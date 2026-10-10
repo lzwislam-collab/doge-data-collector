@@ -1,8 +1,8 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "source": "Dogechain public API v3",
-  "collected_at_utc": "2026-10-10T09:01:38.071485+00:00",
-  "status": "partial",
+  "collected_at_utc": "2026-10-10T09:06:14.376990+00:00",
+  "status": "ok",
   "core_collection_success": true,
   "latest_complete_core_day_utc": "2026-10-09",
   "daily_observations": 4690,
@@ -13,6 +13,47 @@
     "transfers": null,
     "transfers_sent": null
   },
+  "transfer_bucket_history_days": 4690,
+  "transfer_bucket_latest_day_utc": "2026-10-09",
+  "transfer_bucket_latest": {
+    "transfers": {
+      "1_1k": {
+        "count": 8865,
+        "sent": "2248565.24898278"
+      },
+      "1k_1m": {
+        "count": 5695,
+        "sent": "285185966.44152675"
+      },
+      "ge_1m": {
+        "count": 208,
+        "sent": "818958311.10987243"
+      },
+      "lt_1": {
+        "count": 1984,
+        "sent": "69.81528436"
+      }
+    },
+    "transfers_sent": {
+      "1_1k": {
+        "count": 8865,
+        "sent": "2248565.24898278"
+      },
+      "1k_1m": {
+        "count": 5695,
+        "sent": "285185966.44152675"
+      },
+      "ge_1m": {
+        "count": 208,
+        "sent": "818958311.10987243"
+      },
+      "lt_1": {
+        "count": 1984,
+        "sent": "69.81528436"
+      }
+    }
+  },
+  "transfer_scalar_fields": "not applicable: values are structured buckets; see transfer_buckets.json",
   "richlist_balance_deltas": {
     "observed_addresses": 100,
     "top10": [
@@ -97,23 +138,26 @@
         "provider_label": null
       }
     ],
-    "top100_positive_balance_delta_24h_doge": "116858974.21978249",
-    "top100_negative_balance_delta_24h_doge": "-85825893.44164597",
-    "note": "Current top100 address balances, not entity whale trades or exchange netflows."
+    "top100_positive_balance_delta_24h_doge": "116613296.04311257",
+    "top100_negative_balance_delta_24h_doge": "-76093352.89720220",
+    "note": "Balance delta of the CURRENT largest addresses; not investor trades or exchange flow."
   },
-  "errors": {
-    "transfers": "no valid completed daily observations",
-    "transfers_sent": "no valid completed daily observations"
+  "errors": {},
+  "skipped_malformed_points": {
+    "active_addresses": 0,
+    "new_addresses": 0,
+    "tx_count": 0,
+    "transfers": 0,
+    "transfers_sent": 0
   },
   "not_available": [
     "verified_exchange_netflow",
     "entity_level_whale_trades",
-    "full_network_large_transfer_feed"
+    "continuous_full_network_large_transfer_feed"
   ],
   "caveats": [
-    "Addresses do not equal people",
-    "Transfers can include UTXO change",
-    "Richlist top100 composition changes over time",
-    "A successful core run does not imply optional metrics are healthy"
+    "Current Top100 addresses are not entities",
+    "Full exchange netflow requires validated address labels",
+    "Historical transfer bucket names and amounts must be interpreted using provider schema"
   ]
 }
