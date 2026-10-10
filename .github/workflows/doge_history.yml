@@ -1,0 +1,42 @@
+name: Backfill OKX daily DOGE BTC ETH history and baseline backtest
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 2,10,18 * * *'
+permissions:
+  contents: write
+concurrency:
+  group: doge-history-collector
+  cancel-in-progress: false
+jobs:
+  backfill:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Backfill historical UTC close data and audit
+        id: collect
+        continue-on-error: true
+        run: python doge_history.py
+      - name: Commit data and diagnostics
+        if: always()
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          for file in data/history/latest.json data/history/daily.csv data/history/backtest_latest.json; do
+            if [ -f "$file" ]; then git add -f "$file"; fi
+          done
+          if ! git diff --cached --quiet; then
+            git commit -m 'data: update UTC daily history and audit baseline'
+            for attempt in 1 2 3 4 5; do
+              if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
+              if [ "$attempt" -eq 5 ]; then exit 1; fi
+              sleep 4
+            done
+          fi
+      - name: Fail on data collection errors
+        if: steps.collect.outcome != 'success'
+        run: exit 1
