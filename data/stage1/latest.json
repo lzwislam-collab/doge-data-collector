@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "generated_at_utc": "2026-10-10T12:48:24.253373+00:00",
+  "data_scope": "DOGE chain activity, whale block scanner, OKX PoR address balance sampling",
+  "exchange_netflow_verified": false,
+  "scheduled_execution_verified": false,
+  "source": [
+    "Dogechain public API",
+    "OKX September 2026 proof-of-reserves disclosed addresses"
+  ],
+  "checks": {
+    "chain": {
+      "status": "ok",
+      "age_hours": 3.92,
+      "block_height": 6409158
+    },
+    "daily_metrics": {
+      "status": "ok",
+      "age_hours": 3.7,
+      "complete_day_utc": "2026-10-09",
+      "historical_days": 4690
+    },
+    "whales": {
+      "status": "ok",
+      "age_hours": 0.33,
+      "completed_height": 6409356,
+      "tip_at_run": 6409356,
+      "backlog_at_run_end": 0,
+      "new_whale_transactions": 1,
+      "errors": []
+    },
+    "okx_addresses": {
+      "status": "ok",
+      "age_hours": 0.15,
+      "sampled": 300,
+      "total": 40134,
+      "fraction_pct": 0.7475,
+      "next_index": 300,
+      "cycle": 1,
+      "errors": []
+    },
+    "okx_current_csv": {
+      "exists": true,
+      "rows": 300,
+      "duplicates": 0
+    },
+    "okx_observations_csv": {
+      "exists": true,
+      "rows": 300,
+      "duplicates": 0
+    }
+  },
+  "limitations": [
+    "Address balance deltas are not exchange inflow/outflow",
+    "Whale transactions can be UTXO change/internal transfers",
+    "PoR-listed addresses are neither ownership verified nor comprehensive",
+    "Automated schedule run IDs and event types are not confirmed by this read-only audit"
+  ],
+  "issues": [],
+  "status": "ok_partial_coverage"
+}
