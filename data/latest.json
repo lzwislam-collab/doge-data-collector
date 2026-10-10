@@ -1,18 +1,18 @@
 {
-  "schema_version": 2,
-  "source": "OKX public spot REST API",
-  "collected_at_utc": "2026-10-10T08:20:38.441674+00:00",
-  "collected_at_ms": 1791620438441,
+  "schema_version": 3,
+  "source": "OKX public API; third-party sentiment separately labelled",
+  "collected_at_utc": "2026-10-10T08:40:44.050003+00:00",
+  "collected_at_ms": 1791621640600,
   "status": "ok",
   "markets": {
     "BTC-USDT": {
       "symbol": "BTC-USDT",
-      "ticker_ts_ms": 1791620436282,
-      "last": "82844.1",
-      "bid": "82844",
-      "ask": "82844.1",
-      "volume_24h_base": "3476.0249079",
-      "volume_24h_quote": "287896715.045109061",
+      "ticker_ts_ms": 1791621640671,
+      "last": "82837.6",
+      "bid": "82837.5",
+      "ask": "82837.6",
+      "volume_24h_base": "3444.55962985",
+      "volume_24h_quote": "285302263.958938847",
       "closed_hour_start_ms": 1791615600000,
       "hour_open": "82741",
       "hour_high": "82806",
@@ -22,12 +22,12 @@
     },
     "ETH-USDT": {
       "symbol": "ETH-USDT",
-      "ticker_ts_ms": 1791620436569,
-      "last": "2494.73",
-      "bid": "2494.76",
-      "ask": "2494.77",
-      "volume_24h_base": "54032.606951",
-      "volume_24h_quote": "134727168.39384819",
+      "ticker_ts_ms": 1791621641468,
+      "last": "2494.45",
+      "bid": "2494.44",
+      "ask": "2494.45",
+      "volume_24h_base": "54573.083804",
+      "volume_24h_quote": "136071064.44791676",
       "closed_hour_start_ms": 1791615600000,
       "hour_open": "2493.53",
       "hour_high": "2496.04",
@@ -37,12 +37,12 @@
     },
     "DOGE-USDT": {
       "symbol": "DOGE-USDT",
-      "ticker_ts_ms": 1791620437064,
-      "last": "0.08615",
-      "bid": "0.08615",
-      "ask": "0.08616",
-      "volume_24h_base": "255551631.500113",
-      "volume_24h_quote": "21776491.10769741957",
+      "ticker_ts_ms": 1791621642361,
+      "last": "0.08623",
+      "bid": "0.08623",
+      "ask": "0.08624",
+      "volume_24h_base": "253192841.134554",
+      "volume_24h_quote": "21576808.1371878956",
       "closed_hour_start_ms": 1791615600000,
       "hour_open": "0.0862",
       "hour_high": "0.08627",
@@ -50,6 +50,139 @@
       "hour_close": "0.08614",
       "hour_volume_base": "4421206.274207"
     }
+  },
+  "extensions": {
+    "derivatives": {
+      "BTC-USDT": {
+        "source": "OKX public API",
+        "instrument": "BTC-USDT-SWAP",
+        "open_interest_contracts": "3007839.74000001227",
+        "open_interest_ccy": "30078.3974000001227",
+        "open_interest_usd": "2490452202.80339015940049",
+        "open_interest_ts_ms": 1791621641494,
+        "funding_rate": "0.0000382238129801",
+        "funding_time_ms": 1791648000000,
+        "next_funding_time_ms": 1791676800000
+      },
+      "ETH-USDT": {
+        "source": "OKX public API",
+        "instrument": "ETH-USDT-SWAP",
+        "open_interest_contracts": "6043498.2300000221",
+        "open_interest_ccy": "604349.82300000221",
+        "open_interest_usd": "1506819370.1876755101709",
+        "open_interest_ts_ms": 1791621642414,
+        "funding_rate": "0.0000170530986984",
+        "funding_time_ms": 1791648000000,
+        "next_funding_time_ms": 1791676800000
+      },
+      "DOGE-USDT": {
+        "source": "OKX public API",
+        "instrument": "DOGE-USDT-SWAP",
+        "open_interest_contracts": "1106145.75999999952",
+        "open_interest_ccy": "1106145759.99999952",
+        "open_interest_usd": "95327641.5967999586336",
+        "open_interest_ts_ms": 1791621643292,
+        "funding_rate": "0.0000265762513387",
+        "funding_time_ms": 1791648000000,
+        "next_funding_time_ms": 1791676800000
+      }
+    },
+    "orderbook": {
+      "BTC-USDT": {
+        "source": "OKX public API",
+        "timestamp_ms": 1791621641804,
+        "spread_bps": 0.012071820087124832,
+        "bid_notional_usdt_top20": 119674.887993556,
+        "ask_notional_usdt_top20": 270219.61035586,
+        "imbalance_top20": -0.3861165597350612,
+        "note": "20-level snapshot, not executed trade flow or market-wide liquidity"
+      },
+      "ETH-USDT": {
+        "source": "OKX public API",
+        "timestamp_ms": 1791621642704,
+        "spread_bps": 0.040089077930215065,
+        "bid_notional_usdt_top20": 244362.96673266997,
+        "ask_notional_usdt_top20": 240156.46550020998,
+        "imbalance_top20": 0.008681800878603726,
+        "note": "20-level snapshot, not executed trade flow or market-wide liquidity"
+      },
+      "DOGE-USDT": {
+        "source": "OKX public API",
+        "timestamp_ms": 1791621643601,
+        "spread_bps": 1.1596219632395341,
+        "bid_notional_usdt_top20": 360461.3581780109,
+        "ask_notional_usdt_top20": 325989.0607738581,
+        "imbalance_top20": 0.050218189766404464,
+        "note": "20-level snapshot, not executed trade flow or market-wide liquidity"
+      }
+    },
+    "daily_technical": {
+      "BTC-USDT": {
+        "status": "ok",
+        "available_days": 99,
+        "return_7d": -0.022389075106277856,
+        "return_14d": -0.01750793707416254,
+        "sma_7d": 84329.02857142857,
+        "sma_14d": 84242.45714285715,
+        "mean_absolute_daily_return_14d": 0.009149603251095937,
+        "note": "Descriptive statistics, not a calibrated price prediction"
+      },
+      "ETH-USDT": {
+        "status": "ok",
+        "available_days": 99,
+        "return_7d": -0.06783427198908842,
+        "return_14d": -0.07583716593234324,
+        "sma_7d": 2622.7871428571425,
+        "sma_14d": 2655.1671428571426,
+        "mean_absolute_daily_return_14d": 0.011046504563674928,
+        "note": "Descriptive statistics, not a calibrated price prediction"
+      },
+      "DOGE-USDT": {
+        "status": "ok",
+        "available_days": 99,
+        "return_7d": -0.08134280180761777,
+        "return_14d": -0.13731433767808432,
+        "sma_7d": 0.09090714285714287,
+        "sma_14d": 0.09283714285714287,
+        "mean_absolute_daily_return_14d": 0.018479116359799787,
+        "note": "Descriptive statistics, not a calibrated price prediction"
+      }
+    },
+    "market_sentiment": {
+      "source": "alternative.me",
+      "scope": "broad crypto market, not DOGE",
+      "value": 64,
+      "classification": "Greed",
+      "timestamp_s": 1791590400
+    }
+  },
+  "data_quality": {
+    "hourly": {
+      "BTC-USDT": {
+        "rows": 99,
+        "missing_hours_between_first_last": 0,
+        "earliest_ms": 1791262800000,
+        "latest_ms": 1791615600000
+      },
+      "ETH-USDT": {
+        "rows": 99,
+        "missing_hours_between_first_last": 0,
+        "earliest_ms": 1791262800000,
+        "latest_ms": 1791615600000
+      },
+      "DOGE-USDT": {
+        "rows": 99,
+        "missing_hours_between_first_last": 0,
+        "earliest_ms": 1791262800000,
+        "latest_ms": 1791615600000
+      }
+    },
+    "errors": {},
+    "notes": [
+      "1H repair limited to latest ~100 confirmed candles",
+      "Historical missed tick snapshots cannot be reconstructed",
+      "Not included: liquidations, DOGE whale flows, verified chain activity, ETF flow, macro events, news, calibrated forecast"
+    ]
   },
   "unavailable_markets": {}
 }
