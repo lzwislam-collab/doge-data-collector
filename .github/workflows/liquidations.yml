@@ -1,29 +1,39 @@
-name: Verify DOGE liquidation events
+name: Collect observed DOGE liquidation events
+
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '4,19,34,49 * * * *'
+
 permissions:
   contents: write
+
 concurrency:
   group: doge-liquidation-events
   cancel-in-progress: false
+
 jobs:
   sample:
     runs-on: ubuntu-24.04
     timeout-minutes: 13
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install WebSocket client
+      - name: Install pinned WebSocket client
         run: python -m pip install 'websocket-client==1.8.0'
-      - name: Sample OKX liquidation events
+      - name: Observe DOGE liquidation notices for eight minutes
         id: scan
         continue-on-error: true
         env:
           LIQ_LISTEN_SECONDS: '480'
         run: python doge_liquidations.py
-      - name: Publish observations and errors
+      - name: Commit observations and diagnostic record
         if: always()
         run: |
           git config user.name 'github-actions[bot]'
@@ -32,13 +42,15 @@ jobs:
             if [ -f "$f" ]; then git add -f "$f"; fi
           done
           if ! git diff --cached --quiet; then
-            git commit -m 'data: verify observed DOGE liquidations'
-            for i in 1 2 3; do
-              if git pull --rebase origin main && git push origin HEAD:main; then break; fi
-              if [ "$i" = 3 ]; then exit 1; fi
-              sleep 3
+            git commit -m 'data: capture observable DOGE liquidation notices'
+            for attempt in 1 2 3 4 5; do
+              if git pull --rebase origin main && git push origin HEAD:main; then
+                exit 0
+              fi
+              if [ "$attempt" -eq 5 ]; then exit 1; fi
+              sleep 4
             done
           fi
-      - name: Report scanner failure
+      - name: Mark scanner error as workflow failure
         if: steps.scan.outcome != 'success'
         run: exit 1
