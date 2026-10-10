@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Auditable confirmed DOGE block scanner; independent of SSE sampler.
 
-First-run bounded bootstrap (3 blocks), resumable checkpoint, zero fabricated trades.
+Rate-limited resumable block scanner with lag monitoring; zero fabricated trades.
 An explicit seed height can be provided with DOGE_BLOCK_START_HEIGHT.
 """
 import csv
@@ -20,15 +20,22 @@ OUT = Path(__file__).resolve().parent / 'data' / 'whales_blocks'
 THRESHOLD = Decimal('1000000')
 CONFIRMATIONS = 6
 MAX_BLOCKS = max(1, min(int(os.getenv('DOGE_BLOCK_MAX', '3')), 100))
+MIN_REQUEST_INTERVAL = 0.65  # global request budget: <= 93 per minute
+RUN_SECONDS = max(60, min(int(os.getenv('DOGE_BLOCK_RUN_SECONDS', '600')), 780))
+_last_request_time = 0.0
 FIELDS = ['txid','block_height','amount_doge','headline','observed_at_utc','verification']
 
 def timestamp():
     return datetime.now(timezone.utc).isoformat()
 
 def request(path):
+    global _last_request_time
     url = API + path
     for attempt in range(4):
         try:
+            wait = MIN_REQUEST_INTERVAL - (time.monotonic() - _last_request_time)
+            if wait > 0: time.sleep(wait)
+            _last_request_time = time.monotonic()
             req = urllib.request.Request(url, headers={'Accept':'application/json', 'User-Agent':'DOGE-block-scanner/1.0'})
             with urllib.request.urlopen(req, timeout=20) as response:
                 obj = json.load(response)
@@ -103,7 +110,7 @@ def save_events(rows):
 
 def main():
     OUT.mkdir(parents=True,exist_ok=True)
-    start=timestamp(); errors=[]; block_count=0; tx_count=0; candidates=0; new=0
+    start=timestamp(); begin_monotonic=time.monotonic(); errors=[]; block_count=0; tx_count=0; candidates=0; new=0
     rows=read_events()
     state_path=OUT/'checkpoint.json'
     state=json.loads(state_path.read_text(encoding='utf-8')) if state_path.exists() else {}
@@ -118,6 +125,7 @@ def main():
         else: current=int(last)+1
         final=min(target,current+MAX_BLOCKS-1)
         for height in range(current,final+1):
+            if time.monotonic() - begin_monotonic >= RUN_SECONDS: break
             txids=parse_block(height)
             # Fail the block and do not advance checkpoint if any tx cannot be verified.
             new_rows={}
@@ -136,14 +144,17 @@ def main():
             atomic(state_path,json.dumps({'schema_version':1,'last_completed_height':last,
                                           'updated_at_utc':timestamp(), 'confirmed_tip_at_run':target},indent=2)+'\n')
             block_count+=1
-            time.sleep(.55)
     except Exception as exc:
         errors.append(type(exc).__name__+': '+str(exc)[:300])
     status='ok' if not errors and block_count>0 else ('idle' if not errors else 'error')
-    summary={'schema_version':1,'status':status,'source':'Dogechain /network /block/{height} /tx/{txid}',
+    pending=max(0,target-last) if target is not None and last is not None else None
+    summary={'schema_version':2,'status':status,'source':'Dogechain /network /block/{height} /tx/{txid}',
              'started_at_utc':start,'ended_at_utc':timestamp(),'tip_height':tip,
              'confirmation_depth':CONFIRMATIONS,'start_height':current,
-             'last_completed_height':last,'blocks_completed_this_run':block_count,
+             'last_completed_height':last,'confirmed_tip_at_run':target,
+             'backlog_blocks_at_run_end':pending,
+             'max_blocks_per_run':MAX_BLOCKS,'request_min_interval_s':MIN_REQUEST_INTERVAL,
+             'run_time_budget_s':RUN_SECONDS,'blocks_completed_this_run':block_count,
              'transactions_verified_this_run':tx_count, 'new_whale_transactions':new,
              'cumulative_unique_whale_transactions':len(rows),'threshold_doge':str(THRESHOLD),
              'errors':errors,'coverage':'Only contiguous heights after checkpoint; earlier heights are NOT covered unless explicitly backfilled',
