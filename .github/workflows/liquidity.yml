@@ -1,0 +1,50 @@
+name: Collect DOGE swap liquidity
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '13 * * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: doge-liquidity-collector
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Collect public OKX swap liquidity
+        id: scanner
+        continue-on-error: true
+        run: python doge_liquidity.py
+      - name: Persist results, including failure diagnostics
+        if: always()
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          for f in data/liquidity/latest.json data/liquidity/hourly_snapshots.csv; do
+            if [ -f "$f" ]; then git add -f "$f"; fi
+          done
+          if ! git diff --cached --quiet; then
+            git commit -m 'data: collect DOGE swap liquidity'
+            for attempt in 1 2 3 4 5; do
+              if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
+              if [ "$attempt" -eq 5 ]; then exit 1; fi
+              sleep 4
+            done
+          fi
+      - name: Report collection failure
+        if: steps.scanner.outcome != 'success'
+        run: exit 1
