@@ -1,4 +1,4 @@
-name: Verify DOGE block scanner
+name: Verify DOGE block scanner (30-block batch)
 
 on:
   workflow_dispatch:
@@ -15,7 +15,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
-      DOGE_BLOCK_MAX: '3'
+      DOGE_BLOCK_MAX: '30'
+      DOGE_BLOCK_RUN_SECONDS: '600'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -25,11 +26,11 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Scan three confirmed blocks
+      - name: Scan up to 30 confirmed blocks
         id: scan
         continue-on-error: true
         run: python doge_whale_blocks.py
-      - name: Persist diagnostic and checkpoint files
+      - name: Persist diagnostics and checkpoint
         if: always()
         run: |
           git config user.name 'github-actions[bot]'
@@ -38,7 +39,7 @@ jobs:
             if [ -f "$f" ]; then git add -f "$f"; fi
           done
           if ! git diff --cached --quiet; then
-            git commit -m 'data: verify DOGE block scanner'
+            git commit -m 'data: verify DOGE 30-block scanner'
             git push
           fi
       - name: Mark verification failure
