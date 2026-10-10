@@ -21,7 +21,12 @@ def check(base=None, now=None):
  for name,(path,field,limit) in FEEDS.items():
   try:
    obj=json.loads((base/path).read_text(encoding="utf-8"))
-   if obj.get("status")!="ok": raise ValueError("status="+str(obj.get("status")))
+   state=obj.get("status")
+   if name=="whales" and state=="partial":
+    print("WARN whales: partial sample only; NOT full-network whale activity or exchange netflow")
+   elif name=="liquidations" and state=="partial":
+    print("WARN liquidations: subscribed coverage <99%; NOT market-wide liquidations")
+   elif state!="ok": raise ValueError("status="+str(state))
    timestamp=obj.get(field)
    if not isinstance(timestamp,str):raise ValueError("timestamp missing")
    stamp=datetime.fromisoformat(timestamp.replace("Z","+00:00"))
@@ -29,6 +34,13 @@ def check(base=None, now=None):
    age=(now-stamp).total_seconds()/3600
    if age < -0.25:raise ValueError("future timestamp")
    if age > limit:raise ValueError(f"stale {age:.1f} hours (limit {limit})")
+   if name=="etf":
+    dates=obj.get("latest_trade_date",{})
+    if not all(isinstance(dates.get(x),str) and len(dates[x])==10 for x in ("BTC","ETH")):
+     raise ValueError("ETF trade dates missing")
+   if name=="liquidations":
+    coverage=obj.get("coverage","")
+    if "NOT market-wide totals" not in coverage:raise ValueError("liquidation source coverage caveat missing")
    print(f"PASS {name}: age={age:.1f}h")
   except (OSError,ValueError,TypeError,KeyError) as error:
    failures.append(name)
