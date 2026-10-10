@@ -1,0 +1,52 @@
+name: Audit DOGE prediction statistical significance and calibration
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '26 4 * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: doge-statistical-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install pinned numerical dependencies
+        run: python -m pip install 'numpy==1.26.4' 'scikit-learn==1.5.2'
+      - name: Statistical and calibration audit
+        id: audit
+        continue-on-error: true
+        run: python doge_stat_audit.py
+      - name: Persist audit including failure diagnosis
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if [ -f data/stat_audit/latest.json ]; then git add -f data/stat_audit/latest.json; fi
+          if ! git diff --cached --quiet; then
+            git commit -m 'data: audit DOGE prediction calibration and statistical robustness'
+            for attempt in 1 2 3 4 5; do
+              if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
+              if [ "$attempt" -eq 5 ]; then exit 1; fi
+              sleep 4
+            done
+          fi
+      - name: Fail on audit error
+        if: steps.audit.outcome != 'success'
+        run: exit 1
