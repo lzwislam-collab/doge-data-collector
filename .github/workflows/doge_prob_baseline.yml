@@ -1,0 +1,39 @@
+name: Validate DOGE probability baselines
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install numerical dependencies
+        run: python -m pip install 'numpy==1.26.4' 'scikit-learn==1.5.2'
+      - name: Run point-in-time probability comparison
+        id: scan
+        continue-on-error: true
+        run: python doge_prob_baseline.py
+      - name: Commit validation results
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if [ -f data/prob_baseline/latest.json ]; then git add -f data/prob_baseline/latest.json; fi
+          if ! git diff --cached --quiet; then
+            git commit -m 'data: audit DOGE probability baselines'
+            for n in 1 2 3 4 5; do
+              if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
+              if [ "$n" -eq 5 ]; then exit 1; fi
+              sleep 4
+            done
+          fi
+      - name: Fail when model audit fails
+        if: steps.scan.outcome != 'success'
+        run: exit 1
