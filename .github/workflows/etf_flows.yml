@@ -1,0 +1,44 @@
+name: Collect BTC ETH spot ETF flows
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '43 5,13,21 * * 1-6'
+permissions:
+  contents: write
+concurrency:
+  group: doge-etf-flow-collector
+  cancel-in-progress: false
+jobs:
+  collect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install HTML parser
+        run: python -m pip install 'beautifulsoup4==4.12.3'
+      - name: Fetch Farside BTC ETH ETF flows
+        id: collector
+        continue-on-error: true
+        run: python etf_flows.py
+      - name: Save history, revisions and errors
+        if: always()
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          for f in data/etf/latest.json data/etf/daily_flows.csv data/etf/revisions.csv; do
+            if [ -f "$f" ]; then git add -f "$f"; fi
+          done
+          if ! git diff --cached --quiet; then
+            git commit -m 'data: update BTC ETH ETF flows and revisions'
+            for i in 1 2 3 4 5; do
+              if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
+              if [ "$i" -eq 5 ]; then exit 1; fi
+              sleep 4
+            done
+          fi
+      - name: Fail if ETF collection failed
+        if: steps.collector.outcome != 'success'
+        run: exit 1
