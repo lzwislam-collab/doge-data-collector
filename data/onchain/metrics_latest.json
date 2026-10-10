@@ -1,11 +1,18 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "source": "Dogechain public API v3",
-  "collected_at_utc": "2026-10-10T08:59:12.836871+00:00",
+  "collected_at_utc": "2026-10-10T09:01:38.071485+00:00",
   "status": "partial",
-  "latest_complete_day_utc": null,
-  "daily_observations": 0,
-  "daily_activity_latest": null,
+  "core_collection_success": true,
+  "latest_complete_core_day_utc": "2026-10-09",
+  "daily_observations": 4690,
+  "daily_activity_latest": {
+    "active_addresses": "35707.0",
+    "new_addresses": "8457.0",
+    "tx_count": "18116.0",
+    "transfers": null,
+    "transfers_sent": null
+  },
   "richlist_balance_deltas": {
     "observed_addresses": 100,
     "top10": [
@@ -91,12 +98,12 @@
       }
     ],
     "top100_positive_balance_delta_24h_doge": "116858974.21978249",
-    "top100_negative_balance_delta_24h_doge": "-85816249.26464597",
-    "note": "Current top 100 addresses only; address net balance changes, NOT transfer volumes, whale trade flow or exchange netflow."
+    "top100_negative_balance_delta_24h_doge": "-85825893.44164597",
+    "note": "Current top100 address balances, not entity whale trades or exchange netflows."
   },
   "errors": {
-    "transfers": "[<class 'decimal.ConversionSyntax'>]",
-    "transfers_sent": "[<class 'decimal.ConversionSyntax'>]"
+    "transfers": "no valid completed daily observations",
+    "transfers_sent": "no valid completed daily observations"
   },
   "not_available": [
     "verified_exchange_netflow",
@@ -104,8 +111,9 @@
     "full_network_large_transfer_feed"
   ],
   "caveats": [
-    "addresses are not unique people",
-    "transfers include UTXO change and self-transfers",
-    "top100 composition changes over time"
+    "Addresses do not equal people",
+    "Transfers can include UTXO change",
+    "Richlist top100 composition changes over time",
+    "A successful core run does not imply optional metrics are healthy"
   ]
 }
