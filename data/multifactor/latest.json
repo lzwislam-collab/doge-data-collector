@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "status": "ok",
+  "generated_at_utc": "2026-10-10T12:01:13.479958+00:00",
+  "source": "OKX confirmed UTC DOGE/BTC/ETH close data; no future features",
+  "input_rows": 8672,
+  "aligned_days": 2474,
+  "first_date_utc": "2020-01-01",
+  "last_date_utc": "2026-10-09",
+  "holdout_start_utc": "2024-09-16",
+  "features": [
+    "DOGE_ret1",
+    "DOGE_ret7",
+    "DOGE_ret30",
+    "DOGE_vol30",
+    "BTC_ret1",
+    "BTC_ret7",
+    "BTC_ret30",
+    "BTC_vol30",
+    "ETH_ret1",
+    "ETH_ret7",
+    "ETH_ret30",
+    "ETH_vol30",
+    "DOGE_minus_BTC_7d",
+    "DOGE_minus_ETH_7d"
+  ],
+  "method": "expanding-window L2 logistic regression; retrained every 30 calendar days; 30-day minimum feature lookback; training labels require t+h strictly before evaluation t",
+  "horizons": {
+    "1d": {
+      "expanding_fits": 25,
+      "holdout_overlapping": {
+        "n": 724,
+        "multifactor_accuracy_pct": 51.52,
+        "momentum_accuracy_pct": 51.66,
+        "always_up_accuracy_pct": 47.38,
+        "prior_day_accuracy_pct": 50.0
+      },
+      "holdout_nonoverlapping": {
+        "n": 362,
+        "multifactor_accuracy_pct": 53.31,
+        "momentum_accuracy_pct": 53.04,
+        "always_up_accuracy_pct": 44.75,
+        "prior_day_accuracy_pct": 48.34
+      },
+      "test_first_utc": "2024-09-16",
+      "test_last_utc": "2026-09-09"
+    },
+    "7d": {
+      "expanding_fits": 25,
+      "holdout_overlapping": {
+        "n": 724,
+        "multifactor_accuracy_pct": 55.11,
+        "momentum_accuracy_pct": 53.18,
+        "always_up_accuracy_pct": 44.48,
+        "prior_day_accuracy_pct": 49.86
+      },
+      "holdout_nonoverlapping": {
+        "n": 91,
+        "multifactor_accuracy_pct": 53.85,
+        "momentum_accuracy_pct": 52.75,
+        "always_up_accuracy_pct": 43.96,
+        "prior_day_accuracy_pct": 51.65
+      },
+      "test_first_utc": "2024-09-16",
+      "test_last_utc": "2026-09-09"
+    },
+    "30d": {
+      "expanding_fits": 25,
+      "holdout_overlapping": {
+        "n": 724,
+        "multifactor_accuracy_pct": 52.49,
+        "momentum_accuracy_pct": 53.31,
+        "always_up_accuracy_pct": 43.23,
+        "prior_day_accuracy_pct": 53.31
+      },
+      "holdout_nonoverlapping": {
+        "n": 24,
+        "multifactor_accuracy_pct": 45.83,
+        "momentum_accuracy_pct": 54.17,
+        "always_up_accuracy_pct": 50.0,
+        "prior_day_accuracy_pct": 50.0
+      },
+      "test_first_utc": "2024-09-16",
+      "test_last_utc": "2026-09-09"
+    }
+  },
+  "limitations": [
+    "Prediction formed after UTC daily candle close; execution at that close is not assumed",
+    "No ETF, macro, whale or liquidity information until verified historical availability dates exist",
+    "Non-overlap is a sensitivity check; low power for 30-day outcomes",
+    "No transaction costs, taxes, slippage, profitability or calibrated trading rule",
+    "Feature and horizon selection are research choices; no proven predictive edge"
+  ]
+}
