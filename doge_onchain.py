@@ -45,8 +45,9 @@ def decimal(value):
 
 def extract_network(data):
     # Preserve raw provider fields: public API schemas can evolve.
-    height = data.get('height',data.get('block_height',data.get('blocks')))
-    rate = data.get('hashrate',data.get('hash_rate'))
+    info = data.get('info', data) if isinstance(data, dict) else {}
+    height = info.get('block_count', info.get('height', info.get('block_height', info.get('blocks'))))
+    rate = info.get('hashrate', info.get('hash_rate'))
     return (int(height) if height is not None and str(height).isdigit() else None,
             str(rate) if rate is not None else None)
 
@@ -54,7 +55,8 @@ def extract_network(data):
 def richest_list(data):
     # Parse only when provider returns an explicit list of address records.
     if isinstance(data,list): return data
-    for name in ('addresses','richlist','items','results'):
+    if not isinstance(data,dict): return []
+    for name in ('rows','addresses','richlist','items','results'):
         if isinstance(data.get(name),list): return data[name]
     return []
 
@@ -92,7 +94,9 @@ def collect():
     if isinstance(network,dict):
         height,rate=extract_network(network)
         result['metrics']['chain_height']=height
-        result['metrics']['hashrate']=rate
+        result['metrics']['hashrate_raw_hps']=rate
+        if height is None or rate is None:
+            result['errors']['network_parse']='block_count or hashrate missing from network.info'
     if riches is not None:
         records=richest_list(riches)
         if records:
@@ -108,6 +112,9 @@ def collect():
         else:result['errors']['richlist_parse']='Richlist returned but address list structure not recognized; raw retained'
     essential=('supply','network','richlist_page1')
     successful=sum(x in result['raw'] for x in essential)
+    required=('total_supply_doge','chain_height','hashrate_raw_hps','richlist_top10_balance_doge','richlist_top10_pct_of_supply')
+    if successful == 3 and any(result['metrics'].get(k) is None for k in required):
+        result['errors']['missing_metrics']='Missing required parsed metric(s): '+', '.join(k for k in required if result['metrics'].get(k) is None)
     result['status']='ok' if successful==3 and not result['errors'] else ('partial' if successful else 'unavailable')
     OUT.mkdir(parents=True,exist_ok=True)
     destination=OUT/'latest.json'
@@ -125,7 +132,7 @@ def collect():
     date=stamp[:10]
     row={'observed_at_utc':stamp,'observed_at_ms':started,
          'chain_height':result['metrics'].get('chain_height') or result['metrics'].get('supply_block_height') or '',
-         'hashrate':result['metrics'].get('hashrate') or '',
+         'hashrate':result['metrics'].get('hashrate_raw_hps') or '',
          'total_supply_doge':result['metrics'].get('total_supply_doge') or '',
          'richlist_addresses_count':result['metrics'].get('richlist_addresses_count') or '',
          'richlist_top10_balance_doge':result['metrics'].get('richlist_top10_balance_doge') or '',
@@ -139,6 +146,6 @@ def collect():
         w.writeheader();w.writerows(prior[k] for k in sorted(prior))
     os.replace(temp,daily)
     print(json.dumps({'status':result['status'],'observed_at_utc':stamp,'metrics':result['metrics'],'errors':result['errors']},ensure_ascii=False))
-    return 0 if successful==3 else 1
+    return 0 if result['status']=='ok' else 1
 
 if __name__=='__main__':sys.exit(collect())
