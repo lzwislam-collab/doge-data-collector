@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "status": "partial_or_unverified",
+  "generated_at_utc": "2026-10-10T13:00:22.397326+00:00",
+  "repository": "lzwislam-collab/doge-data-collector",
+  "checks": {
+    "whales": {
+      "workflow": ".github/workflows/whale_blocks.yml",
+      "snapshot": "data/whales_blocks/latest.json",
+      "state": "SCHEDULE_AND_SNAPSHOT_TIME_MATCH",
+      "scheduled_completed_last_48h": 11,
+      "scheduled_success_last_48h": 11,
+      "scheduled_failure_last_48h": 0,
+      "latest_scheduled_success": {
+        "id": 38053641960,
+        "created_at": "2026-10-10T12:53:42Z",
+        "updated_at": "2026-10-10T12:58:33Z",
+        "html_url": "https://github.com/lzwislam-collab/doge-data-collector/actions/runs/38053641960"
+      },
+      "snapshot_observed_utc": "2026-10-10T12:58:28.073928+00:00",
+      "snapshot_age_hours": 0.03,
+      "snapshot_status": "ok",
+      "matched_run_id": 38053641960,
+      "reason": "Schedule event, success and compatible committed snapshot timestamp; commit attribution not proven"
+    },
+    "okx_addresses": {
+      "workflow": ".github/workflows/okx_doge_balances.yml",
+      "snapshot": "data/okx_address_balances/latest.json",
+      "state": "SCHEDULE_AND_SNAPSHOT_TIME_MATCH",
+      "scheduled_completed_last_48h": 3,
+      "scheduled_success_last_48h": 3,
+      "scheduled_failure_last_48h": 0,
+      "latest_scheduled_success": {
+        "id": 38052679318,
+        "created_at": "2026-10-10T12:38:09Z",
+        "updated_at": "2026-10-10T12:39:21Z",
+        "html_url": "https://github.com/lzwislam-collab/doge-data-collector/actions/runs/38052679318"
+      },
+      "snapshot_observed_utc": "2026-10-10T12:39:16.200997+00:00",
+      "snapshot_age_hours": 0.35,
+      "snapshot_status": "ok",
+      "matched_run_id": 38052679318,
+      "reason": "Schedule event, success and compatible committed snapshot timestamp; commit attribution not proven"
+    },
+    "onchain": {
+      "workflow": ".github/workflows/onchain.yml",
+      "snapshot": "data/onchain/latest.json",
+      "state": "UNVERIFIED",
+      "scheduled_completed_last_48h": 0,
+      "scheduled_success_last_48h": 0,
+      "scheduled_failure_last_48h": 0,
+      "snapshot_observed_utc": "2026-10-10T08:53:20.625000+00:00",
+      "snapshot_age_hours": 4.12,
+      "snapshot_status": "ok",
+      "reason": "No successful scheduled run in preceding 48h"
+    },
+    "daily_metrics": {
+      "workflow": ".github/workflows/onchain_metrics.yml",
+      "snapshot": "data/onchain/metrics_latest.json",
+      "state": "UNVERIFIED",
+      "scheduled_completed_last_48h": 0,
+      "scheduled_success_last_48h": 0,
+      "scheduled_failure_last_48h": 0,
+      "snapshot_observed_utc": "2026-10-10T09:06:14.376990+00:00",
+      "snapshot_age_hours": 3.9,
+      "snapshot_status": "ok",
+      "reason": "No successful scheduled run in preceding 48h"
+    }
+  },
+  "limitations": [
+    "Run event and snapshot timestamp alignment does not prove causal commit attribution",
+    "Scheduled runs may be delayed or skipped by GitHub",
+    "Do not infer real exchange netflow from address balance samples"
+  ]
+}
