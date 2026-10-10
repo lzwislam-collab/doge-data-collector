@@ -1,0 +1,58 @@
+name: One-time DOGE BTC ETH historical backfill
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: doge-history-collector
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Backfill up to 15 historical batches with safety checks
+        id: collect
+        shell: bash
+        run: |
+          set -euo pipefail
+          previous=0
+          if [ -f data/history/daily.csv ]; then previous=$(( $(wc -l < data/history/daily.csv) - 1 )); fi
+          for n in $(seq 1 15); do
+            echo "Batch $n, previous rows $previous"
+            python doge_history.py
+            current=$(( $(wc -l < data/history/daily.csv) - 1 ))
+            if [ "$current" -lt "$previous" ]; then echo 'HISTORY ROW COUNT SHRANK'; exit 1; fi
+            if [ "$current" -eq "$previous" ]; then
+              echo 'No new historical rows. Provider retention or coverage endpoint reached.'
+              break
+            fi
+            previous="$current"
+            sleep 3
+          done
+      - name: Persist all completed historical data and audit
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          for file in data/history/latest.json data/history/daily.csv data/history/backtest_latest.json; do
+            if [ -f "$file" ]; then git add -f "$file"; fi
+          done
+          if ! git diff --cached --quiet; then
+            git commit -m 'data: batch backfill UTC daily DOGE BTC ETH history'
+            for attempt in 1 2 3 4 5; do
+              if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
+              if [ "$attempt" -eq 5 ]; then exit 1; fi
+              sleep 4
+            done
+          fi
