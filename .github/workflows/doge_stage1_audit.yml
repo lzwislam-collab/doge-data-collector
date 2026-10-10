@@ -1,0 +1,42 @@
+name: Audit DOGE chain whale and OKX PoR collection
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '8 1,7,13,19 * * *'
+permissions:
+  contents: write
+concurrency:
+  group: doge-stage1-audit
+  cancel-in-progress: false
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Audit existing snapshots
+        id: validate
+        continue-on-error: true
+        run: python doge_stage1_audit.py
+      - name: Save audit result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if [ -f data/stage1/latest.json ]; then git add -f data/stage1/latest.json; fi
+          if ! git diff --cached --quiet; then
+            git commit -m 'data: audit DOGE chain whale and exchange address coverage'
+            for attempt in 1 2 3 4 5; do
+              if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
+              if [ "$attempt" -eq 5 ]; then exit 1; fi
+              sleep 4
+            done
+          fi
+      - name: Fail when quality gate fails
+        if: steps.validate.outcome != 'success'
+        run: exit 1
