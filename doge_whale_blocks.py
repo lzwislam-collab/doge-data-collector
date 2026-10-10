@@ -110,7 +110,7 @@ def save_events(rows):
 
 def main():
     OUT.mkdir(parents=True,exist_ok=True)
-    start=timestamp(); begin_monotonic=time.monotonic(); errors=[]; block_count=0; tx_count=0; candidates=0; new=0
+    start=timestamp(); begin_monotonic=time.monotonic(); errors=[]; block_count=0; tx_count=0; candidates=0; new=0; stop_reason='batch_complete'; incomplete_block=None
     rows=read_events()
     state_path=OUT/'checkpoint.json'
     state=json.loads(state_path.read_text(encoding='utf-8')) if state_path.exists() else {}
@@ -125,11 +125,20 @@ def main():
         else: current=int(last)+1
         final=min(target,current+MAX_BLOCKS-1)
         for height in range(current,final+1):
-            if time.monotonic() - begin_monotonic >= RUN_SECONDS: break
+            if time.monotonic() - begin_monotonic >= RUN_SECONDS - 120:
+                stop_reason='time_budget_before_block'; break
             txids=parse_block(height)
             # Fail the block and do not advance checkpoint if any tx cannot be verified.
             new_rows={}
+            block_complete=True
             for txid in txids:
+                # Stop safely before a transaction request that could exceed the job budget (120 s safety margin).
+                # Do not persist any incomplete block or advance its checkpoint.
+                if time.monotonic() - begin_monotonic >= RUN_SECONDS - 120:
+                    block_complete=False
+                    incomplete_block=height
+                    stop_reason='time_budget_in_block'
+                    break
                 tx_count+=1
                 if txid in rows: continue
                 amount,headline=explain(txid)
@@ -138,6 +147,8 @@ def main():
                     new_rows[txid]={'txid':txid,'block_height':height,'amount_doge':str(amount),
                                      'headline':headline,'observed_at_utc':timestamp(),
                                      'verification':'confirmed-depth>=6; provider explain.sent; entity unverified'}
+            if not block_complete:
+                break
             rows.update(new_rows); new+=len(new_rows)
             save_events(rows)
             last=height
@@ -145,14 +156,18 @@ def main():
                                           'updated_at_utc':timestamp(), 'confirmed_tip_at_run':target},indent=2)+'\n')
             block_count+=1
     except Exception as exc:
+        stop_reason='error'
         errors.append(type(exc).__name__+': '+str(exc)[:300])
     status='ok' if not errors and block_count>0 else ('idle' if not errors else 'error')
     pending=max(0,target-last) if target is not None and last is not None else None
-    summary={'schema_version':2,'status':status,'source':'Dogechain /network /block/{height} /tx/{txid}',
+    summary={'schema_version':3,'status':status,'source':'Dogechain /network /block/{height} /tx/{txid}',
              'started_at_utc':start,'ended_at_utc':timestamp(),'tip_height':tip,
              'confirmation_depth':CONFIRMATIONS,'start_height':current,
              'last_completed_height':last,'confirmed_tip_at_run':target,
              'backlog_blocks_at_run_end':pending,
+             'backlog_as_of':'confirmed_tip_at_run (not refreshed at run end)',
+             'scan_stop_reason':stop_reason, 'incomplete_block_not_committed':incomplete_block,
+             'elapsed_seconds':round(time.monotonic()-begin_monotonic,2),
              'max_blocks_per_run':MAX_BLOCKS,'request_min_interval_s':MIN_REQUEST_INTERVAL,
              'run_time_budget_s':RUN_SECONDS,'blocks_completed_this_run':block_count,
              'transactions_verified_this_run':tx_count, 'new_whale_transactions':new,
