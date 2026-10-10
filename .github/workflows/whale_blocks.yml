@@ -1,0 +1,46 @@
+name: Verify DOGE block scanner
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: doge-whale-block-scanner
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      DOGE_BLOCK_MAX: '3'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Scan three confirmed blocks
+        id: scan
+        continue-on-error: true
+        run: python doge_whale_blocks.py
+      - name: Persist diagnostic and checkpoint files
+        if: always()
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          for f in data/whales_blocks/latest.json data/whales_blocks/events.csv data/whales_blocks/checkpoint.json; do
+            if [ -f "$f" ]; then git add -f "$f"; fi
+          done
+          if ! git diff --cached --quiet; then
+            git commit -m 'data: verify DOGE block scanner'
+            git push
+          fi
+      - name: Mark verification failure
+        if: steps.scan.outcome != 'success'
+        run: exit 1
