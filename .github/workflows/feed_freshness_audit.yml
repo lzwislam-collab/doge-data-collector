@@ -1,0 +1,21 @@
+name: Audit DOGE feed freshness
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '39 */4 * * *'
+permissions:
+  contents: read
+concurrency:
+  group: doge-feed-freshness-audit
+  cancel-in-progress: false
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check freshness and statuses
+        run: python feed_freshness_audit.py
