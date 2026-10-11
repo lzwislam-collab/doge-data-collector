@@ -157,7 +157,10 @@ def inspect(root=ROOT,now=None):
    'stage5_generated_at_utc':st.isoformat(),
    'last_daily_source_complete_at_utc':daily_last.isoformat(),
    'spot_plus_sha256':sha(pp),'stage5_sha256':sha(sp)},
-  'source_health':{'grade':'WARN' if stale or source_warnings else 'OK',
+  'source_health':{'grade':'WARN' if stale or source_warnings else 'PARTIAL_COVERAGE',
+   'freshness_gate':'WARN' if stale or source_warnings else 'PASS',
+   'live_market_tick_verified':False,
+   'data_quality_pass_does_not_imply_full_coverage':True,
    'global_quality_audit_age_hours_now':round(effective_age,2),
    'global_quality_audit_stale_over_3h':stale,
    'warning_sources':source_warnings,
@@ -190,6 +193,11 @@ def inspect(root=ROOT,now=None):
     'compare net equity after fees/slippage with DOGE buy-hold AND cash plus drawdown',
     'only after independent sign-off propose promotion, never automatic DCA modification'],
   'economic_edge_validated':False,'accuracy_70pct_validated':False,
+  'integrated_prediction_readiness':'BLOCKED_UNTIL_PIT_AND_FORWARD_PROOF',
+  'stage1_exch_netflow_not_verified':True,
+  'stage2_full_liquidation_coverage_not_verified':True,
+  'ETF_MACRO_point_in_time_backtest_not_verified':True,
+  'original_36_item_level_reconciliation_complete':False,
   'model_change_authorized':False,'real_spot_orders_authorized':False,
   'daily_code_or_model_improvement_proven':False,
   'note':'A daily new audit is not evidence the signal has improved; 70% cannot be forced.'}
@@ -222,6 +230,7 @@ def render(s,record):
  return ('# DOGE 现货预测 Plus｜每日进化审计\n\n'
   f"**运行UTC：** {s['generated_at_utc']}  \n"
   f"**本次数据状态：** {s['source_health']['grade']}，来源警告：{warnings}  \n"
+  '**注意：** 时效性 PASS 不等于数据覆盖全面，更不代表预测有效或现货盈利。五大模块均作为背景信息，尚未形成已验证的统一量化预测信号。  \n'
   f"**最新确认日线数据可用时点：** {s['underlying_sources']['last_daily_source_complete_at_utc']}  \n"
   f"**本日账本：** {'新建记录' if record else '保留本日首次记录，不重复写入'}\n\n"
   '## ① 预测能力（仅冻结后独立24小时正式样本）\n\n'
