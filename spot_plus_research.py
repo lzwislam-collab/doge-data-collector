@@ -79,7 +79,7 @@ def simulate(bars,start,mode,btc=None,fee=FEE,slippage=SLIPPAGE):
  if start<3 or start>=len(bars):raise ValueError('invalid test split')
  if not 0<=fee<=.02 or not 0<=slippage<=.02:raise ValueError('invalid friction')
  if btc is not None and len(btc)!=len(bars):raise ValueError('unaligned BTC')
- equity=INITIAL;cash=INITIAL;tokens=0.0;peak=INITIAL;maxdd=0.0
+ equity=INITIAL;cash=INITIAL;tokens=0.0;peak=INITIAL;maxdd=0.0;maxdd_intraday_low_proxy=0.0
  fees=0.0;slip_cost=0.0;trades=0;exposed=0;correct=0;n=0
  daily_return=[]
  for i in range(start,len(bars)):
@@ -97,6 +97,11 @@ def simulate(bars,start,mode,btc=None,fee=FEE,slippage=SLIPPAGE):
    slip_cost+=tokens*open_price*slippage
    cash=tokens*exec_price*(1-fee)
    tokens=0.0;trades+=1
+  # Risk audit: intraday LOW can be materially below the end-of-day close.
+  # Prior close-based equity peaks supply a conservative observed low-watermark,
+  # not a full tick-level intraday maximum-drawdown measurement.
+  low_valued_equity=cash+tokens*bars[i]['l']
+  maxdd_intraday_low_proxy=max(maxdd_intraday_low_proxy,1-low_valued_equity/peak)
   if want:exposed+=1
   if mode not in ('buy_and_hold','cash'):
    actual_up=close>open_price
@@ -118,13 +123,17 @@ def simulate(bars,start,mode,btc=None,fee=FEE,slippage=SLIPPAGE):
   trades+=1
  terminal_equity=cash+terminal_proceeds
  maxdd=max(maxdd,1-terminal_equity/peak)
+ maxdd_intraday_low_proxy=max(maxdd_intraday_low_proxy,maxdd)
  years=(len(bars)-start)/365.0
  return {'initial_usdt':INITIAL,'final_usdt':round(terminal_equity,2),
   'pre_liquidation_mark_to_market_usdt':round(marked_equity,2),
   'terminal_liquidation_assumed':True,
   'net_total_return_pct':round(100*(terminal_equity/INITIAL-1),2),
   'cagr_pct':round(100*((terminal_equity/INITIAL)**(1/years)-1),2) if terminal_equity>0 else -100,
-  'max_drawdown_pct':round(100*maxdd,2),'trades':trades,
+  'max_drawdown_pct':round(100*maxdd,2),
+  'intraday_low_drawdown_floor_pct':round(100*maxdd_intraday_low_proxy,2),
+  'intraday_risk_definition':'daily low mark vs previous closes equity peak; floor not full intraday peak-to-trough',
+  'trades':trades,
   'days_exposed_pct':round(100*exposed/(len(bars)-start),2),
   'estimated_total_fees_usdt':round(fees,2),
   'estimated_total_slippage_usdt':round(slip_cost,2),
@@ -240,7 +249,8 @@ def evaluate(root=ROOT,now=None):
     'BTC/ETH ETF and macro releases lack verified historical point-in-time vintages; excluded from simulated signals',
     'The original 36 items are catalogued at item-level from a verified Google Sheets snapshot, but NOT 36 proven predictive features',
     'All five pillars are consulted as evidence, but only PIT-defensible price data feeds the historical spot experiment',
-    'Research shows gross market regimes and hypothetical execution, not future profitability']}
+    'Research shows gross market regimes and hypothetical execution, not future profitability',
+    'Reported close-to-close max drawdown understates intraday price extremes; intraday low proxy is a conservative floor, not full tick-level max drawdown']}
 
 def main():
  OUT.parent.mkdir(parents=True,exist_ok=True)
