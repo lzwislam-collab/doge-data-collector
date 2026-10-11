@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "evaluated_at_utc": "2026-10-11T08:03:32.356181+00:00",
+  "evaluated_at_utc": "2026-10-11T08:09:53.436643+00:00",
   "status": "data_quality_blocked",
   "claim_permission": "NO_VALIDATED_EDGE",
   "research_only": true,
@@ -99,6 +99,18 @@
       "ETH": 15
     },
     "coverage_note": "Limited historical window; US trading sessions only; Farside third-party aggregated totals"
+  },
+  "stage4_macro_policy_admissibility": {
+    "historical_macro_observation_as_release_timestamp_allowed": false,
+    "unverified_historical_macro_vintages_allowed": false,
+    "calendar_schedule_as_actual_cpi_ppi_release_allowed": false,
+    "retrospective_sec_cftc_pubdate_backtest_allowed": false,
+    "official_macro_values_historical_backtest_authorized": false,
+    "policy_headline_price_direction_validated": false,
+    "macro_first_seen_research_only": false,
+    "policy_event_first_seen_research_only": false,
+    "rule": "Use actual observed first_seen_utc or separately verified release/vintage availability, never observation_date",
+    "audit_error": "KeyError: 'stage4_macro_policy_csv_quality'"
   },
   "limitations": [
     "A significant historical CI alone cannot authorize live forecast marketing",
