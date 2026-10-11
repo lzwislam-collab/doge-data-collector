@@ -62,12 +62,38 @@ class TestDailyEvolution(unittest.TestCase):
   self.assertEqual(a['ledger_rows'],2)
   rows=read_ledger(self.root/'data/stage5/spot_plus/evolution_log.csv')
   self.assertEqual(rows[-1]['previous_digest'],rows[0]['row_digest'])
+  self.assertEqual(a['change_since_previous_daily_record']['new_24h_predictions'],0)
+  self.assertEqual(a['change_since_previous_daily_record']['new_24h_scored'],0)
   # Replay with contemporaneous sources: prove ledger rejects backdates itself.
   self.plus['generated_at_utc']='2026-10-11T12:19:10+00:00'
   self.stage['generated_at_utc']='2026-10-11T12:19:08+00:00'
   self.save()
   with self.assertRaisesRegex(ValueError,'backdate'):
    run(self.root,AT)
+
+ def test_failed_counter_regression_does_not_write_new_ledger(self):
+  self.day.update(locked_bins_with_issued_predictions=5,resolved=3,scored=3,
+    primary_correct=1,primary_accuracy_pct=33.33)
+  self.save()
+  run(self.root,AT)
+  next_day=AT+timedelta(days=1)
+  self.plus['generated_at_utc']=(next_day-timedelta(minutes=30)).isoformat()
+  self.stage['generated_at_utc']=(next_day-timedelta(minutes=29)).isoformat()
+  self.day.update(locked_bins_with_issued_predictions=3,resolved=2,scored=2,
+    primary_correct=1,primary_accuracy_pct=50.0)
+  self.save()
+  with self.assertRaisesRegex(ValueError,'counters regressed'):
+   run(self.root,next_day)
+  self.assertEqual(len(read_ledger(self.root/'data/stage5/spot_plus/evolution_log.csv')),1)
+
+ def test_warning_text_names_stale_global_quality_audit(self):
+  report=run(self.root,AT)
+  self.assertIn('GLOBAL_QUALITY_AUDIT:older_than_3h',
+                report['source_health']['warning_sources'])
+  md=(self.root/'reports/DOGE_SPOT_PLUS_DAILY.md').read_text()
+  self.assertIn('GLOBAL_QUALITY_AUDIT:older_than_3h',md)
+  self.assertIn('尚无有效样本',md)
+  self.assertNotIn('尚无有效样本%',md)
 
  def test_mutating_existing_ledger_cell_is_detected(self):
   run(self.root,AT)
