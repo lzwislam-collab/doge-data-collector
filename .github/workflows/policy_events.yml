@@ -1,0 +1,49 @@
+name: Collect official Fed policy releases and BLS calendar
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'policy_events_collector.py'
+      - '.github/workflows/policy_events.yml'
+  schedule:
+    - cron: '18 2,14 * * *'
+permissions:
+  contents: write
+concurrency:
+  group: doge-policy-events
+  cancel-in-progress: false
+jobs:
+  collect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify syntax
+        run: python -m py_compile policy_events_collector.py
+      - name: Fetch official policy/calendar events
+        id: collector
+        continue-on-error: true
+        run: python policy_events_collector.py
+      - name: Persist events and diagnostics
+        if: always()
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          for f in data/policy_events/latest.json data/policy_events/events.csv; do
+            if [ -f "$f" ]; then git add -f "$f"; fi
+          done
+          if ! git diff --cached --quiet; then
+            git commit -m 'data: update official Fed and BLS policy event audit'
+            for i in 1 2 3 4 5; do
+              if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
+              if [ "$i" -eq 5 ]; then exit 1; fi
+              sleep 4
+            done
+          fi
+      - name: Report source or collector error
+        if: steps.collector.outcome != 'success'
+        run: exit 1
