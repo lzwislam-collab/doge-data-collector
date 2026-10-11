@@ -62,6 +62,10 @@ class TestDailyEvolution(unittest.TestCase):
   self.assertEqual(a['ledger_rows'],2)
   rows=read_ledger(self.root/'data/stage5/spot_plus/evolution_log.csv')
   self.assertEqual(rows[-1]['previous_digest'],rows[0]['row_digest'])
+  # Replay with contemporaneous sources: prove ledger rejects backdates itself.
+  self.plus['generated_at_utc']='2026-10-11T12:19:10+00:00'
+  self.stage['generated_at_utc']='2026-10-11T12:19:08+00:00'
+  self.save()
   with self.assertRaisesRegex(ValueError,'backdate'):
    run(self.root,AT)
 
