@@ -11,7 +11,7 @@ def read(relative):
   return j if isinstance(j,dict) else {'status':'error','reason':'not_object'}
  except Exception as e:return {'status':'unavailable','reason':type(e).__name__}
 def stamp(item):
- for k in ('collected_at_utc','observed_to_utc','observed_at_utc','ended_at_utc','run_utc','generated_utc','generated_at_utc','evaluated_at_utc','evaluated_utc'):
+ for k in ('collected_at_utc','observed_to_utc','observed_at_utc','ended_at_utc','run_utc','generated_utc','generated_at_utc','evaluated_at_utc','evaluated_utc','audited_at_utc'):
   if item.get(k):return str(item[k])
  return '未提供'
 def age_label(item,now,hours):
@@ -69,10 +69,18 @@ def main():
  relative=100*((metrics['DOGE-USDT']['last']/metrics['BTC-USDT']['last'])/
   (prices_by_symbol['DOGE-USDT'][ix-7*86400000]/prices_by_symbol['BTC-USDT'][ix-7*86400000])-1)
  price30=prices[-30:]
+ immutable_issue_times=[]
+ with (ROOT/'data/forecast_v41/registry.csv').open(newline='',encoding='utf-8') as source:
+  for entry in csv.DictReader(source):
+   if entry.get('anchor_date_utc')==cutoff:
+    immutable_issue_times.append(entry['registered_utc'])
+ first_registered=min(immutable_issue_times) if immutable_issue_times else None
+ prev_close_utc=datetime.combine(date.fromisoformat(cutoff)+timedelta(days=1),datetime.min.time(),timezone.utc)
+ first_delay=round((datetime.fromisoformat(first_registered.replace('Z','+00:00'))-prev_close_utc).total_seconds()/60,2) if first_registered else None
  t=['# DOGE全面预测报告 V4.1｜自动研究版','','**状态：RESEARCH_ONLY / NO_VALIDATED_EDGE；非买卖指令。**',
     f'生成于：{now.isoformat()}；行情起点：OKX已收盘1Dutc {cutoff}；DOGE起点价格：{fmt(prices[-1],5)} USDT。',
     '预测对象为目标UTC日线收盘价，不是盘中最高最低价。不能把历史频率当成已校准真实概率。',
-    f'**时点警示：信号参考日线收盘时间 {forecast.get("origin_close_at_utc","未提供")}；本报告形成时目标窗口已过去 {forecast.get("target_window_elapsed_before_issue_minutes","未提供")} 分钟，不属于报告发出后完整24小时价格预测。**','',
+    f'**时点警示：UTC收盘基准 {forecast.get("origin_close_at_utc","未提供")}，原始预测首次不可修改登记 {first_registered or "未登记"}（日线收盘后 {first_delay if first_delay is not None else "N/A"} 分钟），本报告生成已过 {forecast.get("target_window_elapsed_before_issue_minutes","未提供")} 分钟；这不是报告发布后完整24小时预测。**','',
     '## F01｜24小时／7天／30天／365天情景及区间',
     '|目标UTC日|周期|P10区间低点|P50中位值|P90区间高点|历史上涨频率|历史大跌频率|',
     '|---|---|---:|---:|---:|---:|---:|']
@@ -80,7 +88,7 @@ def main():
   x=forecast['price_intervals'][str(h)+'d'];b=x['p10_p50_p90_usdt']
   t.append(f"|{x['target_utc']}|{h}天|{fmt(b['p10'],5)}|{fmt(b['p50'],5)}|{fmt(b['p90'],5)}|{fmt(x['historical_up_frequency_pct'],2)}%|跌幅≤{x['research_large_down_threshold_pct']}%: {fmt(x['historical_large_down_frequency_pct'],2)}%|")
  if not forecast.get('registration_window_ok',False):
-  t+=['**前瞻登记门禁：本次运行已超过UTC日线收盘后2小时，新模型区间仅供研究，未登记的新预测不计入未来评分。**']
+  t+=['**本轮登记窗口已关闭：已有合格历史登记仍正常保留、等待到期评分；未登记的当日预测不能事后补登。**']
  t+=['','365天：仅提供宏观、网络结构及牛熊压力情景；长期独立样本不足，**不提供精确概率或已校准价格区间**。',
      '情景解释：上行条件为BTC风险环境改善、DOGE相对强弱回升且流动性确认；下行条件为BTC走弱、杠杆压力和流动性收缩。上述是条件假设，尚未验证为预测规则。',
      '所有P10/P90均来自历史经验收益分位数，尚未实现80%校准。','',
