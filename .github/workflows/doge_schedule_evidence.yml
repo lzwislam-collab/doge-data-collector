@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'doge_schedule_evidence.py'
+      - 'test_doge_schedule_evidence.py'
       - '.github/workflows/doge_schedule_evidence.yml'
   schedule:
     - cron: '44 2,8,14,20 * * *'
@@ -27,6 +28,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Test healthy partial-window evidence policy
+        run: |
+          python -m py_compile doge_schedule_evidence.py
+          python -m unittest -v test_doge_schedule_evidence
       - name: Verify schedule run events and persisted snapshot timestamps
         id: audit
         continue-on-error: true
