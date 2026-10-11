@@ -129,7 +129,7 @@ class SpotPlusTests(unittest.TestCase):
  def test_liquidation_ok_and_partial_are_accepted_without_claiming_full_coverage(self):
   stamp=NOW.isoformat()
   for status in ('ok','partial'):
-   dump(self.root,'data/liquidations/latest.json',
+   dump(self.root/'data/liquidations/latest.json',
      {'status':status,'ended_at_utc':stamp,'listen_seconds':480})
    context=inspect(self.root,NOW)
    entry=context['pillars']['2_liquidations_liquidity']
@@ -138,7 +138,7 @@ class SpotPlusTests(unittest.TestCase):
    self.assertIn('global_liquidation_total',entry['unverified_features'])
 
  def test_actual_unhealthy_liquidation_status_remains_visible(self):
-  dump(self.root,'data/liquidations/latest.json',
+  dump(self.root/'data/liquidations/latest.json',
     {'status':'error','ended_at_utc':NOW.isoformat(),'listen_seconds':480})
   entry=inspect(self.root,NOW)['pillars']['2_liquidations_liquidity']
   self.assertEqual(entry['sources']['sampled_liquidations']['state'],'unhealthy')
