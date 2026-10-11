@@ -29,7 +29,7 @@ def main():
   times=sorted(prices);anchor=times[-1];last=prices[anchor]
   anchor_day=datetime.fromtimestamp(anchor/1000,timezone.utc).date()
   age=(timestamp.date()-anchor_day).days
-  if age<1 or age>3:raise ValueError('stale or unconfirmed anchor: '+str(age)+' days')
+  if age!=1:raise ValueError('anchor must be the immediately preceding closed UTC day; age='+str(age))
   regfile=DATA/'registry.csv';existing={}
   if regfile.exists():
    with regfile.open(newline='',encoding='utf-8') as file:
