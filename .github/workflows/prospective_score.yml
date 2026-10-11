@@ -1,17 +1,6 @@
 name: Score prospective DOGE forecast registry
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'prospective_score.py'
-      - 'data/prospective/registry.csv'
-      - '.github/workflows/prospective_score.yml'
-  workflow_run:
-    workflows: ['Register prospective DOGE baseline forecasts', 'Backfill OKX daily DOGE BTC ETH history and baseline backtest']
-    types: [completed]
-  schedule:
-    - cron: '43 6 * * *'
 permissions:
   contents: write
 jobs:
