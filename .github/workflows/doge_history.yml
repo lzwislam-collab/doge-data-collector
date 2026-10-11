@@ -51,12 +51,17 @@ jobs:
         if: steps.collect.outcome == 'success'
         continue-on-error: true
         run: python score_v41.py
+      - name: Render V4.1 complete 11-section report with freshness labels
+        id: v41_report
+        if: steps.v41.outcome == 'success' && steps.v41_score.outcome == 'success'
+        continue-on-error: true
+        run: python report_v41.py
       - name: Commit data and diagnostics
         if: always()
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          for file in data/history/latest.json data/history/daily.csv data/history/backtest_latest.json data/prospective/latest.json data/prospective/registry.csv data/prospective/scores.json data/forecast_v41/latest.json data/forecast_v41/backtest_latest.json data/forecast_v41/registry.csv data/forecast_v41/scores.json; do
+          for file in data/history/latest.json data/history/daily.csv data/history/backtest_latest.json data/prospective/latest.json data/prospective/registry.csv data/prospective/scores.json data/forecast_v41/latest.json data/forecast_v41/backtest_latest.json data/forecast_v41/registry.csv data/forecast_v41/scores.json reports/DOGE_V41_LATEST.md; do
             if [ -f "$file" ]; then git add -f "$file"; fi
           done
           if ! git diff --cached --quiet; then
@@ -69,5 +74,5 @@ jobs:
             done
           fi
       - name: Fail on data collection errors
-        if: steps.collect.outcome != 'success' || steps.register.outcome != 'success' || steps.score.outcome != 'success' || steps.v41.outcome != 'success' || steps.v41_score.outcome != 'success'
+        if: steps.collect.outcome != 'success' || steps.register.outcome != 'success' || steps.score.outcome != 'success' || steps.v41.outcome != 'success' || steps.v41_score.outcome != 'success' || steps.v41_report.outcome != 'success'
         run: exit 1
