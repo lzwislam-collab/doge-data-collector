@@ -177,6 +177,22 @@ class SpotPlusTests(unittest.TestCase):
   dump(self.root/'data/quality/latest.json',q)
   self.assertTrue(inspect(self.root,NOW)['quality_audit_stale_for_3h_realtime_claim'])
 
+ def test_actual_36_item_mapping_accepted_only_with_all_numbered_decisions(self):
+  mapping=self.root/'data/stage5/spot_plus/legacy36_map.csv'
+  names=['Source36#','Legacy item','Decision','New section','Audit note','Version']
+  decisions=['KEEP_MERGE']*21+['BACKEND_ONLY']*8+['REMOVE_SCORE']*7
+  rows=[{'Source36#':str(i+1),'Legacy item':'item '+str(i+1),
+         'Decision':decision,'New section':'F01','Audit note':'test','Version':'V3'}
+        for i,decision in enumerate(decisions)]
+  writecsv(mapping,names,rows)
+  context=inspect(self.root,NOW)
+  self.assertTrue(context['original_36_items']['item_level_current_mapping_reconciled'])
+  self.assertTrue(context['original_36_items']['no_claim_all_36_are_signal_features'])
+  rows[14]['Source36#']='14'
+  writecsv(mapping,names,rows)
+  with self.assertRaisesRegex(ValueError,'missing duplicate'):
+   inspect(self.root,NOW)
+
  def test_90day_history_scenario_not_called_probability(self):
   b=daily(self.root,NOW)['DOGE-USDT']
   x=prices_scenario(b,.085)
