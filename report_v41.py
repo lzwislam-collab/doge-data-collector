@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fail-closed DOGE V4.1 research report. Evidence labels, no trading instructions."""
 import csv,json,math,os
-from datetime import datetime,timezone,date
+from datetime import datetime,timezone,date,timedelta
 from pathlib import Path
 from forecast_v41 import ROOT,BASE,load_prices,atomic,iso
 OUT=ROOT/'reports/DOGE_V41_LATEST.md'
@@ -11,7 +11,7 @@ def read(relative):
   return j if isinstance(j,dict) else {'status':'error','reason':'not_object'}
  except Exception as e:return {'status':'unavailable','reason':type(e).__name__}
 def stamp(item):
- for k in ('collected_at_utc','observed_at_utc','ended_at_utc','run_utc','generated_utc','generated_at_utc','evaluated_at_utc'):
+ for k in ('collected_at_utc','observed_to_utc','observed_at_utc','ended_at_utc','run_utc','generated_utc','generated_at_utc','evaluated_at_utc'):
   if item.get(k):return str(item[k])
  return '未提供'
 def age_label(item,now,hours):
@@ -37,7 +37,7 @@ def main():
  cutoff=hist['quality']['symbols']['DOGE-USDT']['last_utc']
  if cutoff!=forecast['anchor_date_utc'] or cutoff!=back.get('source_cutoff_utc'):
   raise ValueError('forecast/backtest historical cutoff mismatch')
- if cutoff!=(now.date().fromordinal(now.date().toordinal()-1)).isoformat():
+ if cutoff!=(now.date()-timedelta(days=1)).isoformat():
   raise ValueError('v41 report cannot use stale daily anchor')
  if scoring.get('source_cutoff_utc')!=cutoff:raise ValueError('score source cutoff mismatch')
  times,prices=load_prices(True,now)
@@ -90,7 +90,7 @@ def main():
      f'- Fed/BLS政策及日历：状态 {policy.get("status","不可用")}，记录 {policy.get("records","未知")}；日程未等于真实公告。',
      f'- SEC/CFTC公告：状态分别为 {sec.get("status","不可用")} / {cftc.get("status","不可用")}。未完成前瞻效应检验。',
      '','## F05｜永续衍生品及强平',
-     f'- OKX衍生品/盘口：{age_label(liquidity,now,2)}；OI约 {fmt(liquidity.get("derivatives",{}).get("open_interest_usd"),0)} USDT；资金费率 {fmt(100*float(liquidity.get("derivatives",{}).get("funding_rate",0)),5)}%。',
+     f'- OKX衍生品/盘口：{age_label(liquidity,now,2)}；OI约 {fmt(liquidity.get("derivatives",{}).get("open_interest_usd"),0)} USDT；资金费率 {fmt(100*float(liquidity["derivatives"]["funding_rate"]),5) if liquidity.get("derivatives",{}).get("funding_rate") is not None else "不可用"}%。',
      f'- OKX强平通知：{age_label(liquidations,now,2)}，状态 {liquidations.get("status","不可用")}；这是**部分监听窗口**，不是全市场总额。',
      f'- Bybit/Binance采样状态：{bybit.get("status","不可用")} / {binance.get("status","不可用")}；0条样本不等于无爆仓。',
      '','## F06｜巨鲸、交易所地址与流动性',
