@@ -2,6 +2,12 @@ name: Audit DOGE prediction statistical significance and calibration
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'doge_stat_audit.py'
+      - 'doge_prob_baseline.py'
+      - '.github/workflows/doge_stat_audit.yml'
   schedule:
     - cron: '26 4 * * *'
 
@@ -31,6 +37,11 @@ jobs:
         id: audit
         continue-on-error: true
         run: python doge_stat_audit.py
+      - name: Compare causal historical-frequency probability baseline on same snapshot
+        id: probability
+        if: steps.audit.outcome == 'success'
+        continue-on-error: true
+        run: python doge_prob_baseline.py
       - name: Persist audit including failure diagnosis
         if: always()
         shell: bash
@@ -38,7 +49,9 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          if [ -f data/stat_audit/latest.json ]; then git add -f data/stat_audit/latest.json; fi
+          for f in data/stat_audit/latest.json data/prob_baseline/latest.json; do
+            if [ -f "$f" ]; then git add -f "$f"; fi
+          done
           if ! git diff --cached --quiet; then
             git commit -m 'data: audit DOGE prediction calibration and statistical robustness'
             for attempt in 1 2 3 4 5; do
@@ -48,5 +61,5 @@ jobs:
             done
           fi
       - name: Fail on audit error
-        if: steps.audit.outcome != 'success'
+        if: steps.audit.outcome != 'success' || steps.probability.outcome != 'success'
         run: exit 1
