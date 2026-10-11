@@ -53,6 +53,8 @@ def scrape(asset,url):
     for cells in rows:
         trade_date=datetime.strptime(cells[0],'%d %b %Y').date()
         if trade_date>datetime.now(timezone.utc).date():continue
+        if trade_date.weekday() >= 5:
+            raise ValueError(f'ETF publication has weekend trade date: {asset} {trade_date}')
         vals=[number(v) for v in cells[1:]]
         if len(vals)<2:raise ValueError('ETF row has no fund/total columns')
         total=vals[-1]
@@ -112,6 +114,21 @@ def main():
         atomic(revision_path,csv_dump(REVISIONS,revisions))
         result['stored_rows']=len(sorted_rows)
         result['duplicates']=0
+        result['coverage_audit']={}
+        for asset in SOURCES:
+            selected=[row for row in sorted_rows if row['asset']==asset]
+            dates=[date.fromisoformat(row['trade_date_us']) for row in selected]
+            if dates != sorted(dates) or len(dates)!=len(set(dates)):
+                raise ValueError(f'Historical date order or duplicate for {asset}')
+            result['coverage_audit'][asset]={
+                'stored_trading_dates':len(dates),
+                'earliest_date':dates[0].isoformat() if dates else None,
+                'latest_date':dates[-1].isoformat() if dates else None,
+                'rows_with_missing_fund_values':sum(int(row['funds_with_values']) < int(row['reported_funds']) for row in selected),
+                'total_is_provider_reported_not_independently_reconstructed':True,
+                'non_trading_days_are_not_zero_flows':True,
+                'point_in_time_usable_before_first_seen':False}
+        result['research_only_not_a_predictive_signal']=True
         result['status']='ok'
     except Exception as exc:
         result['errors']['collector']=type(exc).__name__+': '+str(exc)[:300]
