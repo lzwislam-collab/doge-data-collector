@@ -1,18 +1,18 @@
 {
   "schema_version": 1,
-  "evaluated_at_utc": "2026-10-11T08:22:18.334719+00:00",
-  "status": "data_quality_blocked",
+  "evaluated_at_utc": "2026-10-11T08:24:19.282409+00:00",
+  "status": "ok",
   "claim_permission": "NO_VALIDATED_EDGE",
   "research_only": true,
   "does_not_change_dca": true,
   "model_edge_proven": false,
   "checks": {
     "date_consistency": {
-      "pass": false,
+      "pass": true,
       "dates": [
         "2026-10-10",
         "2026-10-10",
-        "2026-10-09"
+        "2026-10-10"
       ]
     },
     "data_quality": {
@@ -22,11 +22,11 @@
       "duplicate_keys": 0
     },
     "aligned_days": {
-      "pass": false
+      "pass": true
     },
     "freshness": {
       "pass": true,
-      "days_since_last_confirmed_daily_bar": 2
+      "days_since_last_confirmed_daily_bar": 1
     },
     "prediction_horizons": {
       "1d": {
@@ -118,6 +118,27 @@
       "SEC/CFTC keyword candidates are incomplete and no causal bullish/bearish tags are established",
       "Use first_seen_utc conservatively until release timestamps, prior vintages and revision timelines are independently validated"
     ]
+  },
+  "stage5_directional_70pct_audit": {
+    "integrity_status": "ok",
+    "prospective_70pct_validated": false,
+    "historical_70pct_validated": false,
+    "historical_top_candidate": {
+      "horizon": "30d",
+      "model": "btc_momentum",
+      "n_nonoverlap": 20,
+      "correct": 14,
+      "accuracy_pct": 70.0,
+      "wilson95_lower_pct_descriptive_only": 48.1,
+      "historical_selection_bias": true,
+      "may_claim_prospective_70pct": false
+    },
+    "live_registered": 10,
+    "live_scored": 1,
+    "live_unscorable": 2,
+    "daily_quarantined": 3,
+    "source_alignment": "aligned",
+    "evidence_only_no_directional_claim": true
   },
   "limitations": [
     "A significant historical CI alone cannot authorize live forecast marketing",
