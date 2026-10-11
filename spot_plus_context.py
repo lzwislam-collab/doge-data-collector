@@ -64,6 +64,39 @@ def read_latest_etfs(root,now):
   'available_for_historical_training':False,
   'PIT_rule':'Never use ETF trade date as its availability timestamp; historical pre-first_seen backtest prohibited'}
 
+def inspect_legacy36(root):
+ path=root/'data/stage5/spot_plus/legacy36_map.csv'
+ summary={'retained_or_combined':21,'background_governance':8,'uncalibrated_withdrawn':7}
+ if not path.exists():
+  return {'prior_audit_source':'reports/DOGE_SYSTEM_AUDIT_2026-10-11.md',
+    'historical_summary_only':summary,'item_level_current_mapping_reconciled':False,
+    'original_google_sheet_full_catalog_not_validated_here':True,
+    'no_claim_all_36_are_signal_features':True}
+ with path.open(newline='',encoding='utf-8-sig') as stream:
+  reader=csv.DictReader(stream)
+  need={'Source36#','Legacy item','Decision','New section','Audit note','Version'}
+  if not need.issubset(reader.fieldnames or []):
+   raise ValueError('original 36 mapping missing columns')
+  data=list(reader)
+ if len(data)!=36 or [str(i) for i in range(1,37)]!=[x['Source36#'] for x in data]:
+  raise ValueError('original 36 mapping has missing duplicate or unsorted entries')
+ counts={k:sum(x['Decision']==k for x in data)
+   for k in ('KEEP_MERGE','BACKEND_ONLY','REMOVE_SCORE')}
+ if counts!={'KEEP_MERGE':21,'BACKEND_ONLY':8,'REMOVE_SCORE':7}:
+  raise ValueError('original 36 mapping category counts have changed')
+ if any(not x['Legacy item'] or not x['New section'] for x in data):
+  raise ValueError('original 36 item name or section missing')
+ return {'prior_audit_source':'reports/DOGE_SYSTEM_AUDIT_2026-10-11.md',
+   'original_source':'DOGE 长期统计底表 v0.1 / Forecast Report Slim Audit',
+   'item_level_snapshot':'data/stage5/spot_plus/legacy36_map.csv',
+   'last_verified_against_sheet_utc_day':'2026-10-11',
+   'snapshot_not_automatically_synced_to_sheet':True,
+   'historical_summary_only':summary,
+   'item_level_current_mapping_reconciled':True,
+   'original_google_sheet_full_catalog_not_validated_here':False,
+   'no_claim_all_36_are_signal_features':True}
+
+
 def inspect(root,now):
  if now.utcoffset()!=timedelta(0):raise ValueError('UTC audit clock needed')
  quality=load(root,'data/quality/latest.json')
@@ -141,11 +174,7 @@ def inspect(root,now):
   'quality_audit_stale_for_3h_realtime_claim':sec_age>3,
   'quality_critical_failures':len(quality['critical_failures']),
   'pillars':stages,'pillar_count':len(stages),
-  'original_36_items':{'prior_audit_source':'reports/DOGE_SYSTEM_AUDIT_2026-10-11.md',
-   'historical_summary_only':{'retained_or_combined':21,'background_governance':8,'uncalibrated_withdrawn':7},
-   'item_level_current_mapping_reconciled':False,
-   'original_google_sheet_full_catalog_not_validated_here':True,
-   'no_claim_all_36_are_signal_features':True},
+  'original_36_items':inspect_legacy36(root),
   'model_input_authorization':{
    'historic_PIT_safe': ['confirmed_DOGE_BTC_daily_prices_with_conservative_one_day_lag'],
    'live_context_not_historically_trainable_without_first_seen':[
