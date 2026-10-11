@@ -10,6 +10,30 @@ COLS=['forecast_id','registered_utc','anchor_date_utc','anchor_close','horizon_d
 def utc():return datetime.now(timezone.utc)
 def write(path,value):
  tmp=path.with_name(path.name+'.tmp');tmp.write_text(value,encoding='utf-8');os.replace(tmp,path)
+def verify_registry_integrity(existing,root=ROOT):
+    # Compare ALL committed versions, oldest to newest, plus current worktree.
+    # This detects a previously removed/revised row even when later commits obscure it.
+    revs=subprocess.run(['git','log','--reverse','--format=%H','--','data/prospective/registry.csv'],
+     cwd=root,text=True,capture_output=True,check=True).stdout.splitlines()
+    previous={}
+    for revision in revs:
+     raw=subprocess.run(['git','show',revision+':data/prospective/registry.csv'],
+        cwd=root,text=True,capture_output=True,check=True).stdout
+     reader=csv.DictReader(io.StringIO(raw))
+     if reader.fieldnames!=COLS:raise ValueError('historical registry schema mismatch')
+     current={}
+     for row in reader:
+        fid=row['forecast_id']
+        if fid in current:raise ValueError('duplicate forecast in git history: '+fid)
+        current[fid]=row
+     for fid,row in previous.items():
+        if fid not in current or current[fid]!=row:
+         raise ValueError('committed forecast history modified: '+fid)
+     previous=current
+    for fid,row in previous.items():
+     if fid not in existing or existing[fid]!=row:
+        raise ValueError('registered forecast removed or modified: '+fid)
+
 def main():
  DATA.mkdir(parents=True,exist_ok=True);timestamp=utc()
  result={'schema_version':1,'run_utc':timestamp.isoformat(),'status':'error','model':'historical up frequency with Laplace smoothing','research_only':True,'no_dca_change':True,'errors':[]}
@@ -39,28 +63,7 @@ def main():
      fid=row['forecast_id']
      if fid in existing:raise ValueError('duplicate registry ID')
      existing[fid]=row
-  # Compare ALL committed versions, oldest to newest, plus current worktree.
-  # This detects a previously removed/revised row even when later commits obscure it.
-  revs=subprocess.run(['git','log','--reverse','--format=%H','--','data/prospective/registry.csv'],
-   cwd=ROOT,text=True,capture_output=True,check=True).stdout.splitlines()
-  previous={}
-  for revision in revs:
-   raw=subprocess.run(['git','show',revision+':data/prospective/registry.csv'],
-    cwd=ROOT,text=True,capture_output=True,check=True).stdout
-   reader=csv.DictReader(io.StringIO(raw))
-   if reader.fieldnames!=COLS:raise ValueError('historical registry schema mismatch')
-   current={}
-   for row in reader:
-    fid=row['forecast_id']
-    if fid in current:raise ValueError('duplicate forecast in git history: '+fid)
-    current[fid]=row
-   for fid,row in previous.items():
-    if fid not in current or current[fid]!=row:
-     raise ValueError('committed forecast history modified: '+fid)
-   previous=current
-  for fid,row in previous.items():
-   if fid not in existing or existing[fid]!=row:
-    raise ValueError('registered forecast removed or modified: '+fid)
+  verify_registry_integrity(existing)
   old_count=len(existing);added=0
   digest=hashlib.sha256((str(anchor)+':'+str(last)).encode()).hexdigest()
   for h in H:
