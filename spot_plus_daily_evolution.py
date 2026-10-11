@@ -250,7 +250,6 @@ def run(root=ROOT,now=None):
   row=log_row(summary)
   row['previous_digest']=old[-1]['row_digest'] if old else 'GENESIS'
   row['row_digest']=fingerprint(row)
-  write_atomic(path,serial(old+[row]))
  # Existing day's first immutable row is not overwritten by later push runs.
  previous=(old[-1] if append and old else old[-2] if len(old)>1 else None)
  if previous is None:
@@ -271,9 +270,13 @@ def run(root=ROOT,now=None):
  summary['new_ledger_row']=append
  summary['ledger_last_date_utc']=date if append else old[-1]['date_utc']
  summary['ledger_integrity_checked']=True
- write_atomic(root/'data/stage5/spot_plus/evolution_latest.json',
-  json.dumps(summary,ensure_ascii=False,indent=2)+'\n')
- write_atomic(root/'reports/DOGE_SPOT_PLUS_DAILY.md',render(summary,append))
+ # Compute and validate outputs BEFORE writing the ledger, to avoid partial evidence on failure.
+ new_json=json.dumps(summary,ensure_ascii=False,indent=2)+'\n'
+ new_markdown=render(summary,append)
+ new_ledger=serial(old+[row]) if append else None
+ if append:write_atomic(path,new_ledger)
+ write_atomic(root/'data/stage5/spot_plus/evolution_latest.json',new_json)
+ write_atomic(root/'reports/DOGE_SPOT_PLUS_DAILY.md',new_markdown)
  return summary
 
 def main():
