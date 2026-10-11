@@ -11,6 +11,7 @@ DAY_MS=86400000
 HORIZONS=(1,7,30)
 TRAIN=730
 ALPHA=0.2
+MAX_REGISTRATION_LATENCY_MIN=120
 MODEL='doge_empirical_730d_v4_1'
 COLS=['forecast_id','registered_utc','anchor_date_utc','anchor_close','target_date_utc','horizon_days','model_id','training_n','p10','p50','p90','historical_up_frequency','baseline_p10','baseline_p50','baseline_p90','baseline_up_frequency','input_digest']
 DOWNSIDE={1:0.10,7:0.20,30:0.40}
@@ -146,6 +147,13 @@ def build(now=None):
     existing[fid]=row
  verify_append_only(existing)
  digest=hashlib.sha256((iso(times[-1])+':'+format(prices[-1],'.12g')).encode()).hexdigest()
+ anchor_closed_at=datetime.combine(datetime.fromtimestamp(times[-1]/1000,timezone.utc).date()+timedelta(days=1),datetime.min.time(),timezone.utc)
+ elapsed_min=(now-anchor_closed_at).total_seconds()/60
+ register_allowed=0<=elapsed_min<=MAX_REGISTRATION_LATENCY_MIN
+ output['registration_latency_minutes']=round(elapsed_min,2)
+ output['registration_limit_minutes']=MAX_REGISTRATION_LATENCY_MIN
+ output['registration_window_ok']=register_allowed
+ output['registration_warning']=None if register_allowed else 'Late/missing run: descriptive distribution only, no new prospective forecast registered'
  generated=[];backtests={}
  for h in HORIZONS:
   p=prediction(prices,anchor,h,True);baseline=prediction(prices,anchor,h,False)
@@ -159,10 +167,9 @@ def build(now=None):
    'research_large_down_threshold_pct':-int(DOWNSIDE[h]*100),
    'historical_large_down_frequency_pct':round(p['historical_large_down_frequency']*100,3),
    'validated_probability':False,'historical_sample_only':True}
+  output['price_intervals'][str(h)+'d']['prospective_registered_or_existing']=fid in existing or register_allowed
   backtests[str(h)+'d']=walk_forward(prices,h)
-  if fid not in existing:
-   if now.date()!=(datetime.fromtimestamp(times[-1]/1000,timezone.utc).date()+timedelta(days=1)):
-    raise ValueError('retrospective registration forbidden')
+  if fid not in existing and register_allowed:
    row=dict(zip(COLS,[fid,now.isoformat(),iso(times[-1]),format(prices[-1],'.12g'),expected,str(h),MODEL,str(p['n']),
      format(values['p10'],'.12g'),format(values['p50'],'.12g'),format(values['p90'],'.12g'),
      format(p['historical_up_frequency'],'.10f'),
