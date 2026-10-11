@@ -1,0 +1,41 @@
+{
+  "schema_version": 2,
+  "status": "ok",
+  "evaluated_utc": "2026-10-11T02:42:11.254602+00:00",
+  "rule_version": "V4.2_scoring_only_v1",
+  "legacy_watch_rows_unmodified": true,
+  "horizon": "event candle START >= issued_at + 1h AND < issued_at + 12h; evaluate only after each eligible candle closes",
+  "score_window_lead_min_hours": 1,
+  "alarm_cooldown_hours": 12,
+  "event_cluster_hours": 12,
+  "registered": 1,
+  "scored": [],
+  "pending": [
+    {
+      "watch_id": "shock_watch_rule_frozen_20261011_v1_1791680400000",
+      "reason": "awaiting complete forward target candle",
+      "last_required_utc": "2026-10-11T14:00:00+00:00"
+    }
+  ],
+  "quarantined": [],
+  "scored_count": 0,
+  "pending_count": 1,
+  "quarantined_count": 0,
+  "active_alerts": 0,
+  "cooldown_suppressed_alert_ids": [],
+  "true_matched_alerts": 0,
+  "false_alerts": 0,
+  "matched_event_lead_hours": [],
+  "alert_precision_pct": null,
+  "eligible_clustered_events": 0,
+  "unobserved_clustered_events": 3,
+  "matched_clustered_events": 0,
+  "matched_any_clustered_events": 0,
+  "event_recall_pct": null,
+  "target_precision_pct": 70,
+  "target_recall_pct": 70,
+  "minimum_independent_holdout_events": 30,
+  "eligible_for_predictive_claim": false,
+  "approval": "BLOCKED_NO_VALIDATED_EDGE",
+  "evidence_warning": "Event-coverage eligibility requires each of the 11 eligible prior hourly checkpoints; missing collection is not scored as negative; this remains a research-only, post-hoc selected alert rule."
+}
