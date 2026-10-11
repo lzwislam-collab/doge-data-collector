@@ -1,6 +1,11 @@
 name: Verify DOGE collector scheduled-run evidence
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'doge_schedule_evidence.py'
+      - '.github/workflows/doge_schedule_evidence.yml'
   schedule:
     - cron: '44 2,8,14,20 * * *'
 permissions:
