@@ -106,19 +106,37 @@ def simulate(bars,start,mode,btc=None,fee=FEE,slippage=SLIPPAGE):
   daily_return.append(new_equity/equity-1)
   equity=new_equity
   peak=max(peak,equity);maxdd=max(maxdd,1-equity/peak)
+ # At research horizon, every residual DOGE position is ASSUMED liquidated.
+ # Without this, held strategies are marked at mid/last close while cash
+ # has already paid selling costs, overstating immediately realizable PnL.
+ marked_equity=equity
+ terminal_sell_price=bars[-1]['c']*(1-slippage)
+ terminal_proceeds=tokens*terminal_sell_price*(1-fee)
+ if tokens:
+  fees+=tokens*terminal_sell_price*fee
+  slip_cost+=tokens*bars[-1]['c']*slippage
+  trades+=1
+ terminal_equity=cash+terminal_proceeds
+ maxdd=max(maxdd,1-terminal_equity/peak)
  years=(len(bars)-start)/365.0
- return {'initial_usdt':INITIAL,'final_usdt':round(equity,2),
-  'net_total_return_pct':round(100*(equity/INITIAL-1),2),
-  'cagr_pct':round(100*((equity/INITIAL)**(1/years)-1),2) if equity>0 else -100,
+ return {'initial_usdt':INITIAL,'final_usdt':round(terminal_equity,2),
+  'pre_liquidation_mark_to_market_usdt':round(marked_equity,2),
+  'terminal_liquidation_assumed':True,
+  'net_total_return_pct':round(100*(terminal_equity/INITIAL-1),2),
+  'cagr_pct':round(100*((terminal_equity/INITIAL)**(1/years)-1),2) if terminal_equity>0 else -100,
   'max_drawdown_pct':round(100*maxdd,2),'trades':trades,
   'days_exposed_pct':round(100*exposed/(len(bars)-start),2),
+  'estimated_total_fees_usdt':round(fees,2),
+  'estimated_total_slippage_usdt':round(slip_cost,2),
   'observed_fees_usdt':round(fees,2),
   'observed_slippage_usdt':round(slip_cost,2),
   'open_to_close_direction_accuracy_pct':round(100*correct/n,2) if n else None,
   'direction_scored_days':n,
   'assumptions':{'fee_per_side':fee,'slippage_per_side':slippage,
    'funding_yield':0,'borrowing':False,'shorting':False,
-   'liquidation':False,'market_impact_beyond_assumed_slippage':False}}
+   'liquidation':False,'terminal_spot_sale_included':True,
+   'frictions_are_assumptions_not_observed_fills':True,
+   'market_impact_beyond_assumed_slippage':False}}
 
 def prices_scenario(bars,reference):
  """Distribution of known past daily close-to-close moves; NOT a confidence interval."""
@@ -196,6 +214,7 @@ def evaluate(root=ROOT,now=None):
    'target_definition':'daily UTC OPEN-to-CLOSE direction; distinct from frozen V4.2 issuance-to-24h-ticker direction',
    'execution':'spot only full position or cash; no trading within daily bar; initial 10000 USDT',
    'fee_each_side_pct':FEE*100,'slippage_each_side_pct':SLIPPAGE*100,
+   'assumed_terminal_spot_sale_included':True,
    'candidate_hypothesis_only':True},
   'historical_spot_paper':simulations,
   'five_pillar_evidence_audit':context,
