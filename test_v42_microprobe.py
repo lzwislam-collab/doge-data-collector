@@ -6,7 +6,7 @@ class MicroProbeTests(unittest.TestCase):
  def candle(self,t,confirm='1',low='0.99',volume='100'):
   return [str(t),'1','1.01',low,'1.0',volume,'100','100',confirm]
  def test_only_confirmed_full_bar(self):
-  x=parse('DOGE-USDT','1m',self.candle(600000),'1200000','2026-10-11T00:00:00+00:00')
+  x=parse('DOGE-USDT','1m',self.candle(600000),1200000,'2026-10-11T00:00:00+00:00')
   self.assertIsNotNone(x)
   self.assertIsNone(parse('DOGE-USDT','1m',self.candle(600000,'0'),1200000,'2026-10-11T00:00:00Z'))
  def test_not_yet_closed_excluded(self):
