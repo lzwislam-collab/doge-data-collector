@@ -125,6 +125,7 @@ def inspect(root=ROOT,now=None):
  effective_age=(now-quality_origin).total_seconds()/3600
  stale=(effective_age>3)
  source_warnings=[]
+ if stale:source_warnings.append('GLOBAL_QUALITY_AUDIT:older_than_3h')
  for name,pillar in context['pillars'].items():
   for src,entry in pillar.get('sources',{}).items():
    reported=entry.get('state')
@@ -216,7 +217,7 @@ def log_row(summary):
 
 def render(s,record):
  p=s['prospective_24h'];h=s['historical_paper']
- def val(v):return '尚无有效样本' if v is None else str(v)
+ def val(v):return '尚无有效样本' if v is None else str(v)+'%'
  warnings=', '.join(s['source_health']['warning_sources']) or '无'
  return ('# DOGE 现货预测 Plus｜每日进化审计\n\n'
   f"**运行UTC：** {s['generated_at_utc']}  \n"
@@ -225,12 +226,14 @@ def render(s,record):
   f"**本日账本：** {'新建记录' if record else '保留本日首次记录，不重复写入'}\n\n"
   '## ① 预测能力（仅冻结后独立24小时正式样本）\n\n'
   f"- 已发行可独立分箱预测：{p['locked_bin_registered']}；取得有效评分：{p['genuinely_scored']}；正确：{p['correct']}。\n"
-  f"- 方向准确率：{val(p['accuracy_pct'])}%；95% Wilson下限：{val(p['wilson95_lower_pct'])}%；报价覆盖率：{val(p['coverage_pct'])}%。\n"
+  f"- 方向准确率：{val(p['accuracy_pct'])}；95% Wilson下限：{val(p['wilson95_lower_pct'])}；报价覆盖率：{val(p['coverage_pct'])}。\n"
   '- 70%有效优势：**未验证**。历史和冻结前诊断不计入正式成绩。\n\n'
   '## ② 现货经济能力（仅历史假设模拟）\n\n'
   f"- DOGE买入持有：{h['buy_hold_pct']}%；现金：{h['cash_pct']}%；历史最好候选 {h['best_candidate_id']}：{h['best_candidate_pct']}%。\n"
   f"- 与持币比较：{h['candidate_outperformance_vs_hold_pct_points']}个百分点；候选通过历史观察筛选，**不构成未来获利证据**。\n\n"
-  '## ③ 今日最优先整改\n\n'
+  '## ③ 与前一日相比\n\n'
+  f"- {s['change_since_previous_daily_record']['summary']}\n\n"
+  '## ④ 今日最优先整改\n\n'
   f"**{s['evolution_priority']}**\n\n"
   '逐项保留缺失与时点限制，次日复查是否修复。模型升级须另外独立验证。'
   '不自动交易、不更改DOGE定投、不保证70%。\n')
@@ -249,6 +252,21 @@ def run(root=ROOT,now=None):
   row['row_digest']=fingerprint(row)
   write_atomic(path,serial(old+[row]))
  # Existing day's first immutable row is not overwritten by later push runs.
+ previous=(old[-1] if append and old else old[-2] if len(old)>1 else None)
+ if previous is None:
+  change={'summary':'首日基线，无前日对比数据','previous_date_utc':None,
+    'new_24h_predictions':None,'new_24h_scored':None,'new_24h_correct':None}
+ else:
+  p=summary['prospective_24h']
+  new_n=p['locked_bin_registered']-int(previous['prospective_24h_n'])
+  new_s=p['genuinely_scored']-int(previous['prospective_24h_scored'])
+  # Previous correct count is not stored in v1 ledger; record scored delta
+  # and refuse to invent a "correct count improved" history.
+  if new_n<0 or new_s<0:raise ValueError('prospective evidence counters regressed')
+  change={'summary':f'相对{previous["date_utc"]}：新增正式预测{new_n}次，新增合格评分{new_s}次；这不是模型性能提高的证明',
+    'previous_date_utc':previous['date_utc'],
+    'new_24h_predictions':new_n,'new_24h_scored':new_s,'new_24h_correct':None}
+ summary['change_since_previous_daily_record']=change
  summary['ledger_rows']=len(old)+int(append)
  summary['new_ledger_row']=append
  summary['ledger_last_date_utc']=date if append else old[-1]['date_utc']
