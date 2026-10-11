@@ -42,7 +42,16 @@ def main():
      results['quarantined'].append({'forecast_id':fid,'reason':'anchor_close_mismatch_or_missing'});continue
     y=1 if price[target]>price[anchor] else 0
     results['scores'].append({'forecast_id':fid,'target_date':str(target),'realized_up':y,
-      'brier':round((p-y)**2,9),'forecast_probability':p,'target_close':price[target]})
+      'brier':round((p-y)**2,9),'brier_50pct_baseline':0.25,'forecast_probability':p,'target_close':price[target],'horizon_days':horizon})
+  by_horizon={}
+  for h in (1,7,30):
+   group=[row for row in results['scores'] if row['horizon_days']==h]
+   n=len(group)
+   avg=sum(row['brier'] for row in group)/n if n else None
+   by_horizon[str(h)+'d']={'n':n,'mean_brier':round(avg,9) if avg is not None else None,
+    'brier_improvement_vs_50pct':round(0.25-avg,9) if avg is not None else None,
+    'minimum_evaluation_sample':100,'eligible_for_predictive_claim':False}
+  results['horizon_summary']=by_horizon
   results.update(status='ok',registered=len(seen),scored=len(results['scores']),
     pending_count=len(results['pending']),quarantined_count=len(results['quarantined']))
  except Exception as e:results['errors'].append(type(e).__name__+': '+str(e)[:250])
