@@ -1,0 +1,48 @@
+name: Sample free Bybit DOGE liquidation events
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+permissions:
+  contents: write
+concurrency:
+  group: bybit-doge-liquidation-sampling
+  cancel-in-progress: false
+jobs:
+  sample:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 13
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install WebSocket client
+        run: python -m pip install 'websocket-client==1.8.0'
+      - name: Syntax check
+        run: python -m py_compile bybit_liquidations.py
+      - name: Sample Bybit public feed
+        id: fetch
+        continue-on-error: true
+        env:
+          BYBIT_LISTEN_SECONDS: '480'
+        run: python bybit_liquidations.py
+      - name: Commit observations or diagnostics
+        if: always()
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          for f in data/bybit_liquidations/latest.json data/bybit_liquidations/events.csv; do
+            if [ -f "$f" ]; then git add -f "$f"; fi
+          done
+          if ! git diff --cached --quiet; then
+            git commit -m 'data: sample Bybit DOGE liquidation events'
+            for i in 1 2 3 4 5; do
+              if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
+              if [ "$i" -eq 5 ]; then exit 1; fi
+              sleep 4
+            done
+          fi
+      - name: Report failed sample
+        if: steps.fetch.outcome != 'success'
+        run: exit 1
