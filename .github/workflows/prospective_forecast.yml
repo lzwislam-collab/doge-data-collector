@@ -6,6 +6,9 @@ on:
     paths:
       - 'prospective_forecast.py'
       - '.github/workflows/prospective_forecast.yml'
+  workflow_run:
+    workflows: ['Backfill OKX daily DOGE BTC ETH history and baseline backtest']
+    types: [completed]
   schedule:
     - cron: '12 6 * * *'
 permissions:
@@ -15,6 +18,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   register:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 6
     steps:
