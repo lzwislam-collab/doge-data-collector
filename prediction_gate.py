@@ -115,6 +115,21 @@ def main():
          'stage3_etf_admissibility':stage3_etf_admissibility(),
          'stage4_macro_policy_admissibility':stage4_macro_policy_admissibility()}
  try:
+  stage5=json.loads((ROOT/'data/stage5/latest.json').read_text(encoding='utf-8'))
+  if (stage5.get('status')!='ok' or stage5.get('claim_permission')!='NO_VALIDATED_EDGE'
+      or stage5.get('prospective_70pct_validated') is not False):
+   raise ValueError('Stage5 70% direction audit missing or made unsupported claim')
+  result['stage5_directional_70pct_audit']={
+    'integrity_status':'ok',
+    'prospective_70pct_validated':False,
+    'historical_70pct_validated':False,
+    'historical_top_candidate':stage5['historical']['highest_observed_accuracy'],
+    'live_registered':stage5['forward_live']['registered_total'],
+    'live_scored':stage5['forward_live']['scored_total'],
+    'live_unscorable':stage5['forward_live']['unscorable_total'],
+    'daily_quarantined':stage5['daily_probability_forward']['quarantined_total'],
+    'source_alignment':stage5['comparability']['status'],
+    'evidence_only_no_directional_claim':True}
   val=load('data/validation/latest.json')
   stat=load('data/stat_audit/latest.json')
   prob=load('data/prob_baseline/latest.json')
