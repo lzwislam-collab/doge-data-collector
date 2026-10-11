@@ -171,5 +171,5 @@ def main():
   obj={'status':'blocked','error':type(e).__name__+': '+str(e)[:360],'model_predictive_advantage':'NO_VALIDATED_EDGE'}
   write(BASE/'prospective_scores.json',json.dumps(obj,indent=2)+'\n')
  print(json.dumps({k:obj.get(k) for k in ('status','registered_new','registered','precision_pct','recall_pct','error')}))
- return int(obj['status']=='blocked')
+ return int(obj['status']!='ok')
 if __name__=='__main__':raise SystemExit(main())
