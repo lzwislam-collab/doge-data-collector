@@ -11,6 +11,9 @@ on:
       - '.github/workflows/doge_schedule_evidence.yml'
   schedule:
     - cron: '44 2,8,14,20 * * *'
+  workflow_run:
+    workflows: ['DOGE rolling PoR UTXO candidate audit (not exchange netflow)']
+    types: [completed]
 permissions:
   actions: read
   contents: write
@@ -19,6 +22,8 @@ concurrency:
   cancel-in-progress: false
 jobs:
   audit:
+    # A completed UTXO job triggers read-only verification. Skips and failures do not count.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
