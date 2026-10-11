@@ -15,6 +15,8 @@ on:
       - 'test_spot_plus_research.py'
       - 'spot_plus_daily_evolution.py'
       - 'test_spot_plus_daily_evolution.py'
+      - 'feed_freshness_audit.py'
+      - 'test_feed_quality.py'
       - 'test_stage5_forward_quality.py'
       - '.github/workflows/prediction_gate.yml'
       - 'data/quality/latest.json'
@@ -39,17 +41,26 @@ jobs:
         run: |
           python -m py_compile prediction_gate.py stage5_70pct_audit.py stage5_forward_quality.py stage5_error_review.py spot_plus_research.py spot_plus_context.py spot_plus_daily_evolution.py
           python -m unittest -v test_stage5_70pct_audit test_stage5_forward_quality test_stage5_error_review test_spot_plus_research test_spot_plus_daily_evolution
+      - name: Synchronize latest source health and timestamps before forecasting
+        id: freshness
+        continue-on-error: true
+        run: |
+          python -m unittest -q test_feed_quality
+          python feed_freshness_audit.py
       - name: Independently refresh error review without changing original forecasts
         id: error_review
         continue-on-error: true
+        if: steps.freshness.outcome == 'success'
         run: python stage5_error_review.py
       - name: Independently audit 70-percent direction target and prospective samples
         id: stage5
         continue-on-error: true
+        if: steps.freshness.outcome == 'success' && steps.error_review.outcome == 'success'
         run: python stage5_70pct_audit.py
       - name: Integrate all five DOGE source pillars and independently paper-test spot profit
         id: spot_plus
         continue-on-error: true
+        if: steps.freshness.outcome == 'success' && steps.stage5.outcome == 'success'
         run: python spot_plus_research.py
       - name: Append once-per-UTC-day hash-linked research progress and refresh daily human report
         id: evolution
@@ -59,6 +70,7 @@ jobs:
       - name: Audit claim eligibility
         id: audit
         continue-on-error: true
+        if: steps.freshness.outcome == 'success' && steps.spot_plus.outcome == 'success' && steps.evolution.outcome == 'success'
         run: python prediction_gate.py
       - name: Commit result including failure evidence
         if: always()
@@ -67,7 +79,7 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          for file in data/prediction_gate/latest.json data/stage5/latest.json data/stage5/error_review/latest.json data/stage5/spot_plus/latest.json data/stage5/spot_plus/evolution_latest.json data/stage5/spot_plus/evolution_log.csv reports/DOGE_SPOT_PLUS_DAILY.md; do
+          for file in data/quality/latest.json data/prediction_gate/latest.json data/stage5/latest.json data/stage5/error_review/latest.json data/stage5/spot_plus/latest.json data/stage5/spot_plus/evolution_latest.json data/stage5/spot_plus/evolution_log.csv reports/DOGE_SPOT_PLUS_DAILY.md; do
             if [ -f "$file" ]; then git add -f "$file"; fi
           done
           if ! git diff --cached --quiet; then
@@ -79,5 +91,5 @@ jobs:
             done
           fi
       - name: Fail on invalid input audit
-        if: steps.audit.outcome != 'success' || steps.stage5.outcome != 'success' || steps.error_review.outcome != 'success' || steps.spot_plus.outcome != 'success' || steps.evolution.outcome != 'success'
+        if: steps.freshness.outcome != 'success' || steps.audit.outcome != 'success' || steps.stage5.outcome != 'success' || steps.error_review.outcome != 'success' || steps.spot_plus.outcome != 'success' || steps.evolution.outcome != 'success'
         run: exit 1
