@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_utc": "2026-10-11T01:59:22.519383+00:00",
+  "generated_utc": "2026-10-11T02:15:33.116772+00:00",
   "status": "ok",
   "anchor_date_utc": "2026-10-10",
   "anchor_close": 0.08577,
@@ -24,6 +24,7 @@
       "historical_large_down_frequency_pct": 1.913,
       "validated_probability": false,
       "historical_sample_only": true,
+      "remaining_target_minutes_after_registration": 1304.45,
       "prospective_registered_or_existing": true
     },
     "7d": {
@@ -39,6 +40,7 @@
       "historical_large_down_frequency_pct": 2.322,
       "validated_probability": false,
       "historical_sample_only": true,
+      "remaining_target_minutes_after_registration": 9944.45,
       "prospective_registered_or_existing": true
     },
     "30d": {
@@ -54,6 +56,7 @@
       "historical_large_down_frequency_pct": 0.41,
       "validated_probability": false,
       "historical_sample_only": true,
+      "remaining_target_minutes_after_registration": 43064.45,
       "prospective_registered_or_existing": true
     }
   },
@@ -62,10 +65,15 @@
     "Rolling backtest explores 365 recent anchors, not a fresh untouched test set",
     "No 365d probability; no position sizing or execution instructions"
   ],
-  "registration_latency_minutes": 119.38,
+  "forecast_clock_definition": "UTC prior daily close to target UTC daily close; NOT 24h after registration",
+  "origin_close_at_utc": "2026-10-11T00:00:00+00:00",
+  "reported_at_utc": "2026-10-11T02:15:33.116772+00:00",
+  "target_window_elapsed_before_issue_minutes": 135.55,
+  "from_report_time_exact_24h_forecast": false,
+  "registration_latency_minutes": 135.55,
   "registration_limit_minutes": 120,
-  "registration_window_ok": true,
-  "registration_warning": null,
+  "registration_window_ok": false,
+  "registration_warning": "Late/missing run: descriptive distribution only, no new prospective forecast registered",
   "registered_new_forecasts": 0,
   "registry_rows": 3,
   "new_ids": []
