@@ -124,8 +124,8 @@ def main():
     else:
      x=recent[h];as_dir=lambda k: '涨' if x[k]=='UP' else '跌/平'
      direction_lines.append(f"|{name}|{x['issued_at_utc']}|{x['reference_price']}|{as_dir('majority_direction')}|{as_dir('doge_reversal_direction')}|{as_dir('btc_momentum_direction')}|{x['target_utc']}|")
- else:
-  direction_lines+=['真实前瞻方向登记暂不可用：仅展示历史探索性回测，不推断已有实时预测。']
+  else:
+   direction_lines+=['真实前瞻方向登记暂不可用：仅展示历史探索性回测，不推断已有实时预测。']
 
  else:
   direction_lines=['**方向模型的本期历史审计缺失或截止时间不一致，不能发布70%准确率声明。**']
