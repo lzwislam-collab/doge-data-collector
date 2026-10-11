@@ -1,0 +1,38 @@
+name: Test DOGE V4.1 PIT calibration challenger
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'research_interval_calibration.py'
+      - 'forecast_v41.py'
+      - 'score_v41.py'
+      - 'test_calibration_v41.py'
+      - '.github/workflows/test_calibration_v41.yml'
+permissions:
+  contents: read
+jobs:
+  research:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile and test causal calibration
+        run: |
+          python -m py_compile research_interval_calibration.py forecast_v41.py score_v41.py
+          python -m unittest -v test_calibration_v41 test_forecast_v41
+      - name: Evaluate rolling PIT challenger against historical intervals
+        run: |
+          python research_interval_calibration.py
+          python - <<'PY'
+          import json
+          o=json.load(open('data/forecast_v41/calibration_research.json'))
+          assert o['status']=='ok' and o['production_model_unchanged'] is True
+          assert all(o['horizons'][str(h)+'d']['automatic_promotion'] is False for h in (1,7,30))
+          for h in (1,7,30):
+            x=o['horizons'][str(h)+'d']
+            print(h, x['all_overlapping'], x['nonoverlap'], x['paired_block_bootstrap'])
+          PY
