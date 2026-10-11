@@ -1,0 +1,432 @@
+{
+  "schema_version": 1,
+  "status": "ok",
+  "generated_at_utc": "2026-10-11T12:19:10.274234+00:00",
+  "product": "DOGE 现货盈利预测 Plus v0.1 | research-only",
+  "source": "OKX confirmed 1Dutc OHLCV; immutable V4.2 issuance-quote registry",
+  "source_daily_latest_confirmed_start_utc": "2026-10-10T00:00:00Z",
+  "source_daily_last_available_at_utc": "2026-10-11T00:00:00+00:00",
+  "data_quality": {
+    "doge_daily_rows": 2475,
+    "btc_comparison_rows": 2475,
+    "missing_dates": 0,
+    "duplicate_daily_keys": 0
+  },
+  "study": {
+    "test_split": "chronological_last_30_percent",
+    "not_pristine_holdout": true,
+    "candidate_rules_selected_after_historical_exploration": true,
+    "test_start_utc": "2024-09-28",
+    "test_end_utc": "2026-10-10",
+    "test_days": 743,
+    "signal_timing": "use only day i-2 and i-3 confirmed closes; execute at day i OPEN, at least one full daily bar delayed",
+    "target_definition": "daily UTC OPEN-to-CLOSE direction; distinct from frozen V4.2 issuance-to-24h-ticker direction",
+    "execution": "spot only full position or cash; no trading within daily bar; initial 10000 USDT",
+    "fee_each_side_pct": 0.1,
+    "slippage_each_side_pct": 0.05,
+    "candidate_hypothesis_only": true
+  },
+  "historical_spot_paper": {
+    "doge_one_day_lag_reversal": {
+      "initial_usdt": 10000.0,
+      "final_usdt": 5314.53,
+      "net_total_return_pct": -46.85,
+      "cagr_pct": -26.69,
+      "max_drawdown_pct": 58.16,
+      "trades": 373,
+      "days_exposed_pct": 52.89,
+      "observed_fees_usdt": 2577.15,
+      "observed_slippage_usdt": 1288.57,
+      "open_to_close_direction_accuracy_pct": 52.89,
+      "direction_scored_days": 743,
+      "assumptions": {
+        "fee_per_side": 0.001,
+        "slippage_per_side": 0.0005,
+        "funding_yield": 0,
+        "borrowing": false,
+        "shorting": false,
+        "liquidation": false,
+        "market_impact_beyond_assumed_slippage": false
+      }
+    },
+    "doge_one_day_lag_momentum": {
+      "initial_usdt": 10000.0,
+      "final_usdt": 4261.3,
+      "net_total_return_pct": -57.39,
+      "cagr_pct": -34.23,
+      "max_drawdown_pct": 88.21,
+      "trades": 374,
+      "days_exposed_pct": 47.11,
+      "observed_fees_usdt": 4818.04,
+      "observed_slippage_usdt": 2409.02,
+      "open_to_close_direction_accuracy_pct": 47.11,
+      "direction_scored_days": 743,
+      "assumptions": {
+        "fee_per_side": 0.001,
+        "slippage_per_side": 0.0005,
+        "funding_yield": 0,
+        "borrowing": false,
+        "shorting": false,
+        "liquidation": false,
+        "market_impact_beyond_assumed_slippage": false
+      }
+    },
+    "btc_one_day_lag_momentum": {
+      "initial_usdt": 10000.0,
+      "final_usdt": 3242.31,
+      "net_total_return_pct": -67.58,
+      "cagr_pct": -42.49,
+      "max_drawdown_pct": 92.29,
+      "trades": 370,
+      "days_exposed_pct": 50.07,
+      "observed_fees_usdt": 3484.9,
+      "observed_slippage_usdt": 1742.45,
+      "open_to_close_direction_accuracy_pct": 46.03,
+      "direction_scored_days": 743,
+      "assumptions": {
+        "fee_per_side": 0.001,
+        "slippage_per_side": 0.0005,
+        "funding_yield": 0,
+        "borrowing": false,
+        "shorting": false,
+        "liquidation": false,
+        "market_impact_beyond_assumed_slippage": false
+      }
+    },
+    "buy_and_hold": {
+      "initial_usdt": 10000.0,
+      "final_usdt": 6933.97,
+      "net_total_return_pct": -30.66,
+      "cagr_pct": -16.46,
+      "max_drawdown_pct": 85.19,
+      "trades": 1,
+      "days_exposed_pct": 100.0,
+      "observed_fees_usdt": 9.99,
+      "observed_slippage_usdt": 4.99,
+      "open_to_close_direction_accuracy_pct": null,
+      "direction_scored_days": 0,
+      "assumptions": {
+        "fee_per_side": 0.001,
+        "slippage_per_side": 0.0005,
+        "funding_yield": 0,
+        "borrowing": false,
+        "shorting": false,
+        "liquidation": false,
+        "market_impact_beyond_assumed_slippage": false
+      }
+    },
+    "cash": {
+      "initial_usdt": 10000.0,
+      "final_usdt": 10000.0,
+      "net_total_return_pct": 0.0,
+      "cagr_pct": 0.0,
+      "max_drawdown_pct": 0.0,
+      "trades": 0,
+      "days_exposed_pct": 0.0,
+      "observed_fees_usdt": 0.0,
+      "observed_slippage_usdt": 0.0,
+      "open_to_close_direction_accuracy_pct": null,
+      "direction_scored_days": 0,
+      "assumptions": {
+        "fee_per_side": 0.001,
+        "slippage_per_side": 0.0005,
+        "funding_yield": 0,
+        "borrowing": false,
+        "shorting": false,
+        "liquidation": false,
+        "market_impact_beyond_assumed_slippage": false
+      }
+    }
+  },
+  "five_pillar_evidence_audit": {
+    "status": "ok",
+    "quality_audit_age_hours": 3.46,
+    "quality_audit_stale_for_3h_realtime_claim": true,
+    "quality_critical_failures": 0,
+    "pillars": {
+      "1_onchain_whales_exchange": {
+        "sources": {
+          "onchain": {
+            "state": "current",
+            "status": "ok",
+            "source_file": "data/onchain/metrics_latest.json",
+            "source_utc": "2026-10-11T01:49:14.153111+00:00",
+            "age_hours": 10.5,
+            "allowed_for_model": false
+          },
+          "confirmed_whales": {
+            "state": "current",
+            "status": "ok",
+            "source_file": "data/whales_blocks/latest.json",
+            "source_utc": "2026-10-11T12:03:51.604503+00:00",
+            "age_hours": 0.26,
+            "allowed_for_model": false
+          },
+          "utxo_candidate": {
+            "state": "current",
+            "status": "ok_sample_complete",
+            "source_file": "data/stage1/rolling_por_utxo_latest.json",
+            "source_utc": "2026-10-11T07:37:13.640196+00:00",
+            "age_hours": 4.7,
+            "allowed_for_model": false
+          },
+          "schedule_evidence": {
+            "state": "current",
+            "status": "all_evidence_matched",
+            "source_file": "data/stage1/schedule_evidence.json",
+            "source_utc": "2026-10-11T09:35:23.338144+00:00",
+            "age_hours": 2.73,
+            "allowed_for_model": false
+          }
+        },
+        "predictor_policy": "research_context_only; whale TX does not prove economic entity activity or exchange netflows",
+        "unverified_features": [
+          "exchange_netflow",
+          "current_PoR_address_ownership",
+          "entity_adjusted_whale_flow"
+        ],
+        "observations": {
+          "active_addresses_last_complete_day": 33789,
+          "whale_scanner_confirmed_candidate_events": 121,
+          "utxo_scheduled_chain_verified": false,
+          "verified_exchange_netflow": false
+        }
+      },
+      "2_liquidations_liquidity": {
+        "sources": {
+          "sampled_liquidations": {
+            "state": "current",
+            "status": "partial",
+            "source_file": "data/liquidations/latest.json",
+            "source_utc": "2026-10-11T12:09:24.575446+00:00",
+            "age_hours": 0.16,
+            "allowed_for_model": false
+          },
+          "liquidity_snapshot": {
+            "state": "current",
+            "status": "ok",
+            "source_file": "data/liquidity/latest.json",
+            "source_utc": "2026-10-11T11:24:46.207000+00:00",
+            "age_hours": 0.91,
+            "allowed_for_model": false
+          }
+        },
+        "predictor_policy": "liquidity snapshots are timestamped, not historical full-market liquidation totals",
+        "unverified_features": [
+          "global_liquidation_total",
+          "full_24h_forced_liquidation_imbalance"
+        ],
+        "observations": {
+          "bid_ask_50bps_imbalance": -0.1664,
+          "observed_liquidation_listen_window_minutes": 8.0,
+          "liquidation_full_market_coverage": false
+        }
+      },
+      "3_etf": {
+        "sources": {
+          "etf_report": {
+            "state": "current",
+            "status": "ok",
+            "source_file": "data/etf/latest.json",
+            "source_utc": "2026-10-10T21:50:02.145697+00:00",
+            "age_hours": 14.49,
+            "allowed_for_model": false
+          }
+        },
+        "observations": {
+          "state": "snapshot_research_only",
+          "latest_by_asset": {
+            "BTC": {
+              "trade_date_us": "2026-10-09",
+              "net_flow_m_usd": 21.1,
+              "first_seen_utc": "2026-10-10T11:29:04.819937+00:00"
+            },
+            "ETH": {
+              "trade_date_us": "2026-10-09",
+              "net_flow_m_usd": -56.1,
+              "first_seen_utc": "2026-10-10T11:29:04.819937+00:00"
+            }
+          },
+          "available_for_historical_training": false,
+          "PIT_rule": "Never use ETF trade date as its availability timestamp; historical pre-first_seen backtest prohibited"
+        },
+        "predictor_policy": "snapshot available from first_seen_utc; no historical leakage",
+        "unverified_features": [
+          "complete_publication_vintage_history",
+          "same_day_ex_ante_ETF_flow"
+        ]
+      },
+      "4_macro_policy": {
+        "sources": {
+          "macro": {
+            "state": "current",
+            "status": "ok",
+            "source_file": "data/macro/latest.json",
+            "source_utc": "2026-10-11T03:44:17.447391+00:00",
+            "age_hours": 8.58,
+            "allowed_for_model": false
+          },
+          "fed_bls_calendar": {
+            "state": "current",
+            "status": "ok",
+            "source_file": "data/policy_events/latest.json",
+            "source_utc": "2026-10-11T02:28:11.902224+00:00",
+            "age_hours": 9.85,
+            "allowed_for_model": false
+          }
+        },
+        "observations": {
+          "macro_series_count": 8,
+          "policy_calendar_records": 86
+        },
+        "predictor_policy": "observation date != release time; calendar schedule != realized CPI or PPI; no inferred DOGE reaction",
+        "unverified_features": [
+          "historical_FRED_vintages",
+          "confirmed_macro_release_surprises",
+          "policy_text_directional_effect"
+        ]
+      },
+      "5_history_models": {
+        "sources": {
+          "history": {
+            "state": "current",
+            "status": "ok",
+            "source_file": "data/history/latest.json",
+            "source_utc": "2026-10-11T10:32:05.231750+00:00",
+            "age_hours": 1.78,
+            "allowed_for_model": false
+          },
+          "forward_audit": {
+            "state": "current",
+            "status": "ok",
+            "source_file": "data/stage5/latest.json",
+            "source_utc": "2026-10-11T12:19:10.230754+00:00",
+            "age_hours": 0.0,
+            "allowed_for_model": false
+          },
+          "error_review": {
+            "state": "current",
+            "status": "ok",
+            "source_file": "data/stage5/error_review/latest.json",
+            "source_utc": "2026-10-11T12:19:10.010746+00:00",
+            "age_hours": 0.0,
+            "allowed_for_model": false
+          }
+        },
+        "observations": {
+          "70pct_validation": false,
+          "prediction_edge_proven": false,
+          "historical_error_analysis_available": true
+        },
+        "predictor_policy": "honor frozen V4.2 and future claim gate; historical spot simulation separately labeled",
+        "unverified_features": [
+          "prospective_70pct_accuracy",
+          "prospective_positive_spot_net_edge"
+        ]
+      }
+    },
+    "pillar_count": 5,
+    "original_36_items": {
+      "prior_audit_source": "reports/DOGE_SYSTEM_AUDIT_2026-10-11.md",
+      "historical_summary_only": {
+        "retained_or_combined": 21,
+        "background_governance": 8,
+        "uncalibrated_withdrawn": 7
+      },
+      "item_level_current_mapping_reconciled": false,
+      "original_google_sheet_full_catalog_not_validated_here": true,
+      "no_claim_all_36_are_signal_features": true
+    },
+    "model_input_authorization": {
+      "historic_PIT_safe": [
+        "confirmed_DOGE_BTC_daily_prices_with_conservative_one_day_lag"
+      ],
+      "live_context_not_historically_trainable_without_first_seen": [
+        "confirmed_whales",
+        "liquidity_depth",
+        "limited_liquidation_notices",
+        "ETF_flows",
+        "FRED_macro",
+        "policy_headlines",
+        "onchain_address_activity"
+      ],
+      "unsupported": [
+        "entity_verified_exchange_netflow",
+        "whole_market_liquidations",
+        "historical_revised_CPI_as_released",
+        "news_social_realtime_sentiment"
+      ],
+      "all_5_pillars_merged_into_single_numeric_forecast": false,
+      "claim_36_features_trained": false,
+      "safeguard": "Never use post-target or subsequently ingested data as pre-forecast feature"
+    },
+    "reconciliation_note": "Five pillars are integrated as source and evidence inventory, NOT fitted causal coefficients.",
+    "source_daily_candles_last_day": "2026-10-10"
+  },
+  "historical_relative_net_return_vs_hold_pct_points": {
+    "doge_one_day_lag_reversal": -16.19,
+    "doge_one_day_lag_momentum": -26.73,
+    "btc_one_day_lag_momentum": -36.92
+  },
+  "friction_sensitivity_return_pct": {
+    "doge_one_day_lag_reversal": {
+      "half_friction": -29.7,
+      "base_friction": -46.85,
+      "double_friction": -69.63
+    },
+    "doge_one_day_lag_momentum": {
+      "half_friction": -43.59,
+      "base_friction": -57.39,
+      "double_friction": -75.68
+    },
+    "btc_one_day_lag_momentum": {
+      "half_friction": -57.21,
+      "base_friction": -67.58,
+      "double_friction": -81.39
+    }
+  },
+  "prospective_V42_reference": {
+    "status": "pre_registered_pending",
+    "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1791712800000_24h",
+    "issued_at_utc": "2026-10-11T11:24:58.713264+00:00",
+    "target_utc": "2026-10-12T11:24:58.713264+00:00",
+    "reference_price_usdt": 0.08521,
+    "direction": "UP",
+    "forecast_age_minutes": 54.2,
+    "not_a_new_plus_model_forecast": true,
+    "live_forecast_model_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1"
+  },
+  "historical_volatility_scenarios": {
+    "period_days": 90,
+    "p10_return_pct": -3.82,
+    "p90_return_pct": 3.33,
+    "scenario_reference_price": 0.08521,
+    "p10_implied_price": 0.081951,
+    "p90_implied_price": 0.088051,
+    "probability_forecast_calibrated": false,
+    "horizon_mismatch": "historical UTC close-to-close distribution, NOT registered issuance quote to target"
+  },
+  "current_spot_action": "WAIT_FOR_PROSPECTIVE_ECONOMIC_VALIDATION",
+  "profit_edge_vs_hold_verified": false,
+  "direction_accuracy_70pct_verified": false,
+  "five_pillars_have_validated_numeric_weights": false,
+  "live_trading_authorized": false,
+  "dca_rules_changed": false,
+  "pending_economic_validation": [
+    "freeze independent spot-plus paper execution rules before forward comparison",
+    "compare realized after-cost net equity and max drawdown to buy-and-hold and cash over multiple regimes",
+    "log actual executable quotes at the decision and settlement moments",
+    "measure no-signal coverage and genuine target observation completeness",
+    "do not cherry-pick best historical candidate and call it an ex-ante trading advantage"
+  ],
+  "limitations": [
+    "Past OKX 1D candles cannot reproduce fills at intraday bid/ask; slippage is an assumption",
+    "Historical 30% split is NOT blind out-of-sample because strategies were formulated with historical awareness",
+    "Historical accuracy for OPEN-to-CLOSE is not V4.2 24h issuance-to-quote accuracy",
+    "No leverage, no shorting, no passive fill or exchange minimum-order constraints modeled",
+    "BTC/ETH ETF and macro releases lack verified historical point-in-time vintages; excluded from simulated signals",
+    "The original 36 items were reconciled historically as a summary, not verified as 36 independent model inputs",
+    "All five pillars are consulted as evidence, but only PIT-defensible price data feeds the historical spot experiment",
+    "Research shows gross market regimes and hypothetical execution, not future profitability"
+  ]
+}
