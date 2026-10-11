@@ -23,7 +23,10 @@ def stage2_admissibility():
   quality=json.loads((ROOT/'data/quality/latest.json').read_text(encoding='utf-8'))
   if quality.get('status') not in ('ok_with_coverage_limits','ok_with_source_warnings') or quality.get('critical_failures'):
    raise ValueError('data/quality/latest.json has critical failure')
-  liq=load('data/liquidations/latest.json')
+  liq=json.loads((ROOT/'data/liquidations/latest.json').read_text(encoding='utf-8'))
+  if (liq.get('status') not in ('ok','partial') or liq.get('data_quality',{}).get('errors')
+      or liq.get('subscription_coverage_pct',0)<85):
+   raise ValueError('partial liquidation observation coverage insufficient or failed')
   book=load('data/liquidity/latest.json')
   checks=quality['sources']['stage2_csv_quality']
   qc=checks.get('checks',{})
