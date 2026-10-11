@@ -137,8 +137,6 @@ def simulate(bars,start,mode,btc=None,fee=FEE,slippage=SLIPPAGE):
   'days_exposed_pct':round(100*exposed/(len(bars)-start),2),
   'estimated_total_fees_usdt':round(fees,2),
   'estimated_total_slippage_usdt':round(slip_cost,2),
-  'observed_fees_usdt':round(fees,2),
-  'observed_slippage_usdt':round(slip_cost,2),
   'open_to_close_direction_accuracy_pct':round(100*correct/n,2) if n else None,
   'direction_scored_days':n,
   'assumptions':{'fee_per_side':fee,'slippage_per_side':slippage,
