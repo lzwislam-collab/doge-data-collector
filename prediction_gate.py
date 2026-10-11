@@ -11,11 +11,46 @@ def load(rel):
  j=json.loads(p.read_text(encoding='utf-8'))
  if j.get('status')!='ok':raise ValueError(rel+' is not ok')
  return j
+
+def stage2_admissibility():
+ """Fail closed: market-wide liquidation totals do not exist in partial free feeds."""
+ out={'liquidation_24h_totals_allowed':False,'liquidation_24h_directional_imbalance_allowed':False,
+      'missing_notification_window_equals_zero':False,'liquidation_event_samples_research_only':False,
+      'swap_liquidity_snapshots_research_only':False,'retrospective_model_training_authorized':False,
+      'reason':'Partial public notice windows cannot establish all-market liquidation totals',
+      'source_coverage':'unverified','predictive_edge_established':False}
+ try:
+  quality=load('data/quality/latest.json')
+  liq=load('data/liquidations/latest.json')
+  book=load('data/liquidity/latest.json')
+  checks=quality['sources']['stage2_csv_quality']
+  qc=checks.get('checks',{})
+  events_ok=checks.get('state')=='ok' and all(qc.get(k,{}).get('status')=='ok'
+       for k in ('liquidations_okx','binance_liquidations_optional','bybit_liquidations_optional'))
+  out['liquidation_event_samples_research_only']=bool(events_ok and liq.get('not_market_wide') is True
+       and liq.get('historical_backfill') is False)
+  out['swap_liquidity_snapshots_research_only']=bool(checks.get('state')=='ok'
+       and qc.get('liquidity',{}).get('status')=='ok' and book.get('status')=='ok'
+       and book.get('recent_trades',{}).get('coverage_note') and
+       book.get('liquidations',{}).get('liquidation_usd') is None)
+  out['source_coverage']='partial_480_seconds_per_900_seconds_approx' if out['liquidation_event_samples_research_only'] else 'unverified'
+  out['allowed_snapshot_features']=['spread_bps','bid_depth_usdt_10bps','ask_depth_usdt_10bps',
+      'open_interest_usd','funding_rate'] if out['swap_liquidity_snapshots_research_only'] else []
+  out['restrictions']=['Only observations at collection timestamp, never hindsight full-day totals',
+      'No missing-as-zero liquidation values, no synthetic OI-as-liquidation',
+      'Snapshot availability and true collection timestamp must be aligned before any backtest',
+      'Permitted for descriptive research only: no model predictive-edge claim']
+ except Exception as exc:
+  out['source_coverage']='invalid_or_unavailable'
+  out['audit_error']=type(exc).__name__+': '+str(exc)[:200]
+ return out
+
 def main():
  stamp=datetime.now(timezone.utc).isoformat()
  result={'schema_version':1,'evaluated_at_utc':stamp,'status':'error',
          'claim_permission':'BLOCKED','research_only':True,'does_not_change_dca':True,
-         'model_edge_proven':False,'checks':{},'errors':[]}
+         'model_edge_proven':False,'checks':{},'errors':[],
+         'stage2_feature_admissibility':stage2_admissibility()}
  try:
   val=load('data/validation/latest.json')
   stat=load('data/stat_audit/latest.json')
@@ -46,6 +81,7 @@ def main():
   result['model_edge_proven']=False # Separate genuine prospective holdout required.
   result['limitations']=['A significant historical CI alone cannot authorize live forecast marketing',
     'No true prospective registered predictions, trading costs, execution or repeated-hypothesis adjustment verified',
+    'Partial liquidation feeds are never allowed as 24h/global liquidation totals',
     'No change to DOGE investment execution rules']
  except Exception as e:result['errors'].append(type(e).__name__+': '+str(e)[:250])
  OUT.parent.mkdir(parents=True,exist_ok=True)
