@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "status": "research_fail_70pct",
-  "evaluated_utc": "2026-10-11T15:01:35.441682+00:00",
+  "evaluated_utc": "2026-10-11T15:28:40.807321+00:00",
   "source": "OKX historic 1H candles, first_ingested_utc in data/hourly_research/ohlc.csv",
-  "history_start_utc": "2025-02-13T22:00:00+00:00",
+  "history_start_utc": "2024-11-05T22:00:00+00:00",
   "history_last_start_utc": "2026-10-11T14:00:00+00:00",
-  "hourly_rows_by_symbol": 14513,
+  "hourly_rows_by_symbol": 16913,
   "duplicate_keys": 0,
   "missing_hours": 0,
   "crash_label": "DOGE hour close / hour open - 1 <= -5%",
@@ -13,8 +13,21 @@
   "forecast_target": "at least one new >=5% down candle in next 12h after alert becomes available",
   "rule_post_hoc": true,
   "genuine_prior_warnings_preserved": false,
-  "crash_count_total": 8,
+  "crash_count_total": 21,
   "crash_hours_utc": [
+    "2024-11-11T05:00:00+00:00",
+    "2024-11-12T09:00:00+00:00",
+    "2024-11-12T12:00:00+00:00",
+    "2024-11-23T16:00:00+00:00",
+    "2024-12-10T15:00:00+00:00",
+    "2024-12-10T17:00:00+00:00",
+    "2024-12-19T17:00:00+00:00",
+    "2024-12-20T08:00:00+00:00",
+    "2024-12-20T11:00:00+00:00",
+    "2025-01-19T21:00:00+00:00",
+    "2025-01-20T17:00:00+00:00",
+    "2025-02-03T01:00:00+00:00",
+    "2025-02-04T05:00:00+00:00",
     "2025-02-24T22:00:00+00:00",
     "2025-04-07T06:00:00+00:00",
     "2025-05-30T00:00:00+00:00",
@@ -24,15 +37,20 @@
     "2026-08-22T05:00:00+00:00",
     "2026-10-08T15:00:00+00:00"
   ],
-  "eligible_crashes": 8,
-  "caught_crashes": 4,
-  "alert_count": 60,
-  "true_alerts": 4,
-  "false_alerts": 56,
-  "recall_pct": 50.0,
-  "precision_pct": 6.67,
-  "false_alerts_per_week": 0.649,
+  "eligible_crashes": 21,
+  "caught_crashes": 7,
+  "alert_count": 77,
+  "true_alerts": 9,
+  "false_alerts": 68,
+  "recall_pct": 33.33,
+  "precision_pct": 11.69,
+  "false_alerts_per_week": 0.676,
   "warning_lead_hours_for_caught_events": [
+    1.0,
+    0.0,
+    8.0,
+    7.0,
+    0.0,
     11.0,
     4.0,
     5.0,
@@ -40,16 +58,179 @@
     10.0
   ],
   "illustrative_wilson_interval_precision_pct": [
-    2.62,
-    15.93
+    6.27,
+    20.75
   ],
   "illustrative_wilson_interval_recall_pct": [
-    21.52,
-    78.48
+    17.19,
+    54.63
   ],
   "inference_warning": "Intervals are illustrative binomial bounds; temporal dependence and posthoc selection invalidate strict inferential coverage.",
-  "always_no_crash_accuracy_pct": 99.94,
+  "always_no_crash_accuracy_pct": 99.88,
   "signals": [
+    {
+      "hour_start_utc": "2024-11-12T10:00:00+00:00",
+      "available_after_utc": "2024-11-12T11:00:00+00:00",
+      "volume_factor_vs_previous_24h_median": 5.584,
+      "low_vs_open_pct": -13.6,
+      "DOGE_minus_BTC_return_pp": -3.668,
+      "next_12h_crash_starts_utc": [
+        "2024-11-12T12:00:00+00:00"
+      ],
+      "true_pre_crash_alert": true
+    },
+    {
+      "hour_start_utc": "2024-11-17T02:00:00+00:00",
+      "available_after_utc": "2024-11-17T03:00:00+00:00",
+      "volume_factor_vs_previous_24h_median": 5.619,
+      "low_vs_open_pct": -5.156,
+      "DOGE_minus_BTC_return_pp": -2.178,
+      "next_12h_crash_starts_utc": [],
+      "true_pre_crash_alert": false
+    },
+    {
+      "hour_start_utc": "2024-12-02T08:00:00+00:00",
+      "available_after_utc": "2024-12-02T09:00:00+00:00",
+      "volume_factor_vs_previous_24h_median": 5.201,
+      "low_vs_open_pct": -6.686,
+      "DOGE_minus_BTC_return_pp": -3.477,
+      "next_12h_crash_starts_utc": [],
+      "true_pre_crash_alert": false
+    },
+    {
+      "hour_start_utc": "2024-12-03T13:00:00+00:00",
+      "available_after_utc": "2024-12-03T14:00:00+00:00",
+      "volume_factor_vs_previous_24h_median": 5.887,
+      "low_vs_open_pct": -5.735,
+      "DOGE_minus_BTC_return_pp": -3.15,
+      "next_12h_crash_starts_utc": [],
+      "true_pre_crash_alert": false
+    },
+    {
+      "hour_start_utc": "2024-12-18T20:00:00+00:00",
+      "available_after_utc": "2024-12-18T21:00:00+00:00",
+      "volume_factor_vs_previous_24h_median": 15.171,
+      "low_vs_open_pct": -7.801,
+      "DOGE_minus_BTC_return_pp": -2.073,
+      "next_12h_crash_starts_utc": [],
+      "true_pre_crash_alert": false
+    },
+    {
+      "hour_start_utc": "2024-12-19T17:00:00+00:00",
+      "available_after_utc": "2024-12-19T18:00:00+00:00",
+      "volume_factor_vs_previous_24h_median": 8.834,
+      "low_vs_open_pct": -11.452,
+      "DOGE_minus_BTC_return_pp": -6.119,
+      "next_12h_crash_starts_utc": [],
+      "true_pre_crash_alert": false
+    },
+    {
+      "hour_start_utc": "2024-12-19T18:00:00+00:00",
+      "available_after_utc": "2024-12-19T19:00:00+00:00",
+      "volume_factor_vs_previous_24h_median": 9.186,
+      "low_vs_open_pct": -6.822,
+      "DOGE_minus_BTC_return_pp": -1.661,
+      "next_12h_crash_starts_utc": [],
+      "true_pre_crash_alert": false
+    },
+    {
+      "hour_start_utc": "2024-12-20T10:00:00+00:00",
+      "available_after_utc": "2024-12-20T11:00:00+00:00",
+      "volume_factor_vs_previous_24h_median": 5.753,
+      "low_vs_open_pct": -4.505,
+      "DOGE_minus_BTC_return_pp": -2.674,
+      "next_12h_crash_starts_utc": [
+        "2024-12-20T11:00:00+00:00"
+      ],
+      "true_pre_crash_alert": true
+    },
+    {
+      "hour_start_utc": "2024-12-20T11:00:00+00:00",
+      "available_after_utc": "2024-12-20T12:00:00+00:00",
+      "volume_factor_vs_previous_24h_median": 7.91,
+      "low_vs_open_pct": -7.789,
+      "DOGE_minus_BTC_return_pp": -4.472,
+      "next_12h_crash_starts_utc": [],
+      "true_pre_crash_alert": false
+    },
+    {
+      "hour_start_utc": "2025-01-07T15:00:00+00:00",
+      "available_after_utc": "2025-01-07T16:00:00+00:00",
+      "volume_factor_vs_previous_24h_median": 19.029,
+      "low_vs_open_pct": -6.11,
+      "DOGE_minus_BTC_return_pp": -2.2,
+      "next_12h_crash_starts_utc": [],
+      "true_pre_crash_alert": false
+    },
+    {
+      "hour_start_utc": "2025-01-10T13:00:00+00:00",
+      "available_after_utc": "2025-01-10T14:00:00+00:00",
+      "volume_factor_vs_previous_24h_median": 6.542,
+      "low_vs_open_pct": -4.087,
+      "DOGE_minus_BTC_return_pp": -1.131,
+      "next_12h_crash_starts_utc": [],
+      "true_pre_crash_alert": false
+    },
+    {
+      "hour_start_utc": "2025-01-20T17:00:00+00:00",
+      "available_after_utc": "2025-01-20T18:00:00+00:00",
+      "volume_factor_vs_previous_24h_median": 8.12,
+      "low_vs_open_pct": -7.15,
+      "DOGE_minus_BTC_return_pp": -1.549,
+      "next_12h_crash_starts_utc": [],
+      "true_pre_crash_alert": false
+    },
+    {
+      "hour_start_utc": "2025-02-02T03:00:00+00:00",
+      "available_after_utc": "2025-02-02T04:00:00+00:00",
+      "volume_factor_vs_previous_24h_median": 8.109,
+      "low_vs_open_pct": -3.115,
+      "DOGE_minus_BTC_return_pp": -1.33,
+      "next_12h_crash_starts_utc": [],
+      "true_pre_crash_alert": false
+    },
+    {
+      "hour_start_utc": "2025-02-02T16:00:00+00:00",
+      "available_after_utc": "2025-02-02T17:00:00+00:00",
+      "volume_factor_vs_previous_24h_median": 5.0,
+      "low_vs_open_pct": -6.552,
+      "DOGE_minus_BTC_return_pp": -3.705,
+      "next_12h_crash_starts_utc": [
+        "2025-02-03T01:00:00+00:00"
+      ],
+      "true_pre_crash_alert": true
+    },
+    {
+      "hour_start_utc": "2025-02-02T17:00:00+00:00",
+      "available_after_utc": "2025-02-02T18:00:00+00:00",
+      "volume_factor_vs_previous_24h_median": 7.092,
+      "low_vs_open_pct": -4.463,
+      "DOGE_minus_BTC_return_pp": -1.688,
+      "next_12h_crash_starts_utc": [
+        "2025-02-03T01:00:00+00:00"
+      ],
+      "true_pre_crash_alert": true
+    },
+    {
+      "hour_start_utc": "2025-02-03T00:00:00+00:00",
+      "available_after_utc": "2025-02-03T01:00:00+00:00",
+      "volume_factor_vs_previous_24h_median": 7.098,
+      "low_vs_open_pct": -9.24,
+      "DOGE_minus_BTC_return_pp": -3.778,
+      "next_12h_crash_starts_utc": [
+        "2025-02-03T01:00:00+00:00"
+      ],
+      "true_pre_crash_alert": true
+    },
+    {
+      "hour_start_utc": "2025-02-03T01:00:00+00:00",
+      "available_after_utc": "2025-02-03T02:00:00+00:00",
+      "volume_factor_vs_previous_24h_median": 14.842,
+      "low_vs_open_pct": -14.599,
+      "DOGE_minus_BTC_return_pp": -7.008,
+      "next_12h_crash_starts_utc": [],
+      "true_pre_crash_alert": false
+    },
     {
       "hour_start_utc": "2025-02-21T15:00:00+00:00",
       "available_after_utc": "2025-02-21T16:00:00+00:00",
