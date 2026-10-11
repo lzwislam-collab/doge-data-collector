@@ -22,11 +22,17 @@ def read_csv(path,step):
    if t%step or not math.isfinite(p) or p<=0:raise ValueError('invalid timestamp/price')
    if t in prices[s]:raise ValueError('duplicate symbol/time '+s+str(t))
    prices[s][t]=p
- ts=sorted(prices['DOGE-USDT'])
- if not ts or any(set(prices[s])!=set(ts) for s in prices):
-  raise ValueError('unaligned price sources')
+ for sym,series in prices.items():
+  stamps=sorted(series)
+  if not stamps or any(b-a!=step for a,b in zip(stamps,stamps[1:])):
+   raise ValueError('missing internal price data: '+sym)
+ common=set.intersection(*(set(series) for series in prices.values()))
+ ts=sorted(common)
+ if not ts:raise ValueError('no aligned timestamps')
  if any(b-a!=step for a,b in zip(ts,ts[1:])):
-  raise ValueError('gap in confirmed candle closes')
+  raise ValueError('missing internal synchronized bars')
+ if any(max(series)!=ts[-1] for series in prices.values()):
+  raise ValueError('stale cross-asset last close')
  return ts,{s:[prices[s][t] for t in ts] for s in prices}
 
 def stats(rows):
