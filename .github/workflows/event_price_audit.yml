@@ -6,6 +6,9 @@ on:
     paths:
       - 'event_price_audit.py'
       - '.github/workflows/event_price_audit.yml'
+  workflow_run:
+    workflows: ['Collect OKX public market data']
+    types: [completed]
   schedule:
     - cron: '47 2,14 * * *'
 permissions:
@@ -15,6 +18,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   audit:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
