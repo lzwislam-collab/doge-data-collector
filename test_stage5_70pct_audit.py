@@ -3,8 +3,10 @@
 import csv
 import tempfile
 import unittest
+import json
+import shutil
 from pathlib import Path
-from stage5_70pct_audit import wilson_lower, audited_fixed_phase, inspect_forward
+from stage5_70pct_audit import wilson_lower, audited_fixed_phase, inspect_forward, audit_locked_forward_trial
 
 FCOLS=['forecast_id','model_id','issued_at_utc','source_quote_utc','reference_price',
        'horizon_hours','target_utc','majority_direction',
@@ -99,6 +101,71 @@ class AccuracyTests(unittest.TestCase):
         self.assertFalse(high['may_claim_prospective_70pct'])
         self.assertLess(high['wilson95_lower_pct_descriptive_only'],70)
 
+
+
+    def make_lock(self):
+        shutil.copyfile(Path(__file__).resolve().parent/'direction_forward_v42.py',self.root/'direction_forward_v42.py')
+        folder=self.root/'data/stage5'
+        folder.mkdir(parents=True,exist_ok=True)
+        lock={'status':'frozen_protocol','protocol_id':'DOGE_V42_DIRECTION_SHADOW_LOCK_20261012',
+         'model_id':'DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1',
+         'locked_source_file':'direction_forward_v42.py',
+         'locked_source_git_blob_sha':'368abc641db6d5ea6496ac4db624554161034665',
+         'primary_model':'doge_reversal','comparison_model':'majority',
+         'primary_horizons_hours':[1,24],'eligible_target_quote_window_minutes':25,
+         'issue_quote_max_age_seconds':120,'effective_from_utc':'2026-10-12T00:00:00+00:00',
+         'minimum_nonoverlapping_valid_scores_per_horizon':100,
+         'minimum_resolved_quote_coverage_fraction':0.9,
+         'minimum_wilson_95pct_lower_accuracy_fraction':0.7,
+         'minimum_observation_span_days':30}
+        (folder/'pre_registration.json').write_text(json.dumps(lock))
+        return lock
+
+    def test_trial_excludes_all_prelock_predictions(self):
+        self.make_lock()
+        self.write()
+        study=audit_locked_forward_trial(self.root)
+        self.assertEqual(study['horizons']['1h']['locked_bins_with_issued_predictions'],0)
+        self.assertEqual(study['horizons']['1h']['scored'],0)
+        self.assertFalse(study['horizons']['1h']['eligible_for_70pct_claim'])
+
+    def test_trial_freeze_detects_changed_model_script(self):
+        self.make_lock()
+        self.write()
+        (self.root/'direction_forward_v42.py').write_text('modification')
+        with self.assertRaisesRegex(ValueError,'frozen V4.2 source changed'):
+            audit_locked_forward_trial(self.root)
+
+    def test_trial_postlock_pending_is_not_backfilled(self):
+        self.make_lock()
+        new=dict(self.forecast,issued_at_utc='2026-10-12T01:01:00+00:00',
+            source_quote_utc='2026-10-12T01:00:59+00:00',
+            target_utc='2026-10-12T02:01:00+00:00',
+            model_id='DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1',
+            forecast_id='id-postlock')
+        self.write(forecasts=[self.forecast,new],scores=[self.score])
+        hour=audit_locked_forward_trial(self.root)['horizons']['1h']
+        self.assertEqual(hour['locked_bins_with_issued_predictions'],1)
+        self.assertEqual(hour['pending'],1)
+        self.assertEqual(hour['scored'],0)
+
+    def test_trial_does_not_select_same_bin_winner(self):
+        self.make_lock()
+        first=dict(self.forecast,issued_at_utc='2026-10-12T01:01:00+00:00',
+            source_quote_utc='2026-10-12T01:00:59+00:00',
+            target_utc='2026-10-12T02:01:00+00:00',
+            model_id='DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1',forecast_id='early')
+        second=dict(first,issued_at_utc='2026-10-12T01:10:00+00:00',
+            source_quote_utc='2026-10-12T01:09:59+00:00',
+            target_utc='2026-10-12T02:10:00+00:00',forecast_id='late')
+        score=dict(self.score,forecast_id='late',
+            observed_at_utc='2026-10-12T02:10:05+00:00',
+            target_quote_utc='2026-10-12T02:10:03+00:00')
+        self.write(forecasts=[first,second],scores=[score])
+        hour=audit_locked_forward_trial(self.root)['horizons']['1h']
+        self.assertEqual(hour['locked_bins_with_issued_predictions'],1)
+        self.assertEqual(hour['scored'],0)
+        self.assertEqual(hour['pending'],1)
 
 if __name__=='__main__':
     unittest.main(verbosity=2)
