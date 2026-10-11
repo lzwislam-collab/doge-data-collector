@@ -35,7 +35,9 @@ def score_row(r,observed,now):
  calc=lambda lower,upper:interval_score(math.log(lower/a),math.log(upper/a),rtn)*100
  return 'scored',{'forecast_id':r['forecast_id'],'horizon_days':horizon,
    'anchor_date_utc':str(anchor),'target_date_utc':str(target),'realized_target_close':actual,
-   'realized_up':y,'interval_hit':lo<=actual<=hi,'baseline_interval_hit':blo<=actual<=bhi,
+   'realized_up':y,'elapsed_target_minutes_before_forecast':round(latency_min,2),
+   'warning':'Close-to-close horizon began before issued_at_utc; not a full forward period after issuance',
+   'interval_hit':lo<=actual<=hi,'baseline_interval_hit':blo<=actual<=bhi,
    'interval_score_log_pct':round(calc(lo,hi),6),
    'baseline_interval_score_log_pct':round(calc(blo,bhi),6),
    'up_brier':round((p-y)**2,8),'baseline_up_brier':round((bp-y)**2,8)}
