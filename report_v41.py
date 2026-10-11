@@ -32,6 +32,7 @@ def main():
  back=read('data/forecast_v41/backtest_latest.json')
  scoring=read('data/forecast_v41/scores.json')
  direction=read('data/direction_v42/latest.json')
+ direction_forward=read('data/direction_v42/forward_latest.json')
  research=read('data/forecast_v41/calibration_research.json')
  hist=read('data/history/latest.json')
  if forecast.get('status')!='ok' or scoring.get('status')!='ok' or hist.get('status')!='ok':
@@ -98,6 +99,34 @@ def main():
    histrows=direction['horizons'][period];allrows=histrows['all_overlapping'];non=histrows['fixed_phase_nonoverlap']
    direction_lines.append(f"|{period}|{allrows['n']}|{fmt(allrows['expanding_majority']['accuracy_pct'],2)}%|{fmt(allrows['doge_momentum']['accuracy_pct'],2)}%|{fmt(allrows['doge_reversal']['accuracy_pct'],2)}%|{fmt(allrows['btc_momentum']['accuracy_pct'],2)}%|{non['n']}|")
   direction_lines.append('这四类规则均未证明70%优势；测试集已经用于研发探索，不能作为一次独立最终验证。7天/30天收益相互重叠，独立样本量更少。')
+  direction_lines+=['','**真实前瞻登记与到期评分（发行时价格→未来目标价格）**',
+   '|目标周期|已封存|已到期评分|历史多数类准确率|反转准确率|BTC动量准确率|',
+   '|---|---:|---:|---:|---:|---:|']
+  for h,name in ((1,'1小时'),(24,'24小时'),(168,'7天'),(720,'30天')):
+   live=direction_forward.get('horizons',{}).get(str(h)+'h',{})
+   m=live.get('models',{})
+   getacc=lambda key: (str(m[key]['all_scored']['accuracy_pct'])+'%') if m.get(key,{}).get('all_scored',{}).get('accuracy_pct') is not None else '尚无评分'
+   direction_lines.append(f"|{name}|{live.get('total_registered',0)}|{m.get('majority',{}).get('all_scored',{}).get('n',0)}|{getacc('majority')}|{getacc('doge_reversal')}|{getacc('btc_momentum')}|")
+  direction_lines.append(f'前瞻记录截至 {direction_forward.get("generated_utc","未知")}；OKX现货报价 {direction_forward.get("quote_price","未知")} USDT（报价时间 {direction_forward.get("quote_at_utc","未知")}）；状态 {direction_forward.get("status","未验证")}；漏采无法评分 {direction_forward.get("unscorable_count","未知")} 条、待评分 {direction_forward.get("pending_count","未知")} 条。NO_VALIDATED_EDGE。')
+  registerfile=ROOT/'data/direction_v42/forward_registry.csv'
+  if registerfile.exists():
+   recent={}
+   with registerfile.open(newline='',encoding='utf-8') as stream:
+    for row in csv.DictReader(stream):
+     h=int(row['horizon_hours'])
+     if h in (1,24,168,720) and (h not in recent or row['issued_at_utc']>recent[h]['issued_at_utc']):recent[h]=row
+   direction_lines+=['**最近各周期实际封存的方向判断（非实时交易建议）**',
+    '|周期|实际发布时间UTC|参考价 USDT|历史多数类|反转|BTC动量|目标UTC|',
+    '|---|---|---:|---|---|---|---|']
+   for h,name in ((1,'1小时'),(24,'24小时'),(168,'7天'),(720,'30天')):
+    if h not in recent:
+     direction_lines.append(f'|{name}|未登记|—|—|—|—|—|')
+    else:
+     x=recent[h];as_dir=lambda k: '涨' if x[k]=='UP' else '跌/平'
+     direction_lines.append(f"|{name}|{x['issued_at_utc']}|{x['reference_price']}|{as_dir('majority_direction')}|{as_dir('doge_reversal_direction')}|{as_dir('btc_momentum_direction')}|{x['target_utc']}|")
+ else:
+  direction_lines+=['真实前瞻方向登记暂不可用：仅展示历史探索性回测，不推断已有实时预测。']
+
  else:
   direction_lines=['**方向模型的本期历史审计缺失或截止时间不一致，不能发布70%准确率声明。**']
  t[-2:-2]=direction_lines+['','### 辅助：收益分布和历史价格区间（非主要验收目标）','']
