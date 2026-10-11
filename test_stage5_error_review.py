@@ -4,6 +4,7 @@ import csv,json,tempfile,unittest
 from datetime import datetime,timezone,timedelta
 from pathlib import Path
 from stage5_error_review import evaluate
+from stage5_70pct_audit import verify_error_review_hashes
 
 F=['forecast_id','model_id','issued_at_utc','source_quote_utc','reference_price','horizon_hours',
    'target_utc','majority_direction','doge_reversal_direction','btc_momentum_direction']
@@ -82,6 +83,44 @@ class ErrorReviewTests(unittest.TestCase):
   self.assertEqual(first['context']['state'],'retrospective_association_only')
   self.assertNotIn('causal_proof',first)
   self.assertTrue(r['retrospective_correlation_not_proven_cause'])
+
+ def test_early_issue_context_and_late_target_collection_are_not_mixed(self):
+  def ms(h):return int(datetime(2026,10,11,h,tzinfo=timezone.utc).timestamp()*1000)
+  issue_before=datetime(2026,10,11,8,0,tzinfo=timezone.utc)
+  observed_after=datetime(2026,10,11,9,30,tzinfo=timezone.utc)
+  fake={sym:{ms(7):(.10,issue_before),ms(8):(.09,observed_after)}
+        for sym in ('BTC-USDT','ETH-USDT','DOGE-USDT')}
+  r=evaluate(self.root,NOW,fake)
+  c=r['errors_and_coverage_examples'][0]['context']
+  self.assertFalse(c['anchor_first_seen_after_issue'])
+  self.assertTrue(c['outcome_first_seen_after_target'])
+  self.assertFalse(c['ex_ante_market_features_verified'])
+  self.assertEqual(c['source_first_seen_utc_by_symbol']['BTC-USDT']['target_context'],
+                   observed_after.isoformat())
+
+ def test_review_hashes_detect_unchanged_count_but_changed_prediction(self):
+  r=evaluate(self.root,NOW,{})
+  self.assertTrue(verify_error_review_hashes(self.root,r))
+  self.reg[0]['majority_direction']='UP'
+  self.write()
+  with self.assertRaisesRegex(ValueError,'source hash mismatch'):
+   verify_error_review_hashes(self.root,r)
+
+ def test_review_hashes_detect_scoring_mutation_without_count_change(self):
+  r=evaluate(self.root,NOW,{})
+  self.assertTrue(verify_error_review_hashes(self.root,r))
+  self.scored[0]['target_price']='0.091'
+  self.write()
+  with self.assertRaisesRegex(ValueError,'source hash mismatch'):
+   verify_error_review_hashes(self.root,r)
+
+ def test_hashes_detect_minute_record_tampering(self):
+  r=evaluate(self.root,NOW,{})
+  self.assertTrue(verify_error_review_hashes(self.root,r))
+  path=self.root/'data/stage5/minute_shadow/minute_scores.csv'
+  path.write_text(path.read_text()+'\\n',encoding='utf-8')
+  with self.assertRaisesRegex(ValueError,'source hash mismatch'):
+   verify_error_review_hashes(self.root,r)
 
  def test_source_quote_missing_is_coverage_not_direction(self):
   self.scored[0]=dict(forecast_id='wrong',status='unscorable_missing_target_quote',
