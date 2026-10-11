@@ -1,0 +1,25 @@
+name: Test V4.1 DOGE forecast integrity
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'forecast_v41.py'
+      - 'score_v41.py'
+      - 'test_forecast_v41.py'
+      - '.github/workflows/test_forecast_v41.yml'
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile sources
+        run: python -m py_compile forecast_v41.py score_v41.py
+      - name: Test distribution and prospective scoring
+        run: python -m unittest -v test_forecast_v41 test_prospective_score test_prospective_integrity
