@@ -238,7 +238,7 @@ def evaluate(root=ROOT,now=None):
     'Historical accuracy for OPEN-to-CLOSE is not V4.2 24h issuance-to-quote accuracy',
     'No leverage, no shorting, no passive fill or exchange minimum-order constraints modeled',
     'BTC/ETH ETF and macro releases lack verified historical point-in-time vintages; excluded from simulated signals',
-    'The original 36 items were reconciled historically as a summary, not verified as 36 independent model inputs',
+    'The original 36 items are catalogued at item-level from a verified Google Sheets snapshot, but NOT 36 proven predictive features',
     'All five pillars are consulted as evidence, but only PIT-defensible price data feeds the historical spot experiment',
     'Research shows gross market regimes and hypothetical execution, not future profitability']}
 
