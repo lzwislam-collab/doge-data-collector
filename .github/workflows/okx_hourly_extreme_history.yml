@@ -19,7 +19,7 @@ on:
       - 'test_crash_v42_score.py'
       - '.github/workflows/okx_hourly_extreme_history.yml'
   schedule:
-    - cron: '13 * * * *' # hourly research checkpoint, with 03/15 UTC historical backfill
+    - cron: '13,33,53 * * * *' # same existing workflow: extra quote-scoring polls; hourly forecasts unchanged
 permissions:
   contents: write
 concurrency:
