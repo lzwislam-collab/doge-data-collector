@@ -3,6 +3,7 @@
 import json, os, urllib.request, urllib.error
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
+from stage1_rolling_integrity import evaluate as audit_rolling_local, utc as utc_stage1
 
 ROOT=Path(__file__).resolve().parent
 OUTPUT=ROOT/'data/stage1/schedule_evidence.json'
@@ -63,10 +64,77 @@ def get(url):
  req=urllib.request.Request(url,headers=headers)
  with urllib.request.urlopen(req,timeout=25) as rsp:return json.load(rsp)
 
+def verify_rolling_link(local, run_loader=get):
+ """Require actual GitHub Actions run identity, type, success, and timestamps."""
+ meta=local.get('provenance_metadata',{})
+ if not local.get('eligible_chain_metadata_present'):
+  return {'verified':False,'reason':'No stored successful upstream schedule -> workflow_run metadata'}
+ try:
+  upstream_id=int(meta['upstream_whale_run_id'])
+  downstream_id=int(meta['audit_workflow_run_id'])
+  if upstream_id<=0 or downstream_id<=0 or upstream_id==downstream_id:
+   raise ValueError('missing or identical upstream/downstream run IDs')
+  base='https://api.github.com/repos/'+REPO+'/actions/runs/'
+  up=run_loader(base+str(upstream_id))
+  down=run_loader(base+str(downstream_id))
+  if int(up.get('id',-1))!=upstream_id or int(down.get('id',-1))!=downstream_id:
+   raise ValueError('workflow run ID mismatch')
+  if up.get('event')!='schedule' or up.get('status')!='completed' or up.get('conclusion')!='success':
+   raise ValueError('upstream was not a completed successful scheduled run')
+  if down.get('event')!='workflow_run' or down.get('status')!='completed' or down.get('conclusion')!='success':
+   raise ValueError('downstream was not a completed successful workflow_run')
+  def workflow_path(run):
+   return str(run.get('path','')).split('@')[0]
+  if workflow_path(up)!='.github/workflows/whale_blocks.yml':
+   raise ValueError('upstream points to wrong workflow')
+  if workflow_path(down)!='.github/workflows/doge_rolling_utxo.yml':
+   raise ValueError('downstream points to wrong workflow')
+  up_created=utc_stage1(up['created_at'])
+  up_updated=utc_stage1(up['updated_at'])
+  down_created=utc_stage1(down['created_at'])
+  down_updated=utc_stage1(down['updated_at'])
+  audit_time=utc_stage1(local['audit_snapshot_utc'])
+  stored_up_created=utc_stage1(meta['upstream_whale_run_created_at_utc'])
+  if up_created!=stored_up_created or up_created.hour!=3:
+   raise ValueError('upstream 03 UTC provenance mismatch')
+  if not(up_created<=up_updated
+         and up_updated-timedelta(minutes=2)<=down_created
+         and down_created<=audit_time<=down_updated+timedelta(minutes=5)):
+   raise ValueError('upstream/downstream execution and audit timestamps do not reconcile')
+  return {'verified':True,'upstream_schedule_run_id':upstream_id,
+          'downstream_workflow_run_id':downstream_id,
+          'upstream_created_utc':up_created.isoformat(),
+          'downstream_created_utc':down_created.isoformat(),
+          'upstream_workflow':workflow_path(up),'downstream_workflow':workflow_path(down),
+          'scope':'real scheduled whale workflow run and successful completed UTXO workflow run; snapshot provenance matches'}
+ except (ValueError,KeyError,TypeError,urllib.error.URLError) as exc:
+  return {'verified':False,'reason':type(exc).__name__+': '+str(exc)[:200]}
+
+
+def rolling_integrity():
+ try:
+  local=audit_rolling_local(ROOT,NOW)
+  evidence=verify_rolling_link(local)
+  local['workflow_run_evidence']=evidence
+  local['current_chain_automation_verified']=evidence['verified']
+  if not evidence['verified']:
+   local['state']='WAITING_FOR_VERIFIED_SCHEDULED_CHAIN'
+  elif local['current_unprocessed_whale_events']:
+   local['state']='SCHEDULED_CHAIN_VERIFIED_WITH_NEW_SOURCE_BACKLOG'
+  else:
+   local['state']='SCHEDULED_CHAIN_VERIFIED_AND_CURRENT'
+  return local
+ except (ValueError,KeyError,TypeError,OSError,json.JSONDecodeError) as exc:
+  return {'state':'INVALID_LOCAL_DATA','local_data_integrity':'invalid',
+          'current_chain_automation_verified':False,
+          'error':type(exc).__name__+': '+str(exc)[:280]}
+
+
 def audit():
  if not TOKEN:raise ValueError('GITHUB_TOKEN missing; cannot verify run events')
  if '/' not in REPO:raise ValueError('Invalid GitHub repository')
  reports={};stage2_reports={};stage3_reports={};stage4_reports={};all_ok=True;stage2_ok=True;stage3_ok=True;stage4_ok=True
+ rolling=rolling_integrity()
  for name,workflow,file,time_key,allow_status in (
   [(name,*spec,('ok',)) for name,spec in SPECS.items()]+
   [(name,*spec) for name,spec in STAGE2_SPECS.items()]+
@@ -125,6 +193,8 @@ def audit():
    if x['state']!='SCHEDULE_AND_SNAPSHOT_TIME_MATCH':all_ok=False
  return {'schema_version':4,'status':'all_evidence_matched' if all_ok else 'partial_or_unverified',
          'generated_at_utc':NOW.isoformat(),'repository':REPO,'checks':reports,
+         'stage1_rolling_utxo':rolling,
+         'stage1_rolling_utxo_chain_verified':rolling.get('current_chain_automation_verified') is True,
          'stage2_status':'all_evidence_matched_with_coverage_limits' if stage2_ok else 'partial_or_unverified',
          'stage2_checks':stage2_reports,
          'stage3_status':'all_evidence_matched_data_quality_unverified' if stage3_ok else 'partial_or_unverified',
@@ -145,5 +215,5 @@ def main():
  except Exception as exc:obj={'status':'error','generated_at_utc':NOW.isoformat(),'error':type(exc).__name__+': '+str(exc)[:350]}
  temp=OUTPUT.with_suffix('.json.tmp');temp.write_text(json.dumps(obj,ensure_ascii=False,indent=2)+'\n',encoding='utf-8');os.replace(temp,OUTPUT)
  print(json.dumps({'status':obj['status'],'error':obj.get('error')},ensure_ascii=False))
- return 1 if obj['status']=='error' else 0
+ return 1 if obj['status']=='error' or obj.get('stage1_rolling_utxo',{}).get('state')=='INVALID_LOCAL_DATA' else 0
 if __name__=='__main__':raise SystemExit(main())
