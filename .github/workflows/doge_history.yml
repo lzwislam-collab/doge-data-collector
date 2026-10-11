@@ -7,7 +7,8 @@ on:
       - 'doge_history.py'
       - '.github/workflows/doge_history.yml'
   schedule:
-    - cron: '17 1,10,18 * * *'
+    - cron: '37 0 * * *' # 00:37 UTC first attempt, if previous UTC candle confirmed
+    - cron: '17 1,10,18 * * *' # 01:17 UTC fallback plus later data collection
 permissions:
   contents: write
 concurrency:
@@ -25,7 +26,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Test registry and scoring integrity
-        run: python -m unittest -v test_prospective_score test_prospective_integrity test_forecast_v41 test_calibration_v41
+        run: python -m unittest -v test_prospective_score test_prospective_integrity test_forecast_v41 test_calibration_v41 test_ops_v41
       # Exclusive automatic writer for prospective registry and scoring.
       - name: Backfill historical UTC close data and audit
         id: collect
@@ -57,12 +58,17 @@ jobs:
         if: steps.v41.outcome == 'success' && steps.v41_score.outcome == 'success'
         continue-on-error: true
         run: python report_v41.py
+      - name: Audit daily V4.1 completeness and missing forecast registration
+        id: v41_ops
+        if: steps.v41_report.outcome == 'success'
+        continue-on-error: true
+        run: python audit_v41_operations.py
       - name: Commit data and diagnostics
         if: always()
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          for file in data/history/latest.json data/history/daily.csv data/history/backtest_latest.json data/prospective/latest.json data/prospective/registry.csv data/prospective/scores.json data/forecast_v41/latest.json data/forecast_v41/backtest_latest.json data/forecast_v41/registry.csv data/forecast_v41/scores.json data/forecast_v41/calibration_research.json reports/DOGE_V41_LATEST.md; do
+          for file in data/history/latest.json data/history/daily.csv data/history/backtest_latest.json data/prospective/latest.json data/prospective/registry.csv data/prospective/scores.json data/forecast_v41/latest.json data/forecast_v41/backtest_latest.json data/forecast_v41/registry.csv data/forecast_v41/scores.json data/forecast_v41/calibration_research.json data/forecast_v41/operations.json reports/DOGE_V41_LATEST.md; do
             if [ -f "$file" ]; then git add -f "$file"; fi
           done
           if ! git diff --cached --quiet; then
@@ -75,5 +81,5 @@ jobs:
             done
           fi
       - name: Fail on data collection errors
-        if: steps.collect.outcome != 'success' || steps.score.outcome != 'success' || steps.v41.outcome != 'success' || steps.v41_score.outcome != 'success' || steps.v41_report.outcome != 'success' || steps.v41_calibration.outcome != 'success'
+        if: steps.collect.outcome != 'success' || steps.score.outcome != 'success' || steps.v41.outcome != 'success' || steps.v41_score.outcome != 'success' || steps.v41_report.outcome != 'success' || steps.v41_calibration.outcome != 'success' || steps.v41_ops.outcome != 'success'
         run: exit 1
