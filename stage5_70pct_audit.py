@@ -215,8 +215,11 @@ def inspect_forward(root):
       'not_external_tamper_proof':True}
 
 
-def audit_locked_forward_trial(root):
-    """Frozen pre-registered study; select fixed time bins before outcomes are inspected."""
+def audit_locked_forward_trial(root, now=None):
+    """Frozen forward trial: all target-expired bins, including missing scores, are denominators."""
+    if now is None:now=datetime.now(timezone.utc)
+    if now.tzinfo is None or now.utcoffset()!=timedelta(0):
+        raise ValueError('forward trial audit time must be UTC')
     lock_path=root/'data/stage5/pre_registration.json'
     lock=json.loads(lock_path.read_text(encoding='utf-8'))
     if (lock.get('status')!='frozen_protocol'
@@ -255,10 +258,15 @@ def audit_locked_forward_trial(root):
             if index not in bins or issued<utc(bins[index]['issued_at_utc']):
                 bins[index]=row
         selected=[bins[i] for i in sorted(bins)]
-        resolved=[row for row in selected if row['forecast_id'] in scores]
+        # Wait until the entire immutable 25m target-scoring window has closed.
+        # A matured but unscored selected forecast is a coverage failure, NOT
+        # an indefinitely pending prediction (nor a retrievable hindsight win).
+        matured=[row for row in selected if utc(row['target_utc'])+timedelta(minutes=25)<=now]
+        resolved=[row for row in matured if row['forecast_id'] in scores]
         good=[row for row in resolved if scores[row['forecast_id']]['status']=='scored']
-        missing=len(resolved)-len(good)
-        coverage=len(good)/len(resolved) if resolved else None
+        missing=len(matured)-len(good)
+        overdue=len(matured)-len(resolved)
+        coverage=len(good)/len(matured) if matured else None
         k=sum(scores[row['forecast_id']]['doge_reversal_correct']=='1' for row in good)
         baseline=sum(scores[row['forecast_id']]['majority_correct']=='1' for row in good)
         n=len(good)
@@ -270,8 +278,10 @@ def audit_locked_forward_trial(root):
         down_recall=sum(scores[r['forecast_id']]['doge_reversal_correct']=='1' for r in down)/len(down) if down else None
         result['horizons'][str(h)+'h']={
             'locked_bins_with_issued_predictions':len(selected),
-            'resolved':len(resolved),'scored':n,'unscorable':missing,
-            'pending':len(selected)-len(resolved),
+            'resolved':len(resolved),'scored':n,'unscorable':len(resolved)-len(good),
+            'overdue_missing_score_rows':overdue,
+            'matured_denom_including_missing_scores':len(matured),
+            'pending':len(selected)-len(matured),
             'coverage_pct':round(100*coverage,2) if coverage is not None else None,
             'observed_span_days':round(duration,2),
             'primary_correct':k,'primary_accuracy_pct':round(100*k/n,2) if n else None,
