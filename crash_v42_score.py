@@ -80,7 +80,7 @@ def scoring(rows,per,points,now):
   required=[t-i*HOUR for i in range(3,14)]
   (eligible if all(z in registered_starts for z in required) else unobserved).append(t)
  matched=set();matched_alerts=set();lead_hours=[]
- for e in eligible:
+ for e in (g[0] for g in clusters):
   for alert in active:
    if alert['watch_id'] in matched_alerts:continue
    issue=parse_utc(alert['issued_at_utc'])
@@ -89,7 +89,7 @@ def scoring(rows,per,points,now):
     matched.add(e);matched_alerts.add(alert['watch_id']);lead_hours.append(round((e/1000-issue.timestamp())/3600,3));break
  true_alarms=len(matched_alerts);false_alarms=len(active)-true_alarms
  precision=100*true_alarms/len(active) if active else None
- recall=100*len(matched)/len(eligible) if eligible else None
+ recall=100*len(matched.intersection(eligible))/len(eligible) if eligible else None
  # Keep exploratory metrics apart from 70% approval; sufficiently independent tests absent.
  return {'schema_version':2,'status':'ok','evaluated_utc':now.isoformat(),
   'rule_version':'V4.2_scoring_only_v1','legacy_watch_rows_unmodified':True,
@@ -102,7 +102,8 @@ def scoring(rows,per,points,now):
   'true_matched_alerts':true_alarms,'false_alerts':false_alarms,'matched_event_lead_hours':lead_hours,
   'alert_precision_pct':round(precision,2) if precision is not None else None,
   'eligible_clustered_events':len(eligible),'unobserved_clustered_events':len(unobserved),
-  'matched_clustered_events':len(matched),
+  'matched_clustered_events':len(matched.intersection(eligible)),
+  'matched_any_clustered_events':len(matched),
   'event_recall_pct':round(recall,2) if recall is not None else None,
   'target_precision_pct':70,'target_recall_pct':70,'minimum_independent_holdout_events':30,
   'eligible_for_predictive_claim':False,'approval':'BLOCKED_NO_VALIDATED_EDGE',
