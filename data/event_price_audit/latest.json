@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "run_utc": "2026-10-11T00:28:42.451128+00:00",
+  "status": "insufficient_forward_data",
+  "price_source": "OKX DOGE-USDT closed hourly candles in data/hourly.csv",
+  "event_availability_rule": "max(publication_utc, first_seen_utc); no retroactive backdating",
+  "price_entry_rule": "first candle that OPENS at or after availability; use its CLOSE one hour later",
+  "horizons_hours": [
+    1,
+    24,
+    168
+  ],
+  "events_total": 18,
+  "events_eligible": 0,
+  "event_horizon_results": [],
+  "blocked": {
+    "event_not_available_during_price_history": 18
+  },
+  "not_proof_of_predictive_power": true,
+  "price_first_hour_start_utc": "2026-10-06T05:00:00+00:00",
+  "price_last_hour_start_utc": "2026-10-10T22:00:00+00:00",
+  "scored_pairs": 0,
+  "limitations": [
+    "BLS schedules excluded from realized events",
+    "No contemporaneous historical capture before collector first_seen",
+    "No causal conclusions; no out-of-sample predictive advantage",
+    "1h candle series must be gap-checked before statistical use"
+  ]
+}
