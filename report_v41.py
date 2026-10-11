@@ -31,6 +31,7 @@ def main():
  forecast=read('data/forecast_v41/latest.json')
  back=read('data/forecast_v41/backtest_latest.json')
  scoring=read('data/forecast_v41/scores.json')
+ direction=read('data/direction_v42/latest.json')
  research=read('data/forecast_v41/calibration_research.json')
  hist=read('data/history/latest.json')
  if forecast.get('status')!='ok' or scoring.get('status')!='ok' or hist.get('status')!='ok':
@@ -86,9 +87,20 @@ def main():
     f'生成于：{now.isoformat()}；行情起点：OKX已收盘1Dutc {cutoff}；DOGE起点价格：{fmt(prices[-1],5)} USDT。',
     '预测对象为目标UTC日线收盘价，不是盘中最高最低价。不能把历史频率当成已校准真实概率。',
     f'**时点警示：UTC收盘基准 {forecast.get("origin_close_at_utc","未提供")}，原始预测首次不可修改登记 {first_registered or "未登记"}（日线收盘后 {first_delay if first_delay is not None else "N/A"} 分钟），本报告生成已过 {forecast.get("target_window_elapsed_before_issue_minutes","未提供")} 分钟；这不是报告发布后完整24小时预测。**','',
-    '## F01｜24小时／7天／30天／365天情景及区间',
+    '## F01｜首要目标：DOGE四周期涨跌方向预测（70%待验证）',
     '|目标UTC日|周期|P10区间低点|P50中位值|P90区间高点|历史上涨频率|历史大跌频率|',
     '|---|---|---:|---:|---:|---:|---:|']
+ if direction.get('status')=='ok' and direction.get('sources',{}).get('daily_last_closed_start_utc','').startswith(cutoff):
+  direction_lines=['**方向主任务：每个周期分别验收 ≥70% 的上涨/下跌判断正确率；以下仅历史研究回测，不是实时方向预测。**',
+   '|周期|历史测试数|历史多数类准确率|DOGE动量|反转|BTC动量|非重叠数|',
+   '|---|---:|---:|---:|---:|---:|---:|']
+  for period in ('1h','24h','7d','30d'):
+   histrows=direction['horizons'][period];allrows=histrows['all_overlapping'];non=histrows['fixed_phase_nonoverlap']
+   direction_lines.append(f"|{period}|{allrows['n']}|{fmt(allrows['expanding_majority']['accuracy_pct'],2)}%|{fmt(allrows['doge_momentum']['accuracy_pct'],2)}%|{fmt(allrows['doge_reversal']['accuracy_pct'],2)}%|{fmt(allrows['btc_momentum']['accuracy_pct'],2)}%|{non['n']}|")
+  direction_lines.append('这四类规则均未证明70%优势；测试集已经用于研发探索，不能作为一次独立最终验证。7天/30天收益相互重叠，独立样本量更少。')
+ else:
+  direction_lines=['**方向模型的本期历史审计缺失或截止时间不一致，不能发布70%准确率声明。**']
+ t[-2:-2]=direction_lines+['','### 辅助：收益分布和历史价格区间（非主要验收目标）','']
  for h in (1,7,30):
   x=forecast['price_intervals'][str(h)+'d'];b=x['p10_p50_p90_usdt']
   t.append(f"|{x['target_utc']}|{h}天|{fmt(b['p10'],5)}|{fmt(b['p50'],5)}|{fmt(b['p90'],5)}|{fmt(x['historical_up_frequency_pct'],2)}%|跌幅≤{x['research_large_down_threshold_pct']}%: {fmt(x['historical_large_down_frequency_pct'],2)}%|")
@@ -132,7 +144,7 @@ def main():
      '- 下行条件：BTC持续走弱、DOGE/BTC相对强弱恶化、盘口收缩或合约风险显著增加。',
      '- 上行条件：BTC企稳、DOGE相对强弱改善、成交/流动性得到确认。',
      '- 上述条件属于待检验的风险监控规则，不是已经验证的预测因子。',
-     f'- **V4.2严格评分（主研究口径）**：状态 {crash_v42.get("status","不可用")}；历史登记 {crash_v42.get("registered","未知")}，目标到期 {crash_v42.get("scored_count","未知")}，待评分 {crash_v42.get("pending_count","未知")}；真实预警精确率 {(str(crash_v42["alert_precision_pct"])+"%") if crash_v42.get("alert_precision_pct") is not None else "样本不足"}，真实暴跌事件召回率 {(str(crash_v42["event_recall_pct"])+"%") if crash_v42.get("event_recall_pct") is not None else "样本不足"}，模型授权 {crash_v42.get("approval","BLOCKED")}。必须先在实际发出后等待至少1小时，才允许计算随后K线的暴跌命中。',
+     f'- **V4.2暴跌风险辅助评分（不替代主任务）**：状态 {crash_v42.get("status","不可用")}；历史登记 {crash_v42.get("registered","未知")}，目标到期 {crash_v42.get("scored_count","未知")}，待评分 {crash_v42.get("pending_count","未知")}；真实预警精确率 {(str(crash_v42["alert_precision_pct"])+"%") if crash_v42.get("alert_precision_pct") is not None else "样本不足"}，真实暴跌事件召回率 {(str(crash_v42["event_recall_pct"])+"%") if crash_v42.get("event_recall_pct") is not None else "样本不足"}，模型授权 {crash_v42.get("approval","BLOCKED")}。必须先在实际发出后等待至少1小时，才允许计算随后K线的暴跌命中。',
      f'- **V4.2分钟级可行性**：{minute_probe.get("status","未验证")}；样本 {minute_probe.get("total_verified_sample_rows","未知")}条；源采集 {minute_probe.get("observed_utc","未提供")}。仅为小时采样的1m/5m确认K线测试，非连续分钟级流和已验证风险预测。',
      f'- **真实未来1小时监测**：{crash_live.get("status","未建立")}；已登记 {crash_live.get("registered","未知")} 条观察，成熟评分 {len(crash_live.get("scored",[]))} 条；当前精确率 {(str(crash_live["precision_pct"])+"%") if crash_live.get("precision_pct") is not None else "样本不足"}，召回率 {(str(crash_live["recall_pct"])+"%") if crash_live.get("recall_pct") is not None else "样本不足"}；阈值在10月9日暴跌后选择，前瞻积累不足，**不构成70%通过证据**。',
      f'- 1小时极端暴跌历史研究：{crash.get("status","unavailable")}；计算时间 {stamp(crash)}，历史K线截止 {crash.get("history_last_start_utc","未知")}；有效1H样本 {crash.get("hourly_rows_by_symbol","未知")}小时，≥5%小时暴跌 {crash.get("crash_count_total","未知")}次，规则事后触发 {crash.get("alert_count","未知")}次；精确率 {crash.get("precision_pct","不可用")}%、召回率 {crash.get("recall_pct","不可用")}%、误报 {crash.get("false_alerts_per_week","不可用")} 次/周，命中事件提前 {", ".join(str(n) for n in crash.get("warning_lead_hours_for_caught_events",[])) or "无有效事件"} 小时。这是事后选参研究，不是独立测试或可靠预警。',
