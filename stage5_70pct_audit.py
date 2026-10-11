@@ -289,12 +289,12 @@ def audit_independent_minute_shadow(root):
     digest=hashlib.sha1(b'blob '+str(len(source)).encode()+b'\0'+source).hexdigest()
     if digest!=protocol['locked_evaluator_git_blob_sha']:
         raise ValueError('minute evaluation source hash changed')
-    registry=read_csv(root,'data/direction_v42/forward_registry.csv',
+    registry=read_csv(root/'data/direction_v42/forward_registry.csv',
         ('forecast_id','issued_at_utc','target_utc','reference_price',
          'majority_direction','doge_reversal_direction','btc_momentum_direction'))
     registered={row['forecast_id']:row for row in registry}
     if len(registered)!=len(registry):raise ValueError('duplicate source predictions')
-    scores=read_csv(root,'data/stage5/minute_shadow/minute_scores.csv',
+    scores=read_csv(root/'data/stage5/minute_shadow/minute_scores.csv',
         ('forecast_id','target_utc','bar_open_utc','bar_closed_at_utc',
          'retrieved_at_utc','evaluated_at_utc','minute_close_usdt','realized_up',
          'majority_correct','doge_reversal_correct','btc_momentum_correct',
