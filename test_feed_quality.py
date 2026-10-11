@@ -37,6 +37,45 @@ class QualityAuditTests(unittest.TestCase):
      'first_seen_utc':'2026-10-10T01:00:00+00:00','last_checked_utc':'2026-10-10T02:00:00+00:00','revision_count':'0'})
   (etf/'revisions.csv').write_text('asset,trade_date_us,old_total_usd_m,new_total_usd_m,observed_at_utc,source_url\n')
   etfmeta=etf/'latest.json';meta=json.loads(etfmeta.read_text());meta['stored_rows']=2;etfmeta.write_text(json.dumps(meta))
+  # Minimal synthetic Stage 4 fixtures; never require live network for unit tests.
+  macro=self.b/'data/macro';macro.mkdir(parents=True,exist_ok=True)
+  macros=['CPIAUCSL','CPILFESL','PPIACO','PAYEMS','UNRATE','DFEDTARU','DFEDTARL','DGS10']
+  macrofields=['series_id','observation_date','value','unit','frequency','source_url','first_seen_utc','last_checked_utc','revision_count']
+  with (macro/'observations.csv').open('w',newline='') as out:
+   writer=csv.DictWriter(out,fieldnames=macrofields);writer.writeheader()
+   for sid in sorted(macros):
+    writer.writerow({'series_id':sid,'observation_date':'2026-10-09','value':'1.5','unit':'percent',
+     'frequency':'daily','source_url':'https://fred.stlouisfed.org/graph/fredgraph.csv?id='+sid,
+     'first_seen_utc':'2026-10-10T01:00:00+00:00','last_checked_utc':'2026-10-10T02:00:00+00:00','revision_count':'0'})
+  (macro/'revisions.csv').write_text('series_id,observation_date,old_value,new_value,observed_at_utc,source_url\n')
+  m=macro/'latest.json';j=json.loads(m.read_text());j['total_rows']=8
+  j['series']={sid:{'count_on_source':1,'oldest_observation_date':'2026-10-09','latest_observation_date':'2026-10-09'} for sid in macros}
+  m.write_text(json.dumps(j))
+  policy=self.b/'data/policy_events';policy.mkdir(parents=True,exist_ok=True)
+  policyfields=['source','event_id','event_type','title','event_time_utc','event_time_precision','first_seen_utc','last_seen_utc','url','point_in_time_rule']
+  with (policy/'events.csv').open('w',newline='') as out:
+   wr=csv.DictWriter(out,fieldnames=policyfields);wr.writeheader()
+   wr.writerow({'source':'BLS_CALENDAR','event_id':'bls1','event_type':'scheduled_macro_release','title':'Consumer Price Index',
+     'event_time_utc':'2026-11-01T13:30:00+00:00','event_time_precision':'calendar_schedule_not_actual_publication',
+     'first_seen_utc':'2026-10-10T01:00:00+00:00','last_seen_utc':'2026-10-10T02:00:00+00:00',
+     'url':'https://www.bls.gov/schedule/news_release/bls.ics','point_in_time_rule':'schedule_only'})
+   wr.writerow({'source':'FED_MONETARY_RSS','event_id':'fed1','event_type':'federal_reserve_monetary_policy','title':'FOMC Minutes',
+     'event_time_utc':'2026-10-09T18:00:00+00:00','event_time_precision':'provider_pubDate',
+     'first_seen_utc':'2026-10-10T01:00:00+00:00','last_seen_utc':'2026-10-10T02:00:00+00:00',
+     'url':'https://www.federalreserve.gov/newsevents/','point_in_time_rule':'max(provider_pubDate,first_seen_utc)'})
+  m=policy/'latest.json';j=json.loads(m.read_text());j['records']=2;m.write_text(json.dumps(j))
+  for folder,prefix in [('regulatory_events','CFTC_PRESS_RSS'),('sec_events','SEC_PRESS_RSS')]:
+   target=self.b/'data'/folder;target.mkdir(parents=True,exist_ok=True)
+   fields=['source','event_id','title','published_utc','first_seen_utc','last_checked_utc','source_url','keyword_candidate','backtest_available_from_utc']
+   with (target/'events.csv').open('w',newline='') as out:
+    wr=csv.DictWriter(out,fieldnames=fields);wr.writeheader()
+    wr.writerow({'source':prefix,'event_id':'reg1','title':'Digital Assets Policy',
+     'published_utc':'2026-10-09T18:00:00+00:00',
+     'first_seen_utc':'2026-10-10T01:00:00+00:00',
+     'last_checked_utc':'2026-10-10T02:00:00+00:00',
+     'source_url':'https://www.example.gov/policy','keyword_candidate':'true',
+     'backtest_available_from_utc':'2026-10-10T01:00:00+00:00'})
+   m=target/'latest.json';j=json.loads(m.read_text());j['stored_events']=1;m.write_text(json.dumps(j))
   h=self.b/'data/hourly_research/latest.json';h.parent.mkdir(parents=True,exist_ok=True)
   h.write_text(json.dumps({'status':'partial_backfill','archive_complete':False,
    'quality':{'symbols':{'DOGE-USDT':{'last_confirmed_start_utc':'2026-10-11T00:00:00+00:00',
@@ -106,5 +145,31 @@ class QualityAuditTests(unittest.TestCase):
   obj=evaluate(self.b,self.t)
   self.assertEqual(obj['sources']['stage3_etf_csv_quality']['state'],'ok')
   self.assertFalse(obj['stage3_etf_historical_point_in_time_verified'])
+
+ def test_macro_observation_date_is_not_release(self):
+  result=evaluate(self.b,self.t)
+  self.assertEqual(result['sources']['stage4_macro_policy_csv_quality']['state'],'ok')
+  self.assertFalse(result['stage4_macro_historical_vintages_verified'])
+ def test_macro_first_seen_cannot_precede_observation(self):
+  file=self.b/'data/macro/observations.csv'
+  with file.open(newline='') as inp:rows=list(csv.DictReader(inp));cols=list(rows[0])
+  rows[0]['first_seen_utc']='2026-10-08T00:00:00+00:00'
+  with file.open('w',newline='') as out:
+   wr=csv.DictWriter(out,fieldnames=cols);wr.writeheader();wr.writerows(rows)
+  self.assertIn('stage4_macro_policy_csv_quality',evaluate(self.b,self.t)['critical_failures'])
+ def test_bls_schedule_cannot_masquerade_as_released_data(self):
+  file=self.b/'data/policy_events/events.csv'
+  with file.open(newline='') as inp:rows=list(csv.DictReader(inp));cols=list(rows[0])
+  rows[0]['event_time_precision']='provider_pubDate'
+  with file.open('w',newline='') as out:
+   wr=csv.DictWriter(out,fieldnames=cols);wr.writeheader();wr.writerows(rows)
+  self.assertIn('stage4_macro_policy_csv_quality',evaluate(self.b,self.t)['critical_failures'])
+ def test_regulatory_first_seen_cannot_be_backdated(self):
+  file=self.b/'data/sec_events/events.csv'
+  with file.open(newline='') as inp:rows=list(csv.DictReader(inp));cols=list(rows[0])
+  rows[0]['backtest_available_from_utc']='2026-10-08T01:00:00+00:00'
+  with file.open('w',newline='') as out:
+   wr=csv.DictWriter(out,fieldnames=cols);wr.writeheader();wr.writerows(rows)
+  self.assertIn('stage4_macro_policy_csv_quality',evaluate(self.b,self.t)['critical_failures'])
 
 if __name__=='__main__':unittest.main(verbosity=2)
