@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Boundary and anti-hindsight regression for V4.2 event-start definition."""
-import unittest
+import unittest,hashlib
 from datetime import datetime,timezone,timedelta
 from crash_v42_score import target_window,scoring,ceil_hour
 from crash_forward_watch import HOUR,MODEL,iso
@@ -22,6 +22,8 @@ def fixture(end_hour=16,crash_hours=(),issued_minute=13,alert='1',ingest_late=Fa
   'source_first_ingested_utc':(issued+timedelta(minutes=1) if ingest_late else issued-timedelta(minutes=1)).isoformat(),
   'doge_hour_close':'.1','doge_hour_low_pct':'0','volume_multiple':'1',
   'relative_btc_pp':'0','alert':alert,'feature_sha256':'digest'}
+ raw='|'.join(str(per[s][BASE_MS+HOUR][k]) for s in ('DOGE-USDT','BTC-USDT','ETH-USDT') for k in ('open','low','close','volume'))
+ row['feature_sha256']=hashlib.sha256(raw.encode()).hexdigest()
  return {'test':row},per,points,issued
 
 class TimingBoundaryQA(unittest.TestCase):
