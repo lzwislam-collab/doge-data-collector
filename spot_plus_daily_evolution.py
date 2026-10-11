@@ -102,6 +102,43 @@ def make_priority(plus,trial_day,quality_stale,source_warnings,original_quote_qu
   return 'P1_RESEARCH_NEW_PIT_SAFE_MODEL_ON_DISTINCT_FORWARD_COHORT'
  return 'P1_CHECK_REAL_FORWARD_NET_PROFIT_VS_BUYHOLD_AND_CASH'
 
+def checked_market_spot_snapshot(root,now):
+ path=root/'data/stage5/spot_plus/live_quote_latest.json'
+ if not path.exists():
+  return {'status':'missing','live_snapshot_verified':False,
+    'reason':'no actual independent OKX spot quote collected for this report'}
+ j=read_json(path)
+ if (j.get('snapshot_only_not_continuous_market_stream') is not True
+     or j.get('not_an_executable_fill') is not True
+     or j.get('change_to_frozen_v42_or_dca') is not False):
+  raise ValueError('live quote provenance unsupported')
+ observed=utc(j['observed_at_utc'])
+ age=(now-observed).total_seconds()
+ if age<0 or age>180:
+  return {'status':'stale','live_snapshot_verified':False,
+    'observed_at_utc':observed.isoformat(),'age_seconds':round(age,2)}
+ q=j.get('instruments',{})
+ if set(q)!=set(('DOGE-USDT','BTC-USDT','ETH-USDT')):
+  raise ValueError('incomplete live spot quote symbols')
+ out={}
+ for symbol in ('DOGE-USDT','BTC-USDT','ETH-USDT'):
+  d=q[symbol]
+  ticker_at=utc(d['source_quote_at_utc'])
+  current_lag=(now-ticker_at).total_seconds()
+  bid=float(d['best_bid_usdt']);ask=float(d['best_ask_usdt'])
+  price=float(d['last_usdt'])
+  if (d.get('inst_id')!=symbol or not math.isfinite(price)
+      or not math.isfinite(bid) or not math.isfinite(ask)
+      or bid<=0 or ask<bid or price<=0 or current_lag<0 or current_lag>180):
+   raise ValueError('invalid live ticker or stale quote '+symbol)
+  out[symbol]={'price_usdt':price,'quote_at_utc':ticker_at.isoformat(),
+    'bid_usdt':bid,'ask_usdt':ask,'quote_age_seconds':round(current_lag,2)}
+ return {'status':'ok','live_snapshot_verified':True,
+  'observed_at_utc':observed.isoformat(),'age_seconds':round(age,2),
+  'instruments':out,
+  'this_is_not_a_continuous_stream_or_executable_trade':True}
+
+
 def inspect(root=ROOT,now=None):
  if now is None:now=datetime.now(timezone.utc)
  if now.tzinfo is None or now.utcoffset()!=timedelta(0):raise ValueError('UTC audit time')
@@ -174,6 +211,7 @@ def inspect(root=ROOT,now=None):
   'quote_coverage_pct':rate,'required_quote_coverage_pct':90,
   'coverage_priority_uses_prefreeze_collection_only_not_directional_accuracy':True}
  priority=make_priority(plus,ts,stale,source_warnings,ticker_quality)
+ market_snapshot=checked_market_spot_snapshot(root,now)
  return {'schema_version':1,'status':'ok','generated_at_utc':now.isoformat(),
   'ledger_date_utc':now.date().isoformat(),
   'underlying_sources':{'spot_plus_generated_at_utc':pt.isoformat(),
@@ -182,12 +220,13 @@ def inspect(root=ROOT,now=None):
    'spot_plus_sha256':sha(pp),'stage5_sha256':sha(sp)},
   'source_health':{'grade':'WARN' if stale or source_warnings else 'PARTIAL_COVERAGE',
    'freshness_gate':'WARN' if stale or source_warnings else 'PASS',
-   'live_market_tick_verified':False,
+   'live_market_tick_verified':market_snapshot['live_snapshot_verified'],
    'data_quality_pass_does_not_imply_full_coverage':True,
    'global_quality_audit_age_hours_now':round(effective_age,2),
    'global_quality_audit_stale_over_3h':stale,
    'warning_sources':source_warnings,
    'snapshot_data_not_exchange_tick_realtime':True},
+  'current_spot_quote':market_snapshot,
   'original_36_status':context['original_36_items'],
   'all_five_pillars_in_inventory':True,
   'all_five_pillars_in_prediction_weights':False,
@@ -251,7 +290,13 @@ def render(s,record):
  p=s['prospective_24h'];h=s['historical_paper']
  def val(v):return '尚无有效样本' if v is None else str(v)+'%'
  warnings=', '.join(s['source_health']['warning_sources']) or '无'
+ spot=s['current_spot_quote']
+ quote=spot.get('instruments',{}).get('DOGE-USDT',{})
+ quote_desc=(f"OKX DOGE/USDT {quote['price_usdt']}；报价UTC {quote['quote_at_utc']}；"
+  "独立快照，不是连续行情或已验证交易成交价" if spot['live_snapshot_verified']
+  else f"未验证（{spot['status']}），不可冒充实时价格")
  return ('# DOGE 现货预测 Plus｜每日进化审计\n\n'
+  f"**现货即时快照：** {quote_desc}  \n"
   f"**运行UTC：** {s['generated_at_utc']}  \n"
   f"**本次数据状态：** {s['source_health']['grade']}，来源警告：{warnings}  \n"
   '**注意：** 时效性 PASS 不等于数据覆盖全面，更不代表预测有效或现货盈利。五大模块均作为背景信息，尚未形成已验证的统一量化预测信号。  \n'
