@@ -66,7 +66,9 @@ def main():
  result["elapsed_seconds"]=round(time.monotonic()-start,2)
  result["socket_opened"]=opened[0]
  result["stored_unique_snapshots"]=len(old)
- result["status"]="partial" if opened[0] and not result["errors"] else "error"
+ result["status"]="partial" if opened[0] and not result["errors"] and result["elapsed_seconds"]>=SECONDS*0.9 else "error"
+ if result["status"]=="error" and not result["errors"]:
+  result["errors"].append("socket closed before minimum listening duration")
  out=io.StringIO();w=csv.DictWriter(out,fieldnames=FIELDS);w.writeheader()
  w.writerows(old[k] for k in sorted(old,key=lambda k:(int(old[k]["event_ts_ms"]),k)))
  put(p,out.getvalue());put(ROOT/"latest.json",json.dumps(result,indent=2,ensure_ascii=False)+"\n")
