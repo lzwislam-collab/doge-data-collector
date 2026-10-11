@@ -229,9 +229,15 @@ def evaluate(root=ROOT):
     dates={'validation':validation['end_utc'],'statistical':stat['last_date_utc'],
            'probability_baseline':probability['data_end_utc'],
            'daily_history':history['quality']['symbols']['DOGE-USDT']['last_utc']}
-    aligned=len(set(dates.values()))==1 and len({
+    daily_aligned=len(set(dates.values()))==1 and len({
         validation['doge_days'],stat['aligned_days'],probability['aligned_days'],
         history['quality']['symbols']['DOGE-USDT']['days']})==1
+    v42_hourly_rows=int(direction['sources']['hourly_rows'])
+    latest_hourly_rows=int(hourly['quality']['symbols']['DOGE-USDT']['hours'])
+    v42_hourly_at=utc(direction['sources']['hourly_last_closed_start_utc'])
+    latest_hourly_at=utc(hourly['quality']['symbols']['DOGE-USDT']['last_confirmed_start_utc'])
+    historical_direction_snapshot_aligned=(v42_hourly_rows==latest_hourly_rows and v42_hourly_at==latest_hourly_at)
+    aligned=daily_aligned and historical_direction_snapshot_aligned
     # Never promote historically selected candidate results to verified 70% accuracy.
     return {'schema_version':1,'status':'ok',
      'generated_at_utc':datetime.now(timezone.utc).isoformat(),
@@ -242,8 +248,13 @@ def evaluate(root=ROOT):
        'quarantined_total':daily_score['quarantined_count'],
        'quarantined_reasons':daily_bad,
        'not_an_accurate_directional_model_claim':True},
-     'comparability':{'dates':dates,'data_end_and_row_counts_aligned':aligned,
-        'status':'aligned' if aligned else 'BLOCKED_mismatched_source_end_dates',
+     'comparability':{'dates':dates,'data_end_and_row_counts_aligned':daily_aligned,
+        'historical_directional_hourly_source_aligned':historical_direction_snapshot_aligned,
+        'historical_directional_hourly_rows':v42_hourly_rows,
+        'latest_hourly_archive_rows':latest_hourly_rows,
+        'historical_directional_hourly_end_utc':v42_hourly_at.isoformat(),
+        'latest_hourly_archive_end_utc':latest_hourly_at.isoformat(),
+        'status':'aligned' if aligned else 'BLOCKED_mismatched_history_or_model_source',
         'matched_day_backtest_recomputed':False},
      'thresholds':{'min_nonoverlapping_prospective_scored_predictions_per_horizon':MIN_INDEPENDENT_SCORES,
        'minimum_resolved_quote_coverage_pct':90,
