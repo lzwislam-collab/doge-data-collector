@@ -1,0 +1,49 @@
+name: Audit DOGE predictive claim eligibility
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'prediction_gate.py'
+      - '.github/workflows/prediction_gate.yml'
+  schedule:
+    - cron: '37 5 * * *'
+permissions:
+  contents: write
+concurrency:
+  group: doge-prediction-gate
+  cancel-in-progress: false
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Syntax check
+        run: python -m py_compile prediction_gate.py
+      - name: Audit claim eligibility
+        id: audit
+        continue-on-error: true
+        run: python prediction_gate.py
+      - name: Commit result including failure evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -f data/prediction_gate/latest.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'audit: DOGE forecast publication gate'
+            for i in 1 2 3 4 5; do
+              if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
+              if [ "$i" -eq 5 ]; then exit 1; fi
+              sleep 4
+            done
+          fi
+      - name: Fail on invalid input audit
+        if: steps.audit.outcome != 'success'
+        run: exit 1
