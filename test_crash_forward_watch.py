@@ -12,6 +12,7 @@ class HourlyWatchTests(unittest.TestCase):
   (self.base/'data/hourly_research').mkdir(parents=True)
   (self.base/'data/crash_research').mkdir(parents=True)
   subprocess.run(['git','init','-q'],cwd=self.base,check=True)
+  subprocess.run(['git','-c','user.name=QA','-c','user.email=qa@example.test','commit','--allow-empty','-qm','init'],cwd=self.base,check=True)
   self.base_ms=int(datetime(2026,10,11,0,tzinfo=timezone.utc).timestamp()*1000)
   self.make_rows(45)
  def tearDown(self):self.tmp.cleanup()
