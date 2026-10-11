@@ -1,0 +1,26 @@
+name: Test V4.2 issuance-clock multi-horizon direction
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'direction_forward_v42.py'
+      - 'test_direction_forward_v42.py'
+      - '.github/workflows/test_direction_forward_v42.yml'
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile and run prospective directional synthetic tests
+        run: |
+          python -m py_compile direction_forward_v42.py
+          python -m unittest -v test_direction_forward_v42
