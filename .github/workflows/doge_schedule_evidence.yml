@@ -6,6 +6,8 @@ on:
     paths:
       - 'doge_schedule_evidence.py'
       - 'test_doge_schedule_evidence.py'
+      - 'stage1_rolling_integrity.py'
+      - 'test_stage1_rolling_integrity.py'
       - '.github/workflows/doge_schedule_evidence.yml'
   schedule:
     - cron: '44 2,8,14,20 * * *'
@@ -30,8 +32,8 @@ jobs:
           python-version: '3.11'
       - name: Test healthy partial-window evidence policy
         run: |
-          python -m py_compile doge_schedule_evidence.py
-          python -m unittest -v test_doge_schedule_evidence
+          python -m py_compile doge_schedule_evidence.py stage1_rolling_integrity.py
+          python -m unittest -v test_doge_schedule_evidence test_stage1_rolling_integrity
       - name: Verify schedule run events and persisted snapshot timestamps
         id: audit
         continue-on-error: true
