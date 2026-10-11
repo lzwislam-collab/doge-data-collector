@@ -1,6 +1,11 @@
 name: Backfill OKX daily DOGE BTC ETH history and baseline backtest
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'doge_history.py'
+      - '.github/workflows/doge_history.yml'
   schedule:
     - cron: '17 2,10,18 * * *'
 permissions:
