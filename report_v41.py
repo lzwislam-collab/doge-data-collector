@@ -130,8 +130,8 @@ def main():
      '- 下行条件：BTC持续走弱、DOGE/BTC相对强弱恶化、盘口收缩或合约风险显著增加。',
      '- 上行条件：BTC企稳、DOGE相对强弱改善、成交/流动性得到确认。',
      '- 上述条件属于待检验的风险监控规则，不是已经验证的预测因子。',
-     f'- **真实未来1小时监测**：{crash_live.get("status","未建立")}；已登记 {crash_live.get("registered","未知")} 条观察，成熟评分 {len(crash_live.get("scored",[]))} 条；当前精确率 {crash_live.get("precision_pct","样本不足")}%，召回率 {crash_live.get("recall_pct","样本不足")}%；阈值在10月9日暴跌后选择，前瞻积累不足，**不构成70%通过证据**。',
-     f'- 1小时极端暴跌历史研究：{crash.get("status","unavailable")}；计算时间 {stamp(crash)}，历史K线截止 {crash.get("history_last_start_utc","未知")}；有效1H样本 {crash.get("hourly_rows_by_symbol","未知")}小时，≥5%小时暴跌 {crash.get("crash_count_total","未知")}次，规则事后触发 {crash.get("alert_count","未知")}次；精确率 {crash.get("precision_pct","不可用")}%、召回率 {crash.get("recall_pct","不可用")}%、误报 {crash.get("false_alerts_per_week","不可用")} 次/周，命中事件提前 {crash.get("warning_lead_hours_for_caught_events","未知")} 小时。这是事后选参研究，不是独立测试或可靠预警。',
+     f'- **真实未来1小时监测**：{crash_live.get("status","未建立")}；已登记 {crash_live.get("registered","未知")} 条观察，成熟评分 {len(crash_live.get("scored",[]))} 条；当前精确率 {(str(crash_live["precision_pct"])+"%") if crash_live.get("precision_pct") is not None else "样本不足"}，召回率 {(str(crash_live["recall_pct"])+"%") if crash_live.get("recall_pct") is not None else "样本不足"}；阈值在10月9日暴跌后选择，前瞻积累不足，**不构成70%通过证据**。',
+     f'- 1小时极端暴跌历史研究：{crash.get("status","unavailable")}；计算时间 {stamp(crash)}，历史K线截止 {crash.get("history_last_start_utc","未知")}；有效1H样本 {crash.get("hourly_rows_by_symbol","未知")}小时，≥5%小时暴跌 {crash.get("crash_count_total","未知")}次，规则事后触发 {crash.get("alert_count","未知")}次；精确率 {crash.get("precision_pct","不可用")}%、召回率 {crash.get("recall_pct","不可用")}%、误报 {crash.get("false_alerts_per_week","不可用")} 次/周，命中事件提前 {", ".join(str(n) for n in crash.get("warning_lead_hours_for_caught_events",[])) or "无有效事件"} 小时。这是事后选参研究，不是独立测试或可靠预警。',
      '','## F10｜历史回测与前瞻兑现',
      '|周期|滚动样本外窗口数|经验P10–P90覆盖率|滚动区间分数|扩展历史基线区间分数|非重叠窗口数|',
      '|---|---:|---:|---:|---:|---:|']
