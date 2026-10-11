@@ -8,6 +8,8 @@ on:
       - 'evaluate_crash_warning.py'
       - 'crash_forward_watch.py'
       - 'test_crash_forward_watch.py'
+      - 'crash_v42_score.py'
+      - 'test_crash_v42_score.py'
       - '.github/workflows/okx_hourly_extreme_history.yml'
   schedule:
     - cron: '13 * * * *' # hourly research checkpoint, with 03/15 UTC historical backfill
@@ -28,7 +30,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Test hourly point-in-time registry causal restrictions
-        run: python -m unittest -v test_crash_forward_watch
+        run: python -m unittest -v test_crash_forward_watch test_crash_v42_score
       - name: Backfill confirmed UTC 1H data with source-ingestion timestamps
         id: collect
         continue-on-error: true
@@ -46,12 +48,17 @@ jobs:
         if: steps.collect.outcome == 'success'
         continue-on-error: true
         run: python crash_forward_watch.py
+      - name: V4.2 forward-only one-hour-lead risk scoring
+        id: v42
+        if: steps.forward.outcome == 'success'
+        continue-on-error: true
+        run: python crash_v42_score.py
       - name: Persist data and diagnostics
         if: always()
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          for f in data/hourly_research/ohlc.csv data/hourly_research/latest.json data/crash_research/pilot_1h_latest.json data/crash_research/prospective_hourly.csv data/crash_research/prospective_scores.json; do
+          for f in data/hourly_research/ohlc.csv data/hourly_research/latest.json data/crash_research/pilot_1h_latest.json data/crash_research/prospective_hourly.csv data/crash_research/prospective_scores.json data/crash_research/v42_scores.json; do
             if [ -f "$f" ]; then git add -f "$f"; fi
           done
           if ! git diff --cached --quiet; then
@@ -64,5 +71,5 @@ jobs:
             done
           fi
       - name: Fail on collector or quality error
-        if: steps.collect.outcome != 'success' || steps.evaluate.outcome != 'success' || steps.forward.outcome != 'success'
+        if: steps.collect.outcome != 'success' || steps.evaluate.outcome != 'success' || steps.forward.outcome != 'success' || steps.v42.outcome != 'success'
         run: exit 1
