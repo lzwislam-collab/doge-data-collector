@@ -83,9 +83,15 @@ def day_stats(stage):
   raise ValueError('unexpected global validation claim requires separate release audit')
  return day,n,scored,correct
 
-def make_priority(plus,trial_day,quality_stale,source_warnings):
+def make_priority(plus,trial_day,quality_stale,source_warnings,original_quote_quality=None):
  if quality_stale or source_warnings:
   return 'P0_VERIFY_TIMESTAMP_FRESHNESS_AND_MISSING_SOURCE'
+ # Fix real-time original quote observability BEFORE collecting 100 samples.
+ # A 90% required coverage cannot be reached by selecting only scored rows.
+ original_quote_quality=original_quote_quality or {}
+ if original_quote_quality.get('matured') is not None and original_quote_quality['matured']>=5:
+  if original_quote_quality['quote_coverage_pct'] is not None and original_quote_quality['quote_coverage_pct']<90:
+   return 'P0_REPAIR_ORIGINAL_TARGET_TICKER_QUOTE_COVERAGE'
  if trial_day['locked_bins_with_issued_predictions']<100:
   return 'P0_GATHER_LOCKED_NONOVERLAP_24H_FORWARD_SCORES'
  if trial_day.get('coverage_pct') is None or float(trial_day['coverage_pct'])<90:
@@ -150,7 +156,24 @@ def inspect(root=ROOT,now=None):
  best=max(candidates,key=lambda kv:kv[1])
  if any(not math.isfinite(v) for k,v in candidates+[('buy_and_hold',ref)]):
   raise ValueError('invalid hypothetical profitability')
- priority=make_priority(plus,ts,stale,source_warnings)
+ # Prefreeze quote diagnostic is allowed to identify COLLECTION failures,
+ # but is never incorporated into post-freeze directional accuracy.
+ forward_live=stage.get('forward_live',{}).get('horizons',{})
+ sample=forward_live.get('1h',{})
+ try:
+  matured=int(sample.get('resolved',0))
+  scores=int(sample.get('scored',0))
+  uncovered=int(sample.get('unscorable',0))
+ except (TypeError,ValueError):raise ValueError('invalid original ticker coverage counters')
+ if matured<0 or scores<0 or uncovered<0 or scores+uncovered!=matured:
+  raise ValueError('original ticker coverage accounting mismatch')
+ rate=round(100*scores/matured,2) if matured else None
+ if rate is not None and sample.get('resolved_quote_coverage_pct') is not None and abs(rate-float(sample['resolved_quote_coverage_pct']))>0.011:
+  raise ValueError('original ticker quote coverage mismatch')
+ ticker_quality={'matured':matured,'scored':scores,'unscorable':uncovered,
+  'quote_coverage_pct':rate,'required_quote_coverage_pct':90,
+  'coverage_priority_uses_prefreeze_collection_only_not_directional_accuracy':True}
+ priority=make_priority(plus,ts,stale,source_warnings,ticker_quality)
  return {'schema_version':1,'status':'ok','generated_at_utc':now.isoformat(),
   'ledger_date_utc':now.date().isoformat(),
   'underlying_sources':{'spot_plus_generated_at_utc':pt.isoformat(),
@@ -168,6 +191,7 @@ def inspect(root=ROOT,now=None):
   'original_36_status':context['original_36_items'],
   'all_five_pillars_in_inventory':True,
   'all_five_pillars_in_prediction_weights':False,
+  'original_ticker_1h_collection_diagnostic':ticker_quality,
   'prospective_24h':{'locked_bin_registered':registered,
    'genuinely_scored':scored,'correct':correct,
    'accuracy_pct':ts.get('primary_accuracy_pct'),
@@ -236,7 +260,8 @@ def render(s,record):
   '## ① 预测能力（仅冻结后独立24小时正式样本）\n\n'
   f"- 已发行可独立分箱预测：{p['locked_bin_registered']}；取得有效评分：{p['genuinely_scored']}；正确：{p['correct']}。\n"
   f"- 方向准确率：{val(p['accuracy_pct'])}；95% Wilson下限：{val(p['wilson95_lower_pct'])}；报价覆盖率：{val(p['coverage_pct'])}。\n"
-  '- 70%有效优势：**未验证**。历史和冻结前诊断不计入正式成绩。\n\n'
+  '- 70%有效优势：**未验证**。历史和冻结前诊断不计入正式成绩。\n'
+  f"- **原始行情采集健康（诊断，非预测成绩）：** 1小时到期 {s['original_ticker_1h_collection_diagnostic']['matured']} 条，有效 {s['original_ticker_1h_collection_diagnostic']['scored']} 条，漏评 {s['original_ticker_1h_collection_diagnostic']['unscorable']} 条，报价覆盖率 {val(s['original_ticker_1h_collection_diagnostic']['quote_coverage_pct'])}，最低要求90%。\n\n"
   '## ② 现货经济能力（仅历史假设模拟）\n\n'
   f"- DOGE买入持有：{h['buy_hold_pct']}%；现金：{h['cash_pct']}%；历史最好候选 {h['best_candidate_id']}：{h['best_candidate_pct']}%。\n"
   f"- 与持币比较：{h['candidate_outperformance_vs_hold_pct_points']}个百分点；候选通过历史观察筛选，**不构成未来获利证据**。\n\n"
