@@ -34,7 +34,7 @@ permissions:
   contents: write
   actions: read
 concurrency:
-  group: okx-hourly-extreme-history # shared with prediction_gate: serialize common error-review writes
+  group: okx-hourly-extreme-history # shared with daily audit and short raw-quote job; long scans are separate
   cancel-in-progress: false
 jobs:
   hourly-history:
