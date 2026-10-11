@@ -1,0 +1,53 @@
+name: V4.2 confirmed minute-candle source feasibility
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'v42_microprobe.py'
+      - 'test_v42_microprobe.py'
+      - '.github/workflows/v42_microprobe.yml'
+  schedule:
+    - cron: '27 * * * *'
+permissions:
+  contents: write
+concurrency:
+  group: v42-microprobe-hourly
+  cancel-in-progress: false
+jobs:
+  spot-minute-feasibility:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Deterministic timestamp and quality tests
+        run: |
+          python -m py_compile v42_microprobe.py
+          python -m unittest -v test_v42_microprobe
+      - name: Probe confirmed OKX spot minute and five-minute history
+        id: fetch
+        continue-on-error: true
+        run: python v42_microprobe.py
+      - name: Persist QA outcome and bounded sample, even if source failed
+        if: always()
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          for f in data/v42_microprobe/latest.json data/v42_microprobe/latest_sample.csv; do
+            if [ -f "$f" ]; then git add -f "$f"; fi
+          done
+          if ! git diff --cached --quiet; then
+            git commit -m 'data: verify bounded V4.2 minute pilot sample and timing'
+            for attempt in 1 2 3 4 5; do
+              if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
+              git rebase --abort || true
+              [ "$attempt" -lt 5 ] || exit 1
+              sleep 3
+            done
+          fi
+      - name: Block research readiness when micro sources fail
+        if: steps.fetch.outcome != 'success'
+        run: exit 1
