@@ -31,6 +31,7 @@ def main():
  forecast=read('data/forecast_v41/latest.json')
  back=read('data/forecast_v41/backtest_latest.json')
  scoring=read('data/forecast_v41/scores.json')
+ research=read('data/forecast_v41/calibration_research.json')
  hist=read('data/history/latest.json')
  if forecast.get('status')!='ok' or scoring.get('status')!='ok' or hist.get('status')!='ok':
   raise ValueError('critical v41 report inputs not ok')
@@ -72,6 +73,8 @@ def main():
  for h in (1,7,30):
   x=forecast['price_intervals'][str(h)+'d'];b=x['p10_p50_p90_usdt']
   t.append(f"|{x['target_utc']}|{h}天|{fmt(b['p10'],5)}|{fmt(b['p50'],5)}|{fmt(b['p90'],5)}|{fmt(x['historical_up_frequency_pct'],2)}%|跌幅≤{x['research_large_down_threshold_pct']}%: {fmt(x['historical_large_down_frequency_pct'],2)}%|")
+ if not forecast.get('registration_window_ok',False):
+  t+=['**前瞻登记门禁：本次运行已超过UTC日线收盘后2小时，新模型区间仅供研究，未登记的新预测不计入未来评分。**']
  t+=['','365天：仅提供宏观、网络结构及牛熊压力情景；长期独立样本不足，**不提供精确概率或已校准价格区间**。',
      '情景解释：上行条件为BTC风险环境改善、DOGE相对强弱回升且流动性确认；下行条件为BTC走弱、杠杆压力和流动性收缩。上述是条件假设，尚未验证为预测规则。',
      '所有P10/P90均来自历史经验收益分位数，尚未实现80%校准。','',
@@ -113,6 +116,16 @@ def main():
  for h in (1,7,30):
   x=back['horizons'][str(h)+'d'];full=x['all_anchors_overlapping'];non=x['nonoverlap_fixed_start_phase']
   t.append(f"|{h}天|{full['n']}|{fmt(full['rolling']['coverage_pct'],2)}%|{fmt(full['rolling']['mean_interval_score_log_pct'],3)}|{fmt(full['expanding']['mean_interval_score_log_pct'],3)}|{non['n']}|")
+ if research.get('status')=='ok' and research.get('history_cutoff_utc')==cutoff:
+  t+=['','### 区间校准研究候选（不自动上线）',
+      '|周期|原模型区间评分|PIT校准候选评分|候选覆盖率|裁决|',
+      '|---|---:|---:|---:|---|']
+  for h in (1,7,30):
+   r=research['horizons'][str(h)+'d']['all_overlapping']
+   old=r['baseline'];new=r['challenger']
+   t.append(f"|{h}天|{fmt(old['interval_score_log_pct'],3)}|{fmt(new['interval_score_log_pct'],3)}|{fmt(new['coverage_pct'],2)}%|研究中／无自动晋级|")
+  t.append('校准回测不是全新未碰触测试集；多次调参与周期目标相关性仍可能造成过拟合。')
+ else:t+=['历史区间校准候选：未提供同步的有效研究文件；不推断新模型优于原模型。']
  t+=['覆盖目标为80%，过高也可能意味着区间过宽；区间分数越低越好，但历史回测未证明未来优势。',
      f'真实前瞻：登记 {scoring["registered"]} 条，已评分 {scoring["counts"]["scored"]} 条，待评分 {scoring["counts"]["pending"]} 条，隔离 {scoring["counts"]["quarantined"]} 条。**NO_VALIDATED_EDGE**。',
      '','## F11｜来源、缺失、时效及最终审计',
