@@ -5,7 +5,7 @@ Scores the first fully closed 1m candle whose OPEN >= the originally registered
 issuance+H target. This is NOT the exact target quote and NEVER changes V4.2
 forward_scores.csv or its locked point-quote evaluation.
 """
-import csv,io,json,math,os,time,urllib.parse,urllib.request
+import csv,io,json,math,os,time,hashlib,urllib.parse,urllib.request
 from datetime import datetime,timedelta,timezone
 from pathlib import Path
 from direction_forward_v42 import FCOLS,read_rows,write,verify_append_only
@@ -29,6 +29,10 @@ ALLOWED_H={1,24}
 
 def load_protocol(root):
  p=json.loads((root/'data/stage5/minute_evaluation_protocol.json').read_text())
+ source=Path(__file__).read_bytes()
+ actual_sha=hashlib.sha1(b'blob '+str(len(source)).encode()+b'\0'+source).hexdigest()
+ if p.get('locked_evaluator_git_blob_sha')!=actual_sha:
+  raise ValueError('frozen minute evaluator source SHA mismatch')
  if (p.get('status')!='frozen_protocol'
      or p.get('protocol_id')!='DOGE_V42_1M_CLOSE_SHADOW_LOCK_20261012'
      or p.get('forecast_source_model_id')!=MODEL
