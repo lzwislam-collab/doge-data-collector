@@ -9,6 +9,11 @@ on:
       - 'test_stage5_70pct_audit.py'
       - 'stage5_forward_quality.py'
       - 'forward_validation.py'
+      - 'forward_validation_v2.py'
+      - 'quote_evidence_v2.py'
+      - 'test_forward_validation_v2.py'
+      - 'test_quote_evidence_v2.py'
+      - 'data/stage5/forward_validation_protocol_v2.json'
       - 'test_forward_validation.py'
       - 'data/stage5/forward_validation_protocol.json'
       - 'stage5_error_review.py'
@@ -57,8 +62,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          python -m unittest -q test_forward_validation
-          python forward_validation.py --daily
+          python -m unittest -q test_forward_validation test_quote_evidence_v2 test_forward_validation_v2
+          python forward_validation_v2.py --daily
       - name: Synchronize latest source health and timestamps before forecasting
         id: freshness
         continue-on-error: true
@@ -88,7 +93,13 @@ jobs:
         id: evolution
         if: steps.spot_plus.outcome == 'success' && steps.stage5.outcome == 'success'
         continue-on-error: true
-        run: python spot_plus_daily_evolution.py
+        run: |
+          python spot_plus_daily_evolution.py
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('reports/DOGE_SPOT_PLUS_DAILY.md')
+          p.write_text('正式前瞻成绩请查看 [V2日报](DOGE_FORWARD_VALIDATION_V2_DAILY.md)。以下旧协议成绩为独立历史诊断，不作为V2验收依据。\n\n'+p.read_text(),encoding='utf-8')
+          PY
       - name: Audit claim eligibility
         id: audit
         continue-on-error: true
@@ -101,7 +112,7 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          for file in data/quality/latest.json data/prediction_gate/latest.json data/stage5/latest.json data/stage5/error_review/latest.json data/stage5/spot_plus/latest.json data/stage5/spot_plus/evolution_latest.json data/stage5/spot_plus/evolution_log.csv data/stage5/spot_plus/live_quote_latest.json data/stage5/forward_validation/daily_latest.json reports/DOGE_FORWARD_VALIDATION_DAILY.md reports/DOGE_SPOT_PLUS_DAILY.md; do
+          for file in data/quality/latest.json data/prediction_gate/latest.json data/stage5/latest.json data/stage5/error_review/latest.json data/stage5/spot_plus/latest.json data/stage5/spot_plus/evolution_latest.json data/stage5/spot_plus/evolution_log.csv data/stage5/spot_plus/live_quote_latest.json data/stage5/forward_validation/daily_latest.json reports/DOGE_FORWARD_VALIDATION_DAILY.md reports/DOGE_SPOT_PLUS_DAILY.md data/stage5/forward_validation_v2/daily_latest.json reports/DOGE_FORWARD_VALIDATION_V2_DAILY.md; do
             if [ -f "$file" ]; then git add -f "$file"; fi
           done
           if ! git diff --cached --quiet; then

@@ -17,6 +17,11 @@ on:
       - 'test_stage5_error_review.py'
       - 'spot_plus_quote_watch.py'
       - 'forward_validation.py'
+      - 'forward_validation_v2.py'
+      - 'quote_evidence_v2.py'
+      - 'test_forward_validation_v2.py'
+      - 'test_quote_evidence_v2.py'
+      - 'data/stage5/forward_validation_protocol_v2.json'
       - 'test_forward_validation.py'
       - 'data/stage5/forward_validation_protocol.json'
       - 'test_spot_plus_quote_watch.py'
@@ -43,13 +48,13 @@ jobs:
         with:
           python-version: '3.11'
       - name: Test hourly point-in-time registry causal restrictions
-        run: python -m unittest -v test_crash_forward_watch test_crash_v42_score test_direction_forward_v42 test_stage5_minute_shadow test_stage5_error_review test_spot_plus_quote_watch test_forward_validation
+        run: python -m unittest -v test_crash_forward_watch test_crash_v42_score test_direction_forward_v42 test_stage5_minute_shadow test_stage5_error_review test_spot_plus_quote_watch test_forward_validation test_quote_evidence_v2 test_forward_validation_v2
       - name: Fail closed before writes on full-history or frozen protocol mutation
-        run: python forward_validation.py --integrity-only
+        run: python forward_validation_v2.py --integrity-only
       - name: Score genuine due target quotes before long collection steps
         id: quote_watch
         continue-on-error: true
-        run: python spot_plus_quote_watch.py
+        run: python quote_evidence_v2.py watch
       - name: Backfill confirmed UTC 1H data with source-ingestion timestamps
         id: collect
         continue-on-error: true
@@ -76,7 +81,7 @@ jobs:
         id: direction
         if: steps.collect.outcome == 'success'
         continue-on-error: true
-        run: python direction_forward_v42.py
+        run: python quote_evidence_v2.py direction
       - name: Verify benign late-registration skip without changing frozen deadline
         id: direction_late_audit
         if: steps.direction.outcome != 'success' && steps.collect.outcome == 'success'
@@ -106,13 +111,17 @@ jobs:
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: python forward_validation.py
+        run: python forward_validation_v2.py
       - name: Persist data and diagnostics
         if: always()
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           for f in data/hourly_research/ohlc.csv data/hourly_research/latest.json data/crash_research/pilot_1h_latest.json data/crash_research/prospective_hourly.csv data/crash_research/prospective_scores.json data/crash_research/v42_scores.json data/direction_v42/forward_registry.csv data/direction_v42/forward_scores.csv data/direction_v42/forward_latest.json data/stage5/minute_shadow/latest.json data/stage5/minute_shadow/minute_scores.csv data/stage5/error_review/latest.json data/stage5/spot_plus/quote_watch_latest.json data/stage5/forward_validation/latest.json data/stage5/forward_validation/remote_witnesses.csv data/stage5/forward_validation/verified_run_metadata.csv reports/DOGE_FORWARD_VALIDATION.md; do
+            if [ -f "$f" ]; then git add -f "$f"; fi
+          done
+          git add -f data/quote_evidence_v2
+          for f in data/stage5/forward_validation_v2/latest.json data/stage5/forward_validation_v2/protocol_witness.json reports/DOGE_FORWARD_VALIDATION_V2.md; do
             if [ -f "$f" ]; then git add -f "$f"; fi
           done
           if ! git diff --cached --quiet; then
@@ -140,6 +149,10 @@ jobs:
             data/stage5/forward_validation/*.csv
             data/stage5/spot_plus/quote_watch_latest.json
             reports/DOGE_FORWARD_VALIDATION.md
+            data/quote_evidence_v2/
+            data/stage5/forward_validation_protocol_v2.json
+            data/stage5/forward_validation_v2/
+            reports/DOGE_FORWARD_VALIDATION_V2.md
       - name: Fail on collector or quality error
         if: steps.validation.outcome != 'success' || steps.quote_watch.outcome != 'success' || steps.collect.outcome != 'success' || steps.evaluate.outcome != 'success' || steps.forward.outcome != 'success' || steps.v42.outcome != 'success' || (steps.direction.outcome != 'success' && steps.direction_late_audit.outcome != 'success') || steps.minute_shadow.outcome != 'success' || steps.error_review.outcome != 'success'
         run: exit 1

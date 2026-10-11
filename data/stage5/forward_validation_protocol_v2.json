@@ -1,0 +1,42 @@
+{
+  "schema_version": 2,
+  "status": "frozen_protocol",
+  "protocol_id": "DOGE_FORWARD_RAW_QUOTE_BOUND_V2_20261012_0200",
+  "effective_from_utc": "2026-10-12T02:00:00+00:00",
+  "model_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1",
+  "primary_horizons_hours": [
+    1,
+    24
+  ],
+  "locked_code_git_blobs": {
+    "spot_plus_quote_watch.py": "132ac443c8421960b19c43e237b9e638609c5b23",
+    "forward_validation.py": "f0831c7d38581543f84a85639c6d69a7305ff382",
+    "stage5_forward_quality.py": "8c9717dd2fabb49ed3ba1c3f4c1df1281d13f51b",
+    "direction_forward_v42.py": "368abc641db6d5ea6496ac4db624554161034665",
+    "stage5_70pct_audit.py": "1095886e5e493676e15a2de5c2bf0bd1abbd7dc9",
+    "direction_baseline_v42.py": "4bd0417548ab8251ec9d92e168db46d6ec1068bb",
+    "quote_evidence_v2.py": "7d1e62e60f3aa78949ef1d5d81d74086d1907c91",
+    "forward_validation_v2.py": "3adbdcc43c5dbdb57ecd482b1d4138e720146ba1"
+  },
+  "max_publication_delay_minutes": 45,
+  "eligible_target_quote_window_minutes": 25,
+  "minimum_quote_and_issuance_coverage_fraction": 0.9,
+  "minimum_nonoverlap_valid_scores": 100,
+  "minimum_observation_days": 30,
+  "minimum_wilson95_lower_accuracy_fraction": 0.7,
+  "fee_fraction_each_side": 0.001,
+  "slippage_fraction_each_side": 0.0005,
+  "nonoverlap_rule": "Select earliest issued per fixed bin, reserve target+25m before seeing outcome, never substitute missing scores",
+  "economic_rule": "First24h issue per cohort UTC day; UP long then exit actual target quote, DOWN cash; stop at first missing or overlap; compare same-period continuous hold and cash",
+  "old_records_never_backfilled": true,
+  "missing_referenced_snapshot_policy": "integrity blocked",
+  "missing_ordinary_quote_policy": "included in denominator; never reconstruct",
+  "external_immutable_storage_configured": false,
+  "real_orders_authorized": false,
+  "dca_rules_modified": false,
+  "limitations": [
+    "Raw HTTPS capture is not exchange-signed; same collector origin remains a trust assumption",
+    "Independent retention-locked storage is not available/configured; GitHub admin rewrite/deletion remains possible",
+    "No future edge claim until real forward evidence and separate acceptance"
+  ]
+}

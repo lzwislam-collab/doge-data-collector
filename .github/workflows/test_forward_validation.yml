@@ -4,11 +4,17 @@ on:
   pull_request:
     paths:
       - 'forward_validation.py'
+      - 'forward_validation_v2.py'
+      - 'quote_evidence_v2.py'
+      - 'test_forward_validation_v2.py'
+      - 'test_quote_evidence_v2.py'
+      - 'data/stage5/forward_validation_protocol_v2.json'
       - 'test_forward_validation.py'
       - 'data/stage5/forward_validation_protocol.json'
       - '.github/workflows/test_forward_validation.yml'
       - '.github/workflows/okx_hourly_extreme_history.yml'
       - '.github/workflows/prediction_gate.yml'
+      - '.github/workflows/liquidations.yml'
 permissions:
   contents: read
 jobs:
@@ -23,4 +29,4 @@ jobs:
         with:
           python-version: '3.11'
       - run: python -m unittest discover -v
-      - run: python forward_validation.py --integrity-only
+      - run: python forward_validation_v2.py --integrity-only
