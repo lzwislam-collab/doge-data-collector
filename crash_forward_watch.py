@@ -158,7 +158,8 @@ def run(now=None,base=ROOT):
  result.update({'schema_version':1,'status':'ok' if valid else 'source_stale_no_registration',
   'evaluated_at_utc':now.isoformat(),'latest_hour_start_utc':iso(latest),
   'registered_new':int(registered),'delay_minutes':round(delay,2),
-  'research_only':True,'rule_frozen_at_utc':'2026-10-11T00:00:00Z',
+  'research_only':True,'rule_definition_commit':'4477ca2197d5dbf185e8fc26cab9fbcb61fe4c2d',
+  'first_registered_utc':min((r['issued_at_utc'] for r in rows.values()),default=None),
   'rule_was_selected_after_oct09_event':True,
   'historical_alerts_must_not_be_called_live':True})
  write(base/'data/crash_research/prospective_scores.json',json.dumps(result,indent=2,ensure_ascii=False)+'\n')
