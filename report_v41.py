@@ -51,6 +51,10 @@ def main():
  policy=read('data/policy_events/latest.json');sec=read('data/sec_events/latest.json')
  cftc=read('data/regulatory_events/latest.json')
  crash=read('data/crash_research/pilot_1h_latest.json')
+ crash_live=read('data/crash_research/prospective_scores.json')
+ quality=read('data/quality/latest.json')
+ old_baseline=read('data/prob_baseline/latest.json')
+ old_gate=read('data/prediction_gate/latest.json')
  prices_by_symbol={}
  with (ROOT/'data/history/daily.csv').open(newline='',encoding='utf-8') as f:
   for r in csv.DictReader(f):
@@ -67,7 +71,8 @@ def main():
  price30=prices[-30:]
  t=['# DOGE全面预测报告 V4.1｜自动研究版','','**状态：RESEARCH_ONLY / NO_VALIDATED_EDGE；非买卖指令。**',
     f'生成于：{now.isoformat()}；行情起点：OKX已收盘1Dutc {cutoff}；DOGE起点价格：{fmt(prices[-1],5)} USDT。',
-    '预测对象为目标UTC日线收盘价，不是盘中最高最低价。不能把历史频率当成已校准真实概率。','',
+    '预测对象为目标UTC日线收盘价，不是盘中最高最低价。不能把历史频率当成已校准真实概率。',
+    f'**时点警示：信号参考日线收盘时间 {forecast.get("origin_close_at_utc","未提供")}；本报告形成时目标窗口已过去 {forecast.get("target_window_elapsed_before_issue_minutes","未提供")} 分钟，不属于报告发出后完整24小时价格预测。**','',
     '## F01｜24小时／7天／30天／365天情景及区间',
     '|目标UTC日|周期|P10区间低点|P50中位值|P90区间高点|历史上涨频率|历史大跌频率|',
     '|---|---|---:|---:|---:|---:|---:|']
@@ -111,6 +116,7 @@ def main():
      '- 下行条件：BTC持续走弱、DOGE/BTC相对强弱恶化、盘口收缩或合约风险显著增加。',
      '- 上行条件：BTC企稳、DOGE相对强弱改善、成交/流动性得到确认。',
      '- 上述条件属于待检验的风险监控规则，不是已经验证的预测因子。',
+     f'- **真实未来1小时监测**：{crash_live.get("status","未建立")}；已登记 {crash_live.get("registered","未知")} 条观察，成熟评分 {len(crash_live.get("scored",[]))} 条；当前精确率 {crash_live.get("precision_pct","样本不足")}%，召回率 {crash_live.get("recall_pct","样本不足")}%；阈值在10月9日暴跌后选择，前瞻积累不足，**不构成70%通过证据**。',
      f'- 1小时极端暴跌风险研究：{crash.get("status","unavailable")}；OKX历史1H样本 {crash.get("hourly_rows_by_symbol","未知")}小时，≥5%小时暴跌 {crash.get("crash_count_total","未知")}次，候选规则共触发 {crash.get("alert_count","未知")}次；提前预警精确率 {crash.get("precision_pct","不可用")}%、事件召回率 {crash.get("recall_pct","不可用")}%。该规则事后构建、无独立样本验证、不得当作实盘预警。',
      '','## F10｜历史回测与前瞻兑现',
      '|周期|滚动样本外窗口数|经验P10–P90覆盖率|滚动区间分数|扩展历史基线区间分数|非重叠窗口数|',
@@ -134,6 +140,9 @@ def main():
      f'- OKX日线截止：{cutoff} UTC；OKX市场快照：{stamp(spot)}；衍生品：{stamp(liquidity)}；巨鲸：{stamp(whale)}；链上：{stamp(onchain)}。',
      f'- ETF：{stamp(etf)}；FRED：{stamp(macro)}；政策日历：{stamp(policy)}；样本外评分：{stamp(scoring)}。',
      '- ①链上/巨鲸/交易所净流：PARTIAL；②强平/流动性：PARTIAL；③ETF：采集PASS；④宏观政策：采集PASS/因果效应未验证；⑤历史/预测：工程PASS/预测有效性未验证。',
+     f'- **独立数据质量门禁**：状态 {quality.get("status","未运行")}，报告时记录 {stamp(quality)}；关键故障 {quality.get("critical_failures","未知")}，可选数据告警 {quality.get("optional_source_warnings","未知")}。对已过期文件不能凭历史PASS宣称实时。',
+     f'- **旧模型审计时间一致性**：旧多因子/概率基线截止 {old_baseline.get("data_end_utc","不可用")}，当前DOGE日线截止 {cutoff}；'+('旧模型统计滞后：STALE_NOT_USED_FOR_V41。' if old_baseline.get('data_end_utc')!=cutoff else '旧基线时间匹配，但不代表预测优势。')+f' 旧预测门禁状态 {old_gate.get("status","未知")}，不决定V4.1有效性。',
+     '- **Google Sheets/Apps Script单独验收**：本GitHub报告不代表Apps Script触发、执行记录及表格回读已验证；禁止合并声称成功。',
      '- 数据事实与情景判断严格区分；本报告不修改DOGE定投执行规则。',
      '**综合裁决：RESEARCH_ONLY / NO_VALIDATED_EDGE。**',
      '']
