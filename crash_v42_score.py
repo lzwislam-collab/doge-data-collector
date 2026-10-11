@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """V4.2 prospective-only hourly crash scoring: no hindsight, >=1h lead."""
-import json,math
+import json,math,hashlib
 from datetime import datetime,timezone,timedelta
 from pathlib import Path
 from crash_forward_watch import ROOT,BASE,HOUR,WINDOW_HOURS,MAX_DELAY_MIN,MODEL,hour_rows,read_registry,verify_registry,write,iso
@@ -41,11 +41,20 @@ def scoring(rows,per,points,now):
    if not (0<=latency<=MAX_DELAY_MIN):raise ValueError('late/predated issue')
    if source_ingest>issue:raise ValueError('source not captured by issue time')
    if r['alert'] not in ('0','1'):raise ValueError('alert missing or invalid')
+   start_ms=int(source_start.timestamp()*1000)
+   if any(start_ms not in per[s] for s in ('DOGE-USDT','BTC-USDT','ETH-USDT')):
+    raise ValueError('registered source candle missing')
+   raw='|'.join(str(per[s][start_ms][k]) for s in ('DOGE-USDT','BTC-USDT','ETH-USDT')
+     for k in ('open','low','close','volume'))
+   if hashlib.sha256(raw.encode()).hexdigest()!=r['feature_sha256']:
+    raise ValueError('registered input snapshot digest mismatch')
+   if not math.isclose(float(r['doge_hour_close']),per['DOGE-USDT'][start_ms]['close'],rel_tol=1e-10):
+    raise ValueError('registered reference close revised')
    candles,first,end=target_window(issue)
    if not candles or any(t<=int(source_start.timestamp()*1000) for t in candles):
     raise ValueError('target overlaps observed feature candle')
    assert all(t>=issue.timestamp()*1000+HOUR for t in candles)
-  except (ValueError,KeyError,AssertionError) as e:
+  except (ValueError,KeyError,AssertionError,TypeError,OverflowError) as e:
    quarantined.append({'watch_id':fid,'reason':type(e).__name__+': '+str(e)});continue
   if latest<candles[-1]:
    pending.append({'watch_id':fid,'reason':'awaiting complete forward target candle','last_required_utc':iso(candles[-1])});continue
