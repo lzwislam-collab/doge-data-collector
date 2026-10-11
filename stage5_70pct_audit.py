@@ -236,7 +236,11 @@ def evaluate(root=ROOT):
     latest_hourly_rows=int(hourly['quality']['symbols']['DOGE-USDT']['hours'])
     v42_hourly_at=utc(direction['sources']['hourly_last_closed_start_utc'])
     latest_hourly_at=utc(hourly['quality']['symbols']['DOGE-USDT']['last_confirmed_start_utc'])
-    historical_direction_snapshot_aligned=(v42_hourly_rows==latest_hourly_rows and v42_hourly_at==latest_hourly_at)
+    historical_hourly_lag_h=(latest_hourly_at-v42_hourly_at).total_seconds()/3600
+    historical_hourly_extra_rows=latest_hourly_rows-v42_hourly_rows
+    # V4.2 research benchmark runs once per UTC day; hourly archive updates independently.
+    # Permit normal <=26h scheduled refresh lag, never a bulk-backfill change.
+    historical_direction_snapshot_aligned=(0<=historical_hourly_lag_h<=26 and 0<=historical_hourly_extra_rows<=26)
     aligned=daily_aligned and historical_direction_snapshot_aligned
     # Never promote historically selected candidate results to verified 70% accuracy.
     return {'schema_version':1,'status':'ok',
@@ -252,9 +256,12 @@ def evaluate(root=ROOT):
         'historical_directional_hourly_source_aligned':historical_direction_snapshot_aligned,
         'historical_directional_hourly_rows':v42_hourly_rows,
         'latest_hourly_archive_rows':latest_hourly_rows,
+        'historical_directional_hourly_lag_hours':round(historical_hourly_lag_h,2),
+        'historical_directional_hourly_unmodeled_new_rows':historical_hourly_extra_rows,
+        'hourly_daily_refresh_tolerance_hours':26,
         'historical_directional_hourly_end_utc':v42_hourly_at.isoformat(),
         'latest_hourly_archive_end_utc':latest_hourly_at.isoformat(),
-        'status':'aligned' if aligned else 'BLOCKED_mismatched_history_or_model_source',
+        'status':('aligned_with_daily_hourly_refresh_lag' if aligned else 'BLOCKED_mismatched_history_or_model_source'),
         'matched_day_backtest_recomputed':False},
      'thresholds':{'min_nonoverlapping_prospective_scored_predictions_per_horizon':MIN_INDEPENDENT_SCORES,
        'minimum_resolved_quote_coverage_pct':90,
