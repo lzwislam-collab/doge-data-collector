@@ -149,6 +149,52 @@ class AccuracyTests(unittest.TestCase):
         self.assertEqual(hour['pending'],1)
         self.assertEqual(hour['scored'],0)
 
+    def test_matured_unscored_forecast_reduces_coverage_even_if_not_in_scores_csv(self):
+        self.make_lock()
+        first=dict(self.forecast, model_id='DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1',
+            forecast_id='registered-one',
+            issued_at_utc='2026-10-12T00:10:00+00:00',
+            source_quote_utc='2026-10-12T00:09:59+00:00',
+            target_utc='2026-10-12T01:10:00+00:00')
+        second=dict(first,forecast_id='registered-two',
+            issued_at_utc='2026-10-12T01:10:00+00:00',
+            source_quote_utc='2026-10-12T01:09:59+00:00',
+            target_utc='2026-10-12T02:10:00+00:00')
+        one=dict(self.score,forecast_id='registered-one',
+            observed_at_utc='2026-10-12T01:11:00+00:00',
+            target_quote_utc='2026-10-12T01:10:05+00:00')
+        self.write(forecasts=[first,second],scores=[one])
+        now=datetime(2026,10,12,3,0,tzinfo=timezone.utc)
+        h=audit_locked_forward_trial(self.root,now)['horizons']['1h']
+        self.assertEqual(h['matured_denom_including_missing_scores'],2)
+        self.assertEqual(h['scored'],1)
+        self.assertEqual(h['overdue_missing_score_rows'],1)
+        self.assertEqual(h['coverage_pct'],50.0)
+        self.assertEqual(h['pending'],0)
+        self.assertFalse(h['coverage_target_met'])
+        self.assertFalse(h['eligible_for_70pct_claim'])
+
+    def test_not_yet_matured_forecast_remains_pending_not_coverage_failure(self):
+        self.make_lock()
+        first=dict(self.forecast, model_id='DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1',
+            forecast_id='registered-one', issued_at_utc='2026-10-12T00:10:00+00:00',
+            source_quote_utc='2026-10-12T00:09:59+00:00',
+            target_utc='2026-10-12T01:10:00+00:00')
+        second=dict(first,forecast_id='registered-two',
+            issued_at_utc='2026-10-12T01:10:00+00:00',
+            source_quote_utc='2026-10-12T01:09:59+00:00',
+            target_utc='2026-10-12T02:10:00+00:00')
+        one=dict(self.score,forecast_id='registered-one',
+            observed_at_utc='2026-10-12T01:11:00+00:00',
+            target_quote_utc='2026-10-12T01:10:05+00:00')
+        self.write(forecasts=[first,second],scores=[one])
+        now=datetime(2026,10,12,2,20,tzinfo=timezone.utc)
+        h=audit_locked_forward_trial(self.root,now)['horizons']['1h']
+        self.assertEqual(h['matured_denom_including_missing_scores'],1)
+        self.assertEqual(h['overdue_missing_score_rows'],0)
+        self.assertEqual(h['pending'],1)
+        self.assertEqual(h['coverage_pct'],100.0)
+
     def test_trial_does_not_select_same_bin_winner(self):
         self.make_lock()
         first=dict(self.forecast,issued_at_utc='2026-10-12T01:01:00+00:00',
