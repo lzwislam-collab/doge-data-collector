@@ -1,0 +1,167 @@
+name: Probe DOGE PoR address intersections with whale transactions
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/doge_exchange_probe.yml
+permissions:
+  contents: write
+concurrency:
+  group: doge-exchange-probe
+  cancel-in-progress: false
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Probe transaction schema and PoR address intersections
+        id: probe
+        continue-on-error: true
+        shell: bash
+        run: |
+          python - <<'PYCODE'
+          import csv, json, math, os, time, urllib.request, urllib.error
+          from collections import Counter
+          from datetime import datetime, timezone
+          from pathlib import Path
+          
+          ROOT=Path.cwd()
+          OUT=ROOT/'data/stage1/exchange_flow_probe.json'
+          API='https://dogechain.com/api/v3'
+          MAX_SAMPLE=20
+          NOW=datetime.now(timezone.utc)
+          
+          def utc(): return datetime.now(timezone.utc).isoformat()
+          
+          def write_report(obj):
+              OUT.parent.mkdir(parents=True,exist_ok=True)
+              t=OUT.with_suffix('.json.tmp')
+              t.write_text(json.dumps(obj,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+              os.replace(t,OUT)
+          
+          def read_csv(path,expected):
+              with path.open(newline='',encoding='utf-8-sig') as f:
+                  rd=csv.DictReader(f)
+                  if not set(expected).issubset(set(rd.fieldnames or [])):
+                      raise ValueError('missing columns in '+str(path))
+                  return list(rd)
+          
+          def fetch(txid):
+              for attempt in range(4):
+                  try:
+                      req=urllib.request.Request(API+'/tx/'+txid,headers={'Accept':'application/json','User-Agent':'DOGE-PoR-tx-schema-probe/1.0'})
+                      with urllib.request.urlopen(req,timeout=20) as r:obj=json.load(r)
+                      if obj.get('status')!='success' or not isinstance(obj.get('data'),dict):
+                          raise ValueError('unexpected Dogechain tx envelope')
+                      return obj['data']
+                  except urllib.error.HTTPError as e:
+                      if e.code != 429 or attempt==3:raise
+                      time.sleep(min(25,max(2,int(e.headers.get('Retry-After','5')))))
+                  except (urllib.error.URLError,TimeoutError):
+                      if attempt==3:raise
+                      time.sleep(2*(attempt+1))
+          
+          def addresses_in_struct(node):
+              """Only inspect transaction input/output subtrees; never parse explain.headline text."""
+              out=set()
+              if isinstance(node,dict):
+                  for k,v in node.items():
+                      if k in ('address','addr') and isinstance(v,str):out.add(v)
+                      elif k=='addresses' and isinstance(v,list):out.update(z for z in v if isinstance(z,str))
+                      elif isinstance(v,(dict,list)):out.update(addresses_in_struct(v))
+              elif isinstance(node,list):
+                  for v in node:out.update(addresses_in_struct(v))
+              return out
+          
+          def locate_sides(tx):
+              if not isinstance(tx,dict):return None,None,[],[]
+              ins=next((tx[k] for k in ('vin','inputs','vins') if isinstance(tx.get(k),list)),None)
+              outs=next((tx[k] for k in ('vout','outputs','vouts') if isinstance(tx.get(k),list)),None)
+              return ins,outs,[k for k in tx],[k for k in tx if 'in' in k.lower() or 'out' in k.lower()]
+          
+          def main():
+              result={'schema_version':1,'status':'error','generated_at_utc':utc(),
+                      'source':'OKX 2026-09-08 PoR address CSV (ownership signatures unverified) + Dogechain /tx API + locally scanned confirmed whale events',
+                      'scope':'Top 20 most recently scanned >=1m DOGE candidate transactions only; NOT full network; NOT exchange netflow',
+                      'exchange_netflow_verified':False,'transaction_level_ownership_verified':False,
+                      'errors':[],'transaction_samples':[]}
+              try:
+                  por=read_csv(ROOT/'okx_doge_addresses.csv',['address','network','verification_status'])
+                  por_ids=[r['address'] for r in por if r['network']=='DOGE']
+                  if len(por_ids)!=40134 or len(set(por_ids))!=len(por_ids):raise ValueError('PoR address count/duplicate mismatch')
+                  allow=set(por_ids)
+                  events=read_csv(ROOT/'data/whales_blocks/events.csv',['txid','block_height','amount_doge','verification'])
+                  if len({r['txid'] for r in events})!=len(events):raise ValueError('Duplicate whale txid')
+                  chosen=sorted(events,key=lambda r:int(r['block_height']),reverse=True)[:MAX_SAMPLE]
+                  if not chosen:raise ValueError('No whale events to sample')
+                  result.update({'por_addresses':len(allow),'whale_events_stored':len(events),'txs_selected':len(chosen),'max_scanned_block_height':max(int(e['block_height']) for e in events)})
+                  counts=Counter();valid_structure=0
+                  for event in chosen:
+                      txid=event['txid']
+                      if len(txid)!=64 or any(c not in '0123456789abcdefABCDEF' for c in txid):
+                          raise ValueError('Malformed txid')
+                      obj=fetch(txid)
+                      tx=obj.get('transaction')
+                      ins,outs,topkeys,structure_keys=locate_sides(tx)
+                      structured=ins is not None and outs is not None
+                      valid_structure+=int(structured)
+                      in_all=addresses_in_struct(ins) if structured else set()
+                      out_all=addresses_in_struct(outs) if structured else set()
+                      il=sorted(in_all&allow);ol=sorted(out_all&allow)
+                      if not structured:state='SCHEMA_UNRECOGNIZED'
+                      elif il and ol:state='POR_ADDRESSES_ON_BOTH_SIDES_CANDIDATE'
+                      elif il:state='POR_INPUT_CANDIDATE_ONLY'
+                      elif ol:state='POR_OUTPUT_CANDIDATE_ONLY'
+                      else:state='NO_POR_ADDRESS_MATCH_IN_STRUCTURED_SIDES'
+                      counts[state]+=1
+                      result['transaction_samples'].append({
+                          'txid':txid,'block_height':int(event['block_height']),'candidate_label':state,
+                          'input_addresses_extracted':len(in_all),'output_addresses_extracted':len(out_all),
+                          'matching_por_input_addresses':il,'matching_por_output_addresses':ol,
+                          'schema_fields':topkeys[:30],'transaction_fields':structure_keys[:20],
+                          'change_outputs_disclosed':bool((obj.get('explain') or {}).get('change_outputs')),
+                          'note':'Address intersections only, NOT independently verified deposits/withdrawals or economic value'
+                      })
+                      time.sleep(0.6)
+                  result['classifications']=dict(counts)
+                  result['valid_input_output_structures']=valid_structure
+                  result['status']='ok_probe_only' if valid_structure==len(chosen) else 'partial_schema_unrecognized'
+                  result['limitations']=[
+                      'PoR signatures and current ownership unverified; label applies only to disclosed 2026-09-08 addresses',
+                      'Inputs/outputs of whale events are not a representative sample of all exchange flows',
+                      'Address intersection alone cannot identify change, self-transfer, external ownership or direction',
+                      'No amounts or exchange inflow/outflow/netflow may be computed from this probe',
+                      'No backfill or prediction/trading signal is produced'
+                  ]
+              except Exception as e:
+                  result['errors'].append(type(e).__name__+': '+str(e)[:350]);result['status']='error'
+              write_report(result)
+              print(json.dumps({'status':result['status'],'total':result.get('txs_selected'),'valid':result.get('valid_input_output_structures'),'errors':result['errors']}))
+              return 0 if result['status']=='ok_probe_only' else 1
+          
+          if __name__=='__main__':raise SystemExit(main())
+          PYCODE
+      - name: Persist probe diagnostics
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if [ -f data/stage1/exchange_flow_probe.json ]; then git add -f data/stage1/exchange_flow_probe.json; fi
+          if ! git diff --cached --quiet; then
+            git commit -m 'data: probe DOGE PoR candidate address intersections'
+            for i in 1 2 3 4 5; do
+              if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
+              if [ "$i" = 5 ]; then exit 1; fi
+              sleep 4
+            done
+          fi
+      - name: Fail if transaction probe errored
+        if: steps.probe.outcome != 'success'
+        run: exit 1
