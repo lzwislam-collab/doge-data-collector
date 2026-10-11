@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Offline tests for limited OKX liquidation listening-window eligibility."""
 import unittest
-from doge_schedule_evidence import snapshot_status_eligible
+from doge_schedule_evidence import snapshot_status_eligible,verify_rolling_link
 
 class ScheduleEvidenceTests(unittest.TestCase):
  def sample(self,**kw):
@@ -34,5 +34,54 @@ class ScheduleEvidenceTests(unittest.TestCase):
  def test_missing_coverage_is_not_accepted(self):
   self.assertFalse(snapshot_status_eligible('liquidations_okx',
     self.sample(subscription_coverage_pct=None),('ok',)))
+
+class RollingActionLinkTests(unittest.TestCase):
+ def sample(self):
+  local={'eligible_chain_metadata_present':True,
+   'audit_snapshot_utc':'2026-10-12T03:10:20+00:00',
+   'provenance_metadata':{'upstream_whale_run_id':'100',
+    'audit_workflow_run_id':'200',
+    'upstream_whale_run_created_at_utc':'2026-10-12T03:07:00Z'}}
+  up={'id':100,'status':'completed','conclusion':'success','event':'schedule',
+      'path':'.github/workflows/whale_blocks.yml@main',
+      'created_at':'2026-10-12T03:07:00Z','updated_at':'2026-10-12T03:10:00Z'}
+  down={'id':200,'status':'completed','conclusion':'success','event':'workflow_run',
+      'path':'.github/workflows/doge_rolling_utxo.yml@main',
+      'created_at':'2026-10-12T03:10:10Z','updated_at':'2026-10-12T03:10:40Z'}
+  return local,up,down
+
+ def test_verified_only_with_real_matching_action_ids(self):
+  local,up,down=self.sample()
+  loader=lambda url: up if url.endswith('/100') else down
+  result=verify_rolling_link(local,loader)
+  self.assertTrue(result['verified'])
+  self.assertEqual(result['upstream_schedule_run_id'],100)
+
+ def test_skipped_workflow_run_not_success(self):
+  local,up,down=self.sample()
+  down['conclusion']='skipped'
+  result=verify_rolling_link(local,lambda url:up if url.endswith('/100') else down)
+  self.assertFalse(result['verified'])
+
+ def test_wrong_downstream_event_not_success(self):
+  local,up,down=self.sample()
+  down['event']='push'
+  self.assertFalse(verify_rolling_link(local,lambda url:up if url.endswith('/100') else down)['verified'])
+
+ def test_upstream_run_identity_cannot_be_spoofed(self):
+  local,up,down=self.sample()
+  up['id']=101
+  self.assertFalse(verify_rolling_link(local,lambda url:up if url.endswith('/100') else down)['verified'])
+
+ def test_upstream_created_at_must_match_saved_provenance(self):
+  local,up,down=self.sample()
+  local['provenance_metadata']['upstream_whale_run_created_at_utc']='2026-10-12T03:09:00Z'
+  self.assertFalse(verify_rolling_link(local,lambda url:up if url.endswith('/100') else down)['verified'])
+
+ def test_downstream_timestamps_must_follow_upstream(self):
+  local,up,down=self.sample()
+  down['created_at']='2026-10-12T03:01:00Z'
+  self.assertFalse(verify_rolling_link(local,lambda url:up if url.endswith('/100') else down)['verified'])
+
 if __name__=='__main__':
  unittest.main(verbosity=2)
