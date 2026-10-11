@@ -57,6 +57,21 @@ def evaluate():
  true_alerts=sum(x['true_pre_crash_alert'] for x in signals)
  precision=true_alerts/len(signals) if signals else None
  recall=hit/len(eligible) if eligible else None
+ evaluated_hours=max(1,len(ts)-24)
+ false_alerts=len(signals)-true_alerts
+ false_alerts_per_week=168*false_alerts/evaluated_hours
+ lead_hours=[]
+ for e in eligible:
+  for alert in signals:
+   avail=datetime.fromisoformat(alert['available_after_utc']).timestamp()*1000
+   if alert['true_pre_crash_alert'] and avail<=e<=avail+LOOKAHEAD*HOUR:
+    lead_hours.append(round((e-avail)/HOUR,2))
+ def wilson(k,n):
+  if not n:return None
+  z=1.96;p=k/n;den=1+z*z/n
+  mid=(p+z*z/(2*n))/den
+  rad=z*math.sqrt((p*(1-p)+z*z/(4*n))/n)/den
+  return [round(max(0,mid-rad)*100,2),round(min(1,mid+rad)*100,2)]
  min_crashes=30
  result={'schema_version':1,'status':'research_fail_70pct' if eligible else 'insufficient_events',
   'evaluated_utc':datetime.now(timezone.utc).isoformat(),
@@ -72,6 +87,11 @@ def evaluate():
   'alert_count':len(signals),'true_alerts':true_alerts,'false_alerts':len(signals)-true_alerts,
   'recall_pct':round(recall*100,2) if recall is not None else None,
   'precision_pct':round(precision*100,2) if precision is not None else None,
+  'false_alerts_per_week':round(false_alerts_per_week,3),
+  'warning_lead_hours_for_caught_events':lead_hours,
+  'illustrative_wilson_interval_precision_pct':wilson(true_alerts,len(signals)),
+  'illustrative_wilson_interval_recall_pct':wilson(hit,len(eligible)),
+  'inference_warning':'Intervals are illustrative binomial bounds; temporal dependence and posthoc selection invalidate strict inferential coverage.',
   'always_no_crash_accuracy_pct':round((len(ts)-len(crash))/len(ts)*100,2),
   'signals':signals,
   'acceptance':{'target_recall_pct':70,'target_precision_pct':70,'minimum_distinct_heldout_crashes':min_crashes,
