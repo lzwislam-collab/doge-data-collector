@@ -27,6 +27,8 @@ jobs:
           python-version: '3.11'
       - name: Install pinned WebSocket client
         run: python -m pip install 'websocket-client==1.8.0'
+      - name: Validate Python syntax
+        run: python -m py_compile doge_liquidations.py
       - name: Observe DOGE liquidation notices for eight minutes
         id: scan
         continue-on-error: true
