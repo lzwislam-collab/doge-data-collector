@@ -97,7 +97,8 @@ def evaluate(root=ROOT,now=None):
    offset=int((issued-effective).total_seconds()//interval.total_seconds())
    boundary=effective+interval*offset
    grace=ISSUE_GRACE if h==1 else interval
-   if not boundary<=issued<boundary+grace if h==24 else not boundary<=issued<=boundary+grace:
+   in_window=(boundary<=issued<boundary+grace) if h==24 else (boundary<=issued<=boundary+grace)
+   if not in_window:
     raise ValueError('late/out-of-bin issued forecast: '+row['forecast_id'])
    if utc(row['source_hour_start_utc'])!=boundary:
     # For h=24, source_hour_start is the actual hourly issuance bar within that UTC day,
