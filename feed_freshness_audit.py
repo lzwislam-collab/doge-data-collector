@@ -155,6 +155,117 @@ def check_etf_csv(base=BASE,now=None):
   out['issues'].append(type(exc).__name__+': '+str(exc)[:180])
  return out
 
+
+def check_stage4_csvs(base=BASE,now=None):
+ """Independent macro series and policy-release file audit. No retroactive release claim."""
+ if now is None:now=datetime.now(timezone.utc)
+ root=Path(base);checks={};failures=[]
+ def iso(value):
+  stamp=datetime.fromisoformat(str(value).replace('Z','+00:00'))
+  if stamp.tzinfo is None:raise ValueError('timestamp missing timezone')
+  if stamp>now+timedelta(minutes=15):raise ValueError('future observed timestamp')
+  return stamp.astimezone(timezone.utc)
+ def rows(path,required):
+  with (root/path).open(newline='',encoding='utf-8-sig') as stream:
+   rd=csv.DictReader(stream)
+   if not set(required).issubset(rd.fieldnames or []):raise ValueError('CSV columns missing: '+path)
+   return list(rd)
+ def check(name,run):
+  try:
+   item=run();item['state']='ok'
+  except (OSError,ValueError,KeyError,TypeError,ArithmeticError,OverflowError,json.JSONDecodeError) as exc:
+   item={'state':'invalid','issues':[type(exc).__name__+': '+str(exc)[:190]]}
+   failures.append(name)
+  checks[name]=item
+ def macro():
+  meta=json.loads((root/'data/macro/latest.json').read_text(encoding='utf-8'))
+  if meta.get('status')!='ok':raise ValueError('FRED status not ok')
+  known=set(meta['series'])
+  if known!={'CPIAUCSL','CPILFESL','PPIACO','PAYEMS','UNRATE','DFEDTARU','DFEDTARL','DGS10'}:
+   raise ValueError('FRED series set changed')
+  data=rows('data/macro/observations.csv',('series_id','observation_date','value','unit','frequency','source_url','first_seen_utc','last_checked_utc','revision_count'))
+  rev=rows('data/macro/revisions.csv',('series_id','observation_date','old_value','new_value','observed_at_utc','source_url'))
+  revision_count={}
+  for x in rev:
+   k=(x['series_id'],x['observation_date'])
+   if k[0] not in known:raise ValueError('revision series unknown')
+   if not all(Decimal(x[n]).is_finite() for n in ('old_value','new_value')):raise ValueError('nonfinite revision amount')
+   iso(x['observed_at_utc'])
+   revision_count[k]=revision_count.get(k,0)+1
+  seen=set();per={k:[] for k in known};previous=None;older_than_first_seen=0
+  for x in data:
+   sid=x['series_id'];d=date.fromisoformat(x['observation_date']);k=(sid,x['observation_date'])
+   if sid not in known:raise ValueError('unrecognized macro series')
+   if previous is not None and k<previous:raise ValueError('unsorted macro observations')
+   previous=k
+   if k in seen:raise ValueError('duplicate macro series+date')
+   seen.add(k)
+   if d>now.date():raise ValueError('future macro observation')
+   if not Decimal(x['value']).is_finite():raise ValueError('nonfinite macro value')
+   if x['frequency'] not in ('daily','monthly'):raise ValueError('invalid macro frequency')
+   if x['source_url']!='https://fred.stlouisfed.org/graph/fredgraph.csv?id='+sid:
+    raise ValueError('unrecognized macro source')
+   first=iso(x['first_seen_utc']);last=iso(x['last_checked_utc'])
+   if first>last or first.date()<d:raise ValueError('macro first-seen inconsistent')
+   if int(x['revision_count'])!=revision_count.get(k,0):raise ValueError('macro revision count mismatch')
+   if first.date()>d:older_than_first_seen+=1
+   per[sid].append(x['observation_date'])
+  if set(revision_count)-seen:raise ValueError('orphan macro revision')
+  if len(data)!=int(meta['total_rows']):raise ValueError('macro row count mismatch')
+  for sid,dates in per.items():
+   published=meta['series'][sid]
+   if not dates or len(dates)!=int(published['count_on_source']) or min(dates)!=published['oldest_observation_date'] or max(dates)!=published['latest_observation_date']:
+    raise ValueError('series source coverage mismatch '+sid)
+  return {'rows':len(data),'series':{k:len(v) for k,v in sorted(per.items())},
+   'revisions':len(rev),'duplicates':0,'historic_observations_first_seen_after_observation':older_than_first_seen,
+   'historical_release_vintages_verified':False,'observation_dates_as_publication_dates_allowed':False}
+ def policy():
+  meta=json.loads((root/'data/policy_events/latest.json').read_text(encoding='utf-8'))
+  if meta['status']!='ok':raise ValueError('Fed/BLS source not healthy')
+  data=rows('data/policy_events/events.csv',('source','event_id','event_type','title','event_time_utc','event_time_precision','first_seen_utc','last_seen_utc','url','point_in_time_rule'))
+  seen=set();group={'FED_MONETARY_RSS':0,'BLS_CALENDAR':0};past_schedule=0
+  for x in data:
+   key=(x['source'],x['event_id'])
+   if x['source'] not in group or not x['title'] or not x['url']:raise ValueError('policy source fields invalid')
+   if key in seen:raise ValueError('duplicate policy event key')
+   seen.add(key)
+   t=iso(x['event_time_utc']);first=iso(x['first_seen_utc']);last=iso(x['last_seen_utc'])
+   if last<first:raise ValueError('reversed policy timestamps')
+   if x['source']=='BLS_CALENDAR':
+    if x['event_time_precision']!='calendar_schedule_not_actual_publication' or 'schedule_only' not in x['point_in_time_rule']:
+     raise ValueError('BLS schedule mislabeled as actual release')
+    if t<first:past_schedule+=1
+   elif x['event_time_precision']!='provider_pubDate' or t>first:
+    raise ValueError('Fed publication timestamp invalid')
+   group[x['source']]+=1
+  if len(data)!=meta['records']:raise ValueError('policy event count mismatch')
+  return {'rows':len(data),'groups':group,'past_calendar_schedule_rows':past_schedule,
+   'bls_calendar_is_actual_publication':False,'historical_pit_announcement_verified':False,
+   'duplicates':0}
+ def regulator(source):
+  basepath='data/'+source
+  meta=json.loads((root/(basepath+'/latest.json')).read_text(encoding='utf-8'))
+  if meta['status']!='ok':raise ValueError(source+' source not healthy')
+  data=rows(basepath+'/events.csv',('source','event_id','title','published_utc','first_seen_utc','last_checked_utc','source_url','keyword_candidate','backtest_available_from_utc'))
+  seen=set()
+  for x in data:
+   key=x['event_id']
+   if not key or key in seen:raise ValueError('missing/duplicate regulator ID')
+   seen.add(key)
+   pub=iso(x['published_utc']);first=iso(x['first_seen_utc']);last=iso(x['last_checked_utc']);available=iso(x['backtest_available_from_utc'])
+   if pub>first or first>last or available!=first:
+    raise ValueError('unsafe publication/availability timing')
+   if x['keyword_candidate']!='true' or not x['source_url'].startswith('https://'):
+    raise ValueError('invalid regulator candidate label')
+  if len(data)!=meta['stored_events']:raise ValueError('regulator count mismatch')
+  return {'rows':len(data),'duplicates':0,'first_seen_only_pit':True,
+   'full_regulatory_coverage_claimed':False,'directional_market_effect_verified':False}
+ check('fred_macro',macro)
+ check('fed_bls_policy_calendar',policy)
+ check('cftc_policy_candidates',lambda:regulator('regulatory_events'))
+ check('sec_policy_candidates',lambda:regulator('sec_events'))
+ return checks,failures
+
 def evaluate(base=BASE,now=None):
  if now is None:now=datetime.now(timezone.utc)
  if now.tzinfo is None:raise ValueError('timezone required')
@@ -205,12 +316,17 @@ def evaluate(base=BASE,now=None):
  etf_quality=check_etf_csv(base,now)
  reports['stage3_etf_csv_quality']={**etf_quality,'required':True}
  if etf_quality['state']!='ok':critical.append('stage3_etf_csv_quality')
- obj={'schema_version':3,'audited_at_utc':now.isoformat(),
+ stage4_checks,stage4_failed=check_stage4_csvs(base,now)
+ reports['stage4_macro_policy_csv_quality']={'state':'ok' if not stage4_failed else 'stale_or_failed','checks':stage4_checks,'failed_sources':stage4_failed,'required':True}
+ if stage4_failed:critical.append('stage4_macro_policy_csv_quality')
+ obj={'schema_version':4,'audited_at_utc':now.isoformat(),
   'status':'blocked' if critical else ('ok_with_source_warnings' if warnings else 'ok_with_coverage_limits'),
   'critical_failures':critical,'optional_source_warnings':warnings,'sources':reports,
   'verified_exchange_netflow':False,'verified_global_liquidations':False,
   'stage2_liquidation_time_coverage_complete':False,
   'stage3_etf_historical_point_in_time_verified':False,
+  'stage4_macro_historical_vintages_verified':False,
+  'stage4_policy_release_times_verified_for_backtests':False,
   'model_predictive_edge':'NO_VALIDATED_EDGE',
   'google_sheets_collector_verified_by_this_audit':False,
   'limitations':['Old SSE and confirmed-block whale collection are separate feeds',
