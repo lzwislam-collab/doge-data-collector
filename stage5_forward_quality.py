@@ -96,7 +96,8 @@ def evaluate(root=ROOT,now=None):
    issued=utc(row['issued_at_utc'])
    offset=int((issued-effective).total_seconds()//interval.total_seconds())
    boundary=effective+interval*offset
-   if not boundary<=issued<=boundary+ISSUE_GRACE:
+   grace=ISSUE_GRACE if h==1 else interval
+   if not boundary<=issued<boundary+grace if h==24 else not boundary<=issued<=boundary+grace:
     raise ValueError('late/out-of-bin issued forecast: '+row['forecast_id'])
    if utc(row['source_hour_start_utc'])!=boundary:
     # For h=24, source_hour_start is the actual hourly issuance bar within that UTC day,
@@ -104,7 +105,10 @@ def evaluate(root=ROOT,now=None):
     if h==1 or not(boundary<=utc(row['source_hour_start_utc'])<boundary+interval):
      raise ValueError('source feature hour not in issuance bin')
    groups.setdefault(offset,[]).append(row)
-  maturity=now-ISSUE_GRACE
+  # 24h protocol selects the first issued checkpoint within the entire UTC day.
+  # Other hourly-issued 24h checkpoints are valid but cannot displace that earliest one.
+  expiry=ISSUE_GRACE if h==1 else interval
+  maturity=now-expiry
   total=0
   if maturity>=effective:
    total=int((maturity-effective).total_seconds()//interval.total_seconds())+1
@@ -132,6 +136,7 @@ def evaluate(root=ROOT,now=None):
    'issuance_coverage_pct':round(100*len(issued_bins)/total,2) if total else None,
    'all_postfreeze_registration_count':len(eligible),
    'extra_registrations_in_same_bin':sum(max(len(v)-1,0) for v in groups.values()),
+   'issuance_bin_expiry_rule':'45min after each hour' if h==1 else '24h after UTC day starts',
    'quote_scoring':{'due_after_25min':len(quote_due),
                     'successfully_scored':len(valid_quote),
                     'missed_or_unscorable':len(quote_due)-len(valid_quote),
