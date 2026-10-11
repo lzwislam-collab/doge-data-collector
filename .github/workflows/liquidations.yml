@@ -2,6 +2,12 @@ name: Collect observed DOGE liquidation events
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'quote_evidence_v2.py'
+      - 'data/stage5/forward_validation_protocol_v2.json'
+      - '.github/workflows/liquidations.yml'
   schedule:
     - cron: '4,19,34,49 * * * *'
 
@@ -13,6 +19,52 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  quote:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    concurrency:
+      group: okx-hourly-extreme-history
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify frozen implementation before scoring
+        run: python forward_validation_v2.py --integrity-only
+      - name: Score due quotes and preserve raw evidence
+        id: quote_watch
+        continue-on-error: true
+        run: python quote_evidence_v2.py watch
+      - name: Persist quote evidence before long liquidation scan finishes
+        if: always()
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -f data/direction_v42/forward_scores.csv data/stage5/spot_plus/quote_watch_latest.json data/quote_evidence_v2
+          if ! git diff --cached --quiet; then
+            git commit -m 'data: preserve raw due quote evidence'
+            for attempt in 1 2 3 4 5; do
+              if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
+              git rebase --abort || true
+              [ "$attempt" -lt 5 ] || exit 1
+              sleep 4
+            done
+          fi
+      - name: Archive quote evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: doge-raw-quotes-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 90
+          path: |
+            data/quote_evidence_v2/
+            data/stage5/forward_validation_protocol_v2.json
+      - name: Fail on quote capture error
+        if: steps.quote_watch.outcome != 'success'
+        run: exit 1
   sample:
     runs-on: ubuntu-24.04
     timeout-minutes: 13
@@ -28,14 +80,9 @@ jobs:
           python-version: '3.11'
       - name: Install pinned WebSocket client
         run: python -m pip install 'websocket-client==1.8.0'
-      - name: Validate quote scoring boundaries and collector Python syntax
+      - name: Validate collector Python syntax
         run: |
-          python -m py_compile doge_liquidations.py spot_plus_quote_watch.py
-          python -m unittest -v test_spot_plus_quote_watch
-      - name: Improve target price observation for already registered forecasts
-        id: quote_watch
-        continue-on-error: true
-        run: python spot_plus_quote_watch.py
+          python -m py_compile doge_liquidations.py
       - name: Observe DOGE liquidation notices for eight minutes
         id: scan
         continue-on-error: true
@@ -47,7 +94,7 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          for f in data/liquidations/latest.json data/liquidations/events.csv data/direction_v42/forward_scores.csv data/stage5/spot_plus/quote_watch_latest.json; do
+          for f in data/liquidations/latest.json data/liquidations/events.csv ; do
             if [ -f "$f" ]; then git add -f "$f"; fi
           done
           if ! git diff --cached --quiet; then
@@ -61,5 +108,5 @@ jobs:
             done
           fi
       - name: Mark scanner error as workflow failure
-        if: steps.scan.outcome != 'success' || steps.quote_watch.outcome != 'success'
+        if: steps.scan.outcome != 'success'
         run: exit 1
