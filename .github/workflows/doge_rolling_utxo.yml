@@ -144,7 +144,15 @@ jobs:
                       relevant = addr & allow
                       matched_addrs[name].update(relevant)
                       if len(addr) != 1:
-                          issues.append(name + '_' + str(i) + '_ADDRESS_AMBIGUOUS')
+                          zero_nulldata = False
+                          if (name == 'output' and not addr and item.get('type') == 'nulldata'
+                                  and item.get('address') is None):
+                              try:
+                                  zero_nulldata = amount_of(item, False) == Decimal(0)
+                              except ValueError:
+                                  pass
+                          if not zero_nulldata:
+                              issues.append(name + '_' + str(i) + '_ADDRESS_AMBIGUOUS')
                       try:
                           amount = amount_of(item, is_input)
                           sums[name] += amount
@@ -285,7 +293,7 @@ jobs:
                   elif rows:
                       raise ValueError('Existing audit rows without source-version manifest')
                   ordered = sorted(events, key=lambda x: (int(events[x]['block_height']), x))
-                  pending = [x for x in ordered if x not in rows]
+                  pending = [x for x in ordered if x not in rows or rows[x]['balance_reconciled'] != 'true']
                   added = 0
                   for txid in pending[:MAX_PER_RUN]:
                       if time.monotonic() - begin >= MAX_RUN_SECONDS:
