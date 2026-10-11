@@ -1,0 +1,210 @@
+name: Audit DOGE PoR transaction output amounts and change candidates
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/doge_exchange_stage2.yml
+permissions:
+  contents: write
+concurrency:
+  group: doge-exchange-stage2
+  cancel-in-progress: false
+jobs:
+  classify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Audit 20 transaction outputs using Decimal and validate PoR address matches
+        id: audit
+        continue-on-error: true
+        shell: bash
+        run: |
+          python - <<'PYCODE'
+          import csv, json, os, time, urllib.request, urllib.error
+          from collections import Counter
+          from datetime import datetime, timezone
+          from decimal import Decimal, InvalidOperation
+          from pathlib import Path
+          
+          ROOT=Path.cwd()
+          OUT=ROOT/'data/stage1/exchange_flow_amount_audit.json'
+          BASE='https://dogechain.com/api/v3'
+          MAX_SAMPLE=20
+          NOW=datetime.now(timezone.utc)
+          
+          def utc(): return datetime.now(timezone.utc).isoformat()
+          
+          def atomic_json(x):
+              OUT.parent.mkdir(parents=True,exist_ok=True)
+              tmp=OUT.with_suffix('.json.tmp');tmp.write_text(json.dumps(x,ensure_ascii=False,indent=2)+'\n',encoding='utf-8');os.replace(tmp,OUT)
+          
+          def decimal_doge(x):
+              if isinstance(x,bool) or x is None:raise ValueError('missing or boolean amount')
+              try: d=Decimal(str(x))
+              except (InvalidOperation,ValueError,TypeError) as e:raise ValueError('invalid DOGE amount') from e
+              if not d.is_finite() or d<0 or d>Decimal('1000000000000') or d.as_tuple().exponent< -8:raise ValueError('negative/non-finite/overprecision DOGE amount')
+              return d
+          
+          def read_csv(p, cols):
+              with p.open(encoding='utf-8-sig',newline='') as f:
+                  rd=csv.DictReader(f)
+                  if not set(cols).issubset(rd.fieldnames or []):raise ValueError('CSV schema mismatch '+str(p))
+                  rows=list(rd)
+              return rows
+          
+          def http_get(txid):
+              for attempt in range(4):
+                  try:
+                      req=urllib.request.Request(BASE+'/tx/'+txid,headers={'Accept':'application/json','User-Agent':'DOGE-PoR-amounts-audit/1.0'})
+                      with urllib.request.urlopen(req,timeout=20) as f:j=json.load(f,parse_float=Decimal)
+                      if j.get('status')!='success' or not isinstance(j.get('data'),dict):raise ValueError('Unexpected Dogechain response')
+                      return j['data']
+                  except urllib.error.HTTPError as e:
+                      if e.code not in (429,500,502,503,504) or attempt==3:raise
+                      time.sleep(min(20,max(2,int(e.headers.get('Retry-After','4')))))
+                  except (urllib.error.URLError,TimeoutError):
+                      if attempt==3:raise
+                      time.sleep(2*(attempt+1))
+          
+          def addresses(node):
+              """Match prior probe's recursive input/output address extraction exactly."""
+              out=set()
+              if isinstance(node,dict):
+                  for k,v in node.items():
+                      if k in ('address','addr') and isinstance(v,str):out.add(v)
+                      elif k=='addresses' and isinstance(v,list):out.update(z for z in v if isinstance(z,str))
+                      elif isinstance(v,(dict,list)):out.update(addresses(v))
+              elif isinstance(node,list):
+                  for v in node:out.update(addresses(v))
+              return sorted(out)
+          
+          def examine(tx,allow):
+              ins=tx.get('inputs');outs=tx.get('outputs')
+              if not isinstance(ins,list) or not isinstance(outs,list) or not outs:raise ValueError('Missing structured inputs/outputs')
+              if ('inputs_n' in tx and int(tx['inputs_n'])!=len(ins)) or ('outputs_n' in tx and int(tx['outputs_n'])!=len(outs)):
+                  raise ValueError('Transaction input/output count mismatch')
+              in_sets=[addresses(i) for i in ins];out_sets=[addresses(o) for o in outs]
+              all_in_known=all(len(z)>0 for z in in_sets) if ins else False
+              inp=set().union(*map(set,in_sets)) if ins else set()
+              por_in=sorted(inp&allow)
+              por_out=sorted(set().union(*map(set,out_sets))&allow)
+              any_self_return=bool((inp&allow)&set(por_out))
+              no_por_input_is_proven=all_in_known and not por_in
+              if por_in and por_out: category='POR_ON_BOTH_SIDES_INTERNAL_OR_MIXED_CANDIDATE'
+              elif por_out and no_por_input_is_proven: category='ONLY_POR_OUTPUTS_SEEN_INBOUND_CANDIDATE'
+              elif por_out:category='POR_OUTPUTS_INPUT_IDENTITY_UNCERTAIN'
+              elif por_in:category='POR_INPUTS_ONLY_OUTBOUND_CANDIDATE'
+              elif not all_in_known:category='NO_MATCH_INPUT_IDENTITY_UNCERTAIN'
+              else:category='NO_POR_MATCH_IN_EXTRACTED_SIDES'
+              amount_errors=[];amounts=[];por_sum=Decimal(0)
+              for n,(o,aa) in enumerate(zip(outs,out_sets)):
+                  v=o.get('value',o.get('value_doge'))
+                  try:
+                      d=decimal_doge(v);amounts.append(d)
+                      if len(aa)==1 and aa[0] in allow:por_sum+=d
+                      elif len(aa)>1 and set(aa)&allow: amount_errors.append('output_'+str(n)+'_multiple_addresses')
+                  except ValueError:
+                      amount_errors.append('output_'+str(n)+'_value_unusable')
+              output_total=None;valid=False
+              if 'outputs_value' not in tx: amount_errors.append('no_transaction_output_total_to_reconcile')
+              else:
+                  try:
+                      output_total=decimal_doge(tx['outputs_value'])
+                      if len(amounts)==len(outs):
+                          if sum(amounts,Decimal(0))!=output_total:amount_errors.append('sum_outputs_mismatch')
+                  except ValueError:amount_errors.append('invalid_transaction_output_total')
+              valid=(len(amount_errors)==0)
+              if not valid:por_sum=None
+              return {'classification':category,'input_count':len(ins),'output_count':len(outs),
+                      'input_addresses_all_identified':all_in_known,'known_por_input_addresses':por_in,
+                      'known_por_output_addresses':por_out,'self_return_candidate':any_self_return,
+                      'output_amounts_reconciled':valid,
+                      'matched_por_output_amount_doge':format(por_sum,'.8f') if por_sum is not None else None,
+                      'total_transaction_output_doge':format(output_total,'.8f') if output_total is not None else None,
+                      'amount_audit_issues':amount_errors,
+                      'interpretation':'Observed credited outputs to addresses in historical OKX PoR disclosure; not verified deposit or exchange netflow'}
+          
+          def main():
+              result={'schema_version':1,'status':'error','generated_at_utc':utc(),'source':'OKX 2026-09-08 PoR CSV + Dogechain /tx API + prior immutable transaction intersection sample',
+                      'exchange_netflow_verified':False,'owner_signatures_verified':False,
+                      'gross_amounts_are_not_deposits':True,'errors':[],'transactions':[]}
+              try:
+                  a=read_csv(ROOT/'okx_doge_addresses.csv',['address','network'])
+                  al=[r['address'] for r in a if r['network']=='DOGE']
+                  if len(al)!=40134 or len(al)!=len(set(al)):raise ValueError('PoR address list mismatch or duplicates')
+                  allow=set(al)
+                  probe=json.loads((ROOT/'data/stage1/exchange_flow_probe.json').read_text(encoding='utf-8'))
+                  if probe.get('status')!='ok_probe_only' or not probe.get('transaction_samples'):
+                      raise ValueError('Original probe missing or not passing')
+                  samples=probe['transaction_samples']
+                  if len(samples)!=MAX_SAMPLE or len(set(x['txid'] for x in samples))!=len(samples):
+                      raise ValueError('Probe sample count/duplicate mismatch')
+                  result.update({'sampled_txids':len(samples),'source_probe_utc':probe['generated_at_utc'],
+                                 'probe_max_block_height':probe['max_scanned_block_height'],'por_disclosed_addresses':len(allow)})
+                  counts=Counter();reconciled=0;sum_credits=Decimal(0);matched=0
+                  for k,s in enumerate(samples):
+                      txid=s['txid']; data=http_get(txid);tx=data.get('transaction')
+                      if not isinstance(tx,dict):raise ValueError('Missing transaction structure for '+txid)
+                      d=examine(tx,allow)
+                      if tx.get('block_height') is not None and int(tx['block_height'])!=int(s['block_height']):
+                          raise ValueError('Block height mismatch for '+txid)
+                      if tx.get('confirmations') is not None and int(tx['confirmations'])<6:
+                          raise ValueError('Transaction not >=6 confirmations '+txid)
+                      direct_probed_in=set(s.get('matching_por_input_addresses',[]))
+                      direct_probed_out=set(s.get('matching_por_output_addresses',[]))
+                      if set(d['known_por_input_addresses'])!=direct_probed_in or set(d['known_por_output_addresses'])!=direct_probed_out:
+                          raise ValueError('Input/output PoR address intersection diverges from original probe '+txid)
+                      counts[d['classification']]+=1
+                      matched+=int(bool(d['known_por_input_addresses'] or d['known_por_output_addresses']))
+                      if d['output_amounts_reconciled']:
+                          reconciled+=1
+                          if d['known_por_output_addresses']:
+                              sum_credits+=Decimal(d['matched_por_output_amount_doge'])
+                      d.update({'txid':txid,'block_height':int(s['block_height']),'change_outputs_reported':bool((data.get('explain') or {}).get('change_outputs'))})
+                      result['transactions'].append(d)
+                      time.sleep(0.5)
+                  result.update({'status':'ok_amount_probe' if reconciled==MAX_SAMPLE else 'partial_amount_reconciliation',
+                                 'classification_counts':dict(counts),'sampled_transactions':len(samples),
+                                 'por_associated_transactions':matched,
+                                 'transactions_with_reconciled_output_amounts':reconciled,
+                                 'sampled_por_credited_outputs_doge_reconciled_only':format(sum_credits,'.8f'),
+                                 'notes':['Amounts are credits to historical PoR-disclosed addresses within this selected sample only; NOT true deposits or netflows',
+                                          'Transactions with both PoR sides can be internal transfers, self-change or mixed payments; do not net',
+                                          'Source address ownership signatures not cryptographically verified and address membership not current',
+                                          'Whale-selected sample is biased; does not cover all exchange deposits, withdrawals or network transactions',
+                                          'Output totals must reconcile to avoid unit/scale ambiguity',
+                                          'One-off probe only; no recurring trigger or investment signals']})
+              except Exception as e:
+                  result['errors'].append(type(e).__name__+': '+str(e)[:420]);result['status']='error'
+              atomic_json(result)
+              print(json.dumps({'status':result['status'],'transactions':result.get('sampled_transactions'),'reconciled':result.get('transactions_with_reconciled_output_amounts'),'errors':result['errors']}))
+              return 1 if result['status']=='error' else 0
+          
+          if __name__=='__main__':raise SystemExit(main())
+          PYCODE
+      - name: Persist candidate-only money-flow diagnostics
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if [ -f data/stage1/exchange_flow_amount_audit.json ]; then git add -f data/stage1/exchange_flow_amount_audit.json; fi
+          if ! git diff --cached --quiet; then
+            git commit -m 'data: audit observed PoR output credits without inferring netflow'
+            for i in 1 2 3 4 5; do
+              if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
+              if [ "$i" = 5 ]; then exit 1; fi
+              sleep 4
+            done
+          fi
+      - name: Propagate probe failure
+        if: steps.audit.outcome != 'success'
+        run: exit 1
