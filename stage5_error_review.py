@@ -5,7 +5,7 @@ Separate, immutable original ticker and minute-close tracks.
 Observational market co-movement is NEVER evidence of a single causal driver.
 No frozen model, score, registry, DCA rule or prospective protocol is altered.
 """
-import csv,json,math,os
+import csv,json,math,os,hashlib
 from collections import Counter
 from datetime import datetime,timedelta,timezone
 from pathlib import Path
@@ -68,14 +68,21 @@ def market_context(hourly,issued,target):
  b=(int(target.timestamp()*1000)//h-1)*h
  outcome={'state':'retrospective_association_only','bar_anchor_ms':a,'bar_target_ms':b,
           'historical_retrieval_is_not_proof_of_real_time_availability':True,
-          'returns_pct':{},'source_first_seen_after_issuance':False}
+          'returns_pct':{},'anchor_first_seen_after_issue':False,
+          'outcome_first_seen_after_target':False,
+          'ex_ante_market_features_verified':False,
+          'source_first_seen_utc_by_symbol':{}}
  for sym in ('BTC-USDT','ETH-USDT','DOGE-USDT'):
   pair=hourly.get(sym,{})
   if a not in pair or b not in pair:
    return {'state':'insufficient_data','explanation':'missing already-closed BTC/ETH/DOGE hourly anchors'}
   old,seen1=pair[a];new,seen2=pair[b]
-  if seen1>issued or seen2>target:
-   outcome['source_first_seen_after_issuance']=True
+  if seen1>issued:
+   outcome['anchor_first_seen_after_issue']=True
+  if seen2>target:
+   outcome['outcome_first_seen_after_target']=True
+  outcome['source_first_seen_utc_by_symbol'][sym]={'anchor':seen1.isoformat(),
+    'target_context':seen2.isoformat()}
   outcome['returns_pct'][sym]=round(100*(new/old-1),4)
  return outcome
 
@@ -219,6 +226,10 @@ def evaluate(root=ROOT,now=None,hourly_override=None):
   'track_definitions':{'original_ticker':'only genuine quote in [target,target+25m]',
     'confirmed_1m_close':'separate first fully confirmed minute close after target, never exact quote'},
   'registered':len(reg),'original_quote_score_rows':len(original),
+  'source_sha256':{
+    'forecast_registry':hashlib.sha256((root/'data/direction_v42/forward_registry.csv').read_bytes()).hexdigest(),
+    'original_quote_scores':hashlib.sha256((root/'data/direction_v42/forward_scores.csv').read_bytes()).hexdigest(),
+    'independent_minute_scores':hashlib.sha256((root/'data/stage5/minute_shadow/minute_scores.csv').read_bytes()).hexdigest()},
   'independent_minute_score_rows':len(minute),'cohort_statistics':cohorts,
   'errors_and_coverage_examples':error_events[-35:],
   'minute_wrong_diagnostic_examples':[e for e in by_track['confirmed_1m_close']
