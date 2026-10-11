@@ -21,14 +21,21 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: true
+          fetch-depth: 0
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - name: Install pinned WebSocket client
         run: python -m pip install 'websocket-client==1.8.0'
-      - name: Validate Python syntax
-        run: python -m py_compile doge_liquidations.py
+      - name: Validate quote scoring boundaries and collector Python syntax
+        run: |
+          python -m py_compile doge_liquidations.py spot_plus_quote_watch.py
+          python -m unittest -v test_spot_plus_quote_watch
+      - name: Improve target price observation for already registered forecasts
+        id: quote_watch
+        continue-on-error: true
+        run: python spot_plus_quote_watch.py
       - name: Observe DOGE liquidation notices for eight minutes
         id: scan
         continue-on-error: true
@@ -40,7 +47,7 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          for f in data/liquidations/latest.json data/liquidations/events.csv; do
+          for f in data/liquidations/latest.json data/liquidations/events.csv data/direction_v42/forward_scores.csv data/stage5/spot_plus/quote_watch_latest.json; do
             if [ -f "$f" ]; then git add -f "$f"; fi
           done
           if ! git diff --cached --quiet; then
@@ -54,5 +61,5 @@ jobs:
             done
           fi
       - name: Mark scanner error as workflow failure
-        if: steps.scan.outcome != 'success'
+        if: steps.scan.outcome != 'success' || steps.quote_watch.outcome != 'success'
         run: exit 1
