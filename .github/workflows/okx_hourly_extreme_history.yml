@@ -6,9 +6,11 @@ on:
     paths:
       - 'okx_hourly_research_history.py'
       - 'evaluate_crash_warning.py'
+      - 'crash_forward_watch.py'
+      - 'test_crash_forward_watch.py'
       - '.github/workflows/okx_hourly_extreme_history.yml'
   schedule:
-    - cron: '43 3,15 * * *'
+    - cron: '13 * * * *' # hourly research checkpoint, with 03/15 UTC historical backfill
 permissions:
   contents: write
 concurrency:
@@ -25,21 +27,31 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Test hourly point-in-time registry causal restrictions
+        run: python -m unittest -v test_crash_forward_watch
       - name: Backfill confirmed UTC 1H data with source-ingestion timestamps
         id: collect
         continue-on-error: true
-        run: python okx_hourly_research_history.py
+        run: |
+          hour=$(date -u +%H)
+          if [ "$hour" = "03" ] || [ "$hour" = "15" ]; then export DOGE_HOURLY_PAGE_BUDGET=24; else export DOGE_HOURLY_PAGE_BUDGET=0; fi
+          python okx_hourly_research_history.py
       - name: Evaluate hourly extreme-down alert precision and recall
         id: evaluate
         if: steps.collect.outcome == 'success'
         continue-on-error: true
         run: python evaluate_crash_warning.py
+      - name: Register genuinely prospective hourly risk checkpoint and score matured alerts
+        id: forward
+        if: steps.collect.outcome == 'success'
+        continue-on-error: true
+        run: python crash_forward_watch.py
       - name: Persist data and diagnostics
         if: always()
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          for f in data/hourly_research/ohlc.csv data/hourly_research/latest.json data/crash_research/pilot_1h_latest.json; do
+          for f in data/hourly_research/ohlc.csv data/hourly_research/latest.json data/crash_research/pilot_1h_latest.json data/crash_research/prospective_hourly.csv data/crash_research/prospective_scores.json; do
             if [ -f "$f" ]; then git add -f "$f"; fi
           done
           if ! git diff --cached --quiet; then
@@ -52,5 +64,5 @@ jobs:
             done
           fi
       - name: Fail on collector or quality error
-        if: steps.collect.outcome != 'success' || steps.evaluate.outcome != 'success'
+        if: steps.collect.outcome != 'success' || steps.evaluate.outcome != 'success' || steps.forward.outcome != 'success'
         run: exit 1
