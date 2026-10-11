@@ -7,6 +7,7 @@ All registration/quote/score times must be timezone-aware UTC.
 import csv
 import json
 import math
+import hashlib
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -190,6 +191,81 @@ def inspect_forward(root):
       'not_external_tamper_proof':True}
 
 
+def audit_locked_forward_trial(root):
+    """Frozen pre-registered study; select fixed time bins before outcomes are inspected."""
+    lock_path=root/'data/stage5/pre_registration.json'
+    lock=json.loads(lock_path.read_text(encoding='utf-8'))
+    if (lock.get('status')!='frozen_protocol'
+        or lock.get('model_id')!='DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1'
+        or lock.get('primary_model')!='doge_reversal'
+        or lock.get('comparison_model')!='majority'
+        or lock.get('primary_horizons_hours')!=[1,24]
+        or int(lock.get('eligible_target_quote_window_minutes',-1))!=25
+        or int(lock.get('issue_quote_max_age_seconds',-1))!=120):
+        raise ValueError('preregistered forward trial parameters changed')
+    effective=utc(lock['effective_from_utc'])
+    blob=(root/lock['locked_source_file']).read_bytes()
+    actual=hashlib.sha1(b'blob '+str(len(blob)).encode('ascii')+b'\0'+blob).hexdigest()
+    if actual!=lock['locked_source_git_blob_sha']:
+        raise ValueError('frozen V4.2 source changed after preregistration')
+    p=root/'data/direction_v42'
+    forecast_rows=read_csv(p/'forward_registry.csv',
+        ('forecast_id','model_id','issued_at_utc','horizon_hours','target_utc'))
+    score_rows=read_csv(p/'forward_scores.csv',
+        ('forecast_id','status','realized_up','majority_correct','doge_reversal_correct'))
+    scores={row['forecast_id']:row for row in score_rows}
+    result={'protocol_id':lock['protocol_id'],'protocol_frozen':True,
+            'effective_from_utc':effective.isoformat(),'model_source_git_blob_sha':actual,
+            'no_prefreeze_predictions_counted':True,'sample_selection':'first issued prediction per immutable UTC-aligned h-hour bin, before inspecting outcome',
+            'overall_70pct_claim_allowed':False,'horizons':{}}
+    for h in lock['primary_horizons_hours']:
+        bins={}
+        for row in forecast_rows:
+            issued=utc(row['issued_at_utc'])
+            if issued<effective or int(row['horizon_hours'])!=h:
+                continue
+            if row['model_id']!=lock['model_id']:
+                raise ValueError('unexpected model version in post-freeze registry')
+            index=int((issued-effective).total_seconds()//(3600*h))
+            # Before outcomes: earliest prediction for this fixed phase. Do not select wins or scored-only rows.
+            if index not in bins or issued<utc(bins[index]['issued_at_utc']):
+                bins[index]=row
+        selected=[bins[i] for i in sorted(bins)]
+        resolved=[row for row in selected if row['forecast_id'] in scores]
+        good=[row for row in resolved if scores[row['forecast_id']]['status']=='scored']
+        missing=len(resolved)-len(good)
+        coverage=len(good)/len(resolved) if resolved else None
+        k=sum(scores[row['forecast_id']]['doge_reversal_correct']=='1' for row in good)
+        baseline=sum(scores[row['forecast_id']]['majority_correct']=='1' for row in good)
+        n=len(good)
+        upper=wilson_lower(k,n) if n else None
+        duration=(utc(selected[-1]['issued_at_utc'])-utc(selected[0]['issued_at_utc'])).total_seconds()/86400 if len(selected)>1 else 0
+        up=[r for r in good if scores[r['forecast_id']]['realized_up']=='UP']
+        down=[r for r in good if scores[r['forecast_id']]['realized_up']=='DOWN']
+        up_recall=sum(scores[r['forecast_id']]['doge_reversal_correct']=='1' for r in up)/len(up) if up else None
+        down_recall=sum(scores[r['forecast_id']]['doge_reversal_correct']=='1' for r in down)/len(down) if down else None
+        result['horizons'][str(h)+'h']={
+            'locked_bins_with_issued_predictions':len(selected),
+            'resolved':len(resolved),'scored':n,'unscorable':missing,
+            'pending':len(selected)-len(resolved),
+            'coverage_pct':round(100*coverage,2) if coverage is not None else None,
+            'observed_span_days':round(duration,2),
+            'primary_correct':k,'primary_accuracy_pct':round(100*k/n,2) if n else None,
+            'wilson95_lower_pct_descriptive_only':round(100*upper,2) if upper is not None else None,
+            'up_recall_pct':round(100*up_recall,2) if up_recall is not None else None,
+            'down_recall_pct':round(100*down_recall,2) if down_recall is not None else None,
+            'baseline_majority_correct':baseline,
+            'baseline_majority_accuracy_pct':round(100*baseline/n,2) if n else None,
+            'minimum_n_met':n>=lock['minimum_nonoverlapping_valid_scores_per_horizon'],
+            'coverage_target_met':bool(coverage is not None and coverage>=lock['minimum_resolved_quote_coverage_fraction']),
+            'wilson_accuracy_target_met':bool(upper is not None and upper>=lock['minimum_wilson_95pct_lower_accuracy_fraction']),
+            'time_span_met':duration>=lock['minimum_observation_span_days'],
+            'both_directions_scored':bool(up and down),
+            'beats_predeclared_majority_baseline':n>0 and k>baseline,
+            'eligible_for_70pct_claim':False}
+    return result
+
+
 def evaluate(root=ROOT):
     direction=jsonfile(root,'data/direction_v42/latest.json')
     validation=jsonfile(root,'data/validation/latest.json')
@@ -211,6 +287,7 @@ def evaluate(root=ROOT):
         raise ValueError('shadow report prematurely claims 70%')
     historical=audited_fixed_phase(direction)
     forward=inspect_forward(root)
+    preregistered_trial=audit_locked_forward_trial(root)
     daily_reg=read_csv(root/'data/prospective/registry.csv',('forecast_id','registered_utc','anchor_date_utc','target_date_utc','horizon_days'))
     ids={r['forecast_id'] for r in daily_reg}
     if len(ids)!=len(daily_reg) or len(ids)!=daily_score['registered']:
@@ -247,6 +324,7 @@ def evaluate(root=ROOT):
      'generated_at_utc':datetime.now(timezone.utc).isoformat(),
      'target_accuracy_pct':70,'historical':historical,
      'forward_live':forward,
+     'preregistered_forward_trial':preregistered_trial,
      'daily_probability_forward':{'registered_total':len(ids),
        'scored_total':daily_score['scored'],'pending_total':daily_score['pending_count'],
        'quarantined_total':daily_score['quarantined_count'],
