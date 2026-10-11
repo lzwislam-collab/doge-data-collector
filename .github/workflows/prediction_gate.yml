@@ -8,6 +8,8 @@ on:
       - 'stage5_70pct_audit.py'
       - 'test_stage5_70pct_audit.py'
       - 'stage5_forward_quality.py'
+      - 'stage5_error_review.py'
+      - 'test_stage5_error_review.py'
       - 'test_stage5_forward_quality.py'
       - '.github/workflows/prediction_gate.yml'
       - 'data/quality/latest.json'
@@ -30,8 +32,12 @@ jobs:
           python-version: '3.11'
       - name: Test Stage 5 score integrity and confidence intervals
         run: |
-          python -m py_compile prediction_gate.py stage5_70pct_audit.py stage5_forward_quality.py
-          python -m unittest -v test_stage5_70pct_audit test_stage5_forward_quality
+          python -m py_compile prediction_gate.py stage5_70pct_audit.py stage5_forward_quality.py stage5_error_review.py
+          python -m unittest -v test_stage5_70pct_audit test_stage5_forward_quality test_stage5_error_review
+      - name: Independently refresh error review without changing original forecasts
+        id: error_review
+        continue-on-error: true
+        run: python stage5_error_review.py
       - name: Independently audit 70-percent direction target and prospective samples
         id: stage5
         continue-on-error: true
@@ -47,7 +53,7 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          for file in data/prediction_gate/latest.json data/stage5/latest.json; do
+          for file in data/prediction_gate/latest.json data/stage5/latest.json data/stage5/error_review/latest.json; do
             if [ -f "$file" ]; then git add -f "$file"; fi
           done
           if ! git diff --cached --quiet; then
@@ -59,5 +65,5 @@ jobs:
             done
           fi
       - name: Fail on invalid input audit
-        if: steps.audit.outcome != 'success' || steps.stage5.outcome != 'success'
+        if: steps.audit.outcome != 'success' || steps.stage5.outcome != 'success' || steps.error_review.outcome != 'success'
         run: exit 1
