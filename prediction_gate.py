@@ -71,13 +71,46 @@ def stage3_etf_admissibility():
   out['audit_error']=type(exc).__name__+': '+str(exc)[:180]
  return out
 
+
+def stage4_macro_policy_admissibility():
+ """No FRED observation-date lookahead, no BLS schedule-as-release, no retrospective regulatory publication."""
+ out={'historical_macro_observation_as_release_timestamp_allowed':False,
+      'unverified_historical_macro_vintages_allowed':False,
+      'calendar_schedule_as_actual_cpi_ppi_release_allowed':False,
+      'retrospective_sec_cftc_pubdate_backtest_allowed':False,
+      'official_macro_values_historical_backtest_authorized':False,
+      'policy_headline_price_direction_validated':False,
+      'macro_first_seen_research_only':False,
+      'policy_event_first_seen_research_only':False,
+      'rule':'Use actual observed first_seen_utc or separately verified release/vintage availability, never observation_date'}
+ try:
+  quality=json.loads((ROOT/'data/quality/latest.json').read_text(encoding='utf-8'))
+  if quality.get('critical_failures'):raise ValueError('source quality has critical failures')
+  stage=quality['sources']['stage4_macro_policy_csv_quality']
+  if stage.get('state')!='ok':raise ValueError('stage4 quality not verified')
+  src=stage['checks']
+  out['macro_first_seen_research_only']=src['fred_macro']['state']=='ok'
+  out['policy_event_first_seen_research_only']=all(src[k]['state']=='ok'
+     for k in ('fed_bls_policy_calendar','cftc_policy_candidates','sec_policy_candidates'))
+  out['audited_macro_observations']=src['fred_macro']['rows']
+  out['audited_policy_candidates_and_calendar_rows']=sum(src[k]['rows']
+     for k in ('fed_bls_policy_calendar','cftc_policy_candidates','sec_policy_candidates'))
+  out['limitations']=['FRED observation dates precede publication; revised values are latest-vintage rather than historical PIT',
+   'BLS calendar event time is a scheduled future release, not confirmation of actual data publication',
+   'SEC/CFTC keyword candidates are incomplete and no causal bullish/bearish tags are established',
+   'Use first_seen_utc conservatively until release timestamps, prior vintages and revision timelines are independently validated']
+ except Exception as exc:
+  out['audit_error']=type(exc).__name__+': '+str(exc)[:180]
+ return out
+
 def main():
  stamp=datetime.now(timezone.utc).isoformat()
  result={'schema_version':1,'evaluated_at_utc':stamp,'status':'error',
          'claim_permission':'BLOCKED','research_only':True,'does_not_change_dca':True,
          'model_edge_proven':False,'checks':{},'errors':[],
          'stage2_feature_admissibility':stage2_admissibility(),
-         'stage3_etf_admissibility':stage3_etf_admissibility()}
+         'stage3_etf_admissibility':stage3_etf_admissibility(),
+         'stage4_macro_policy_admissibility':stage4_macro_policy_admissibility()}
  try:
   val=load('data/validation/latest.json')
   stat=load('data/stat_audit/latest.json')
