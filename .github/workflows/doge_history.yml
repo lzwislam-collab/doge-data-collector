@@ -26,12 +26,22 @@ jobs:
         id: collect
         continue-on-error: true
         run: python doge_history.py
+      - name: Register newest prospective DOGE baseline
+        id: register
+        if: steps.collect.outcome == 'success'
+        continue-on-error: true
+        run: python prospective_forecast.py
+      - name: Score matured prospective entries
+        id: score
+        if: steps.collect.outcome == 'success'
+        continue-on-error: true
+        run: python prospective_score.py
       - name: Commit data and diagnostics
         if: always()
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          for file in data/history/latest.json data/history/daily.csv data/history/backtest_latest.json; do
+          for file in data/history/latest.json data/history/daily.csv data/history/backtest_latest.json data/prospective/latest.json data/prospective/registry.csv data/prospective/scores.json; do
             if [ -f "$file" ]; then git add -f "$file"; fi
           done
           if ! git diff --cached --quiet; then
@@ -43,5 +53,5 @@ jobs:
             done
           fi
       - name: Fail on data collection errors
-        if: steps.collect.outcome != 'success'
+        if: steps.collect.outcome != 'success' || steps.register.outcome != 'success' || steps.score.outcome != 'success'
         run: exit 1
