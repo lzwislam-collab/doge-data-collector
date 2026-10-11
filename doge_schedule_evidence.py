@@ -21,6 +21,9 @@ STAGE2_SPECS={
  'liquidations_binance':('.github/workflows/binance_liquidations.yml','data/binance_liquidations/latest.json','ended_at_utc',('partial',)),
  'liquidations_bybit':('.github/workflows/bybit_liquidations.yml','data/bybit_liquidations/latest.json','ended_at_utc',('partial',))
 }
+STAGE3_SPECS={
+ 'btc_eth_etf':('.github/workflows/etf_flows.yml','data/etf/latest.json','ended_at_utc',('ok',))
+}
 
 def parse(s):
  d=datetime.fromisoformat(str(s).replace('Z','+00:00'))
@@ -36,10 +39,11 @@ def get(url):
 def audit():
  if not TOKEN:raise ValueError('GITHUB_TOKEN missing; cannot verify run events')
  if '/' not in REPO:raise ValueError('Invalid GitHub repository')
- reports={};stage2_reports={};all_ok=True;stage2_ok=True
+ reports={};stage2_reports={};stage3_reports={};all_ok=True;stage2_ok=True;stage3_ok=True
  for name,workflow,file,time_key,allow_status in (
   [(name,*spec,('ok',)) for name,spec in SPECS.items()]+
-  [(name,*spec) for name,spec in STAGE2_SPECS.items()]
+  [(name,*spec) for name,spec in STAGE2_SPECS.items()]+
+  [(name,*spec) for name,spec in STAGE3_SPECS.items()]
  ):
   x={'workflow':workflow,'snapshot':file,'state':'UNVERIFIED',
      'allowed_snapshot_statuses':list(allow_status)}
@@ -78,16 +82,23 @@ def audit():
     else:x['reason']='Schedule succeeded but no timestamp-matching snapshot; cannot attribute persistence'
   except (ValueError,KeyError,TypeError,urllib.error.URLError) as exc:
    x['reason']=type(exc).__name__+': '+str(exc)[:280]
-  if name in STAGE2_SPECS:
+  if name in STAGE3_SPECS:
+   stage3_reports[name]=x
+   if x['state']!='SCHEDULE_AND_SNAPSHOT_TIME_MATCH':stage3_ok=False
+  elif name in STAGE2_SPECS:
    stage2_reports[name]=x
    if x['state']!='SCHEDULE_AND_SNAPSHOT_TIME_MATCH':stage2_ok=False
   else:
    reports[name]=x
    if x['state']!='SCHEDULE_AND_SNAPSHOT_TIME_MATCH':all_ok=False
- return {'schema_version':2,'status':'all_evidence_matched' if all_ok else 'partial_or_unverified',
+ return {'schema_version':3,'status':'all_evidence_matched' if all_ok else 'partial_or_unverified',
          'generated_at_utc':NOW.isoformat(),'repository':REPO,'checks':reports,
          'stage2_status':'all_evidence_matched_with_coverage_limits' if stage2_ok else 'partial_or_unverified',
          'stage2_checks':stage2_reports,
+         'stage3_status':'all_evidence_matched_data_quality_unverified' if stage3_ok else 'partial_or_unverified',
+         'stage3_checks':stage3_reports,
+         'stage3_etf_data_history_complete':False,
+         'stage3_etf_backfill_point_in_time_verified':False,
          'stage2_verified_market_wide_liquidations':False,
          'stage2_coverage_note':'Scheduled partial exchange notification windows are NOT 24-hour or market-wide liquidation totals; CoinGlass unavailable due to paid plan.',
          'limitations':['Run event and snapshot timestamp alignment does not prove causal commit attribution','Scheduled runs may be delayed or skipped by GitHub','Do not infer real exchange netflow from address balance samples','Partial liquidation observation windows may miss forced liquidations and are not representative of 24h totals']}
