@@ -266,6 +266,82 @@ def audit_locked_forward_trial(root):
     return result
 
 
+
+def audit_independent_minute_shadow(root):
+    """Cross-check each minute score and freeze; never pool minute and quote accuracy."""
+    protocol=json.loads((root/'data/stage5/minute_evaluation_protocol.json').read_text(encoding='utf-8'))
+    latest=jsonfile(root,'data/stage5/minute_shadow/latest.json')
+    if (protocol.get('status')!='frozen_protocol'
+        or protocol.get('original_quote_scoring_untouched') is not True
+        or latest.get('original_V42_scores_modified') is not False
+        or latest.get('not_exact_issuance_to_target_quote') is not True
+        or latest.get('claim_permission')!='NO_VALIDATED_EDGE'):
+        raise ValueError('minute shadow must never be promoted as exact target ticker')
+    source=(root/protocol['locked_evaluator_file']).read_bytes()
+    digest=hashlib.sha1(b'blob '+str(len(source)).encode()+b'\0'+source).hexdigest()
+    if digest!=protocol['locked_evaluator_git_blob_sha']:
+        raise ValueError('minute evaluation source hash changed')
+    registry=read_csv(root,'data/direction_v42/forward_registry.csv',
+        ('forecast_id','issued_at_utc','target_utc','reference_price',
+         'majority_direction','doge_reversal_direction','btc_momentum_direction'))
+    registered={row['forecast_id']:row for row in registry}
+    if len(registered)!=len(registry):raise ValueError('duplicate source predictions')
+    scores=read_csv(root,'data/stage5/minute_shadow/minute_scores.csv',
+        ('forecast_id','target_utc','bar_open_utc','bar_closed_at_utc',
+         'retrieved_at_utc','evaluated_at_utc','minute_close_usdt','realized_up',
+         'majority_correct','doge_reversal_correct','btc_momentum_correct',
+         'protocol_id','evaluation_cohort','offset_seconds_after_target'))
+    seen=set()
+    freeze=utc(protocol['effective_from_utc'])
+    counts={'pre_freeze_diagnostic_only':0,'preregistered_forward_shadow':0}
+    for score in scores:
+        fid=score['forecast_id']
+        if fid in seen or fid not in registered:
+            raise ValueError('duplicate/orphan minute score ID')
+        seen.add(fid)
+        forecast=registered[fid]
+        issued=utc(forecast['issued_at_utc'])
+        target=utc(forecast['target_utc'])
+        bar_open=utc(score['bar_open_utc'])
+        bar_close=utc(score['bar_closed_at_utc'])
+        seen_at=utc(score['retrieved_at_utc'])
+        audited_at=utc(score['evaluated_at_utc'])
+        expect_open_ms=((int(target.timestamp()*1000)+59999)//60000)*60000
+        if (score['target_utc']!=forecast['target_utc']
+            or int(bar_open.timestamp()*1000)!=expect_open_ms
+            or bar_close!=bar_open+timedelta(minutes=1)
+            or seen_at<bar_close or audited_at<bar_close
+            or not 0<(bar_close-target).total_seconds()<=120):
+            raise ValueError('minute score has fabricated target/availability time')
+        if abs(float(score['offset_seconds_after_target'])-(bar_close-target).total_seconds())>0.0011:
+            raise ValueError('minute offset seconds inconsistent')
+        price=float(score['minute_close_usdt'])
+        ref=float(forecast['reference_price'])
+        if not(math.isfinite(price) and price>0 and math.isfinite(ref) and ref>0):
+            raise ValueError('invalid minute shadow or reference price')
+        truth='UP' if price>ref else 'DOWN'
+        if score['realized_up']!=truth:
+            raise ValueError('minute shadow label wrong')
+        for model in ('majority','doge_reversal','btc_momentum'):
+            if score[model+'_correct']!=('1' if forecast[model+'_direction']==truth else '0'):
+                raise ValueError('minute shadow outcome flag wrong')
+        expected='pre_freeze_diagnostic_only' if issued<freeze else 'preregistered_forward_shadow'
+        if score['evaluation_cohort']!=expected or score['protocol_id']!=protocol['protocol_id']:
+            raise ValueError('historical shadow included in prospective experiment')
+        counts[expected]+=1
+    if (latest['minute_rows_total']!=len(scores)
+        or latest['preregistered_forward_rows']!=counts['preregistered_forward_shadow']
+        or latest['prefreeze_diagnostic_rows']!=counts['pre_freeze_diagnostic_only']):
+        raise ValueError('minute score CSV and report row counts disagree')
+    return {'status':'ok','method':'confirmed 1m CLOSE after target, never target ticker quote',
+        'code_blob_sha':digest,
+        'preregistered_future_evaluations':counts['preregistered_forward_shadow'],
+        'retrospective_diagnostics_excluded':counts['pre_freeze_diagnostic_only'],
+        'rows':len(scores),'duplicate_or_orphan_ids':0,
+        'timestamp_and_direction_score_integrity':'verified',
+        'can_merge_into_original_quote_accuracy':False,
+        '70pct_accuracy_validated':False}
+
 def evaluate(root=ROOT):
     direction=jsonfile(root,'data/direction_v42/latest.json')
     validation=jsonfile(root,'data/validation/latest.json')
@@ -288,6 +364,7 @@ def evaluate(root=ROOT):
     historical=audited_fixed_phase(direction)
     forward=inspect_forward(root)
     preregistered_trial=audit_locked_forward_trial(root)
+    minute_shadow=audit_independent_minute_shadow(root)
     daily_reg=read_csv(root/'data/prospective/registry.csv',('forecast_id','registered_utc','anchor_date_utc','target_date_utc','horizon_days'))
     ids={r['forecast_id'] for r in daily_reg}
     if len(ids)!=len(daily_reg) or len(ids)!=daily_score['registered']:
@@ -325,6 +402,7 @@ def evaluate(root=ROOT):
      'target_accuracy_pct':70,'historical':historical,
      'forward_live':forward,
      'preregistered_forward_trial':preregistered_trial,
+     'independent_minute_shadow':minute_shadow,
      'daily_probability_forward':{'registered_total':len(ids),
        'scored_total':daily_score['scored'],'pending_total':daily_score['pending_count'],
        'quarantined_total':daily_score['quarantined_count'],
