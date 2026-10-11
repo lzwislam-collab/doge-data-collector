@@ -15,6 +15,8 @@ on:
       - 'test_spot_plus_research.py'
       - 'spot_plus_daily_evolution.py'
       - 'test_spot_plus_daily_evolution.py'
+      - 'spot_plus_quote_watch.py'
+      - 'test_spot_plus_quote_watch.py'
       - 'feed_freshness_audit.py'
       - 'test_feed_quality.py'
       - 'test_stage5_forward_quality.py'
@@ -40,7 +42,7 @@ jobs:
       - name: Test Stage 5 score integrity and confidence intervals
         run: |
           python -m py_compile prediction_gate.py stage5_70pct_audit.py stage5_forward_quality.py stage5_error_review.py spot_plus_research.py spot_plus_context.py spot_plus_daily_evolution.py
-          python -m unittest -v test_stage5_70pct_audit test_stage5_forward_quality test_stage5_error_review test_spot_plus_research test_spot_plus_daily_evolution
+          python -m unittest -v test_stage5_70pct_audit test_stage5_forward_quality test_stage5_error_review test_spot_plus_research test_spot_plus_daily_evolution test_spot_plus_quote_watch
       - name: Synchronize latest source health and timestamps before forecasting
         id: freshness
         continue-on-error: true
