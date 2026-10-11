@@ -58,7 +58,7 @@ def bls(text,stamp):
      dt=datetime.strptime(raw,'%Y%m%dT%H%M%SZ').replace(tzinfo=timezone.utc)
     elif 'T' in raw:
      if not tzid:raise ValueError('BLS release time lacks explicit timezone')
-     dt=datetime.strptime(raw,'%Y%m%dT%H%M%S' if len(raw)==15 else '%Y%m%dT%H%M').replace(tzinfo=ZoneInfo(tzid)).astimezone(timezone.utc)
+     dt=datetime.strptime(raw,'%Y%m%dT%H%M%S' if len(raw)==15 else '%Y%m%dT%H%M').replace(tzinfo=ZoneInfo({'US-Eastern':'America/New_York','EST5EDT':'America/New_York'}.get(tzid,tzid))).astimezone(timezone.utc)
     else:
      # All-day dates are not actual release instants and must not be used as intraday signals.
      continue
