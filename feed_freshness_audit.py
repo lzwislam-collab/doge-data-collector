@@ -160,10 +160,10 @@ def check_stage4_csvs(base=BASE,now=None):
  """Independent macro series and policy-release file audit. No retroactive release claim."""
  if now is None:now=datetime.now(timezone.utc)
  root=Path(base);checks={};failures=[]
- def iso(value):
+ def iso(value,allow_future=False):
   stamp=datetime.fromisoformat(str(value).replace('Z','+00:00'))
   if stamp.tzinfo is None:raise ValueError('timestamp missing timezone')
-  if stamp>now+timedelta(minutes=15):raise ValueError('future observed timestamp')
+  if not allow_future and stamp>now+timedelta(minutes=15):raise ValueError('future observed timestamp')
   return stamp.astimezone(timezone.utc)
  def rows(path,required):
   with (root/path).open(newline='',encoding='utf-8-sig') as stream:
@@ -229,7 +229,7 @@ def check_stage4_csvs(base=BASE,now=None):
    if x['source'] not in group or not x['title'] or not x['url']:raise ValueError('policy source fields invalid')
    if key in seen:raise ValueError('duplicate policy event key')
    seen.add(key)
-   t=iso(x['event_time_utc']);first=iso(x['first_seen_utc']);last=iso(x['last_seen_utc'])
+   t=iso(x['event_time_utc'],allow_future=x['source']=='BLS_CALENDAR');first=iso(x['first_seen_utc']);last=iso(x['last_seen_utc'])
    if last<first:raise ValueError('reversed policy timestamps')
    if x['source']=='BLS_CALENDAR':
     if x['event_time_precision']!='calendar_schedule_not_actual_publication' or 'schedule_only' not in x['point_in_time_rule']:
