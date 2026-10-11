@@ -13,7 +13,7 @@ def score_record(r,prices,now_date):
  if reg.tzinfo is None or reg.utcoffset()!=timedelta(0) or h not in (1,7,30) or not math.isfinite(p) or not 0<p<1 or anchor+timedelta(days=h)!=target or r['model_id']!='doge_laplace_v1':
   return 'quarantined','invalid_registry_fields'
  if (reg.date()-anchor).days!=1:return 'quarantined','registered_with_stale_anchor'
- if reg>=datetime.combine(target,datetime.min.time(),timezone.utc):return 'quarantined','registration_after_target_day_started'
+ if reg>=datetime.combine(target+timedelta(days=1),datetime.min.time(),timezone.utc):return 'quarantined','registration_after_target_close'
  if anchor not in prices or abs(prices[anchor]-float(r['anchor_close']))>1e-10:return 'quarantined','anchor_mismatch_or_missing'
  if target not in prices or now_date<=target:return 'pending','target_not_closed'
  if any(anchor+timedelta(days=i) not in prices for i in range(h+1)):return 'quarantined','missing_intermediate_daily_bar'
