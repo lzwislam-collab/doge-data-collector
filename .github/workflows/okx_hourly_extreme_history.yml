@@ -16,6 +16,9 @@ on:
       - 'stage5_error_review.py'
       - 'test_stage5_error_review.py'
       - 'spot_plus_quote_watch.py'
+      - 'forward_validation.py'
+      - 'test_forward_validation.py'
+      - 'data/stage5/forward_validation_protocol.json'
       - 'test_spot_plus_quote_watch.py'
       - 'data/stage5/minute_evaluation_protocol.json'
       - 'test_crash_v42_score.py'
@@ -24,6 +27,7 @@ on:
     - cron: '13,33,53 * * * *' # same existing workflow: extra quote-scoring polls; hourly forecasts unchanged
 permissions:
   contents: write
+  actions: read
 concurrency:
   group: okx-hourly-extreme-history
   cancel-in-progress: false
@@ -39,7 +43,9 @@ jobs:
         with:
           python-version: '3.11'
       - name: Test hourly point-in-time registry causal restrictions
-        run: python -m unittest -v test_crash_forward_watch test_crash_v42_score test_direction_forward_v42 test_stage5_minute_shadow test_stage5_error_review test_spot_plus_quote_watch
+        run: python -m unittest -v test_crash_forward_watch test_crash_v42_score test_direction_forward_v42 test_stage5_minute_shadow test_stage5_error_review test_spot_plus_quote_watch test_forward_validation
+      - name: Fail closed before writes on full-history or frozen protocol mutation
+        run: python forward_validation.py --integrity-only
       - name: Score genuine due target quotes before long collection steps
         id: quote_watch
         continue-on-error: true
@@ -95,12 +101,18 @@ jobs:
         if: steps.collect.outcome == 'success'
         continue-on-error: true
         run: python stage5_error_review.py
+      - name: Audit original quotes, publication receipts, baselines and prospective spot paper
+        id: validation
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python forward_validation.py
       - name: Persist data and diagnostics
         if: always()
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          for f in data/hourly_research/ohlc.csv data/hourly_research/latest.json data/crash_research/pilot_1h_latest.json data/crash_research/prospective_hourly.csv data/crash_research/prospective_scores.json data/crash_research/v42_scores.json data/direction_v42/forward_registry.csv data/direction_v42/forward_scores.csv data/direction_v42/forward_latest.json data/stage5/minute_shadow/latest.json data/stage5/minute_shadow/minute_scores.csv data/stage5/error_review/latest.json data/stage5/spot_plus/quote_watch_latest.json; do
+          for f in data/hourly_research/ohlc.csv data/hourly_research/latest.json data/crash_research/pilot_1h_latest.json data/crash_research/prospective_hourly.csv data/crash_research/prospective_scores.json data/crash_research/v42_scores.json data/direction_v42/forward_registry.csv data/direction_v42/forward_scores.csv data/direction_v42/forward_latest.json data/stage5/minute_shadow/latest.json data/stage5/minute_shadow/minute_scores.csv data/stage5/error_review/latest.json data/stage5/spot_plus/quote_watch_latest.json data/stage5/forward_validation/latest.json data/stage5/forward_validation/remote_witnesses.csv data/stage5/forward_validation/verified_run_metadata.csv reports/DOGE_FORWARD_VALIDATION.md; do
             if [ -f "$f" ]; then git add -f "$f"; fi
           done
           if ! git diff --cached --quiet; then
@@ -112,6 +124,22 @@ jobs:
               sleep 4
             done
           fi
+      - name: Preserve per-run forecast and score evidence snapshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: doge-forward-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 90
+          if-no-files-found: error
+          path: |
+            data/direction_v42/forward_registry.csv
+            data/direction_v42/forward_scores.csv
+            data/stage5/*protocol.json
+            data/stage5/pre_registration.json
+            data/stage5/forward_validation/latest.json
+            data/stage5/forward_validation/*.csv
+            data/stage5/spot_plus/quote_watch_latest.json
+            reports/DOGE_FORWARD_VALIDATION.md
       - name: Fail on collector or quality error
-        if: steps.quote_watch.outcome != 'success' || steps.collect.outcome != 'success' || steps.evaluate.outcome != 'success' || steps.forward.outcome != 'success' || steps.v42.outcome != 'success' || (steps.direction.outcome != 'success' && steps.direction_late_audit.outcome != 'success') || steps.minute_shadow.outcome != 'success' || steps.error_review.outcome != 'success'
+        if: steps.validation.outcome != 'success' || steps.quote_watch.outcome != 'success' || steps.collect.outcome != 'success' || steps.evaluate.outcome != 'success' || steps.forward.outcome != 'success' || steps.v42.outcome != 'success' || (steps.direction.outcome != 'success' && steps.direction_late_audit.outcome != 'success') || steps.minute_shadow.outcome != 'success' || steps.error_review.outcome != 'success'
         run: exit 1
