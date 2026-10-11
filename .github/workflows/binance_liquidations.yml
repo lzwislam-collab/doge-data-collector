@@ -1,0 +1,48 @@
+name: Sample free Binance DOGE liquidation snapshots
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '12,27,42,57 * * * *'
+permissions:
+  contents: write
+concurrency:
+  group: binance-doge-liquidation-sampling
+  cancel-in-progress: false
+jobs:
+  sample:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 13
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install WebSocket client
+        run: python -m pip install 'websocket-client==1.8.0'
+      - name: Validate Python syntax
+        run: python -m py_compile binance_liquidations.py
+      - name: Sample Binance public snapshots
+        id: collector
+        continue-on-error: true
+        env:
+          BINANCE_LISTEN_SECONDS: '480'
+        run: python binance_liquidations.py
+      - name: Save data and diagnostics
+        if: always()
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          for f in data/binance_liquidations/latest.json data/binance_liquidations/events.csv; do
+            if [ -f "$f" ]; then git add -f "$f"; fi
+          done
+          if ! git diff --cached --quiet; then
+            git commit -m 'data: collect Binance DOGE liquidation snapshots'
+            for attempt in 1 2 3 4 5; do
+              if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
+              if [ "$attempt" -eq 5 ]; then exit 1; fi
+              sleep 4
+            done
+          fi
+      - name: Fail on scanner error
+        if: steps.collector.outcome != 'success'
+        run: exit 1
