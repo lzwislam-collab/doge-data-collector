@@ -197,7 +197,7 @@ def inspect(root=ROOT,now=None):
   'stage1_exch_netflow_not_verified':True,
   'stage2_full_liquidation_coverage_not_verified':True,
   'ETF_MACRO_point_in_time_backtest_not_verified':True,
-  'original_36_item_level_reconciliation_complete':False,
+  'original_36_item_level_reconciliation_complete':bool(context['original_36_items'].get('item_level_current_mapping_reconciled')),
   'model_change_authorized':False,'real_spot_orders_authorized':False,
   'daily_code_or_model_improvement_proven':False,
   'note':'A daily new audit is not evidence the signal has improved; 70% cannot be forced.'}
