@@ -1,6 +1,11 @@
 name: Sample free Binance DOGE liquidation snapshots
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'binance_liquidations.py'
+      - '.github/workflows/binance_liquidations.yml'
   schedule:
     - cron: '12,27,42,57 * * * *'
 permissions:
