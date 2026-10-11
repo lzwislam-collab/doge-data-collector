@@ -15,6 +15,8 @@ on:
       - 'test_stage5_minute_shadow.py'
       - 'stage5_error_review.py'
       - 'test_stage5_error_review.py'
+      - 'spot_plus_quote_watch.py'
+      - 'test_spot_plus_quote_watch.py'
       - 'data/stage5/minute_evaluation_protocol.json'
       - 'test_crash_v42_score.py'
       - '.github/workflows/okx_hourly_extreme_history.yml'
@@ -37,7 +39,11 @@ jobs:
         with:
           python-version: '3.11'
       - name: Test hourly point-in-time registry causal restrictions
-        run: python -m unittest -v test_crash_forward_watch test_crash_v42_score test_direction_forward_v42 test_stage5_minute_shadow test_stage5_error_review
+        run: python -m unittest -v test_crash_forward_watch test_crash_v42_score test_direction_forward_v42 test_stage5_minute_shadow test_stage5_error_review test_spot_plus_quote_watch
+      - name: Score genuine due target quotes before long collection steps
+        id: quote_watch
+        continue-on-error: true
+        run: python spot_plus_quote_watch.py
       - name: Backfill confirmed UTC 1H data with source-ingestion timestamps
         id: collect
         continue-on-error: true
@@ -94,7 +100,7 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          for f in data/hourly_research/ohlc.csv data/hourly_research/latest.json data/crash_research/pilot_1h_latest.json data/crash_research/prospective_hourly.csv data/crash_research/prospective_scores.json data/crash_research/v42_scores.json data/direction_v42/forward_registry.csv data/direction_v42/forward_scores.csv data/direction_v42/forward_latest.json data/stage5/minute_shadow/latest.json data/stage5/minute_shadow/minute_scores.csv data/stage5/error_review/latest.json; do
+          for f in data/hourly_research/ohlc.csv data/hourly_research/latest.json data/crash_research/pilot_1h_latest.json data/crash_research/prospective_hourly.csv data/crash_research/prospective_scores.json data/crash_research/v42_scores.json data/direction_v42/forward_registry.csv data/direction_v42/forward_scores.csv data/direction_v42/forward_latest.json data/stage5/minute_shadow/latest.json data/stage5/minute_shadow/minute_scores.csv data/stage5/error_review/latest.json data/stage5/spot_plus/quote_watch_latest.json; do
             if [ -f "$f" ]; then git add -f "$f"; fi
           done
           if ! git diff --cached --quiet; then
@@ -107,5 +113,5 @@ jobs:
             done
           fi
       - name: Fail on collector or quality error
-        if: steps.collect.outcome != 'success' || steps.evaluate.outcome != 'success' || steps.forward.outcome != 'success' || steps.v42.outcome != 'success' || (steps.direction.outcome != 'success' && steps.direction_late_audit.outcome != 'success') || steps.minute_shadow.outcome != 'success' || steps.error_review.outcome != 'success'
+        if: steps.quote_watch.outcome != 'success' || steps.collect.outcome != 'success' || steps.evaluate.outcome != 'success' || steps.forward.outcome != 'success' || steps.v42.outcome != 'success' || (steps.direction.outcome != 'success' && steps.direction_late_audit.outcome != 'success') || steps.minute_shadow.outcome != 'success' || steps.error_review.outcome != 'success'
         run: exit 1
