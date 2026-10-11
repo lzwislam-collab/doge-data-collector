@@ -73,7 +73,7 @@ class IssuanceReliability(unittest.TestCase):
   self.assertEqual(h['minute_scoring']['coverage_pct'],50)
   self.assertEqual(h['minute_scoring']['missing'],1)
   self.assertFalse(h['primary_model_prospectively_proven_70pct'])
-  self.assertEqual(result['horizons']['24h']['missing_issuance_windows'],1)
+  self.assertEqual(result['horizons']['24h']['expected_expired_issue_windows'],0)
 
  def test_before_freeze_windows_do_not_exist(self):
   r=evaluate(self.root,FROZEN-timedelta(minutes=1))
@@ -118,6 +118,35 @@ class IssuanceReliability(unittest.TestCase):
   self.write()
   with self.assertRaisesRegex(ValueError,'orphan'):
    evaluate(self.root,self.now)
+
+ def test_24h_uses_first_issuance_in_day_not_45minute_deadline(self):
+  first=FROZEN+timedelta(minutes=10)
+  later=FROZEN+timedelta(hours=1,minutes=10)
+  self.reg.extend([
+   {'forecast_id':'dayfirst','model_id':'DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1',
+    'issued_at_utc':first.isoformat(),'source_hour_start_utc':FROZEN.isoformat(),
+    'horizon_hours':'24','target_utc':(first+timedelta(hours=24)).isoformat()},
+   {'forecast_id':'daylater','model_id':'DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1',
+    'issued_at_utc':later.isoformat(),'source_hour_start_utc':(FROZEN+timedelta(hours=1)).isoformat(),
+    'horizon_hours':'24','target_utc':(later+timedelta(hours=24)).isoformat()}
+  ])
+  self.minute.append({'forecast_id':'daylater','status':'scored_from_confirmed_1m_close',
+    'realized_up':'UP','majority_correct':'1','doge_reversal_correct':'1',
+    'evaluation_cohort':'preregistered_forward_shadow'})
+  self.write()
+  report=evaluate(self.root,FROZEN+timedelta(hours=25))
+  day=report['horizons']['24h']
+  self.assertEqual(day['expected_expired_issue_windows'],1)
+  self.assertEqual(day['issued_windows'],1)
+  self.assertEqual(day['extra_registrations_in_same_bin'],1)
+  self.assertEqual(day['minute_scoring']['successfully_scored'],0)
+  self.assertEqual(day['minute_scoring']['missing'],1)
+  self.assertEqual(day['issuance_bin_expiry_rule'],'24h after UTC day starts')
+
+ def test_24h_empty_day_counts_missing_only_when_day_closes(self):
+  res=evaluate(self.root,FROZEN+timedelta(days=1,minutes=3))
+  self.assertEqual(res['horizons']['24h']['expected_expired_issue_windows'],1)
+  self.assertEqual(res['horizons']['24h']['missing_issuance_windows'],1)
 
  def test_no_70pct_claim_from_single_perfect_hit(self):
   r=evaluate(self.root,self.now)
