@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Independent source freshness/coverage audit. Do not conflate staleness and predictive validity."""
 import json,sys,os,csv,math
-from datetime import datetime,timezone
+from decimal import Decimal
+from datetime import datetime,timezone,timedelta,date
 from pathlib import Path
 BASE=Path(__file__).resolve().parent
 OUT=BASE/'data/quality/latest.json'
@@ -83,6 +84,77 @@ def check_stage2_csvs(base=BASE, now=None):
   checks[key]=result
  return checks,failures
 
+
+def check_etf_csv(base=BASE,now=None):
+ """Validate observed BTC/ETH ETF rows; history availability is first_seen, never trade date."""
+ if now is None:now=datetime.now(timezone.utc)
+ out={'state':'error','rows':0,'per_asset':{},'duplicate_keys':0,'timestamp_errors':0,
+      'point_in_time_historical_backfill_verified':False,'trade_date_as_available_timestamp_allowed':False,
+      'revision_history_before_first_seen_available':False,'issues':[]}
+ try:
+  root=Path(base)/'data/etf'
+  meta=json.loads((root/'latest.json').read_text(encoding='utf-8'))
+  if meta.get('status')!='ok':raise ValueError('ETF source status not ok')
+  with (root/'daily_flows.csv').open(newline='',encoding='utf-8-sig') as file:
+   rd=csv.DictReader(file)
+   fields={'asset','trade_date_us','total_usd_m','reported_funds','funds_with_values','source_url','first_seen_utc','last_checked_utc','revision_count'}
+   if not fields.issubset(rd.fieldnames or []):raise ValueError('ETF daily CSV missing columns')
+   rows=list(rd)
+  with (root/'revisions.csv').open(newline='',encoding='utf-8-sig') as file:
+   rd=csv.DictReader(file)
+   if not {'asset','trade_date_us','old_total_usd_m','new_total_usd_m','observed_at_utc'}.issubset(rd.fieldnames or []):
+    raise ValueError('ETF revision CSV missing columns')
+   revisions=list(rd)
+  seen=set();assets={'BTC':[],'ETH':[]};rev_counts={}
+  for rev in revisions:
+   key=(rev['asset'],rev['trade_date_us'])
+   if rev['asset'] not in assets:raise ValueError('invalid ETF revision asset')
+   for field in ('old_total_usd_m','new_total_usd_m'):
+    if not Decimal(rev[field]).is_finite():raise ValueError('nonfinite ETF revision')
+   stamp=datetime.fromisoformat(rev['observed_at_utc'].replace('Z','+00:00'))
+   if stamp.tzinfo is None or stamp>now+timedelta(minutes=15):raise ValueError('invalid ETF revision timestamp')
+   rev_counts[key]=rev_counts.get(key,0)+1
+  all_keys=[]
+  for row in rows:
+   asset=row['asset']
+   if asset not in assets:raise ValueError('non-BTC/ETH ETF asset')
+   day=date.fromisoformat(row['trade_date_us'])
+   if day.weekday()>=5 or day>now.date():raise ValueError('invalid ETF trading day')
+   key=(asset,row['trade_date_us'])
+   if key in seen:out['duplicate_keys']+=1
+   seen.add(key);all_keys.append((row['trade_date_us'],asset))
+   if not Decimal(row['total_usd_m']).is_finite():raise ValueError('nonfinite ETF amount')
+   reported=int(row['reported_funds']);filled=int(row['funds_with_values'])
+   if not(0<filled<=reported):raise ValueError('ETF constituent fund count invalid')
+   if row['source_url']!=('https://farside.co.uk/'+asset.lower()+'/'):raise ValueError('unknown ETF table source')
+   first=datetime.fromisoformat(row['first_seen_utc'].replace('Z','+00:00'))
+   last=datetime.fromisoformat(row['last_checked_utc'].replace('Z','+00:00'))
+   if first.tzinfo is None or last.tzinfo is None or first>last or last>now+timedelta(minutes=15) or first.date()<day:
+    out['timestamp_errors']+=1
+   if int(row['revision_count'])!=rev_counts.get(key,0):
+    raise ValueError('ETF revision count mismatch')
+   assets[asset].append(row)
+  if all_keys!=sorted(all_keys):raise ValueError('ETF rows not sorted by date and asset')
+  if out['duplicate_keys'] or out['timestamp_errors']:raise ValueError('ETF duplicate key or invalid timestamps')
+  if len(rows)!=meta['stored_rows']:raise ValueError('ETF stored_rows mismatch')
+  if set(rev_counts)-seen:raise ValueError('revision exists without ETF base row')
+  for asset,items in assets.items():
+   if not items:raise ValueError(asset+' ETF absent')
+   dates=[row['trade_date_us'] for row in items]
+   if max(dates)!=meta['latest_trade_date'][asset]:raise ValueError(asset+' latest date mismatch')
+   out['per_asset'][asset]={'rows':len(items),'first_trade_date':min(dates),'last_trade_date':max(dates),
+    'first_collection_time_utc':min(r['first_seen_utc'] for r in items),
+    'missing_constituent_fund_values':sum(int(r['funds_with_values'])<int(r['reported_funds']) for r in items)}
+  out['rows']=len(rows);out['revisions']=len(revisions)
+  out['state']='ok'
+  out['limitations']=['US ETF market holidays and publication delays: omitted dates are NOT zero netflows',
+   'Rows first collected after the trade date cannot be backdated for predictive backtesting',
+   'Farside is a third-party table, not audited original issuer cash flows',
+   'Limited observed date span is not complete ETF history']
+ except (OSError,ValueError,KeyError,TypeError,ArithmeticError,OverflowError,json.JSONDecodeError) as exc:
+  out['issues'].append(type(exc).__name__+': '+str(exc)[:180])
+ return out
+
 def evaluate(base=BASE,now=None):
  if now is None:now=datetime.now(timezone.utc)
  if now.tzinfo is None:raise ValueError('timezone required')
@@ -130,11 +202,15 @@ def evaluate(base=BASE,now=None):
  stage2_files,stage2_failed=check_stage2_csvs(base,now)
  reports['stage2_csv_quality']={'state':'ok' if not stage2_failed else 'stale_or_failed','checks':stage2_files,'failed_sources':stage2_failed,'required':True}
  if stage2_failed:critical.append('stage2_csv_quality')
- obj={'schema_version':2,'audited_at_utc':now.isoformat(),
+ etf_quality=check_etf_csv(base,now)
+ reports['stage3_etf_csv_quality']={**etf_quality,'required':True}
+ if etf_quality['state']!='ok':critical.append('stage3_etf_csv_quality')
+ obj={'schema_version':3,'audited_at_utc':now.isoformat(),
   'status':'blocked' if critical else ('ok_with_source_warnings' if warnings else 'ok_with_coverage_limits'),
   'critical_failures':critical,'optional_source_warnings':warnings,'sources':reports,
   'verified_exchange_netflow':False,'verified_global_liquidations':False,
   'stage2_liquidation_time_coverage_complete':False,
+  'stage3_etf_historical_point_in_time_verified':False,
   'model_predictive_edge':'NO_VALIDATED_EDGE',
   'google_sheets_collector_verified_by_this_audit':False,
   'limitations':['Old SSE and confirmed-block whale collection are separate feeds',
