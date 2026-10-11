@@ -1,0 +1,55 @@
+name: V4.2 DOGE directional prediction primary baseline
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'direction_baseline_v42.py'
+      - 'test_direction_baseline_v42.py'
+      - '.github/workflows/v42_direction_baseline.yml'
+  schedule:
+    - cron: '41 2 * * *'
+permissions:
+  contents: write
+concurrency:
+  group: v42-direction-baseline
+  cancel-in-progress: false
+jobs:
+  baseline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate no lookahead, missing timestamp and duplicates
+        run: |
+          python -m py_compile direction_baseline_v42.py
+          python -m unittest -v test_direction_baseline_v42
+      - name: Audit 1h 24h 7d and 30d DOGE price direction benchmarks
+        id: audit
+        continue-on-error: true
+        run: python direction_baseline_v42.py
+      - name: Commit exact recorded outcome
+        if: always()
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if [ -f data/direction_v42/latest.json ]; then
+            git add -f data/direction_v42/latest.json
+            if ! git diff --cached --quiet; then
+              git commit -m 'data: audit four-horizon DOGE directional baselines'
+              for n in 1 2 3 4 5; do
+                if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
+                git rebase --abort || true
+                [ "$n" -lt 5 ] || exit 1
+                sleep 3
+              done
+            fi
+          fi
+      - name: Stop if direction audit failed
+        if: steps.audit.outcome != 'success'
+        run: exit 1
