@@ -47,6 +47,9 @@ def main():
  liquidations=read('data/liquidations/latest.json');bybit=read('data/bybit_liquidations/latest.json')
  binance=read('data/binance_liquidations/latest.json')
  whale=read('data/whales/latest.json');onchain=read('data/onchain/latest.json')
+ confirmed_whales=read('data/whales_blocks/latest.json')
+ por_balances=read('data/okx_address_balances/latest.json')
+ chain_activity=read('data/onchain/metrics_latest.json')
  etf=read('data/etf/latest.json');macro=read('data/macro/latest.json')
  policy=read('data/policy_events/latest.json');sec=read('data/sec_events/latest.json')
  cftc=read('data/regulatory_events/latest.json')
@@ -111,12 +114,15 @@ def main():
      f'- OKX强平通知：{age_label(liquidations,now,2)}，状态 {liquidations.get("status","不可用")}；这是**部分监听窗口**，不是全市场总额。',
      f'- Bybit/Binance采样状态：{bybit.get("status","不可用")} / {binance.get("status","不可用")}；0条样本不等于无爆仓。',
      '','## F06｜巨鲸、交易所地址与流动性',
-     f'- 巨鲸采样：状态 {whale.get("status","不可用")}，已累计验证大额转账 {whale.get("cumulative_verified_unique_transfers","未知")} 条；{age_label(whale,now,8)}。',
+     f'- **确认区块大额转账**：{confirmed_whales.get("status","不可用")}；已累计记录 {confirmed_whales.get("cumulative_unique_whale_transactions","未知")} 条≥100万DOGE链上转账；扫描区块高度至 {confirmed_whales.get("last_completed_height","未知")}；采集 {stamp(confirmed_whales)}。仅覆盖自检查点起的已扫描区块，不代表全历史或独立巨鲸人数。',
+     f'- **旧SSE抽样（单独列示）**：{whale.get("status","不可用")}；累计验证 {whale.get("cumulative_verified_unique_transfers","未知")} 条；{age_label(whale,now,8)}。不可与确认区块累计量直接相加。',
+     f'- **OKX PoR地址余额抽样**：状态 {por_balances.get("status","不可用")}；已采样地址 {por_balances.get("sampled_addresses_ever","未知")}/{por_balances.get("addresses_in_allowlist","未知")}（{por_balances.get("sampled_fraction_pct","未知")}%），PoR静态披露日期 {por_balances.get("por_snapshot_date_utc","未知")}；余额变化不能直接换算交易所充值、提现或卖压。',
      '- 交易所地址标签及净转入转出尚无可审计的全面覆盖。未知转账不可视作抛售。',
      f'- 当前盘口指标仅参考已标注时点的OKX快照；数据质量不合格时不计算执行滑点。',
      '','## F07｜DOGE原生链健康',
      f'- 状态 {onchain.get("status","不可用")}；{age_label(onchain,now,36)}；主网区块高度 {onchain.get("metrics",{}).get("chain_height","不可用")}。',
      f'- 前10大地址供应占比 {fmt(onchain.get("metrics",{}).get("richlist_top10_pct_of_supply"),2)}%；地址包含交易所与托管可能，不等于10个独立巨鲸。',
+     f'- **原生链日度活动**：源状态 {chain_activity.get("status","不可用")}；已完成日期 {chain_activity.get("latest_complete_core_day_utc","未知")}；当日活跃地址 {fmt(chain_activity.get("daily_activity_latest",{}).get("active_addresses"),0)}，交易笔数 {fmt(chain_activity.get("daily_activity_latest",{}).get("tx_count"),0)}；历史日期数 {chain_activity.get("daily_observations","未知")}。活跃地址不等于独立用户数。',
      '- UTXO找零、网络活跃地址等指标仍需去重和历史口径统一。',
      '','## F08｜新闻与市场情绪',
      '当前缺乏可审计、连续、同一时间点可见的情绪数据，**本章数据不足，不生成情绪评分**。',
@@ -145,7 +151,7 @@ def main():
  t+=['覆盖目标为80%，过高也可能意味着区间过宽；区间分数越低越好，但历史回测未证明未来优势。',
      f'真实前瞻：登记 {scoring["registered"]} 条，已评分 {scoring["counts"]["scored"]} 条，待评分 {scoring["counts"]["pending"]} 条，隔离 {scoring["counts"]["quarantined"]} 条。**NO_VALIDATED_EDGE**。',
      '','## F11｜来源、缺失、时效及最终审计',
-     f'- OKX日线截止：{cutoff} UTC；OKX市场快照：{stamp(spot)}；衍生品：{stamp(liquidity)}；巨鲸：{stamp(whale)}；链上：{stamp(onchain)}。',
+     f'- OKX日线截止：{cutoff} UTC；OKX市场快照：{stamp(spot)}；衍生品：{stamp(liquidity)}；旧巨鲸SSE：{stamp(whale)}；确认区块扫描：{stamp(confirmed_whales)}；PoR：{stamp(por_balances)}；链上日度活动：{stamp(chain_activity)}；原始链快照：{stamp(onchain)}。',
      f'- ETF：{stamp(etf)}；FRED：{stamp(macro)}；政策日历：{stamp(policy)}；样本外评分：{stamp(scoring)}。',
      '- ①链上/巨鲸/交易所净流：PARTIAL；②强平/流动性：PARTIAL；③ETF：采集PASS；④宏观政策：采集PASS/因果效应未验证；⑤历史/预测：工程PASS/预测有效性未验证。',
      f'- **独立数据质量门禁**：状态 {quality.get("status","未运行")}，报告时记录 {stamp(quality)}；关键故障 {quality.get("critical_failures","未知")}，可选数据告警 {quality.get("optional_source_warnings","未知")}。对已过期文件不能凭历史PASS宣称实时。',
