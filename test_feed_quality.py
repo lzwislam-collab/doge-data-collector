@@ -63,7 +63,7 @@ class QualityAuditTests(unittest.TestCase):
      'event_time_utc':'2026-10-09T18:00:00+00:00','event_time_precision':'provider_pubDate',
      'first_seen_utc':'2026-10-10T01:00:00+00:00','last_seen_utc':'2026-10-10T02:00:00+00:00',
      'url':'https://www.federalreserve.gov/newsevents/','point_in_time_rule':'max(provider_pubDate,first_seen_utc)'})
-  m=policy/'latest.json';j=json.loads(m.read_text());j['records']=2;m.write_text(json.dumps(j))
+  m=policy/'latest.json';j={'status':'ok','records':2};m.write_text(json.dumps(j))
   for folder,prefix in [('regulatory_events','CFTC_PRESS_RSS'),('sec_events','SEC_PRESS_RSS')]:
    target=self.b/'data'/folder;target.mkdir(parents=True,exist_ok=True)
    fields=['source','event_id','title','published_utc','first_seen_utc','last_checked_utc','source_url','keyword_candidate','backtest_available_from_utc']
@@ -75,7 +75,7 @@ class QualityAuditTests(unittest.TestCase):
      'last_checked_utc':'2026-10-10T02:00:00+00:00',
      'source_url':'https://www.example.gov/policy','keyword_candidate':'true',
      'backtest_available_from_utc':'2026-10-10T01:00:00+00:00'})
-   m=target/'latest.json';j=json.loads(m.read_text());j['stored_events']=1;m.write_text(json.dumps(j))
+   m=target/'latest.json';j={'status':'ok','stored_events':1};m.write_text(json.dumps(j))
   h=self.b/'data/hourly_research/latest.json';h.parent.mkdir(parents=True,exist_ok=True)
   h.write_text(json.dumps({'status':'partial_backfill','archive_complete':False,
    'quality':{'symbols':{'DOGE-USDT':{'last_confirmed_start_utc':'2026-10-11T00:00:00+00:00',
