@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "evaluated_at_utc": "2026-10-11T05:51:03.764514+00:00",
+  "evaluated_at_utc": "2026-10-11T07:59:25.499160+00:00",
   "status": "data_quality_blocked",
   "claim_permission": "NO_VALIDATED_EDGE",
   "research_only": true,
@@ -62,9 +62,22 @@
     }
   },
   "errors": [],
+  "stage2_feature_admissibility": {
+    "liquidation_24h_totals_allowed": false,
+    "liquidation_24h_directional_imbalance_allowed": false,
+    "missing_notification_window_equals_zero": false,
+    "liquidation_event_samples_research_only": false,
+    "swap_liquidity_snapshots_research_only": false,
+    "retrospective_model_training_authorized": false,
+    "reason": "Partial public notice windows cannot establish all-market liquidation totals",
+    "source_coverage": "invalid_or_unavailable",
+    "predictive_edge_established": false,
+    "audit_error": "ValueError: data/quality/latest.json is not ok"
+  },
   "limitations": [
     "A significant historical CI alone cannot authorize live forecast marketing",
     "No true prospective registered predictions, trading costs, execution or repeated-hypothesis adjustment verified",
+    "Partial liquidation feeds are never allowed as 24h/global liquidation totals",
     "No change to DOGE investment execution rules"
   ]
 }
