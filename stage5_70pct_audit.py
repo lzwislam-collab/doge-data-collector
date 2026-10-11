@@ -373,6 +373,9 @@ def evaluate(root=ROOT):
     forward=inspect_forward(root)
     preregistered_trial=audit_locked_forward_trial(root)
     minute_shadow=audit_independent_minute_shadow(root)
+    # Denominators include missing fixed UTC issuance windows, not only recorded predictions.
+    from stage5_forward_quality import evaluate as audit_issuance_coverage
+    forward_reliability=audit_issuance_coverage(root)
     daily_reg=read_csv(root/'data/prospective/registry.csv',('forecast_id','registered_utc','anchor_date_utc','target_date_utc','horizon_days'))
     ids={r['forecast_id'] for r in daily_reg}
     if len(ids)!=len(daily_reg) or len(ids)!=daily_score['registered']:
@@ -411,6 +414,7 @@ def evaluate(root=ROOT):
      'forward_live':forward,
      'preregistered_forward_trial':preregistered_trial,
      'independent_minute_shadow':minute_shadow,
+     'forward_issuance_and_score_coverage':forward_reliability,
      'daily_probability_forward':{'registered_total':len(ids),
        'scored_total':daily_score['scored'],'pending_total':daily_score['pending_count'],
        'quarantined_total':daily_score['quarantined_count'],
