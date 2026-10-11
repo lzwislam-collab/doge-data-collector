@@ -1,6 +1,11 @@
 name: Sample free Bybit DOGE liquidation events
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'bybit_liquidations.py'
+      - '.github/workflows/bybit_liquidations.yml'
   schedule:
     - cron: '7,22,37,52 * * * *'
 permissions:
