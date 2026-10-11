@@ -63,6 +63,20 @@ jobs:
         if: steps.collect.outcome == 'success'
         continue-on-error: true
         run: python direction_forward_v42.py
+      - name: Verify benign late-registration skip without changing frozen deadline
+        id: direction_late_audit
+        if: steps.direction.outcome != 'success' && steps.collect.outcome == 'success'
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report=json.loads(Path('data/direction_v42/forward_latest.json').read_text())
+          assert report.get('status')=='stale_hour_no_new_registration', 'direction error is not benign lateness'
+          assert report.get('feature_lag_min',0)>45, 'cannot waive timely forecast errors'
+          assert report.get('new_ids')==[], 'late forecast must never register new predictions'
+          print('LATE_BUT_SAFE: no forecast backdated; scoring proceeds independently')
+          PY
       - name: Independently score target outcomes using confirmed OKX 1m bars
         id: minute_shadow
         if: steps.collect.outcome == 'success'
@@ -86,5 +100,5 @@ jobs:
             done
           fi
       - name: Fail on collector or quality error
-        if: steps.collect.outcome != 'success' || steps.evaluate.outcome != 'success' || steps.forward.outcome != 'success' || steps.v42.outcome != 'success' || steps.direction.outcome != 'success' || steps.minute_shadow.outcome != 'success'
+        if: steps.collect.outcome != 'success' || steps.evaluate.outcome != 'success' || steps.forward.outcome != 'success' || steps.v42.outcome != 'success' || (steps.direction.outcome != 'success' && steps.direction_late_audit.outcome != 'success') || steps.minute_shadow.outcome != 'success'
         run: exit 1
