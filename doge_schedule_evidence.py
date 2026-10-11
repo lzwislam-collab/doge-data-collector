@@ -37,7 +37,7 @@ def audit():
  if not TOKEN:raise ValueError('GITHUB_TOKEN missing; cannot verify run events')
  if '/' not in REPO:raise ValueError('Invalid GitHub repository')
  reports={};stage2_reports={};all_ok=True;stage2_ok=True
- for name,(workflow,file,time_key,allow_status) in (
+ for name,workflow,file,time_key,allow_status in (
   [(name,*spec,('ok',)) for name,spec in SPECS.items()]+
   [(name,*spec) for name,spec in STAGE2_SPECS.items()]
  ):
