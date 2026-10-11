@@ -9,6 +9,7 @@ untouched blind holdout. Do not alter frozen V4.2 or DOGE DCA rules.
 import csv,io,json,math,os
 from datetime import datetime,timedelta,timezone
 from pathlib import Path
+from spot_plus_context import inspect as inspect_five_pillars
 
 ROOT=Path(__file__).resolve().parent
 OUT=ROOT/'data/stage5/spot_plus/latest.json'
@@ -180,6 +181,7 @@ def evaluate(root=ROOT,now=None):
  forward=latest_forward(root,now)
  reference=forward['reference_price_usdt'] if forward['status']=='pre_registered_pending' else dog[-1]['c']
  def date_of(i):return datetime.fromtimestamp(dog[i]['t']/1000,timezone.utc).date().isoformat()
+ context=inspect_five_pillars(root,now)
  return {'schema_version':1,'status':'ok','generated_at_utc':now.isoformat(),
   'product':'DOGE 现货盈利预测 Plus v0.1 | research-only',
   'source':'OKX confirmed 1Dutc OHLCV; immutable V4.2 issuance-quote registry',
@@ -196,11 +198,16 @@ def evaluate(root=ROOT,now=None):
    'fee_each_side_pct':FEE*100,'slippage_each_side_pct':SLIPPAGE*100,
    'candidate_hypothesis_only':True},
   'historical_spot_paper':simulations,
+  'five_pillar_evidence_audit':context,
+  'historical_relative_net_return_vs_hold_pct_points':{
+    m:round(simulations[m]['net_total_return_pct']-simulations['buy_and_hold']['net_total_return_pct'],2)
+    for m in MODELS},
   'friction_sensitivity_return_pct':variations,
   'prospective_V42_reference':forward,
   'historical_volatility_scenarios':prices_scenario(dog,reference),
   'current_spot_action':'WAIT_FOR_PROSPECTIVE_ECONOMIC_VALIDATION',
   'profit_edge_vs_hold_verified':False,'direction_accuracy_70pct_verified':False,
+  'five_pillars_have_validated_numeric_weights':False,
   'live_trading_authorized':False,'dca_rules_changed':False,
   'pending_economic_validation':['freeze independent spot-plus paper execution rules before forward comparison',
     'compare realized after-cost net equity and max drawdown to buy-and-hold and cash over multiple regimes',
@@ -212,6 +219,8 @@ def evaluate(root=ROOT,now=None):
     'Historical accuracy for OPEN-to-CLOSE is not V4.2 24h issuance-to-quote accuracy',
     'No leverage, no shorting, no passive fill or exchange minimum-order constraints modeled',
     'BTC/ETH ETF and macro releases lack verified historical point-in-time vintages; excluded from simulated signals',
+    'The original 36 items were reconciled historically as a summary, not verified as 36 independent model inputs',
+    'All five pillars are consulted as evidence, but only PIT-defensible price data feeds the historical spot experiment',
     'Research shows gross market regimes and hypothetical execution, not future profitability']}
 
 def main():
