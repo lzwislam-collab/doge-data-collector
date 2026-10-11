@@ -64,6 +64,22 @@ def jsonfile(root, name):
     return data
 
 
+def verify_error_review_hashes(root,review):
+    """Fail closed if any original forecast/score file changed without review refresh."""
+    paths={
+        'forecast_registry':'data/direction_v42/forward_registry.csv',
+        'original_quote_scores':'data/direction_v42/forward_scores.csv',
+        'independent_minute_scores':'data/stage5/minute_shadow/minute_scores.csv'}
+    hashes=review.get('source_sha256')
+    if not isinstance(hashes,dict) or set(hashes)!=set(paths):
+        raise ValueError('missing exact original source fingerprints in postmortem report')
+    for name,relative in paths.items():
+        current=hashlib.sha256((root/relative).read_bytes()).hexdigest()
+        if hashes[name]!=current:
+            raise ValueError('error review source hash mismatch: '+name)
+    return True
+
+
 def audited_fixed_phase(direction):
     if direction.get('validated_accuracy_70pct') is not False:
         raise ValueError('historical report inaccurately claims 70% validation')
@@ -385,6 +401,7 @@ def evaluate(root=ROOT):
         ('forecast_id','status'))
     register_rows=read_csv(root/'data/direction_v42/forward_registry.csv',
         ('forecast_id','model_id'))
+    verify_error_review_hashes(root,review)
     if (review.get('registered')!=len(register_rows)
         or review.get('original_quote_score_rows')!=len(quote_rows)
         or review.get('independent_minute_score_rows')!=len(minute_rows)):
@@ -394,7 +411,8 @@ def evaluate(root=ROOT):
         'independent_minute_scores':len(minute_rows),
         'model_change_authorized':False,
         'causal_attribution_verified':False,
-        'source_score_counts_consistent':True}
+        'source_score_counts_consistent':True,
+        'source_file_sha256_verified':True}
     # Denominators include missing fixed UTC issuance windows, not only recorded predictions.
     from stage5_forward_quality import evaluate as audit_issuance_coverage
     forward_reliability=audit_issuance_coverage(root)
