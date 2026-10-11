@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Offline, deterministic tests: 1m close shadow never replaces issued-quote scores."""
-import csv,json,tempfile,unittest
+import csv,json,tempfile,unittest,hashlib
 from datetime import datetime,timezone,timedelta
 from pathlib import Path
 from direction_forward_v42 import FCOLS
@@ -23,7 +23,10 @@ class MinuteShadowTests(unittest.TestCase):
   self.original=self.root/'data/direction_v42/forward_scores.csv'
   self.original.write_text('keep original scores untouched\n')
   self.p=self.root/'data/stage5/minute_evaluation_protocol.json'
+  body=(Path(__file__).resolve().parent/'stage5_minute_shadow.py').read_bytes()
+  digest=hashlib.sha1(b'blob '+str(len(body)).encode()+b'\0'+body).hexdigest()
   self.p.write_text(json.dumps({'status':'frozen_protocol',
+   'locked_evaluator_git_blob_sha':digest,
     'protocol_id':'DOGE_V42_1M_CLOSE_SHADOW_LOCK_20261012',
     'forecast_source_model_id':MODEL,'primary_horizons_hours':[1,24],
     'selection_rule':'first confirmed 1m bar with open >= registered target; use close at open+60s',
