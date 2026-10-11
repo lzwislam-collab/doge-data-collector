@@ -373,6 +373,28 @@ def evaluate(root=ROOT):
     forward=inspect_forward(root)
     preregistered_trial=audit_locked_forward_trial(root)
     minute_shadow=audit_independent_minute_shadow(root)
+    review=jsonfile(root,'data/stage5/error_review/latest.json')
+    if (review.get('claim_permission')!='NO_VALIDATED_EDGE'
+        or review.get('automatic_model_change_authorized') is not False
+        or review.get('automatic_dca_change_authorized') is not False
+        or review.get('validated_70pct') is not False):
+        raise ValueError('error review has unsupported automatic promotion')
+    quote_rows=read_csv(root/'data/direction_v42/forward_scores.csv',
+        ('forecast_id','status'))
+    minute_rows=read_csv(root/'data/stage5/minute_shadow/minute_scores.csv',
+        ('forecast_id','status'))
+    register_rows=read_csv(root/'data/direction_v42/forward_registry.csv',
+        ('forecast_id','model_id'))
+    if (review.get('registered')!=len(register_rows)
+        or review.get('original_quote_score_rows')!=len(quote_rows)
+        or review.get('independent_minute_score_rows')!=len(minute_rows)):
+        raise ValueError('error review stale relative to latest score/registry snapshot')
+    error_review_gate={'status':'ok','registered':len(register_rows),
+        'original_quote_scores':len(quote_rows),
+        'independent_minute_scores':len(minute_rows),
+        'model_change_authorized':False,
+        'causal_attribution_verified':False,
+        'source_score_counts_consistent':True}
     # Denominators include missing fixed UTC issuance windows, not only recorded predictions.
     from stage5_forward_quality import evaluate as audit_issuance_coverage
     forward_reliability=audit_issuance_coverage(root)
@@ -414,6 +436,7 @@ def evaluate(root=ROOT):
      'forward_live':forward,
      'preregistered_forward_trial':preregistered_trial,
      'independent_minute_shadow':minute_shadow,
+     'error_review_integrity':error_review_gate,
      'forward_issuance_and_score_coverage':forward_reliability,
      'daily_probability_forward':{'registered_total':len(ids),
        'scored_total':daily_score['scored'],'pending_total':daily_score['pending_count'],
