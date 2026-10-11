@@ -1,0 +1,276 @@
+name: Audit DOGE disclosed-address UTXO deltas (not exchange netflow)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/doge_exchange_stage3.yml
+permissions:
+  contents: write
+concurrency:
+  group: doge-exchange-stage3-utxo
+  cancel-in-progress: false
+jobs:
+  reconcile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Audit 20 UTXO transaction inputs / outputs and suppress ambiguous deltas
+        id: audit
+        continue-on-error: true
+        shell: bash
+        run: |
+          python - <<'PYCODE'
+          #!/usr/bin/env python3
+          """Stage 3: conservative per-transaction delta of disclosed PoR address *set*.
+          Research / address accounting only. Never verified OKX deposit / withdrawal / netflow.
+          """
+          import csv
+          import json
+          import os
+          import time
+          import urllib.error
+          import urllib.request
+          from collections import Counter
+          from datetime import datetime, timezone
+          from decimal import Decimal, InvalidOperation
+          from pathlib import Path
+          
+          ROOT=Path.cwd()
+          DEST=ROOT/'data/stage1/exchange_flow_utxo_audit.json'
+          API='https://dogechain.com/api/v3'
+          TWENTY=20
+          
+          
+          def utc():
+              return datetime.now(timezone.utc).isoformat()
+          
+          
+          def D(x):
+              if x is None or isinstance(x,bool):
+                  raise ValueError('value missing or boolean')
+              try:
+                  v=Decimal(str(x))
+              except (InvalidOperation,ValueError,TypeError) as e:
+                  raise ValueError('not a valid decimal') from e
+              if not v.is_finite() or v<0 or v>Decimal('1000000000000') or v.as_tuple().exponent < -8:
+                  raise ValueError('bad precision / negative / over range')
+              return v
+          
+          
+          def valstr(x):
+              return format(x,'.8f') if x is not None else None
+          
+          
+          def addresses(node):
+              r=set()
+              if isinstance(node,dict):
+                  for k,v in node.items():
+                      if k in ('address','addr') and isinstance(v,str) and v:
+                          r.add(v)
+                      elif k=='addresses' and isinstance(v,list):
+                          r.update(z for z in v if isinstance(z,str) and z)
+                      elif isinstance(v,(dict,list)):
+                          r.update(addresses(v))
+              elif isinstance(node,list):
+                  for item in node:r.update(addresses(item))
+              return r
+          
+          
+          def side_value(item,is_input):
+              for key in ('value','value_doge','amount'):
+                  if key in item:
+                      try:return D(item[key]),key
+                      except ValueError:return None,'INVALID_'+key
+              if is_input:
+                  for nested in ('prevout','previous_output','prev_output'):
+                      if isinstance(item.get(nested),dict):
+                          return side_value(item[nested],False)
+              return None,'NO_VALUE_FIELD'
+          
+          
+          def classify(tx, allow, old):
+              ins=tx.get('inputs');outs=tx.get('outputs')
+              if not isinstance(ins,list) or not isinstance(outs,list) or not outs:
+                  raise ValueError('missing input/output structure')
+              if ('inputs_n' in tx and int(tx['inputs_n'])!=len(ins)) or ('outputs_n' in tx and int(tx['outputs_n'])!=len(outs)):
+                  raise ValueError('input/output counts mismatch')
+              input_used=Decimal('0');output_credited=Decimal('0')
+              total_input=Decimal('0');total_output=Decimal('0')
+              input_values_good=True; output_values_good=True; input_identity_good=True;output_identity_good=True
+              input_fields=Counter();output_fields=Counter();in_matched=set();out_matched=set();shared=set()
+              for item in ins:
+                  if not isinstance(item,dict):raise ValueError('non-object input')
+                  a=addresses(item);m=a&allow
+                  in_matched|=m
+                  v,field=side_value(item,True);input_fields[field]+=1
+                  if v is None:input_values_good=False
+                  else:total_input+=v
+                  if len(a)!=1: input_identity_good=False
+                  if m:
+                      if v is None or len(a)!=1: input_values_good=False
+                      else:input_used+=v
+              for item in outs:
+                  if not isinstance(item,dict):raise ValueError('non-object output')
+                  a=addresses(item);m=a&allow
+                  out_matched|=m
+                  v,field=side_value(item,False);output_fields[field]+=1
+                  if v is None:output_values_good=False
+                  else:total_output+=v
+                  if len(a)!=1:output_identity_good=False
+                  if m:
+                      if v is None or len(a)!=1:output_values_good=False
+                      else:output_credited+=v
+              shared=in_matched&out_matched
+              problems=[]
+              if not input_values_good:problems.append('INPUT_AMOUNT_MISSING_OR_AMBIGUOUS')
+              if not output_values_good:problems.append('OUTPUT_AMOUNT_MISSING_OR_AMBIGUOUS')
+              if not input_identity_good:problems.append('INPUT_ADDRESS_AMBIGUOUS')
+              if not output_identity_good:problems.append('OUTPUT_ADDRESS_AMBIGUOUS')
+              input_summary=output_summary=fee_summary=None
+              for key, variable in [('inputs_value','in'),('outputs_value','out'),('fee','fee')]:
+                  if key not in tx:
+                      problems.append('NO_'+key.upper())
+                      continue
+                  try:
+                      d=D(tx[key])
+                      if variable=='in':input_summary=d
+                      if variable=='out':output_summary=d
+                      if variable=='fee':fee_summary=d
+                  except ValueError:
+                      problems.append('INVALID_'+key.upper())
+              if input_values_good and input_summary is not None and total_input!=input_summary:
+                  problems.append('INPUT_TOTAL_MISMATCH')
+              if output_values_good and output_summary is not None and total_output!=output_summary:
+                  problems.append('OUTPUT_TOTAL_MISMATCH')
+              if input_summary is not None and output_summary is not None and fee_summary is not None and input_summary-output_summary!=fee_summary:
+                  problems.append('FEE_MISMATCH')
+              # Require all UTXO values and ALL input/output addresses accounted for before set-level delta.
+              balanced=not problems
+              if valstr(output_credited)!=old['matched_por_output_amount_doge']:
+                  raise ValueError('V3 mismatches immutable V2 PoR output amount')
+              if set(old['known_por_input_addresses'])!=in_matched or set(old['known_por_output_addresses'])!=out_matched:
+                  raise ValueError('V3 mismatches original matched address lists')
+              if not in_matched and not out_matched:cl='NO_POR_MATCH'
+              elif in_matched and out_matched:cl='BOTH_SIDES_MIXED_OR_SELF_RETURN'
+              elif out_matched:cl='OUTPUT_ONLY_CANDIDATE'
+              else:cl='INPUT_ONLY_CANDIDATE'
+              delta=output_credited-input_used if balanced else None
+              return {'classification':cl,'por_input_addresses':len(in_matched),'por_output_addresses':len(out_matched),
+                      'por_addresses_on_both_sides':len(shared),'input_addresses_all_unique':input_identity_good,
+                      'output_addresses_all_unique':output_identity_good,'input_amount_field_counts':dict(input_fields),
+                      'output_amount_field_counts':dict(output_fields),
+                      'por_input_amount_doge':valstr(input_used) if input_values_good and input_identity_good else None,
+                      'por_output_amount_doge':valstr(output_credited) if output_values_good and output_identity_good else None,
+                      'por_address_set_delta_doge':valstr(delta),
+                      'input_total_doge':valstr(input_summary),'output_total_doge':valstr(output_summary),
+                      'fee_doge':valstr(fee_summary),'balanced_and_unambiguous':balanced,'issues':problems,
+                      'entity_netflow_doge':None,'verified_exchange_deposit_withdrawal':False,
+                      'interpretation':'Observed delta of historical PoR-disclosed ADDRESSES within one transaction, NOT verified OKX netflow'}
+          
+          
+          def fetch(txid):
+              for i in range(4):
+                  try:
+                      req=urllib.request.Request(API+'/tx/'+txid,headers={'Accept':'application/json','User-Agent':'DOGE-PoR-UTXO-audit/1.0'})
+                      with urllib.request.urlopen(req,timeout=20) as stream:
+                          d=json.load(stream,parse_float=Decimal)
+                      if d.get('status')!='success' or not isinstance(d.get('data'),dict):
+                          raise ValueError('Bad API envelope')
+                      return d['data']
+                  except urllib.error.HTTPError as e:
+                      if e.code not in (429,500,502,503,504) or i==3:raise
+                      time.sleep(max(2,min(20,int(e.headers.get('Retry-After','4')))))
+                  except (urllib.error.URLError,TimeoutError):
+                      if i==3:raise
+                      time.sleep(2*(i+1))
+          
+          
+          def audit():
+              with (ROOT/'okx_doge_addresses.csv').open(newline='',encoding='utf-8-sig') as f:
+                  rows=list(csv.DictReader(f))
+              allow={r['address'] for r in rows if r.get('network')=='DOGE'}
+              if len(rows)!=40134 or len(allow)!=40134:
+                  raise ValueError('PoR source count/duplicate mismatch')
+              previous=json.loads((ROOT/'data/stage1/exchange_flow_amount_audit.json').read_text(encoding='utf-8'))
+              if previous.get('status')!='ok_amount_probe' or len(previous.get('transactions',[]))!=TWENTY:
+                  raise ValueError('V2 verified report absent or incomplete')
+              result={'schema_version':1,'status':'error','generated_at_utc':utc(),
+                      'source':'OKX 2026-09-08 disclosed PoR addresses; Dogechain confirmed transaction input/output data; V2 2026-10-11 amount audit',
+                      'sample_source_generated_at_utc':previous['generated_at_utc'],'sample_size':TWENTY,
+                      'exchange_netflow_verified':False,'current_ownership_verified':False,
+                      'transactions':[],'errors':[]}
+              n_balanced=0;n_matched=0;observed_delta=Decimal('0');counts=Counter();issue_counts=Counter()
+              for old in previous['transactions']:
+                  txid=old['txid']
+                  if len(txid)!=64 or any(c not in 'abcdef0123456789' for c in txid.lower()):
+                      raise ValueError('Invalid txid')
+                  data=fetch(txid);tx=data.get('transaction')
+                  if not isinstance(tx,dict):raise ValueError('Transaction missing')
+                  if tx.get('block_height') is not None and int(tx['block_height'])!=int(old['block_height']):
+                      raise ValueError('Block height mismatch')
+                  if tx.get('confirmations') is not None and int(tx['confirmations'])<6:
+                      raise ValueError('Unconfirmed transaction')
+                  detail=classify(tx,allow,old)
+                  if detail['balanced_and_unambiguous']:
+                      n_balanced+=1;observed_delta+=Decimal(detail['por_address_set_delta_doge'])
+                  n_matched+=int(detail['classification']!='NO_POR_MATCH')
+                  counts[detail['classification']]+=1
+                  issue_counts.update(detail['issues'])
+                  detail['txid']=txid;detail['block_height']=int(old['block_height'])
+                  detail['change_outputs_reported']=bool((data.get('explain') or {}).get('change_outputs'))
+                  result['transactions'].append(detail)
+                  time.sleep(.5)
+              result.update({'status':'ok_reconciled' if n_balanced==TWENTY else 'partial_input_amounts_unverified',
+                             'transactions_verified_full_utxo_balance':n_balanced,'por_associated_transactions':n_matched,
+                             'classification_counts':dict(counts),'issue_counts':dict(issue_counts),
+                             'observed_por_address_set_delta_doge_complete_cases_only':valstr(observed_delta) if n_balanced==TWENTY else None,
+                             'limitations':['Do not interpret signed set delta as OKX exchange inflow, outflow or reserves',
+                               'Address ownership on observation date and PoR signature not cryptographically verified',
+                               'Whale-event-selected 20 transactions are not representative of all DOGE or exchange transactions',
+                               'Unlisted exchange wallets may be on the other side, causing false inflow/outflow appearance',
+                               'Same-address outputs, UTXO change, consolidation and internal transfer can dominate gross amounts',
+                               'Missing / ambiguous input units or addresses strictly suppress delta instead of guessing',
+                               'Output values are checked against V2 audited results and transaction sums / fee checked']})
+              return result
+          
+          
+          def main():
+              DEST.parent.mkdir(parents=True,exist_ok=True)
+              try:r=audit()
+              except Exception as e:r={'schema_version':1,'status':'error','generated_at_utc':utc(),
+                                     'errors':[type(e).__name__+': '+str(e)[:400]],
+                                     'exchange_netflow_verified':False}
+              tmp=DEST.with_suffix('.json.tmp')
+              tmp.write_text(json.dumps(r,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+              os.replace(tmp,DEST)
+              print(json.dumps({'status':r['status'],'balanced':r.get('transactions_verified_full_utxo_balance'),'errors':r.get('errors')},ensure_ascii=False))
+              return 1 if r['status']=='error' else 0
+          
+          if __name__=='__main__':raise SystemExit(main())
+          PYCODE
+      - name: Commit audit results, including explicit failures
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if [ -f data/stage1/exchange_flow_utxo_audit.json ]; then git add -f data/stage1/exchange_flow_utxo_audit.json; fi
+          if ! git diff --cached --quiet; then
+            git commit -m 'data: audit conservative PoR address UTXO deltas'
+            for i in 1 2 3 4 5; do
+              if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
+              if [ "$i" -eq 5 ]; then exit 1; fi
+              sleep 4
+            done
+          fi
+      - name: Fail if audit execution errored
+        if: steps.audit.outcome != 'success'
+        run: exit 1
