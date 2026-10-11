@@ -1,16 +1,6 @@
 name: Register prospective DOGE baseline forecasts
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'prospective_forecast.py'
-      - '.github/workflows/prospective_forecast.yml'
-  workflow_run:
-    workflows: ['Backfill OKX daily DOGE BTC ETH history and baseline backtest']
-    types: [completed]
-  schedule:
-    - cron: '12 6 * * *'
 permissions:
   contents: write
 concurrency:
