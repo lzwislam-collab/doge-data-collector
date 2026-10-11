@@ -1,7 +1,336 @@
 {
   "schema_version": 1,
-  "status": "blocked",
-  "generated_utc": "2026-10-11T02:53:24.012365+00:00",
-  "error": "ValueError: unaligned price sources",
-  "validated_accuracy_70pct": false
+  "status": "ok",
+  "generated_utc": "2026-10-11T02:54:06.740828+00:00",
+  "scope": "PRIMARY V4.2 DOGE UP/DOWN DIRECTION; extreme move only a subsidiary risk module",
+  "target_accuracy_pct": 70,
+  "validated_accuracy_70pct": false,
+  "prediction_edge_proven": false,
+  "price_direction_label": "up if target close > anchor close; otherwise down/equal",
+  "models": [
+    "expanding_majority",
+    "doge_momentum",
+    "doge_reversal",
+    "btc_momentum"
+  ],
+  "no_training_on_future_labels": true,
+  "sources": {
+    "hourly_last_closed_start_utc": "2026-10-11T01:00:00+00:00",
+    "daily_last_closed_start_utc": "2026-10-10T00:00:00+00:00",
+    "hourly_rows": 7300,
+    "daily_rows": 2475
+  },
+  "horizons": {
+    "1h": {
+      "candle_unit": "hour",
+      "all_overlapping": {
+        "n": 1824,
+        "observed_up_pct": 50.44,
+        "observed_down_or_equal_pct": 49.56,
+        "expanding_majority": {
+          "accuracy_pct": 49.56,
+          "correct": 904,
+          "up_recall_pct": 0.0,
+          "down_recall_pct": 100.0,
+          "balanced_accuracy_pct": 50.0
+        },
+        "doge_momentum": {
+          "accuracy_pct": 46.11,
+          "correct": 841,
+          "up_recall_pct": 46.52,
+          "down_recall_pct": 45.69,
+          "balanced_accuracy_pct": 46.1
+        },
+        "doge_reversal": {
+          "accuracy_pct": 53.89,
+          "correct": 983,
+          "up_recall_pct": 53.48,
+          "down_recall_pct": 54.31,
+          "balanced_accuracy_pct": 53.9
+        },
+        "btc_momentum": {
+          "accuracy_pct": 47.31,
+          "correct": 863,
+          "up_recall_pct": 48.37,
+          "down_recall_pct": 46.24,
+          "balanced_accuracy_pct": 47.3
+        }
+      },
+      "fixed_phase_nonoverlap": {
+        "n": 1824,
+        "observed_up_pct": 50.44,
+        "observed_down_or_equal_pct": 49.56,
+        "expanding_majority": {
+          "accuracy_pct": 49.56,
+          "correct": 904,
+          "up_recall_pct": 0.0,
+          "down_recall_pct": 100.0,
+          "balanced_accuracy_pct": 50.0
+        },
+        "doge_momentum": {
+          "accuracy_pct": 46.11,
+          "correct": 841,
+          "up_recall_pct": 46.52,
+          "down_recall_pct": 45.69,
+          "balanced_accuracy_pct": 46.1
+        },
+        "doge_reversal": {
+          "accuracy_pct": 53.89,
+          "correct": 983,
+          "up_recall_pct": 53.48,
+          "down_recall_pct": 54.31,
+          "balanced_accuracy_pct": 53.9
+        },
+        "btc_momentum": {
+          "accuracy_pct": 47.31,
+          "correct": 863,
+          "up_recall_pct": 48.37,
+          "down_recall_pct": 46.24,
+          "balanced_accuracy_pct": 47.3
+        }
+      },
+      "anchor_first_utc": "2026-07-27T01:00:00+00:00",
+      "anchor_last_utc": "2026-10-11T00:00:00+00:00",
+      "anchor_label": "last CONFIRMED candle close, not issue-time price",
+      "forecast_window_definition": "anchor close vs h subsequent confirmed candle closes",
+      "holdout_reused_for_research": true,
+      "models_precommitted_for_future_shadow_comparison": false,
+      "research_limit": "Fixed-rule descriptive backtest; not a pristine holdout and not validated forward performance"
+    },
+    "24h": {
+      "candle_unit": "hour",
+      "all_overlapping": {
+        "n": 1801,
+        "observed_up_pct": 49.81,
+        "observed_down_or_equal_pct": 50.19,
+        "expanding_majority": {
+          "accuracy_pct": 50.19,
+          "correct": 904,
+          "up_recall_pct": 0.0,
+          "down_recall_pct": 100.0,
+          "balanced_accuracy_pct": 50.0
+        },
+        "doge_momentum": {
+          "accuracy_pct": 43.31,
+          "correct": 780,
+          "up_recall_pct": 42.03,
+          "down_recall_pct": 44.58,
+          "balanced_accuracy_pct": 43.3
+        },
+        "doge_reversal": {
+          "accuracy_pct": 56.69,
+          "correct": 1021,
+          "up_recall_pct": 57.97,
+          "down_recall_pct": 55.42,
+          "balanced_accuracy_pct": 56.7
+        },
+        "btc_momentum": {
+          "accuracy_pct": 41.25,
+          "correct": 743,
+          "up_recall_pct": 46.04,
+          "down_recall_pct": 36.5,
+          "balanced_accuracy_pct": 41.27
+        }
+      },
+      "fixed_phase_nonoverlap": {
+        "n": 76,
+        "observed_up_pct": 50.0,
+        "observed_down_or_equal_pct": 50.0,
+        "expanding_majority": {
+          "accuracy_pct": 50.0,
+          "correct": 38,
+          "up_recall_pct": 0.0,
+          "down_recall_pct": 100.0,
+          "balanced_accuracy_pct": 50.0
+        },
+        "doge_momentum": {
+          "accuracy_pct": 43.42,
+          "correct": 33,
+          "up_recall_pct": 44.74,
+          "down_recall_pct": 42.11,
+          "balanced_accuracy_pct": 43.42
+        },
+        "doge_reversal": {
+          "accuracy_pct": 56.58,
+          "correct": 43,
+          "up_recall_pct": 55.26,
+          "down_recall_pct": 57.89,
+          "balanced_accuracy_pct": 56.58
+        },
+        "btc_momentum": {
+          "accuracy_pct": 46.05,
+          "correct": 35,
+          "up_recall_pct": 52.63,
+          "down_recall_pct": 39.47,
+          "balanced_accuracy_pct": 46.05
+        }
+      },
+      "anchor_first_utc": "2026-07-27T01:00:00+00:00",
+      "anchor_last_utc": "2026-10-10T01:00:00+00:00",
+      "anchor_label": "last CONFIRMED candle close, not issue-time price",
+      "forecast_window_definition": "anchor close vs h subsequent confirmed candle closes",
+      "holdout_reused_for_research": true,
+      "models_precommitted_for_future_shadow_comparison": false,
+      "research_limit": "Fixed-rule descriptive backtest; not a pristine holdout and not validated forward performance"
+    },
+    "7d": {
+      "candle_unit": "UTC day",
+      "all_overlapping": {
+        "n": 612,
+        "observed_up_pct": 41.5,
+        "observed_down_or_equal_pct": 58.5,
+        "expanding_majority": {
+          "accuracy_pct": 58.5,
+          "correct": 358,
+          "up_recall_pct": 0.0,
+          "down_recall_pct": 100.0,
+          "balanced_accuracy_pct": 50.0
+        },
+        "doge_momentum": {
+          "accuracy_pct": 48.86,
+          "correct": 299,
+          "up_recall_pct": 38.19,
+          "down_recall_pct": 56.42,
+          "balanced_accuracy_pct": 47.31
+        },
+        "doge_reversal": {
+          "accuracy_pct": 51.14,
+          "correct": 313,
+          "up_recall_pct": 61.81,
+          "down_recall_pct": 43.58,
+          "balanced_accuracy_pct": 52.69
+        },
+        "btc_momentum": {
+          "accuracy_pct": 48.86,
+          "correct": 299,
+          "up_recall_pct": 49.21,
+          "down_recall_pct": 48.6,
+          "balanced_accuracy_pct": 48.91
+        }
+      },
+      "fixed_phase_nonoverlap": {
+        "n": 88,
+        "observed_up_pct": 43.18,
+        "observed_down_or_equal_pct": 56.82,
+        "expanding_majority": {
+          "accuracy_pct": 56.82,
+          "correct": 50,
+          "up_recall_pct": 0.0,
+          "down_recall_pct": 100.0,
+          "balanced_accuracy_pct": 50.0
+        },
+        "doge_momentum": {
+          "accuracy_pct": 52.27,
+          "correct": 46,
+          "up_recall_pct": 44.74,
+          "down_recall_pct": 58.0,
+          "balanced_accuracy_pct": 51.37
+        },
+        "doge_reversal": {
+          "accuracy_pct": 47.73,
+          "correct": 42,
+          "up_recall_pct": 55.26,
+          "down_recall_pct": 42.0,
+          "balanced_accuracy_pct": 48.63
+        },
+        "btc_momentum": {
+          "accuracy_pct": 45.45,
+          "correct": 40,
+          "up_recall_pct": 52.63,
+          "down_recall_pct": 40.0,
+          "balanced_accuracy_pct": 46.32
+        }
+      },
+      "anchor_first_utc": "2025-01-30T00:00:00+00:00",
+      "anchor_last_utc": "2026-10-03T00:00:00+00:00",
+      "anchor_label": "last CONFIRMED candle close, not issue-time price",
+      "forecast_window_definition": "anchor close vs h subsequent confirmed candle closes",
+      "holdout_reused_for_research": true,
+      "models_precommitted_for_future_shadow_comparison": false,
+      "research_limit": "Fixed-rule descriptive backtest; not a pristine holdout and not validated forward performance"
+    },
+    "30d": {
+      "candle_unit": "UTC day",
+      "all_overlapping": {
+        "n": 589,
+        "observed_up_pct": 40.07,
+        "observed_down_or_equal_pct": 59.93,
+        "expanding_majority": {
+          "accuracy_pct": 59.93,
+          "correct": 353,
+          "up_recall_pct": 0.0,
+          "down_recall_pct": 100.0,
+          "balanced_accuracy_pct": 50.0
+        },
+        "doge_momentum": {
+          "accuracy_pct": 53.14,
+          "correct": 313,
+          "up_recall_pct": 36.44,
+          "down_recall_pct": 64.31,
+          "balanced_accuracy_pct": 50.37
+        },
+        "doge_reversal": {
+          "accuracy_pct": 46.86,
+          "correct": 276,
+          "up_recall_pct": 63.56,
+          "down_recall_pct": 35.69,
+          "balanced_accuracy_pct": 49.63
+        },
+        "btc_momentum": {
+          "accuracy_pct": 58.57,
+          "correct": 345,
+          "up_recall_pct": 59.75,
+          "down_recall_pct": 57.79,
+          "balanced_accuracy_pct": 58.77
+        }
+      },
+      "fixed_phase_nonoverlap": {
+        "n": 20,
+        "observed_up_pct": 50.0,
+        "observed_down_or_equal_pct": 50.0,
+        "expanding_majority": {
+          "accuracy_pct": 50.0,
+          "correct": 10,
+          "up_recall_pct": 0.0,
+          "down_recall_pct": 100.0,
+          "balanced_accuracy_pct": 50.0
+        },
+        "doge_momentum": {
+          "accuracy_pct": 60.0,
+          "correct": 12,
+          "up_recall_pct": 60.0,
+          "down_recall_pct": 60.0,
+          "balanced_accuracy_pct": 60.0
+        },
+        "doge_reversal": {
+          "accuracy_pct": 40.0,
+          "correct": 8,
+          "up_recall_pct": 40.0,
+          "down_recall_pct": 40.0,
+          "balanced_accuracy_pct": 40.0
+        },
+        "btc_momentum": {
+          "accuracy_pct": 70.0,
+          "correct": 14,
+          "up_recall_pct": 70.0,
+          "down_recall_pct": 70.0,
+          "balanced_accuracy_pct": 70.0
+        }
+      },
+      "anchor_first_utc": "2025-01-30T00:00:00+00:00",
+      "anchor_last_utc": "2026-09-10T00:00:00+00:00",
+      "anchor_label": "last CONFIRMED candle close, not issue-time price",
+      "forecast_window_definition": "anchor close vs h subsequent confirmed candle closes",
+      "holdout_reused_for_research": true,
+      "models_precommitted_for_future_shadow_comparison": false,
+      "research_limit": "Fixed-rule descriptive backtest; not a pristine holdout and not validated forward performance"
+    }
+  },
+  "caveats": [
+    "All h-step historical returns begin at earlier closed-candle anchor; this is not exact issuance-to-target forecasting",
+    "The fixed set of rules is a research screen; all model selection requires new holdout and future prospective logs",
+    "h=24 hourly and 7/30 daily returns overlap; report nonoverlap sample counts, do not assume IID",
+    "Every valid prediction is up or down/equal; no abstentions or coverage manipulation",
+    "No evidence supports 70pct accuracy; reported scores are not trade profitability"
+  ]
 }
