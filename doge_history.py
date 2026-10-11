@@ -99,14 +99,22 @@ def main():
             matching=[int(k[1]) for k in old if k[0]==symbol]
             cursor=min(matching) if matching else None
             try:
-                raw=request(symbol,cursor)
-                new=0
-                for c in raw:
+                # Never use oldest-only backfill as a substitute for forward daily collection.
+                # Two independent windows: most recent confirmed closes and older history.
+                recent=request(symbol)
+                older=request(symbol,cursor) if cursor is not None else []
+                new=0;recent_dates=[]
+                for c in recent+older:
                     row=validrow(symbol,c,now_ms)
                     if row is None:continue
                     key=symbol,row['open_utc_ms']
+                    if c in recent:recent_dates.append(int(row['open_utc_ms']))
                     if key not in old:old[key]=row;new+=1
-                out['per_symbol'][symbol]={'received':len(raw),'inserted':new,'previous_oldest_ms':cursor}
+                expected_last=(now_ms//DAY-1)*DAY
+                if not recent_dates or max(recent_dates)<expected_last:
+                    raise ValueError('Recent UTC daily feed stale: expected >= '+str(expected_last)+', got '+str(max(recent_dates) if recent_dates else None))
+                out['per_symbol'][symbol]={'recent_received':len(recent),'older_received':len(older),
+                    'recent_latest_confirmed_ms':max(recent_dates),'inserted':new,'previous_oldest_ms':cursor}
                 out['new_rows']+=new
             except Exception as e:raise RuntimeError(symbol+': '+str(e)) from e
         values=sorted(old.values(),key=lambda r:(r['symbol'],int(r['open_utc_ms'])))
