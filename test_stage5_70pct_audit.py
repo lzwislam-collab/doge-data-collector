@@ -6,6 +6,7 @@ import unittest
 import json
 import shutil
 from pathlib import Path
+from datetime import datetime, timezone
 from stage5_70pct_audit import wilson_lower, audited_fixed_phase, inspect_forward, audit_locked_forward_trial
 
 FCOLS=['forecast_id','model_id','issued_at_utc','source_quote_utc','reference_price',
