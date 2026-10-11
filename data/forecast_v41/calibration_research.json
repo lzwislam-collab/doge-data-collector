@@ -1,0 +1,197 @@
+{
+  "schema_version": 1,
+  "status": "ok",
+  "evaluated_utc": "2026-10-11T01:38:20.305506+00:00",
+  "history_cutoff_utc": "2026-10-10",
+  "baseline_model": "doge_empirical_730d_v4_1",
+  "candidate": "rolling PIT quantile recalibration from previously matured 365d observations",
+  "research_only": true,
+  "model_edge_validated": false,
+  "production_model_unchanged": true,
+  "pits_require_actual_target_close_before_calibration": true,
+  "limitations": [
+    "Researcher has examined this recent historical period previously, not untouched holdout",
+    "365 adjacent h-day outcomes overlap; 30d effective sample very low",
+    "PIT calibration can narrow historical intervals without improving future reliability",
+    "No auto-promotion; immutable original forecasts untouched"
+  ],
+  "horizons": {
+    "1d": {
+      "all_overlapping": {
+        "n": 365,
+        "baseline": {
+          "coverage_pct": 90.14,
+          "interval_score_log_pct": 13.5122,
+          "mean_width_log_pct": 10.485
+        },
+        "challenger": {
+          "coverage_pct": 86.85,
+          "interval_score_log_pct": 13.2386,
+          "mean_width_log_pct": 9.7065
+        },
+        "paired_score_diff_log_pct": -0.2736
+      },
+      "nonoverlap": {
+        "n": 365,
+        "baseline": {
+          "coverage_pct": 90.14,
+          "interval_score_log_pct": 13.5122,
+          "mean_width_log_pct": 10.485
+        },
+        "challenger": {
+          "coverage_pct": 86.85,
+          "interval_score_log_pct": 13.2386,
+          "mean_width_log_pct": 9.7065
+        },
+        "paired_score_diff_log_pct": -0.2736
+      },
+      "paired_block_bootstrap": {
+        "mean_challenger_minus_baseline": -0.2736039,
+        "block_days": 7,
+        "bootstrap_repetitions": 500,
+        "95pct_interval": [
+          -0.5127142,
+          -0.0082067
+        ],
+        "note": "Not an untouched holdout and ignores researcher-selection multiplicity."
+      },
+      "latest_research_candidate": {
+        "baseline": [
+          -0.04743497276688471,
+          0.048995810053685085
+        ],
+        "challenger": [
+          -0.038093988655694966,
+          0.030914845675122857
+        ],
+        "calibration": {
+          "p10_pit": 0.15170998632010943,
+          "p90_pit": 0.8050615595075239,
+          "calibration_n": 365,
+          "approx_nonoverlap_n": 365
+        }
+      },
+      "automatic_promotion": false,
+      "model_edge_validated": false,
+      "interpretation": "Coverage, width and interval score reported together; never select solely by coverage."
+    },
+    "7d": {
+      "all_overlapping": {
+        "n": 365,
+        "baseline": {
+          "coverage_pct": 90.96,
+          "interval_score_log_pct": 35.4794,
+          "mean_width_log_pct": 30.2874
+        },
+        "challenger": {
+          "coverage_pct": 89.04,
+          "interval_score_log_pct": 35.8262,
+          "mean_width_log_pct": 27.9931
+        },
+        "paired_score_diff_log_pct": 0.3468
+      },
+      "nonoverlap": {
+        "n": 53,
+        "baseline": {
+          "coverage_pct": 92.45,
+          "interval_score_log_pct": 37.2006,
+          "mean_width_log_pct": 30.2762
+        },
+        "challenger": {
+          "coverage_pct": 92.45,
+          "interval_score_log_pct": 36.6282,
+          "mean_width_log_pct": 27.9898
+        },
+        "paired_score_diff_log_pct": -0.5724
+      },
+      "paired_block_bootstrap": {
+        "mean_challenger_minus_baseline": 0.3467509,
+        "block_days": 7,
+        "bootstrap_repetitions": 500,
+        "95pct_interval": [
+          -2.5098408,
+          3.3122764
+        ],
+        "note": "Not an untouched holdout and ignores researcher-selection multiplicity."
+      },
+      "latest_research_candidate": {
+        "baseline": [
+          -0.14015141825787047,
+          0.1450966875650879
+        ],
+        "challenger": [
+          -0.10907582974977456,
+          0.06941116463758375
+        ],
+        "calibration": {
+          "p10_pit": 0.15991792065663474,
+          "p90_pit": 0.7960328317373462,
+          "calibration_n": 365,
+          "approx_nonoverlap_n": 52
+        }
+      },
+      "automatic_promotion": false,
+      "model_edge_validated": false,
+      "interpretation": "Coverage, width and interval score reported together; never select solely by coverage."
+    },
+    "30d": {
+      "all_overlapping": {
+        "n": 365,
+        "baseline": {
+          "coverage_pct": 90.96,
+          "interval_score_log_pct": 71.8187,
+          "mean_width_log_pct": 66.3041
+        },
+        "challenger": {
+          "coverage_pct": 85.48,
+          "interval_score_log_pct": 75.3623,
+          "mean_width_log_pct": 65.9239
+        },
+        "paired_score_diff_log_pct": 3.5436
+      },
+      "nonoverlap": {
+        "n": 13,
+        "baseline": {
+          "coverage_pct": 84.62,
+          "interval_score_log_pct": 72.3185,
+          "mean_width_log_pct": 66.3
+        },
+        "challenger": {
+          "coverage_pct": 92.31,
+          "interval_score_log_pct": 80.0539,
+          "mean_width_log_pct": 66.6357
+        },
+        "paired_score_diff_log_pct": 7.7353
+      },
+      "paired_block_bootstrap": {
+        "mean_challenger_minus_baseline": 3.5436475,
+        "block_days": 30,
+        "bootstrap_repetitions": 500,
+        "95pct_interval": [
+          -8.5127013,
+          16.0732089
+        ],
+        "note": "Not an untouched holdout and ignores researcher-selection multiplicity."
+      },
+      "latest_research_candidate": {
+        "baseline": [
+          -0.31892370389068725,
+          0.28477292875672555
+        ],
+        "challenger": [
+          -0.3093407730115173,
+          0.17866687783615925
+        ],
+        "calibration": {
+          "p10_pit": 0.11203830369357046,
+          "p90_pit": 0.8146374829001368,
+          "calibration_n": 365,
+          "approx_nonoverlap_n": 12
+        }
+      },
+      "automatic_promotion": false,
+      "model_edge_validated": false,
+      "interpretation": "Coverage, width and interval score reported together; never select solely by coverage."
+    }
+  }
+}
