@@ -25,7 +25,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Test registry and scoring integrity
-        run: python -m unittest -v test_prospective_score test_prospective_integrity
+        run: python -m unittest -v test_prospective_score test_prospective_integrity test_forecast_v41
       # Exclusive automatic writer for prospective registry and scoring.
       - name: Backfill historical UTC close data and audit
         id: collect
@@ -41,12 +41,22 @@ jobs:
         if: steps.collect.outcome == 'success'
         continue-on-error: true
         run: python prospective_score.py
+      - name: Generate V4.1 price intervals, append forecast, and walk-forward audit
+        id: v41
+        if: steps.collect.outcome == 'success'
+        continue-on-error: true
+        run: python forecast_v41.py
+      - name: Score matured V4.1 prospective intervals
+        id: v41_score
+        if: steps.collect.outcome == 'success'
+        continue-on-error: true
+        run: python score_v41.py
       - name: Commit data and diagnostics
         if: always()
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          for file in data/history/latest.json data/history/daily.csv data/history/backtest_latest.json data/prospective/latest.json data/prospective/registry.csv data/prospective/scores.json; do
+          for file in data/history/latest.json data/history/daily.csv data/history/backtest_latest.json data/prospective/latest.json data/prospective/registry.csv data/prospective/scores.json data/forecast_v41/latest.json data/forecast_v41/backtest_latest.json data/forecast_v41/registry.csv data/forecast_v41/scores.json; do
             if [ -f "$file" ]; then git add -f "$file"; fi
           done
           if ! git diff --cached --quiet; then
@@ -59,5 +69,5 @@ jobs:
             done
           fi
       - name: Fail on data collection errors
-        if: steps.collect.outcome != 'success' || steps.register.outcome != 'success' || steps.score.outcome != 'success'
+        if: steps.collect.outcome != 'success' || steps.register.outcome != 'success' || steps.score.outcome != 'success' || steps.v41.outcome != 'success' || steps.v41_score.outcome != 'success'
         run: exit 1
