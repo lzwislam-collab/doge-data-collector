@@ -36,6 +36,27 @@ def parse(s):
  if d.tzinfo is None:raise ValueError('Naive timestamp')
  return d.astimezone(timezone.utc)
 
+def snapshot_status_eligible(name,snap,allowed):
+ # Partial means limited observation, NOT automatically a source malfunction.
+ # Only OKX WebSocket partial runs can be accepted with independently reported
+ # healthy subscription and no parser or transport errors.
+ if snap.get('status') in allowed:
+  return True
+ if name!='liquidations_okx' or snap.get('status')!='partial':
+  return False
+ dq=snap.get('data_quality') or {}
+ try:
+  percent=float(snap.get('subscription_coverage_pct',0))
+  return (snap.get('not_market_wide') is True
+          and snap.get('historical_backfill') is False
+          and dq.get('subscribed') is True
+          and percent>=85.0
+          and not dq.get('errors')
+          and int(dq.get('parse_errors',1))==0
+          and int(dq.get('subscription_ack_count',0))>=1)
+ except (TypeError,ValueError):
+  return False
+
 def get(url):
  headers={'Accept':'application/vnd.github+json','User-Agent':'DOGE-collector-schedule-audit/1.0','X-GitHub-Api-Version':'2022-11-28'}
  if TOKEN:headers['Authorization']='Bearer '+TOKEN
@@ -76,14 +97,15 @@ def audit():
    if t>NOW+timedelta(minutes=5):raise ValueError('Future snapshot time')
    if not successful:
     x['reason']='No successful scheduled run in preceding 48h'
-   elif snap.get('status') not in allow_status:
-    x['reason']='Snapshot status not eligible: '+str(snap.get('status'))
+   elif not snapshot_status_eligible(name,snap,allow_status):
+    x['reason']='Snapshot status or partial subscription quality not eligible: '+str(snap.get('status'))
    else:
     # Verify data came from at least one eligible successful scheduled run window.
     eligible=[r for r in successful if parse(r['created_at'])-timedelta(minutes=2)<=t<=parse(r['updated_at'])+timedelta(minutes=10)]
     if eligible:
      r=max(eligible,key=lambda z:parse(z['created_at']))
      x['state']='SCHEDULE_AND_SNAPSHOT_TIME_MATCH'
+     x['scope']='PARTIAL_SUBSCRIPTION_ONLY_NOT_MARKET_TOTAL' if snap.get('status')=='partial' else 'SOURCE_DEFINED_SNAPSHOT'
      x['matched_run_id']=r['id']
      x['reason']='Schedule event, success and compatible committed snapshot timestamp; commit attribution not proven'
     else:x['reason']='Schedule succeeded but no timestamp-matching snapshot; cannot attribute persistence'
