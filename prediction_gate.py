@@ -20,7 +20,9 @@ def stage2_admissibility():
       'reason':'Partial public notice windows cannot establish all-market liquidation totals',
       'source_coverage':'unverified','predictive_edge_established':False}
  try:
-  quality=load('data/quality/latest.json')
+  quality=json.loads((ROOT/'data/quality/latest.json').read_text(encoding='utf-8'))
+  if quality.get('status') not in ('ok_with_coverage_limits','ok_with_source_warnings') or quality.get('critical_failures'):
+   raise ValueError('data/quality/latest.json has critical failure')
   liq=load('data/liquidations/latest.json')
   book=load('data/liquidity/latest.json')
   checks=quality['sources']['stage2_csv_quality']
