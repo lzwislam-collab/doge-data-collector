@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "status": "insufficient_validation_sample",
+  "source": "OKX 1H OHLCV backfilled into data/hourly.csv; market time separate from first local capture",
+  "data_start_utc": "2026-10-06T05:00:00+00:00",
+  "data_end_utc": "2026-10-11T00:00:00+00:00",
+  "hours": 116,
+  "duplicates": 0,
+  "gaps": 0,
+  "screenshot_crash": {
+    "start_utc": "2026-10-08T15:00:00+00:00",
+    "start_jst": "2026-10-09T00:00:00 JST (converted clock)",
+    "open": 0.08713,
+    "low": 0.08194,
+    "close": 0.08268,
+    "open_close_pct": -5.107,
+    "open_to_low_pct": -5.957,
+    "volume_doge": 217797233.551487,
+    "btc_same_hour_pct": -2.015,
+    "eth_same_hour_pct": -3.804,
+    "source_first_ingested_utc": "2026-10-10T08:40:40.600000+00:00",
+    "was_genuinely_warned_before_crash": false
+  },
+  "exploratory_earlier_signal": {
+    "hour_start_utc": "2026-10-08T04:00:00+00:00",
+    "known_after_utc": "2026-10-08T05:00:00+00:00",
+    "hour_close_return_pct": -1.422,
+    "hour_open_to_low_pct": -3.814,
+    "prior_24h_median_volume_doge": 13873245.91,
+    "volume_multiple": 6.76,
+    "doge_minus_btc_hour_return_pp": -1.291,
+    "fires": true
+  },
+  "post_hoc_rule_first_alerts_in_prior_12h": [
+    {
+      "hour_start_utc": "2026-10-08T04:00:00+00:00",
+      "known_after_utc": "2026-10-08T05:00:00+00:00",
+      "hour_close_return_pct": -1.422,
+      "hour_open_to_low_pct": -3.814,
+      "prior_24h_median_volume_doge": 13873245.91,
+      "volume_multiple": 6.76,
+      "doge_minus_btc_hour_return_pp": -1.291,
+      "fires": true
+    }
+  ],
+  "rule_fixed_before_holdout": false,
+  "crash_hour_count": 1,
+  "crash_start_times_utc": [
+    "2026-10-08T15:00:00+00:00"
+  ],
+  "naive_always_no_crash_accuracy_pct": 99.14,
+  "distinct_independent_validation_events": 0,
+  "research_acceptance": {
+    "historical_distinct_crashes_minimum": 30,
+    "precision_minimum": 0.7,
+    "recall_minimum": 0.7,
+    "warning_lead_time_hours_minimum": 1,
+    "false_alarm_budget": "must be predeclared and audited",
+    "passed": false
+  },
+  "reason": "Only one historical >=5% 1H close-to-open crash in 116 hours; post-hoc alert thresholds and source backfill cannot certify causal predictive performance",
+  "no_forecast_edge_claim": true
+}
