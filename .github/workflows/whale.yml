@@ -2,6 +2,10 @@ name: Sample DOGE whale events
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/whale.yml'
   schedule:
     - cron: '17 */4 * * *'
 
@@ -41,7 +45,12 @@ jobs:
           done
           if ! git diff --cached --quiet; then
             git commit -m 'data: sample DOGE whale stream'
-            git push
+            for attempt in 1 2 3 4 5; do
+              if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
+              git rebase --abort || true
+              if [ "$attempt" -eq 5 ]; then exit 1; fi
+              sleep 4
+            done
           fi
       - name: Report sampling failure
         if: steps.collector.outcome != 'success'
