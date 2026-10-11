@@ -95,6 +95,21 @@ class SpotPlusTests(unittest.TestCase):
   self.assertEqual(cash['final_usdt'],cash['pre_liquidation_mark_to_market_usdt'])
   self.assertEqual(cash['trades'],0)
 
+ def test_intraday_low_risk_is_not_hidden_by_close_only_max_drawdown(self):
+  bars=daily(self.root,NOW)['DOGE-USDT']
+  # One artificial intraday crash fully recovers at the same UTC close:
+  # close-only equity cannot capture this exposure.
+  bars[402]['l']=min(bars[402]['o'],bars[402]['c'])*.00001
+  r=simulate(bars,400,'buy_and_hold')
+  self.assertGreater(r['intraday_low_drawdown_floor_pct'],r['max_drawdown_pct'])
+  self.assertGreater(r['intraday_low_drawdown_floor_pct'],95)
+  self.assertIn('floor',r['intraday_risk_definition'])
+
+ def test_cash_has_no_intraday_spot_drawdown(self):
+  bars=daily(self.root,NOW)['DOGE-USDT']
+  r=simulate(bars,400,'cash')
+  self.assertEqual(r['intraday_low_drawdown_floor_pct'],0)
+
  def test_model_never_assumes_short_on_down(self):
   bars=daily(self.root,NOW)['DOGE-USDT']
   x=simulate(bars,400,'doge_one_day_lag_reversal')
