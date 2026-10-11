@@ -15,6 +15,12 @@ SPECS={
  'onchain':('.github/workflows/onchain.yml','data/onchain/latest.json','observed_at_utc'),
  'daily_metrics':('.github/workflows/onchain_metrics.yml','data/onchain/metrics_latest.json','collected_at_utc')
 }
+STAGE2_SPECS={
+ 'liquidations_okx':('.github/workflows/liquidations.yml','data/liquidations/latest.json','ended_at_utc',('ok',)),
+ 'liquidity_okx':('.github/workflows/liquidity.yml','data/liquidity/latest.json','collected_at_utc',('ok',)),
+ 'liquidations_binance':('.github/workflows/binance_liquidations.yml','data/binance_liquidations/latest.json','ended_at_utc',('partial',)),
+ 'liquidations_bybit':('.github/workflows/bybit_liquidations.yml','data/bybit_liquidations/latest.json','ended_at_utc',('partial',))
+}
 
 def parse(s):
  d=datetime.fromisoformat(str(s).replace('Z','+00:00'))
@@ -30,9 +36,13 @@ def get(url):
 def audit():
  if not TOKEN:raise ValueError('GITHUB_TOKEN missing; cannot verify run events')
  if '/' not in REPO:raise ValueError('Invalid GitHub repository')
- reports={};all_ok=True
- for name,(workflow,file,time_key) in SPECS.items():
-  x={'workflow':workflow,'snapshot':file,'state':'UNVERIFIED'}
+ reports={};stage2_reports={};all_ok=True;stage2_ok=True
+ for name,(workflow,file,time_key,allow_status) in (
+  [(name,*spec,('ok',)) for name,spec in SPECS.items()]+
+  [(name,*spec) for name,spec in STAGE2_SPECS.items()]
+ ):
+  x={'workflow':workflow,'snapshot':file,'state':'UNVERIFIED',
+     'allowed_snapshot_statuses':list(allow_status)}
   try:
    # GitHub API directly filters to scheduled runs, never infer schedule from YAML or commit.
    url='https://api.github.com/repos/'+REPO+'/actions/workflows/'+workflow.split('/')[-1]+'/runs?event=schedule&per_page=30'
@@ -55,8 +65,8 @@ def audit():
    if t>NOW+timedelta(minutes=5):raise ValueError('Future snapshot time')
    if not successful:
     x['reason']='No successful scheduled run in preceding 48h'
-   elif snap.get('status')!='ok':
-    x['reason']='Snapshot status not OK'
+   elif snap.get('status') not in allow_status:
+    x['reason']='Snapshot status not eligible: '+str(snap.get('status'))
    else:
     # Verify data came from at least one eligible successful scheduled run window.
     eligible=[r for r in successful if parse(r['created_at'])-timedelta(minutes=2)<=t<=parse(r['updated_at'])+timedelta(minutes=10)]
@@ -68,11 +78,19 @@ def audit():
     else:x['reason']='Schedule succeeded but no timestamp-matching snapshot; cannot attribute persistence'
   except (ValueError,KeyError,TypeError,urllib.error.URLError) as exc:
    x['reason']=type(exc).__name__+': '+str(exc)[:280]
-  reports[name]=x
-  if x['state']!='SCHEDULE_AND_SNAPSHOT_TIME_MATCH':all_ok=False
- return {'schema_version':1,'status':'all_evidence_matched' if all_ok else 'partial_or_unverified',
+  if name in STAGE2_SPECS:
+   stage2_reports[name]=x
+   if x['state']!='SCHEDULE_AND_SNAPSHOT_TIME_MATCH':stage2_ok=False
+  else:
+   reports[name]=x
+   if x['state']!='SCHEDULE_AND_SNAPSHOT_TIME_MATCH':all_ok=False
+ return {'schema_version':2,'status':'all_evidence_matched' if all_ok else 'partial_or_unverified',
          'generated_at_utc':NOW.isoformat(),'repository':REPO,'checks':reports,
-         'limitations':['Run event and snapshot timestamp alignment does not prove causal commit attribution','Scheduled runs may be delayed or skipped by GitHub','Do not infer real exchange netflow from address balance samples']}
+         'stage2_status':'all_evidence_matched_with_coverage_limits' if stage2_ok else 'partial_or_unverified',
+         'stage2_checks':stage2_reports,
+         'stage2_verified_market_wide_liquidations':False,
+         'stage2_coverage_note':'Scheduled partial exchange notification windows are NOT 24-hour or market-wide liquidation totals; CoinGlass unavailable due to paid plan.',
+         'limitations':['Run event and snapshot timestamp alignment does not prove causal commit attribution','Scheduled runs may be delayed or skipped by GitHub','Do not infer real exchange netflow from address balance samples','Partial liquidation observation windows may miss forced liquidations and are not representative of 24h totals']}
 
 def main():
  OUTPUT.parent.mkdir(parents=True,exist_ok=True)
