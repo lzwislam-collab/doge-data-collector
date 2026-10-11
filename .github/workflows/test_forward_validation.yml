@@ -1,0 +1,26 @@
+name: Test prospective evidence and spot paper accounting
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'forward_validation.py'
+      - 'test_forward_validation.py'
+      - 'data/stage5/forward_validation_protocol.json'
+      - '.github/workflows/test_forward_validation.yml'
+      - '.github/workflows/okx_hourly_extreme_history.yml'
+      - '.github/workflows/prediction_gate.yml'
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest discover -v
+      - run: python forward_validation.py --integrity-only
