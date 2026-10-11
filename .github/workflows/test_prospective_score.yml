@@ -1,0 +1,21 @@
+name: Test prospective DOGE scoring integrity
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'prospective_score.py'
+      - 'test_prospective_score.py'
+      - '.github/workflows/test_prospective_score.yml'
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest -v test_prospective_score test_prospective_integrity
