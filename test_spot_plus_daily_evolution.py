@@ -180,5 +180,33 @@ class TestDailyEvolution(unittest.TestCase):
   self.assertEqual(x['original_36_status']['item_level_current_mapping_reconciled'],False)
   self.assertIn('不更改DOGE定投', (self.root/'reports/DOGE_SPOT_PLUS_DAILY.md').read_text())
 
+
+ def test_independent_live_spot_snapshot_is_visibly_separate_from_forecast(self):
+  from spot_plus_live_quote import run as issue_quote
+  quote_at=AT-timedelta(seconds=3)
+  ts=str(int(quote_at.timestamp()*1000))
+  ticks={symbol:{'instId':symbol,'last':str(value),'bidPx':str(value*0.99995),
+   'askPx':str(value*1.00005),'ts':ts} for symbol,value in
+   (('DOGE-USDT',0.08541),('BTC-USDT',83079.2),('ETH-USDT',2504.32))}
+  issue_quote(self.root,AT,ticks)
+  state=inspect(self.root,AT+timedelta(seconds=2))
+  self.assertTrue(state['current_spot_quote']['live_snapshot_verified'])
+  self.assertEqual(state['current_spot_quote']['instruments']['DOGE-USDT']['price_usdt'],0.08541)
+  self.assertFalse(state['real_spot_orders_authorized'])
+  run(self.root,AT+timedelta(seconds=2))
+  self.assertIn('OKX DOGE/USDT 0.08541',(self.root/'reports/DOGE_SPOT_PLUS_DAILY.md').read_text())
+
+ def test_stale_previous_market_quote_is_not_presented_as_live(self):
+  from spot_plus_live_quote import run as issue_quote
+  old=AT-timedelta(minutes=5)
+  ticks={symbol:{'instId':symbol,'last':str(value),'bidPx':str(value*.99995),
+   'askPx':str(value*1.00005),
+   'ts':str(int((old-timedelta(seconds=1)).timestamp()*1000))} for symbol,value in
+   (('DOGE-USDT',0.08541),('BTC-USDT',83079.2),('ETH-USDT',2504.32))}
+  issue_quote(self.root,old,ticks)
+  result=inspect(self.root,AT)
+  self.assertFalse(result['current_spot_quote']['live_snapshot_verified'])
+  self.assertEqual(result['current_spot_quote']['status'],'stale')
+
 if __name__=='__main__':
  unittest.main(verbosity=2)
