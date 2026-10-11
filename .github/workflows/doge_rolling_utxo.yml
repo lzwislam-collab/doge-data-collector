@@ -21,8 +21,13 @@ jobs:
   analyze:
     # Only process the upstream run created during 03:00-03:59 UTC (~4 opportunities/day),
     # to avoid 96 extra paid GitHub runner-minutes per day. No new cron.
-    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && contains(github.event.workflow_run.created_at, 'T03:'))
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.event == 'schedule' && github.event.workflow_run.conclusion == 'success' && contains(github.event.workflow_run.created_at, 'T03:'))
     runs-on: ubuntu-24.04
+    env:
+      UPSTREAM_WHALE_RUN_ID: ${{ github.event.workflow_run.id || '' }}
+      UPSTREAM_WHALE_RUN_EVENT: ${{ github.event.workflow_run.event || '' }}
+      UPSTREAM_WHALE_RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion || '' }}
+      UPSTREAM_WHALE_RUN_CREATED_AT: ${{ github.event.workflow_run.created_at || '' }}
     timeout-minutes: 11
     steps:
       - name: Checkout latest main snapshot
@@ -254,7 +259,14 @@ jobs:
                   'source': 'Dogechain public /tx API and whale-scanner confirmed events; OKX PoR 2026-09-08 disclosed addresses',
                   'coverage': 'ONLY confirmed whale-scanner events since scanner checkpoint, not all DOGE transactions',
                   'verified_exchange_netflow': False, 'current_exchange_address_ownership_verified': False,
-                  'results_not_for_trading_signals': True, 'errors': []
+                  'results_not_for_trading_signals': True,
+                  'trigger_event': os.getenv('GITHUB_EVENT_NAME'),
+                  'audit_workflow_run_id': os.getenv('GITHUB_RUN_ID'),
+                  'upstream_whale_run_id': os.getenv('UPSTREAM_WHALE_RUN_ID') or None,
+                  'upstream_whale_run_event': os.getenv('UPSTREAM_WHALE_RUN_EVENT') or None,
+                  'upstream_whale_run_conclusion': os.getenv('UPSTREAM_WHALE_RUN_CONCLUSION') or None,
+                  'upstream_whale_run_created_at_utc': os.getenv('UPSTREAM_WHALE_RUN_CREATED_AT') or None,
+                  'errors': []
               }
               rows = {}
               try:
