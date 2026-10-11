@@ -1,7 +1,7 @@
 # DOGE 现货预测 Plus｜每日进化审计
 
-**运行UTC：** 2026-10-11T12:35:14.904883+00:00  
-**本次数据状态：** WARN，来源警告：GLOBAL_QUALITY_AUDIT:older_than_3h  
+**运行UTC：** 2026-10-11T12:38:16.823943+00:00  
+**本次数据状态：** WARN，来源警告：2_liquidations_liquidity/sampled_liquidations:unhealthy  
 **最新确认日线数据可用时点：** 2026-10-11T00:00:00+00:00  
 **本日账本：** 保留本日首次记录，不重复写入
 
