@@ -1,10 +1,16 @@
 name: Audit DOGE feed freshness
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'feed_freshness_audit.py'
+      - 'test_feed_quality.py'
+      - '.github/workflows/feed_freshness_audit.yml'
   schedule:
     - cron: '39 */4 * * *'
 permissions:
-  contents: read
+  contents: write
 concurrency:
   group: doge-feed-freshness-audit
   cancel-in-progress: false
@@ -17,5 +23,29 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Test source-independent freshness rules
+        run: python -m unittest -v test_feed_quality
       - name: Check freshness and statuses
+        id: check
+        continue-on-error: true
         run: python feed_freshness_audit.py
+      - name: Commit timestamped quality diagnostics
+        if: always()
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if [ -f data/quality/latest.json ]; then
+            git add -f data/quality/latest.json
+            if ! git diff --cached --quiet; then
+              git commit -m 'data: record source-specific freshness and coverage status'
+              for n in 1 2 3 4 5; do
+                if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
+                git rebase --abort || true
+                [ "$n" -lt 5 ] || exit 1
+                sleep 4
+              done
+            fi
+          fi
+      - name: Fail if any critical feed failed
+        if: steps.check.outcome != 'success'
+        run: exit 1
