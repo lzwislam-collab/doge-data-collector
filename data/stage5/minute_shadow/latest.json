@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "status": "ok",
+  "generated_at_utc": "2026-10-11T08:45:23.512043+00:00",
+  "source": "OKX public confirmed 1m history-candles DOGE-USDT",
+  "protocol_id": "DOGE_V42_1M_CLOSE_SHADOW_LOCK_20261012",
+  "original_V42_scores_modified": false,
+  "method": "first confirmed 1m open >= registered target, using close after that full minute",
+  "not_exact_issuance_to_target_quote": true,
+  "historical_kline_not_a_live_quote": true,
+  "data_availability_at_actual_retrieval_time_only": true,
+  "max_target_to_bar_close_seconds": 120,
+  "all_registry_rows": 12,
+  "minute_rows_total": 5,
+  "new_minute_scores": 5,
+  "prefreeze_diagnostic_rows": 5,
+  "preregistered_forward_rows": 0,
+  "postfreeze_due_forecasts": 0,
+  "postfreeze_scored_forecasts": 0,
+  "postfreeze_quote_coverage_pct": null,
+  "postfreeze_minimum_coverage_target_pct": 90,
+  "not_validated_model_accuracy": true,
+  "claim_permission": "NO_VALIDATED_EDGE",
+  "limitations": [
+    "Distinct evaluation method; do NOT merge with V4.2 original ticker-based scored count",
+    "History is fetched after the target; cannot assert real-time quote existed at target",
+    "Data older than bounded retrieval window may remain unresolved and lower coverage",
+    "Provider may revise historical candles; stored first observed bar and retrieval UTC are required",
+    "Pre-freeze retrospective diagnostic rows NEVER qualify as forward accuracy evidence"
+  ]
+}
