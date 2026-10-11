@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Prospective DOGE prediction registry, baseline only. No reconstructed forecasts."""
-import csv,hashlib,json,math,os
+import csv,hashlib,json,math,os,subprocess,io
 from datetime import datetime,timezone,timedelta
 from pathlib import Path
 ROOT=Path(__file__).resolve().parent
@@ -39,6 +39,19 @@ def main():
      fid=row['forecast_id']
      if fid in existing:raise ValueError('duplicate registry ID')
      existing[fid]=row
+  # Verify that every row from the preceding committed registry still exists unchanged.
+  # Requires full git history (actions/checkout fetch-depth: 0).
+  revs=subprocess.run(['git','log','-2','--format=%H','--','data/prospective/registry.csv'],
+   cwd=ROOT,text=True,capture_output=True,check=True).stdout.splitlines()
+  if len(revs)>=2:
+   prev=subprocess.run(['git','show',revs[1]+':data/prospective/registry.csv'],
+    cwd=ROOT,text=True,capture_output=True,check=True).stdout
+   rd=csv.DictReader(io.StringIO(prev))
+   if rd.fieldnames!=COLS:raise ValueError('historical registry schema mismatch')
+   for prior in rd:
+    fid=prior['forecast_id']
+    if fid not in existing or existing[fid]!=prior:
+     raise ValueError('historical forecast removed or modified: '+fid)
   old_count=len(existing);added=0
   digest=hashlib.sha256((str(anchor)+':'+str(last)).encode()).hexdigest()
   for h in H:
@@ -57,7 +70,6 @@ def main():
      'training_days':str(len(history)),'source_digest':digest}
    added+=1
   if added:
-   import io
    out=io.StringIO();w=csv.DictWriter(out,fieldnames=COLS);w.writeheader()
    w.writerows(existing[k] for k in sorted(existing))
    write(regfile,out.getvalue())
