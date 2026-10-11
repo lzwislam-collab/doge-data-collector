@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "evaluated_at_utc": "2026-10-11T08:09:53.436643+00:00",
+  "evaluated_at_utc": "2026-10-11T08:12:38.790279+00:00",
   "status": "data_quality_blocked",
   "claim_permission": "NO_VALIDATED_EDGE",
   "research_only": true,
@@ -66,25 +66,13 @@
     "liquidation_24h_totals_allowed": false,
     "liquidation_24h_directional_imbalance_allowed": false,
     "missing_notification_window_equals_zero": false,
-    "liquidation_event_samples_research_only": true,
-    "swap_liquidity_snapshots_research_only": true,
+    "liquidation_event_samples_research_only": false,
+    "swap_liquidity_snapshots_research_only": false,
     "retrospective_model_training_authorized": false,
     "reason": "Partial public notice windows cannot establish all-market liquidation totals",
-    "source_coverage": "partial_480_seconds_per_900_seconds_approx",
+    "source_coverage": "invalid_or_unavailable",
     "predictive_edge_established": false,
-    "allowed_snapshot_features": [
-      "spread_bps",
-      "bid_depth_usdt_10bps",
-      "ask_depth_usdt_10bps",
-      "open_interest_usd",
-      "funding_rate"
-    ],
-    "restrictions": [
-      "Only observations at collection timestamp, never hindsight full-day totals",
-      "No missing-as-zero liquidation values, no synthetic OI-as-liquidation",
-      "Snapshot availability and true collection timestamp must be aligned before any backtest",
-      "Permitted for descriptive research only: no model predictive-edge claim"
-    ]
+    "audit_error": "ValueError: data/liquidations/latest.json is not ok"
   },
   "stage3_etf_admissibility": {
     "historical_trade_date_as_available_at_allowed": false,
@@ -107,10 +95,17 @@
     "retrospective_sec_cftc_pubdate_backtest_allowed": false,
     "official_macro_values_historical_backtest_authorized": false,
     "policy_headline_price_direction_validated": false,
-    "macro_first_seen_research_only": false,
-    "policy_event_first_seen_research_only": false,
+    "macro_first_seen_research_only": true,
+    "policy_event_first_seen_research_only": true,
     "rule": "Use actual observed first_seen_utc or separately verified release/vintage availability, never observation_date",
-    "audit_error": "KeyError: 'stage4_macro_policy_csv_quality'"
+    "audited_macro_observations": 34345,
+    "audited_policy_candidates_and_calendar_rows": 89,
+    "limitations": [
+      "FRED observation dates precede publication; revised values are latest-vintage rather than historical PIT",
+      "BLS calendar event time is a scheduled future release, not confirmation of actual data publication",
+      "SEC/CFTC keyword candidates are incomplete and no causal bullish/bearish tags are established",
+      "Use first_seen_utc conservatively until release timestamps, prior vintages and revision timelines are independently validated"
+    ]
   },
   "limitations": [
     "A significant historical CI alone cannot authorize live forecast marketing",
