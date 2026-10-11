@@ -1,0 +1,49 @@
+name: Watch SEC official crypto policy press releases
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'sec_events_collector.py'
+      - '.github/workflows/sec_events.yml'
+  schedule:
+    - cron: '24 4,16 * * *'
+permissions:
+  contents: write
+concurrency:
+  group: doge-sec-events
+  cancel-in-progress: false
+jobs:
+  collect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Syntax check
+        run: python -m py_compile sec_events_collector.py
+      - name: Collect official SEC releases
+        id: collector
+        continue-on-error: true
+        run: python sec_events_collector.py
+      - name: Persist audit and records
+        if: always()
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          for f in data/sec_events/latest.json data/sec_events/events.csv; do
+            if [ -f "$f" ]; then git add -f "$f"; fi
+          done
+          if ! git diff --cached --quiet; then
+            git commit -m 'data: archive SEC official policy releases'
+            for i in 1 2 3 4 5; do
+              if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
+              if [ "$i" -eq 5 ]; then exit 1; fi
+              sleep 4
+            done
+          fi
+      - name: Fail if collector failed
+        if: steps.collector.outcome != 'success'
+        run: exit 1
