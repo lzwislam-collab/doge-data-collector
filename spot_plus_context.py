@@ -93,7 +93,7 @@ def inspect(root,now):
   'verified_exchange_netflow':False}
  stages['2_liquidations_liquidity']={
   'sources':{
-   'sampled_liquidations':view_source(root,'data/liquidations/latest.json','ended_at_utc',now,3,('partial',)),
+   'sampled_liquidations':view_source(root,'data/liquidations/latest.json','ended_at_utc',now,3,('ok','partial')),
    'liquidity_snapshot':view_source(root,'data/liquidity/latest.json','collected_at_utc',now,3)},
   'predictor_policy':'liquidity snapshots are timestamped, not historical full-market liquidation totals',
   'unverified_features':['global_liquidation_total','full_24h_forced_liquidation_imbalance']}
