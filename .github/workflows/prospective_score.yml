@@ -6,12 +6,16 @@ on:
     paths:
       - 'prospective_score.py'
       - '.github/workflows/prospective_score.yml'
+  workflow_run:
+    workflows: ['Register prospective DOGE baseline forecasts']
+    types: [completed]
   schedule:
     - cron: '43 6 * * *'
 permissions:
   contents: write
 jobs:
   score:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
