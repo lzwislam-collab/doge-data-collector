@@ -47,12 +47,37 @@ def stage2_admissibility():
   out['audit_error']=type(exc).__name__+': '+str(exc)[:200]
  return out
 
+
+def stage3_etf_admissibility():
+ """ETF snapshots known only at first_seen_utc, never retroactively on trade date."""
+ out={'historical_trade_date_as_available_at_allowed':False,
+      'pre_collection_backtest_using_etf_values_allowed':False,
+      'retrospective_model_training_authorized':False,
+      'historical_revisions_point_in_time_available':False,
+      'snapshot_research_only':False,
+      'publication_timestamp_rule':'first_seen_utc or verified later publication timestamp, NEVER trade_date_us',
+      'predictive_edge_established':False}
+ try:
+  quality=json.loads((ROOT/'data/quality/latest.json').read_text(encoding='utf-8'))
+  gate=quality['sources']['stage3_etf_csv_quality']
+  if quality.get('critical_failures') or gate['state']!='ok':
+   raise ValueError('ETF CSV integrity failed')
+  snap=load('data/etf/latest.json')
+  out['snapshot_research_only']=bool(snap.get('unit')=='USD millions' and
+      set(gate['per_asset'])=={'BTC','ETH'} and gate.get('rows',0)>0)
+  out['observed_rows_by_asset']={k:v['rows'] for k,v in gate['per_asset'].items()}
+  out['coverage_note']='Limited historical window; US trading sessions only; Farside third-party aggregated totals'
+ except Exception as exc:
+  out['audit_error']=type(exc).__name__+': '+str(exc)[:180]
+ return out
+
 def main():
  stamp=datetime.now(timezone.utc).isoformat()
  result={'schema_version':1,'evaluated_at_utc':stamp,'status':'error',
          'claim_permission':'BLOCKED','research_only':True,'does_not_change_dca':True,
          'model_edge_proven':False,'checks':{},'errors':[],
-         'stage2_feature_admissibility':stage2_admissibility()}
+         'stage2_feature_admissibility':stage2_admissibility(),
+         'stage3_etf_admissibility':stage3_etf_admissibility()}
  try:
   val=load('data/validation/latest.json')
   stat=load('data/stat_audit/latest.json')
