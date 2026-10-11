@@ -1,0 +1,21 @@
+name: Test DOGE forecast registry integrity
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'prospective_forecast.py'
+      - 'test_prospective_integrity.py'
+      - '.github/workflows/test_prospective_integrity.yml'
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest -v test_prospective_integrity
