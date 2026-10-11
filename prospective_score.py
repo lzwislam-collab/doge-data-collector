@@ -32,6 +32,8 @@ def main():
     p=float(r['p_up'])
     if reg.tzinfo is None or horizon not in (1,7,30) or not 0<p<1 or anchor+timedelta(days=horizon)!=target:
      results['quarantined'].append({'forecast_id':fid,'reason':'invalid_registry_fields'});continue
+    if (reg.date()-anchor).days!=1:
+     results['quarantined'].append({'forecast_id':fid,'reason':'registered_with_stale_anchor'});continue
     if reg >= datetime.combine(target+timedelta(days=1),datetime.min.time(),timezone.utc):
      results['quarantined'].append({'forecast_id':fid,'reason':'registered_after_target_close'});continue
     if target not in price or datetime.now(timezone.utc).date()<=target:
