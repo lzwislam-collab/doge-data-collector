@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "status": "ok",
-  "generated_at_utc": "2026-10-11T12:40:59.509456+00:00",
+  "generated_at_utc": "2026-10-11T12:48:43.435998+00:00",
   "product": "DOGE 现货盈利预测 Plus v0.1 | research-only",
   "source": "OKX confirmed 1Dutc OHLCV; immutable V4.2 issuance-quote registry",
   "source_daily_latest_confirmed_start_utc": "2026-10-10T00:00:00Z",
@@ -24,19 +24,24 @@
     "execution": "spot only full position or cash; no trading within daily bar; initial 10000 USDT",
     "fee_each_side_pct": 0.1,
     "slippage_each_side_pct": 0.05,
+    "assumed_terminal_spot_sale_included": true,
     "candidate_hypothesis_only": true
   },
   "historical_spot_paper": {
     "doge_one_day_lag_reversal": {
       "initial_usdt": 10000.0,
-      "final_usdt": 5314.53,
-      "net_total_return_pct": -46.85,
-      "cagr_pct": -26.69,
+      "final_usdt": 5306.56,
+      "pre_liquidation_mark_to_market_usdt": 5314.53,
+      "terminal_liquidation_assumed": true,
+      "net_total_return_pct": -46.93,
+      "cagr_pct": -26.75,
       "max_drawdown_pct": 58.16,
-      "trades": 373,
+      "trades": 374,
       "days_exposed_pct": 52.89,
-      "observed_fees_usdt": 2577.15,
-      "observed_slippage_usdt": 1288.57,
+      "estimated_total_fees_usdt": 2582.46,
+      "estimated_total_slippage_usdt": 1291.23,
+      "observed_fees_usdt": 2582.46,
+      "observed_slippage_usdt": 1291.23,
       "open_to_close_direction_accuracy_pct": 52.89,
       "direction_scored_days": 743,
       "assumptions": {
@@ -46,17 +51,23 @@
         "borrowing": false,
         "shorting": false,
         "liquidation": false,
+        "terminal_spot_sale_included": true,
+        "frictions_are_assumptions_not_observed_fills": true,
         "market_impact_beyond_assumed_slippage": false
       }
     },
     "doge_one_day_lag_momentum": {
       "initial_usdt": 10000.0,
       "final_usdt": 4261.3,
+      "pre_liquidation_mark_to_market_usdt": 4261.3,
+      "terminal_liquidation_assumed": true,
       "net_total_return_pct": -57.39,
       "cagr_pct": -34.23,
       "max_drawdown_pct": 88.21,
       "trades": 374,
       "days_exposed_pct": 47.11,
+      "estimated_total_fees_usdt": 4818.04,
+      "estimated_total_slippage_usdt": 2409.02,
       "observed_fees_usdt": 4818.04,
       "observed_slippage_usdt": 2409.02,
       "open_to_close_direction_accuracy_pct": 47.11,
@@ -68,17 +79,23 @@
         "borrowing": false,
         "shorting": false,
         "liquidation": false,
+        "terminal_spot_sale_included": true,
+        "frictions_are_assumptions_not_observed_fills": true,
         "market_impact_beyond_assumed_slippage": false
       }
     },
     "btc_one_day_lag_momentum": {
       "initial_usdt": 10000.0,
       "final_usdt": 3242.31,
+      "pre_liquidation_mark_to_market_usdt": 3242.31,
+      "terminal_liquidation_assumed": true,
       "net_total_return_pct": -67.58,
       "cagr_pct": -42.49,
       "max_drawdown_pct": 92.29,
       "trades": 370,
       "days_exposed_pct": 50.07,
+      "estimated_total_fees_usdt": 3484.9,
+      "estimated_total_slippage_usdt": 1742.45,
       "observed_fees_usdt": 3484.9,
       "observed_slippage_usdt": 1742.45,
       "open_to_close_direction_accuracy_pct": 46.03,
@@ -90,19 +107,25 @@
         "borrowing": false,
         "shorting": false,
         "liquidation": false,
+        "terminal_spot_sale_included": true,
+        "frictions_are_assumptions_not_observed_fills": true,
         "market_impact_beyond_assumed_slippage": false
       }
     },
     "buy_and_hold": {
       "initial_usdt": 10000.0,
-      "final_usdt": 6933.97,
-      "net_total_return_pct": -30.66,
-      "cagr_pct": -16.46,
+      "final_usdt": 6923.58,
+      "pre_liquidation_mark_to_market_usdt": 6933.97,
+      "terminal_liquidation_assumed": true,
+      "net_total_return_pct": -30.76,
+      "cagr_pct": -16.52,
       "max_drawdown_pct": 85.19,
-      "trades": 1,
+      "trades": 2,
       "days_exposed_pct": 100.0,
-      "observed_fees_usdt": 9.99,
-      "observed_slippage_usdt": 4.99,
+      "estimated_total_fees_usdt": 16.92,
+      "estimated_total_slippage_usdt": 8.46,
+      "observed_fees_usdt": 16.92,
+      "observed_slippage_usdt": 8.46,
       "open_to_close_direction_accuracy_pct": null,
       "direction_scored_days": 0,
       "assumptions": {
@@ -112,17 +135,23 @@
         "borrowing": false,
         "shorting": false,
         "liquidation": false,
+        "terminal_spot_sale_included": true,
+        "frictions_are_assumptions_not_observed_fills": true,
         "market_impact_beyond_assumed_slippage": false
       }
     },
     "cash": {
       "initial_usdt": 10000.0,
       "final_usdt": 10000.0,
+      "pre_liquidation_mark_to_market_usdt": 10000.0,
+      "terminal_liquidation_assumed": true,
       "net_total_return_pct": 0.0,
       "cagr_pct": 0.0,
       "max_drawdown_pct": 0.0,
       "trades": 0,
       "days_exposed_pct": 0.0,
+      "estimated_total_fees_usdt": 0.0,
+      "estimated_total_slippage_usdt": 0.0,
       "observed_fees_usdt": 0.0,
       "observed_slippage_usdt": 0.0,
       "open_to_close_direction_accuracy_pct": null,
@@ -134,6 +163,8 @@
         "borrowing": false,
         "shorting": false,
         "liquidation": false,
+        "terminal_spot_sale_included": true,
+        "frictions_are_assumptions_not_observed_fills": true,
         "market_impact_beyond_assumed_slippage": false
       }
     }
@@ -151,7 +182,7 @@
             "status": "ok",
             "source_file": "data/onchain/metrics_latest.json",
             "source_utc": "2026-10-11T01:49:14.153111+00:00",
-            "age_hours": 10.86,
+            "age_hours": 10.99,
             "allowed_for_model": false
           },
           "confirmed_whales": {
@@ -159,7 +190,7 @@
             "status": "ok",
             "source_file": "data/whales_blocks/latest.json",
             "source_utc": "2026-10-11T12:29:14.742604+00:00",
-            "age_hours": 0.2,
+            "age_hours": 0.32,
             "allowed_for_model": false
           },
           "utxo_candidate": {
@@ -167,7 +198,7 @@
             "status": "ok_sample_complete",
             "source_file": "data/stage1/rolling_por_utxo_latest.json",
             "source_utc": "2026-10-11T07:37:13.640196+00:00",
-            "age_hours": 5.06,
+            "age_hours": 5.19,
             "allowed_for_model": false
           },
           "schedule_evidence": {
@@ -175,7 +206,7 @@
             "status": "all_evidence_matched",
             "source_file": "data/stage1/schedule_evidence.json",
             "source_utc": "2026-10-11T09:35:23.338144+00:00",
-            "age_hours": 3.09,
+            "age_hours": 3.22,
             "allowed_for_model": false
           }
         },
@@ -199,7 +230,7 @@
             "status": "ok",
             "source_file": "data/liquidations/latest.json",
             "source_utc": "2026-10-11T12:35:24.445110+00:00",
-            "age_hours": 0.09,
+            "age_hours": 0.22,
             "allowed_for_model": false
           },
           "liquidity_snapshot": {
@@ -207,7 +238,7 @@
             "status": "ok",
             "source_file": "data/liquidity/latest.json",
             "source_utc": "2026-10-11T12:30:59.213000+00:00",
-            "age_hours": 0.17,
+            "age_hours": 0.3,
             "allowed_for_model": false
           }
         },
@@ -229,7 +260,7 @@
             "status": "ok",
             "source_file": "data/etf/latest.json",
             "source_utc": "2026-10-10T21:50:02.145697+00:00",
-            "age_hours": 14.85,
+            "age_hours": 14.98,
             "allowed_for_model": false
           }
         },
@@ -263,7 +294,7 @@
             "status": "ok",
             "source_file": "data/macro/latest.json",
             "source_utc": "2026-10-11T03:44:17.447391+00:00",
-            "age_hours": 8.95,
+            "age_hours": 9.07,
             "allowed_for_model": false
           },
           "fed_bls_calendar": {
@@ -271,7 +302,7 @@
             "status": "ok",
             "source_file": "data/policy_events/latest.json",
             "source_utc": "2026-10-11T02:28:11.902224+00:00",
-            "age_hours": 10.21,
+            "age_hours": 10.34,
             "allowed_for_model": false
           }
         },
@@ -293,14 +324,14 @@
             "status": "ok",
             "source_file": "data/history/latest.json",
             "source_utc": "2026-10-11T10:32:05.231750+00:00",
-            "age_hours": 2.15,
+            "age_hours": 2.28,
             "allowed_for_model": false
           },
           "forward_audit": {
             "state": "current",
             "status": "ok",
             "source_file": "data/stage5/latest.json",
-            "source_utc": "2026-10-11T12:40:59.469061+00:00",
+            "source_utc": "2026-10-11T12:48:43.391640+00:00",
             "age_hours": 0.0,
             "allowed_for_model": false
           },
@@ -308,7 +339,7 @@
             "state": "current",
             "status": "ok",
             "source_file": "data/stage5/error_review/latest.json",
-            "source_utc": "2026-10-11T12:40:59.241069+00:00",
+            "source_utc": "2026-10-11T12:48:43.134357+00:00",
             "age_hours": 0.0,
             "allowed_for_model": false
           }
@@ -364,15 +395,15 @@
     "source_daily_candles_last_day": "2026-10-10"
   },
   "historical_relative_net_return_vs_hold_pct_points": {
-    "doge_one_day_lag_reversal": -16.19,
-    "doge_one_day_lag_momentum": -26.73,
-    "btc_one_day_lag_momentum": -36.92
+    "doge_one_day_lag_reversal": -16.17,
+    "doge_one_day_lag_momentum": -26.63,
+    "btc_one_day_lag_momentum": -36.82
   },
   "friction_sensitivity_return_pct": {
     "doge_one_day_lag_reversal": {
-      "half_friction": -29.7,
-      "base_friction": -46.85,
-      "double_friction": -69.63
+      "half_friction": -29.75,
+      "base_friction": -46.93,
+      "double_friction": -69.72
     },
     "doge_one_day_lag_momentum": {
       "half_friction": -43.59,
@@ -392,7 +423,7 @@
     "target_utc": "2026-10-12T12:31:07.518690+00:00",
     "reference_price_usdt": 0.08525,
     "direction": "UP",
-    "forecast_age_minutes": 9.9,
+    "forecast_age_minutes": 17.6,
     "not_a_new_plus_model_forecast": true,
     "live_forecast_model_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1"
   },
