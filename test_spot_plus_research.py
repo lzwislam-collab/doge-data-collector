@@ -89,7 +89,9 @@ class SpotPlusTests(unittest.TestCase):
   bars=daily(self.root,NOW)['DOGE-USDT']
   hold=simulate(bars,400,'buy_and_hold',fee=.002,slippage=.002)
   self.assertGreater(hold['estimated_total_fees_usdt'],0)
-  self.assertEqual(hold['observed_fees_usdt'],hold['estimated_total_fees_usdt'])
+  self.assertNotIn('observed_fees_usdt',hold)
+  self.assertNotIn('observed_slippage_usdt',hold)
+  self.assertTrue(hold['assumptions']['frictions_are_assumptions_not_observed_fills'])
   self.assertEqual(hold['final_usdt'],round(hold['pre_liquidation_mark_to_market_usdt']*(1-.002)*(1-.002),2))
   cash=simulate(bars,400,'cash',fee=.002,slippage=.002)
   self.assertEqual(cash['final_usdt'],cash['pre_liquidation_mark_to_market_usdt'])
