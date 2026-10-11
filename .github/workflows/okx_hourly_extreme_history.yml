@@ -1,0 +1,50 @@
+name: Backfill DOGE BTC ETH 1H extreme-event research history
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'okx_hourly_research_history.py'
+      - '.github/workflows/okx_hourly_extreme_history.yml'
+  schedule:
+    - cron: '43 3,15 * * *'
+permissions:
+  contents: write
+concurrency:
+  group: okx-hourly-extreme-history
+  cancel-in-progress: false
+jobs:
+  hourly-history:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Backfill confirmed UTC 1H data with source-ingestion timestamps
+        id: collect
+        continue-on-error: true
+        run: python okx_hourly_research_history.py
+      - name: Persist data and diagnostics
+        if: always()
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          for f in data/hourly_research/ohlc.csv data/hourly_research/latest.json; do
+            if [ -f "$f" ]; then git add -f "$f"; fi
+          done
+          if ! git diff --cached --quiet; then
+            git commit -m 'data: extend OKX 1H research history'
+            for attempt in 1 2 3 4 5; do
+              if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
+              git rebase --abort || true
+              [ "$attempt" -lt 5 ] || exit 1
+              sleep 4
+            done
+          fi
+      - name: Fail on collector or quality error
+        if: steps.collect.outcome != 'success'
+        run: exit 1
