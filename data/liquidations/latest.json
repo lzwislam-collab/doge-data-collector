@@ -1,14 +1,14 @@
 {
   "schema_version": 3,
-  "status": "ok",
+  "status": "partial",
   "source": "OKX public WS liquidation-orders",
   "instrument": "DOGE-USDT-SWAP",
-  "started_at_utc": "2026-10-11T02:02:11.199257+00:00",
-  "ended_at_utc": "2026-10-11T02:10:11.317352+00:00",
-  "listen_seconds": 480.12,
-  "subscribed_seconds": 479.17,
-  "subscription_coverage_pct": 99.8,
-  "connections_attempted": 1,
+  "started_at_utc": "2026-10-11T02:22:32.953416+00:00",
+  "ended_at_utc": "2026-10-11T02:30:33.154276+00:00",
+  "listen_seconds": 480.2,
+  "subscribed_seconds": 475.02,
+  "subscription_coverage_pct": 98.92,
+  "connections_attempted": 2,
   "coverage": "Partial public notification feed; only subscribed windows; NOT market-wide totals",
   "notional_definition": "sz * contract_doge_per_contract * bkPx; bankruptcy-price estimate, NOT market-wide",
   "historical_backfill": false,
@@ -21,22 +21,30 @@
   "event_key_caveat": "Potential collision when timestamp, direction, size and price match; not globally unique",
   "data_quality": {
     "subscribed": true,
-    "subscription_ack_count": 1,
-    "messages": 70,
+    "subscription_ack_count": 2,
+    "messages": 14,
     "observed_doge_messages": 0,
     "errors": [],
-    "disconnects": 1,
-    "reconnects": 0,
+    "disconnects": 2,
+    "reconnects": 1,
     "new_events": 0,
     "duplicate_events": 0,
     "connections": [
       {
-        "connected_at_utc": "2026-10-11T02:02:11.913678+00:00",
-        "subscribed_at_utc": "2026-10-11T02:02:12.029942+00:00",
-        "disconnected_at_utc": "2026-10-11T02:10:11.315772+00:00",
+        "connected_at_utc": "2026-10-11T02:22:33.929398+00:00",
+        "subscribed_at_utc": "2026-10-11T02:22:34.119319+00:00",
+        "disconnected_at_utc": "2026-10-11T02:23:04.119807+00:00",
+        "close_code": 4004,
+        "close_reason": "No data received in 30s.",
+        "subscribed_seconds": 30.001
+      },
+      {
+        "connected_at_utc": "2026-10-11T02:23:07.740283+00:00",
+        "subscribed_at_utc": "2026-10-11T02:23:07.934660+00:00",
+        "disconnected_at_utc": "2026-10-11T02:30:33.153072+00:00",
         "close_code": null,
         "close_reason": "",
-        "subscribed_seconds": 479.169
+        "subscribed_seconds": 445.019
       }
     ],
     "parse_errors": 0
