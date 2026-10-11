@@ -39,19 +39,28 @@ def main():
      fid=row['forecast_id']
      if fid in existing:raise ValueError('duplicate registry ID')
      existing[fid]=row
-  # Verify that every row from the preceding committed registry still exists unchanged.
-  # Requires full git history (actions/checkout fetch-depth: 0).
-  revs=subprocess.run(['git','log','-2','--format=%H','--','data/prospective/registry.csv'],
+  # Compare ALL committed versions, oldest to newest, plus current worktree.
+  # This detects a previously removed/revised row even when later commits obscure it.
+  revs=subprocess.run(['git','log','--reverse','--format=%H','--','data/prospective/registry.csv'],
    cwd=ROOT,text=True,capture_output=True,check=True).stdout.splitlines()
-  if len(revs)>=2:
-   prev=subprocess.run(['git','show',revs[1]+':data/prospective/registry.csv'],
+  previous={}
+  for revision in revs:
+   raw=subprocess.run(['git','show',revision+':data/prospective/registry.csv'],
     cwd=ROOT,text=True,capture_output=True,check=True).stdout
-   rd=csv.DictReader(io.StringIO(prev))
-   if rd.fieldnames!=COLS:raise ValueError('historical registry schema mismatch')
-   for prior in rd:
-    fid=prior['forecast_id']
-    if fid not in existing or existing[fid]!=prior:
-     raise ValueError('historical forecast removed or modified: '+fid)
+   reader=csv.DictReader(io.StringIO(raw))
+   if reader.fieldnames!=COLS:raise ValueError('historical registry schema mismatch')
+   current={}
+   for row in reader:
+    fid=row['forecast_id']
+    if fid in current:raise ValueError('duplicate forecast in git history: '+fid)
+    current[fid]=row
+   for fid,row in previous.items():
+    if fid not in current or current[fid]!=row:
+     raise ValueError('committed forecast history modified: '+fid)
+   previous=current
+  for fid,row in previous.items():
+   if fid not in existing or existing[fid]!=row:
+    raise ValueError('registered forecast removed or modified: '+fid)
   old_count=len(existing);added=0
   digest=hashlib.sha256((str(anchor)+':'+str(last)).encode()).hexdigest()
   for h in H:
