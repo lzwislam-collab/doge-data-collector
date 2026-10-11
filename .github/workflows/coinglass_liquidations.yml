@@ -1,0 +1,46 @@
+name: Collect CoinGlass DOGE multi-exchange liquidations
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '27 1,5,9,13,17,21 * * *'
+permissions:
+  contents: write
+concurrency:
+  group: coinglass-doge-liquidations
+  cancel-in-progress: false
+jobs:
+  collect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      COINGLASS_API_KEY: ${{ secrets.COINGLASS_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate collector syntax
+        run: python -m py_compile coinglass_liquidations.py
+      - name: Fetch or record unavailable state
+        id: collect
+        continue-on-error: true
+        run: python coinglass_liquidations.py
+      - name: Persist diagnostic and available records
+        if: always()
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          for f in data/coinglass_liquidations/latest.json data/coinglass_liquidations/four_hour.csv; do
+            if [ -f "$f" ]; then git add -f "$f"; fi
+          done
+          if ! git diff --cached --quiet; then
+            git commit -m 'data: audit CoinGlass DOGE liquidation aggregate'
+            for i in 1 2 3 4 5; do
+              if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
+              if [ "$i" -eq 5 ]; then exit 1; fi
+              sleep 4
+            done
+          fi
+      - name: Flag missing key or collection failure
+        if: steps.collect.outcome != 'success'
+        run: exit 1
