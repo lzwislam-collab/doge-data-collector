@@ -1,0 +1,52 @@
+name: Audit DOGE extreme hourly crash event
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'crash_event_audit.py'
+      - 'test_crash_event_audit.py'
+      - '.github/workflows/audit_hourly_crash.yml'
+permissions:
+  contents: write
+concurrency:
+  group: doge-crash-event-audit
+  cancel-in-progress: false
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile and verify retrospective anti-leakage markers
+        run: |
+          python -m py_compile crash_event_audit.py
+          python crash_event_audit.py
+          python - <<'PY'
+          import json
+          x=json.load(open('data/crash_research/oct09_audit.json'))
+          assert x['status']=='insufficient_validation_sample'
+          assert x['screenshot_crash']['was_genuinely_warned_before_crash'] is False
+          assert x['screenshot_crash']['source_first_ingested_utc']>'2026-10-08T16:00:00+00:00'
+          assert x['crash_hour_count']==1 and x['hours']>=100
+          assert x['research_acceptance']['passed'] is False
+          assert x['exploratory_earlier_signal']['fires'] is True
+          print('retrospective review only: no 70pct prediction claim')
+          PY
+      - name: Commit diagnostic artifacts
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -f data/crash_research/oct09_audit.json reports/DOGE_OCT09_CRASH_POSTMORTEM.md
+          if ! git diff --cached --quiet; then
+            git commit -m 'data: audit historical DOGE extreme-hour precursor without hindsight claims'
+            for attempt in 1 2 3 4 5; do
+              if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
+              git rebase --abort || true
+              [ "$attempt" -lt 5 ] || exit 1
+              sleep 4
+            done
+          fi
