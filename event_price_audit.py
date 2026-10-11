@@ -66,6 +66,8 @@ def main():
      event_id=row["event_id"]
      if not event_id:raise ValueError("empty event ID")
      events.append((name,event_id,max(publication,first),publication,first))
+  audit["hourly_duplicate_same_value_count"]=0
+  audit["hourly_gap_count"]=sum((b-a)//HOUR_MS-1 for a,b in zip(stamps,stamps[1:]) if b-a>HOUR_MS)
   audit["events_total"]=len(events)
   for name,event_id,available,published,first in events:
    audit["blocked"].setdefault("event_not_available_during_price_history",0)
@@ -84,6 +86,10 @@ def main():
      key="missing_mature_target_"+str(h)+"h"
      audit["blocked"][key]=audit["blocked"].get(key,0)+1
      continue
+    if any((entry_ts+k*HOUR_MS) not in candles for k in range(h+1)):
+     key="gap_in_return_window_"+str(h)+"h"
+     audit["blocked"][key]=audit["blocked"].get(key,0)+1
+     continue
     audit["event_horizon_results"].append({
       "source":name,"event_id":event_id,
       "available_utc":datetime.fromtimestamp(available/1000,timezone.utc).isoformat(),
@@ -97,7 +103,7 @@ def main():
    "BLS schedules excluded from realized events",
    "No contemporaneous historical capture before collector first_seen",
    "No causal conclusions; no out-of-sample predictive advantage",
-   "1h candle series must be gap-checked before statistical use"]
+   "1h candle continuity checked per scoring window; aggregate gaps disclosed"]
  except Exception as e:
   audit["error"]=type(e).__name__+": "+str(e)[:240]
  out=OUT/"latest.json";tmp=out.with_suffix(".json.tmp")
