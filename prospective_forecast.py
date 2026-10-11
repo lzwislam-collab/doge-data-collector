@@ -48,6 +48,8 @@ def main():
    if len(history)<365:raise ValueError('insufficient matured examples')
    p=(1+sum(history))/(2+len(history))
    target=anchor_day+timedelta(days=h)
+   # Reject a target already closed before registration; no retroactive forecasts.
+   if timestamp.date()>target:continue
    existing[fid]={'forecast_id':fid,'registered_utc':timestamp.isoformat(),
      'anchor_date_utc':anchor_day.isoformat(),'anchor_close':str(last),
      'horizon_days':str(h),'target_date_utc':target.isoformat(),
