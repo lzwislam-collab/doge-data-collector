@@ -1,0 +1,47 @@
+name: Audit policy event DOGE price alignment
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'event_price_audit.py'
+      - '.github/workflows/event_price_audit.yml'
+  schedule:
+    - cron: '47 2,14 * * *'
+permissions:
+  contents: write
+concurrency:
+  group: doge-policy-price-alignment
+  cancel-in-progress: false
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Syntax check
+        run: python -m py_compile event_price_audit.py
+      - name: Calculate conservative available event coverage
+        id: checker
+        continue-on-error: true
+        run: python event_price_audit.py
+      - name: Persist audit outcome
+        if: always()
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -f data/event_price_audit/latest.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'audit: update policy event price availability'
+            for i in 1 2 3 4 5; do
+              if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
+              if [ "$i" -eq 5 ]; then exit 1; fi
+              sleep 4
+            done
+          fi
+      - name: Fail on invalid audit
+        if: steps.checker.outcome != 'success'
+        run: exit 1
