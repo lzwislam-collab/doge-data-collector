@@ -3,12 +3,16 @@
 import csv,json,math,os,hashlib
 from datetime import datetime,timezone,timedelta,date
 from pathlib import Path
-from forecast_v41 import ROOT,BASE,COLS,MODEL,atomic,load_prices,interval_score,verify_append_only,iso,DAY_MS
+from forecast_v41 import ROOT,BASE,COLS,MODEL,atomic,load_prices,interval_score,verify_append_only,iso,DAY_MS,MAX_REGISTRATION_LATENCY_MIN
 
 def score_row(r,observed,now):
  anchor=date.fromisoformat(r['anchor_date_utc']);target=date.fromisoformat(r['target_date_utc'])
  created=datetime.fromisoformat(r['registered_utc'].replace('Z','+00:00'))
  horizon=int(r['horizon_days'])
+ anchor_closed_at=datetime.combine(anchor+timedelta(days=1),datetime.min.time(),timezone.utc)
+ latency_min=(created-anchor_closed_at).total_seconds()/60
+ if not 0<=latency_min<=MAX_REGISTRATION_LATENCY_MIN:
+  return 'quarantined','prospective_registration_too_late_or_before_anchor_close'
  if (created.tzinfo is None or created.utcoffset()!=timedelta(0) or horizon not in (1,7,30)
      or created.date()!=anchor+timedelta(days=1) or target!=anchor+timedelta(days=horizon)
      or created>=datetime.combine(target+timedelta(days=1),datetime.min.time(),timezone.utc)
