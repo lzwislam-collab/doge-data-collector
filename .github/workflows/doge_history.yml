@@ -24,6 +24,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      # Exclusive automatic writer for prospective registry and scoring.
       - name: Backfill historical UTC close data and audit
         id: collect
         continue-on-error: true
@@ -50,6 +51,7 @@ jobs:
             git commit -m 'data: update UTC daily history and audit baseline'
             for attempt in 1 2 3 4 5; do
               if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
+              git rebase --abort || true
               if [ "$attempt" -eq 5 ]; then exit 1; fi
               sleep 4
             done
