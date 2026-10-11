@@ -1,0 +1,51 @@
+name: Register prospective DOGE baseline forecasts
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'prospective_forecast.py'
+      - '.github/workflows/prospective_forecast.yml'
+  schedule:
+    - cron: '12 6 * * *'
+permissions:
+  contents: write
+concurrency:
+  group: doge-prospective-registry
+  cancel-in-progress: false
+jobs:
+  register:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify syntax
+        run: python -m py_compile prospective_forecast.py
+      - name: Register baseline before target maturity
+        id: register
+        continue-on-error: true
+        run: python prospective_forecast.py
+      - name: Persist immutable-key registry and diagnostic
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          for f in data/prospective/latest.json data/prospective/registry.csv; do
+            if [ -f "$f" ]; then git add -f "$f"; fi
+          done
+          if ! git diff --cached --quiet; then
+            git commit -m 'data: register prospective DOGE baseline prediction'
+            for n in 1 2 3 4 5; do
+              if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
+              if [ "$n" -eq 5 ]; then exit 1; fi
+              sleep 4
+            done
+          fi
+      - name: Reject failed registration
+        if: steps.register.outcome != 'success'
+        run: exit 1
