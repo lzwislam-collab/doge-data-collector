@@ -24,6 +24,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Test registry and scoring integrity
+        run: python -m unittest -v test_prospective_score test_prospective_integrity
       # Exclusive automatic writer for prospective registry and scoring.
       - name: Backfill historical UTC close data and audit
         id: collect
