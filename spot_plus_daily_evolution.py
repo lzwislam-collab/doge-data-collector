@@ -202,9 +202,9 @@ def log_row(summary):
   'data_state':summary['source_health']['grade'],
   'prospective_24h_n':str(p['locked_bin_registered']),
   'prospective_24h_scored':str(p['genuinely_scored']),
-  'prospective_24h_accuracy_pct':str(p['accuracy_pct'] or ''),
-  'prospective_24h_wilson95_lower_pct':str(p['wilson95_lower_pct'] or ''),
-  'prospective_24h_quote_coverage_pct':str(p['coverage_pct'] or ''),
+  'prospective_24h_accuracy_pct':str(p['accuracy_pct']) if p['accuracy_pct'] is not None else '',
+  'prospective_24h_wilson95_lower_pct':str(p['wilson95_lower_pct']) if p['wilson95_lower_pct'] is not None else '',
+  'prospective_24h_quote_coverage_pct':str(p['coverage_pct']) if p['coverage_pct'] is not None else '',
   'buy_hold_research_return_pct':str(h['buy_hold_pct']),
   'best_candidate_research_return_pct':str(h['best_candidate_pct']),
   'market_edge_validated':'false','70pct_validated':'false',
@@ -229,7 +229,7 @@ def render(s,record):
   '- 70%有效优势：**未验证**。历史和冻结前诊断不计入正式成绩。\n\n'
   '## ② 现货经济能力（仅历史假设模拟）\n\n'
   f"- DOGE买入持有：{h['buy_hold_pct']}%；现金：{h['cash_pct']}%；历史最好候选 {h['best_candidate_id']}：{h['best_candidate_pct']}%。\n"
-  f"- 与持币比较：{h['candidate_outperformance_vs_hold_pct_points']}个百分点；候选通过历史观察筛选，**不构成未来获利证据**。\n\n'
+  f"- 与持币比较：{h['candidate_outperformance_vs_hold_pct_points']}个百分点；候选通过历史观察筛选，**不构成未来获利证据**。\n\n"
   '## ③ 今日最优先整改\n\n'
   f"**{s['evolution_priority']}**\n\n"
   '逐项保留缺失与时点限制，次日复查是否修复。模型升级须另外独立验证。'
