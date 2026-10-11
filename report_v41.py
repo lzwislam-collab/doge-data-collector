@@ -11,7 +11,7 @@ def read(relative):
   return j if isinstance(j,dict) else {'status':'error','reason':'not_object'}
  except Exception as e:return {'status':'unavailable','reason':type(e).__name__}
 def stamp(item):
- for k in ('collected_at_utc','observed_to_utc','observed_at_utc','ended_at_utc','run_utc','generated_utc','generated_at_utc','evaluated_at_utc'):
+ for k in ('collected_at_utc','observed_to_utc','observed_at_utc','ended_at_utc','run_utc','generated_utc','generated_at_utc','evaluated_at_utc','evaluated_utc'):
   if item.get(k):return str(item[k])
  return '未提供'
 def age_label(item,now,hours):
@@ -50,6 +50,7 @@ def main():
  etf=read('data/etf/latest.json');macro=read('data/macro/latest.json')
  policy=read('data/policy_events/latest.json');sec=read('data/sec_events/latest.json')
  cftc=read('data/regulatory_events/latest.json')
+ crash=read('data/crash_research/pilot_1h_latest.json')
  prices_by_symbol={}
  with (ROOT/'data/history/daily.csv').open(newline='',encoding='utf-8') as f:
   for r in csv.DictReader(f):
@@ -110,6 +111,7 @@ def main():
      '- 下行条件：BTC持续走弱、DOGE/BTC相对强弱恶化、盘口收缩或合约风险显著增加。',
      '- 上行条件：BTC企稳、DOGE相对强弱改善、成交/流动性得到确认。',
      '- 上述条件属于待检验的风险监控规则，不是已经验证的预测因子。',
+     f'- 1小时极端暴跌风险研究：{crash.get("status","unavailable")}；OKX历史1H样本 {crash.get("hourly_rows_by_symbol","未知")}小时，≥5%小时暴跌 {crash.get("crash_count_total","未知")}次，候选规则共触发 {crash.get("alert_count","未知")}次；提前预警精确率 {crash.get("precision_pct","不可用")}%、事件召回率 {crash.get("recall_pct","不可用")}%。该规则事后构建、无独立样本验证、不得当作实盘预警。',
      '','## F10｜历史回测与前瞻兑现',
      '|周期|滚动样本外窗口数|经验P10–P90覆盖率|滚动区间分数|扩展历史基线区间分数|非重叠窗口数|',
      '|---|---:|---:|---:|---:|---:|']
