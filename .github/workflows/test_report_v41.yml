@@ -1,0 +1,30 @@
+name: Test DOGE V4.1 research report
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'report_v41.py'
+      - '.github/workflows/test_report_v41.yml'
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Syntax and report generation
+        run: |
+          python -m py_compile report_v41.py
+          python report_v41.py
+      - name: Verify 11 chapters, no unsupported model advantage
+        run: |
+          for n in $(seq -w 1 11); do
+            grep -q "## F${n}｜" reports/DOGE_V41_LATEST.md
+          done
+          grep -q 'NO_VALIDATED_EDGE' reports/DOGE_V41_LATEST.md
+          grep -q '实验\|历史经验\|历史频率\|尚未' reports/DOGE_V41_LATEST.md
