@@ -11,7 +11,8 @@ SYMBOLS=('DOGE-USDT','BTC-USDT','ETH-USDT')
 COLUMNS=('symbol','open_utc_ms','open','high','low','close','volume_base','first_ingested_utc','source')
 HOUR=3600000
 OLDEST_TARGET=int(datetime(2023,10,1,tzinfo=timezone.utc).timestamp()*1000)
-PAGE_BUDGET=24
+PAGE_BUDGET=int(os.getenv('DOGE_HOURLY_PAGE_BUDGET','24'))
+if not 0<=PAGE_BUDGET<=24:raise ValueError('invalid hourly page budget')
 API='https://www.okx.com/api/v5/market/history-candles'
 def iso(ms):return datetime.fromtimestamp(ms/1000,timezone.utc).isoformat()
 def atomic(p,s):
