@@ -50,8 +50,16 @@ def run():
             request=urllib.request.Request(url,headers={"accept":"application/json","CG-API-KEY":key,"User-Agent":"DOGE-data-quality/1.0"})
             with urllib.request.urlopen(request,timeout=35) as response:
                 payload=json.load(response)
+            msg=str(payload.get("msg",""))
+            if "upgrade plan" in msg.lower():
+                result["status"]="plan_required"
+                result["errors"]["subscription"]="CoinGlass returned Upgrade plan; no liquidations were collected"
+                result["plan_guidance"]="Check CoinGlass API subscription; documented minimum for this endpoint is Hobbyist at 4h"
+                atomic(ROOT/"latest.json",json.dumps(result,ensure_ascii=False,indent=2)+"\\n")
+                print(json.dumps({"status":result["status"],"records":None,"errors":result["errors"]},ensure_ascii=False))
+                return 1
             if str(payload.get("code"))!="0" or not isinstance(payload.get("data"),list) or not payload["data"]:
-                raise ValueError("CoinGlass error or empty payload: "+str(payload.get("msg",""))[:120])
+                raise ValueError("CoinGlass error or empty payload: "+msg[:120])
             old={}
             history=ROOT/"four_hour.csv"
             if history.exists():
