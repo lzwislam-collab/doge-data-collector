@@ -55,6 +55,8 @@ def main():
  cftc=read('data/regulatory_events/latest.json')
  crash=read('data/crash_research/pilot_1h_latest.json')
  crash_live=read('data/crash_research/prospective_scores.json')
+ crash_v42=read('data/crash_research/v42_scores.json')
+ minute_probe=read('data/v42_microprobe/latest.json')
  quality=read('data/quality/latest.json')
  old_baseline=read('data/prob_baseline/latest.json')
  old_gate=read('data/prediction_gate/latest.json')
@@ -130,6 +132,8 @@ def main():
      '- 下行条件：BTC持续走弱、DOGE/BTC相对强弱恶化、盘口收缩或合约风险显著增加。',
      '- 上行条件：BTC企稳、DOGE相对强弱改善、成交/流动性得到确认。',
      '- 上述条件属于待检验的风险监控规则，不是已经验证的预测因子。',
+     f'- **V4.2严格评分（主研究口径）**：状态 {crash_v42.get("status","不可用")}；历史登记 {crash_v42.get("registered","未知")}，目标到期 {crash_v42.get("scored_count","未知")}，待评分 {crash_v42.get("pending_count","未知")}；真实预警精确率 {(str(crash_v42["alert_precision_pct"])+"%") if crash_v42.get("alert_precision_pct") is not None else "样本不足"}，真实暴跌事件召回率 {(str(crash_v42["event_recall_pct"])+"%") if crash_v42.get("event_recall_pct") is not None else "样本不足"}，模型授权 {crash_v42.get("approval","BLOCKED")}。必须先在实际发出后等待至少1小时，才允许计算随后K线的暴跌命中。',
+     f'- **V4.2分钟级可行性**：{minute_probe.get("status","未验证")}；样本 {minute_probe.get("total_verified_sample_rows","未知")}条；源采集 {minute_probe.get("observed_utc","未提供")}。仅为小时采样的1m/5m确认K线测试，非连续分钟级流和已验证风险预测。',
      f'- **真实未来1小时监测**：{crash_live.get("status","未建立")}；已登记 {crash_live.get("registered","未知")} 条观察，成熟评分 {len(crash_live.get("scored",[]))} 条；当前精确率 {(str(crash_live["precision_pct"])+"%") if crash_live.get("precision_pct") is not None else "样本不足"}，召回率 {(str(crash_live["recall_pct"])+"%") if crash_live.get("recall_pct") is not None else "样本不足"}；阈值在10月9日暴跌后选择，前瞻积累不足，**不构成70%通过证据**。',
      f'- 1小时极端暴跌历史研究：{crash.get("status","unavailable")}；计算时间 {stamp(crash)}，历史K线截止 {crash.get("history_last_start_utc","未知")}；有效1H样本 {crash.get("hourly_rows_by_symbol","未知")}小时，≥5%小时暴跌 {crash.get("crash_count_total","未知")}次，规则事后触发 {crash.get("alert_count","未知")}次；精确率 {crash.get("precision_pct","不可用")}%、召回率 {crash.get("recall_pct","不可用")}%、误报 {crash.get("false_alerts_per_week","不可用")} 次/周，命中事件提前 {", ".join(str(n) for n in crash.get("warning_lead_hours_for_caught_events",[])) or "无有效事件"} 小时。这是事后选参研究，不是独立测试或可靠预警。',
      '','## F10｜历史回测与前瞻兑现',
@@ -156,6 +160,7 @@ def main():
      '- ①链上/巨鲸/交易所净流：PARTIAL；②强平/流动性：PARTIAL；③ETF：采集PASS；④宏观政策：采集PASS/因果效应未验证；⑤历史/预测：工程PASS/预测有效性未验证。',
      f'- **独立数据质量门禁**：状态 {quality.get("status","未运行")}，报告时记录 {stamp(quality)}；关键故障 {quality.get("critical_failures","未知")}，可选数据告警 {quality.get("optional_source_warnings","未知")}。对已过期文件不能凭历史PASS宣称实时。',
      f'- **旧模型审计时间一致性**：旧多因子/概率基线截止 {old_baseline.get("data_end_utc","不可用")}，当前DOGE日线截止 {cutoff}；'+('旧模型统计滞后：STALE_NOT_USED_FOR_V41。' if old_baseline.get('data_end_utc')!=cutoff else '旧基线时间匹配，但不代表预测优势。')+f' 旧预测门禁状态 {old_gate.get("status","未知")}，不决定V4.1有效性。',
+     f'- V4.2实测窗口审计时间：{stamp(crash_v42)}；1m/5m可行性样本时间：{minute_probe.get("observed_utc","无")}。V4.2的70%资格门禁保持BLOCKED，历史回测不能替代前瞻评分。',
      '- **Google Sheets/Apps Script单独验收**：本GitHub报告不代表Apps Script触发、执行记录及表格回读已验证；禁止合并声称成功。',
      '- 数据事实与情景判断严格区分；本报告不修改DOGE定投执行规则。',
      '**综合裁决：RESEARCH_ONLY / NO_VALIDATED_EDGE。**',
