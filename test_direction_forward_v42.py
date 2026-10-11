@@ -44,7 +44,7 @@ class ForwardDirectionTests(unittest.TestCase):
   self.assertEqual(set(int(v['horizon_hours']) for v in rows.values()),{1,24})
   for row in rows.values():
    self.assertEqual(row['issued_at_utc'],now.isoformat())
-   self.assertEqual(row['reference_price'],'.11')
+   self.assertEqual(float(row['reference_price']),0.11)
    self.assertEqual(row['model_id'],MODEL)
    self.assertEqual(row['target_utc'],(now+timedelta(hours=int(row['horizon_hours']))).isoformat())
  def test_genuine_full_one_hour_forward_and_no_double_register(self):
