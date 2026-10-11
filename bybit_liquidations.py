@@ -108,7 +108,9 @@ def run():
     status["subscription_seconds"]=round(min(online[0],elapsed),2)
     status["in_window_subscription_pct"]=round(100*min(online[0],elapsed)/elapsed,2) if elapsed else 0
     status["stored_unique_events"]=len(old)
-    status["status"]="partial" if status["subscription_ack"] and not status["errors"] else "error"
+    status["status"]="partial" if (status["subscription_ack"] and not status["errors"] and elapsed>=DURATION*0.9 and online[0]>=DURATION*0.85) else "error"
+    if status["status"]=="error" and not status["errors"]:
+        status["errors"].append("insufficient listening duration or subscription coverage")
     out=io.StringIO()
     writer=csv.DictWriter(out,fieldnames=FIELDS)
     writer.writeheader()
