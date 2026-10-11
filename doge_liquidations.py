@@ -181,6 +181,7 @@ def main():
                 duration = max(0., end - active_since[0])
                 session['subscribed_seconds'] = round(duration, 3)
                 online_total += duration
+                active_since[0] = None
             if session['disconnected_at_utc'] is None:
                 session['disconnected_at_utc'] = utc()
         if session_errors:
@@ -198,6 +199,8 @@ def main():
 
     elapsed = time.monotonic() - start
     coverage_pct = round(100 * min(online_total, elapsed) / elapsed, 2) if elapsed else 0.
+    if online_total > elapsed + 0.5:
+        state['errors'].append('coverage accounting exceeds elapsed window')
     # A clean run can still be partial. An OKX notice feed is not exhaustive by design.
     status = ('error' if state['errors'] or not state['subscribed']
               else 'ok' if coverage_pct >= 99.0 else 'partial')
