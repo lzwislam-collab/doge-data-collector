@@ -92,7 +92,6 @@ def main():
                    'close_reason': '', 'subscribed_seconds': 0.0}
         state['connections'].append(session)
         active_since = [None]
-        closed_by_deadline = [False]
         session_errors = []
 
         def on_open(ws):
@@ -167,7 +166,6 @@ def main():
                                      on_error=on_error, on_close=on_close)
         remaining = max(0.1, deadline - time.monotonic())
         def end_session():
-            closed_by_deadline[0] = True
             app.close()
         timer = threading.Timer(remaining, end_session)
         timer.daemon = True
@@ -208,7 +206,7 @@ def main():
                'listen_seconds': round(elapsed, 2), 'subscribed_seconds': round(online_total, 2),
                'subscription_coverage_pct': coverage_pct, 'connections_attempted': attempts,
                'coverage': 'Partial public notification feed; only subscribed windows; NOT market-wide totals',
-               'notional_definition': 'sz * 1000 DOGE/contract * bkPx, bankruptcy-price notional',
+               'notional_definition': 'sz * contract_doge_per_contract * bkPx; bankruptcy-price estimate, NOT market-wide',
                'historical_backfill': False, 'event_rows_total': len(rows),
                'contract_doge_per_contract': str(contract_multiplier),
                'planned_coverage_ceiling_pct': round(100 * DURATION / 900, 2),
