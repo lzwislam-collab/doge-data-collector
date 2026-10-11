@@ -150,6 +150,11 @@ def build(now=None):
  anchor_closed_at=datetime.combine(datetime.fromtimestamp(times[-1]/1000,timezone.utc).date()+timedelta(days=1),datetime.min.time(),timezone.utc)
  elapsed_min=(now-anchor_closed_at).total_seconds()/60
  register_allowed=0<=elapsed_min<=MAX_REGISTRATION_LATENCY_MIN
+ output['forecast_clock_definition']='UTC prior daily close to target UTC daily close; NOT 24h after registration'
+ output['origin_close_at_utc']=anchor_closed_at.isoformat()
+ output['reported_at_utc']=now.isoformat()
+ output['target_window_elapsed_before_issue_minutes']=round(max(0,elapsed_min),2)
+ output['from_report_time_exact_24h_forecast']=False
  output['registration_latency_minutes']=round(elapsed_min,2)
  output['registration_limit_minutes']=MAX_REGISTRATION_LATENCY_MIN
  output['registration_window_ok']=register_allowed
@@ -166,7 +171,8 @@ def build(now=None):
    'historical_up_frequency_pct':round(p['historical_up_frequency']*100,3),
    'research_large_down_threshold_pct':-int(DOWNSIDE[h]*100),
    'historical_large_down_frequency_pct':round(p['historical_large_down_frequency']*100,3),
-   'validated_probability':False,'historical_sample_only':True}
+   'validated_probability':False,'historical_sample_only':True,
+   'remaining_target_minutes_after_registration':round((datetime.combine(datetime.fromtimestamp((times[-1]+h*DAY_MS)/1000,timezone.utc).date()+timedelta(days=1),datetime.min.time(),timezone.utc)-now).total_seconds()/60,2)}
   output['price_intervals'][str(h)+'d']['prospective_registered_or_existing']=fid in existing or register_allowed
   backtests[str(h)+'d']=walk_forward(prices,h)
   if fid not in existing and register_allowed:
