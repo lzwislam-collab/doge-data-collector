@@ -25,7 +25,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Test registry and scoring integrity
-        run: python -m unittest -v test_prospective_score test_prospective_integrity test_forecast_v41
+        run: python -m unittest -v test_prospective_score test_prospective_integrity test_forecast_v41 test_calibration_v41
       # Exclusive automatic writer for prospective registry and scoring.
       - name: Backfill historical UTC close data and audit
         id: collect
@@ -47,6 +47,11 @@ jobs:
         if: steps.collect.outcome == 'success'
         continue-on-error: true
         run: python score_v41.py
+      - name: Evaluate research-only historical interval calibration challenger
+        id: v41_calibration
+        if: steps.collect.outcome == 'success'
+        continue-on-error: true
+        run: python research_interval_calibration.py
       - name: Render V4.1 complete 11-section report with freshness labels
         id: v41_report
         if: steps.v41.outcome == 'success' && steps.v41_score.outcome == 'success'
@@ -57,7 +62,7 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          for file in data/history/latest.json data/history/daily.csv data/history/backtest_latest.json data/prospective/latest.json data/prospective/registry.csv data/prospective/scores.json data/forecast_v41/latest.json data/forecast_v41/backtest_latest.json data/forecast_v41/registry.csv data/forecast_v41/scores.json reports/DOGE_V41_LATEST.md; do
+          for file in data/history/latest.json data/history/daily.csv data/history/backtest_latest.json data/prospective/latest.json data/prospective/registry.csv data/prospective/scores.json data/forecast_v41/latest.json data/forecast_v41/backtest_latest.json data/forecast_v41/registry.csv data/forecast_v41/scores.json data/forecast_v41/calibration_research.json reports/DOGE_V41_LATEST.md; do
             if [ -f "$file" ]; then git add -f "$file"; fi
           done
           if ! git diff --cached --quiet; then
@@ -70,5 +75,5 @@ jobs:
             done
           fi
       - name: Fail on data collection errors
-        if: steps.collect.outcome != 'success' || steps.score.outcome != 'success' || steps.v41.outcome != 'success' || steps.v41_score.outcome != 'success' || steps.v41_report.outcome != 'success'
+        if: steps.collect.outcome != 'success' || steps.score.outcome != 'success' || steps.v41.outcome != 'success' || steps.v41_score.outcome != 'success' || steps.v41_report.outcome != 'success' || steps.v41_calibration.outcome != 'success'
         run: exit 1
