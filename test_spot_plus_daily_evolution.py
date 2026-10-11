@@ -108,6 +108,36 @@ class TestDailyEvolution(unittest.TestCase):
   with self.assertRaisesRegex(ValueError,'five-pillar'):
    inspect(self.root,AT)
 
+ def test_missing_target_quote_blocks_progress_before_100_forecasts(self):
+  self.plus['five_pillar_evidence_audit']['quality_audit_age_hours']=0.1
+  self.stage['forward_live']={'horizons':{'1h':{'resolved':8,'scored':3,
+    'unscorable':5,'resolved_quote_coverage_pct':37.5}}}
+  self.save()
+  result=inspect(self.root,AT)
+  health=result['original_ticker_1h_collection_diagnostic']
+  self.assertEqual(health['matured'],8)
+  self.assertEqual(health['unscorable'],5)
+  self.assertEqual(health['quote_coverage_pct'],37.5)
+  self.assertEqual(result['evolution_priority'],'P0_REPAIR_ORIGINAL_TARGET_TICKER_QUOTE_COVERAGE')
+  self.assertFalse(result['accuracy_70pct_validated'])
+  run(self.root,AT)
+  self.assertIn('报价覆盖率 37.5%',(self.root/'reports/DOGE_SPOT_PLUS_DAILY.md').read_text())
+
+ def test_tampered_quote_coverage_fails_closed(self):
+  self.plus['five_pillar_evidence_audit']['quality_audit_age_hours']=0.1
+  self.stage['forward_live']={'horizons':{'1h':{'resolved':8,'scored':3,
+    'unscorable':5,'resolved_quote_coverage_pct':90.0}}}
+  self.save()
+  with self.assertRaisesRegex(ValueError,'coverage mismatch'):
+   inspect(self.root,AT)
+
+ def test_missing_quote_counter_cannot_be_ignored(self):
+  self.stage['forward_live']={'horizons':{'1h':{'resolved':8,'scored':8,
+    'unscorable':5,'resolved_quote_coverage_pct':100.0}}}
+  self.save()
+  with self.assertRaisesRegex(ValueError,'coverage accounting mismatch'):
+   inspect(self.root,AT)
+
  def test_realtime_warning_prevents_fake_green(self):
   x=inspect(self.root,AT)
   self.assertEqual(x['source_health']['grade'],'WARN')
