@@ -7,7 +7,7 @@ on:
       - 'doge_history.py'
       - '.github/workflows/doge_history.yml'
   schedule:
-    - cron: '17 2,10,18 * * *'
+    - cron: '17 1,10,18 * * *'
 permissions:
   contents: write
 concurrency:
@@ -31,11 +31,7 @@ jobs:
         id: collect
         continue-on-error: true
         run: python doge_history.py
-      - name: Register newest prospective DOGE baseline
-        id: register
-        if: steps.collect.outcome == 'success'
-        continue-on-error: true
-        run: python prospective_forecast.py
+      # Legacy baseline registry remains frozen; old eligible forecasts continue to be scored.
       - name: Score matured prospective entries
         id: score
         if: steps.collect.outcome == 'success'
@@ -74,5 +70,5 @@ jobs:
             done
           fi
       - name: Fail on data collection errors
-        if: steps.collect.outcome != 'success' || steps.register.outcome != 'success' || steps.score.outcome != 'success' || steps.v41.outcome != 'success' || steps.v41_score.outcome != 'success' || steps.v41_report.outcome != 'success'
+        if: steps.collect.outcome != 'success' || steps.score.outcome != 'success' || steps.v41.outcome != 'success' || steps.v41_score.outcome != 'success' || steps.v41_report.outcome != 'success'
         run: exit 1
