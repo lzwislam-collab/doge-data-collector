@@ -51,7 +51,15 @@ def read_csv(path, fields):
 def jsonfile(root, name):
     path = root / name
     data = json.loads(path.read_text(encoding='utf-8'))
-    if data.get('status') not in ('ok', 'partial_backfill'):
+    if name=='data/direction_v42/forward_latest.json' and data.get('status')=='stale_hour_no_new_registration':
+        if (float(data.get('feature_lag_min',0))<=45
+            or data.get('new_ids')!=[]
+            or data.get('validated_70pct') is not False
+            or data.get('claim_permission')!='NO_VALIDATED_EDGE'):
+            raise ValueError('unexpected/misleading late forecast skip')
+        utc(data['generated_utc'])
+        utc(data['quote_at_utc'])
+    elif data.get('status') not in ('ok','partial_backfill'):
         raise ValueError('nonhealthy source ' + name + ' status=' + str(data.get('status')))
     return data
 
