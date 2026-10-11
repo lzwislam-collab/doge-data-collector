@@ -7,6 +7,8 @@ on:
       - 'prediction_gate.py'
       - 'stage5_70pct_audit.py'
       - 'test_stage5_70pct_audit.py'
+      - 'stage5_forward_quality.py'
+      - 'test_stage5_forward_quality.py'
       - '.github/workflows/prediction_gate.yml'
       - 'data/quality/latest.json'
       - 'data/prob_baseline/latest.json'
@@ -28,8 +30,8 @@ jobs:
           python-version: '3.11'
       - name: Test Stage 5 score integrity and confidence intervals
         run: |
-          python -m py_compile prediction_gate.py stage5_70pct_audit.py
-          python -m unittest -v test_stage5_70pct_audit
+          python -m py_compile prediction_gate.py stage5_70pct_audit.py stage5_forward_quality.py
+          python -m unittest -v test_stage5_70pct_audit test_stage5_forward_quality
       - name: Independently audit 70-percent direction target and prospective samples
         id: stage5
         continue-on-error: true
