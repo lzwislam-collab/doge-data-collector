@@ -6,6 +6,8 @@ import json
 import os
 import threading
 import time
+import urllib.request
+import urllib.parse
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -16,7 +18,20 @@ BASE = Path(__file__).resolve().parent / 'data' / 'liquidations'
 WS = 'wss://ws.okx.com:8443/ws/v5/public'
 FIELDS = ['event_key','event_ts_ms','side','pos_side','contracts','bankruptcy_price','notional_usdt','received_at_utc']
 DURATION = max(30, min(int(os.getenv('LIQ_LISTEN_SECONDS', '480')), 600))
-CONTRACT_DOGE = Decimal('1000')  # Verify contract specification before changing instrument.
+def contract_doge():
+    """Fail closed unless OKX confirms live linear DOGE-denominated swap contract."""
+    url = 'https://www.okx.com/api/v5/public/instruments?' + urllib.parse.urlencode({'instType': 'SWAP', 'instId': 'DOGE-USDT-SWAP'})
+    req = urllib.request.Request(url, headers={'Accept':'application/json','User-Agent':'DOGE-liquidation-audit/1.1'})
+    with urllib.request.urlopen(req, timeout=20) as response:
+        payload = json.load(response)
+    if payload.get('code') != '0' or not isinstance(payload.get('data'),list):
+        raise ValueError('OKX instrument metadata unavailable')
+    inst = next((x for x in payload['data'] if x.get('instId') == 'DOGE-USDT-SWAP'), None)
+    if not inst or inst.get('ctType') != 'linear' or inst.get('ctValCcy') != 'DOGE' or inst.get('state') != 'live':
+        raise ValueError('DOGE swap denomination/state unexpected')
+    val = positive(inst['ctVal'])
+    return val
+
 
 def utc():
     return datetime.now(timezone.utc).isoformat()
@@ -52,6 +67,16 @@ def main():
     deadline = start + DURATION
     started = utc()
     rows = load_events(BASE / 'events.csv')
+    try:
+        contract_multiplier = contract_doge()
+    except Exception as error:
+        report = {'schema_version': 3, 'status':'error', 'source':'OKX public WS liquidation-orders',
+                  'instrument':'DOGE-USDT-SWAP','started_at_utc':started,'ended_at_utc':utc(),
+                  'errors':{'contract_metadata':type(error).__name__ + ': ' + str(error)[:200]},
+                  'coverage':'no liquidation events accepted; contract metadata validation failed',
+                  'not_market_wide':True}
+        atomic(BASE / 'latest.json', json.dumps(report, indent=2) + '\n')
+        return 1
     lock = threading.Lock()
     state = {'subscribed': False, 'subscription_ack_count': 0, 'messages': 0,
              'observed_doge_messages': 0, 'errors': [], 'disconnects': 0,
@@ -121,7 +146,7 @@ def main():
                             rows[key] = {'event_key': key, 'event_ts_ms': str(ts), 'side': side,
                                          'pos_side': pos_side, 'contracts': str(sz),
                                          'bankruptcy_price': str(px),
-                                         'notional_usdt': str(sz * CONTRACT_DOGE * px),
+                                         'notional_usdt': str(sz * contract_multiplier * px),
                                          'received_at_utc': utc()}
                             state['new_events'] += 1
             except Exception as e:
@@ -178,13 +203,18 @@ def main():
     # A clean run can still be partial. An OKX notice feed is not exhaustive by design.
     status = ('error' if state['errors'] or not state['subscribed']
               else 'ok' if coverage_pct >= 99.0 else 'partial')
-    summary = {'schema_version': 2, 'status': status, 'source': 'OKX public WS liquidation-orders',
+    summary = {'schema_version': 3, 'status': status, 'source': 'OKX public WS liquidation-orders',
                'instrument': 'DOGE-USDT-SWAP', 'started_at_utc': started, 'ended_at_utc': utc(),
                'listen_seconds': round(elapsed, 2), 'subscribed_seconds': round(online_total, 2),
                'subscription_coverage_pct': coverage_pct, 'connections_attempted': attempts,
                'coverage': 'Partial public notification feed; only subscribed windows; NOT market-wide totals',
                'notional_definition': 'sz * 1000 DOGE/contract * bkPx, bankruptcy-price notional',
                'historical_backfill': False, 'event_rows_total': len(rows),
+               'contract_doge_per_contract': str(contract_multiplier),
+               'planned_coverage_ceiling_pct': round(100 * DURATION / 900, 2),
+               'scheduled_interval_minutes': 15,
+               'coverage_is_per_listening_window_only': True,
+               'not_market_wide': True,
                'event_key_caveat': 'Potential collision when timestamp, direction, size and price match; not globally unique',
                'data_quality': state}
     atomic(BASE / 'latest.json', json.dumps(summary, ensure_ascii=False, indent=2) + '\n')
