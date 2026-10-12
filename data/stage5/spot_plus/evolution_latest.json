@@ -1,14 +1,14 @@
 {
   "schema_version": 1,
   "status": "ok",
-  "generated_at_utc": "2026-10-12T07:38:02.940385+00:00",
+  "generated_at_utc": "2026-10-12T08:16:45.569534+00:00",
   "ledger_date_utc": "2026-10-12",
   "underlying_sources": {
-    "spot_plus_generated_at_utc": "2026-10-12T07:38:02.108205+00:00",
-    "stage5_generated_at_utc": "2026-10-12T07:38:02.053124+00:00",
+    "spot_plus_generated_at_utc": "2026-10-12T08:16:44.248995+00:00",
+    "stage5_generated_at_utc": "2026-10-12T08:16:44.199619+00:00",
     "last_daily_source_complete_at_utc": "2026-10-12T00:00:00+00:00",
-    "spot_plus_sha256": "a98acc8ccd21cad25c941b4425099c63cd5463749ef9f21562c9ee6d19bdd225",
-    "stage5_sha256": "a981ba43f1853bca7206c2ccba866d64fe4e1b7ee1718c45ce7bec2a7ab7d781"
+    "spot_plus_sha256": "d2850934df7e2927114795d73b5bd96223ed025b6cb25e558731be23aaabde0b",
+    "stage5_sha256": "9a05ff5efdbfaf24b093971ad6e7d019eea7b019c32b3c350818d8086a6551cd"
   },
   "source_health": {
     "grade": "WARN",
@@ -25,32 +25,73 @@
   "current_spot_quote": {
     "status": "ok",
     "live_snapshot_verified": true,
-    "observed_at_utc": "2026-10-12T07:38:02.880589+00:00",
+    "observed_at_utc": "2026-10-12T08:16:45.505474+00:00",
     "age_seconds": 0.06,
     "instruments": {
       "DOGE-USDT": {
-        "price_usdt": 0.08774,
-        "quote_at_utc": "2026-10-12T07:38:01.870000+00:00",
-        "bid_usdt": 0.08772,
-        "ask_usdt": 0.08773,
-        "quote_age_seconds": 1.07
+        "price_usdt": 0.08743,
+        "quote_at_utc": "2026-10-12T08:16:44.572000+00:00",
+        "bid_usdt": 0.08742,
+        "ask_usdt": 0.08743,
+        "quote_age_seconds": 1.0
       },
       "BTC-USDT": {
-        "price_usdt": 83963.2,
-        "quote_at_utc": "2026-10-12T07:38:02.165000+00:00",
-        "bid_usdt": 83963.1,
-        "ask_usdt": 83963.2,
-        "quote_age_seconds": 0.78
+        "price_usdt": 83618.7,
+        "quote_at_utc": "2026-10-12T08:16:44.765000+00:00",
+        "bid_usdt": 83618.6,
+        "ask_usdt": 83618.7,
+        "quote_age_seconds": 0.8
       },
       "ETH-USDT": {
-        "price_usdt": 2564.28,
-        "quote_at_utc": "2026-10-12T07:38:02.269000+00:00",
-        "bid_usdt": 2564.32,
-        "ask_usdt": 2564.33,
-        "quote_age_seconds": 0.67
+        "price_usdt": 2554.08,
+        "quote_at_utc": "2026-10-12T08:16:44.771000+00:00",
+        "bid_usdt": 2554.12,
+        "ask_usdt": 2554.13,
+        "quote_age_seconds": 0.8
       }
     },
     "this_is_not_a_continuous_stream_or_executable_trade": true
+  },
+  "official_V2_forward_validation": {
+    "status": "ok",
+    "is_official": true,
+    "available": true,
+    "generated_at_utc": "2026-10-12T08:06:09.223966+00:00",
+    "age_hours": 0.18,
+    "is_stale_over_3h": false,
+    "effective_from_utc": "2026-10-12T02:00:00+00:00",
+    "1h": {
+      "expected_issuances": 6,
+      "issued": 1,
+      "issuance_coverage_pct": 16.67,
+      "nonoverlap_due": 0,
+      "nonoverlap_scored": 0,
+      "nonoverlap_missing": 0,
+      "nonoverlap_accuracy_pct": null,
+      "nonoverlap_wilson95_lower_pct": null,
+      "nonoverlap_quote_coverage_pct": null,
+      "edge_validated": false
+    },
+    "24h": {
+      "expected_issuances": 0,
+      "issued": 0,
+      "issuance_coverage_pct": null,
+      "nonoverlap_due": 0,
+      "nonoverlap_scored": 0,
+      "nonoverlap_missing": 0,
+      "nonoverlap_accuracy_pct": null,
+      "nonoverlap_wilson95_lower_pct": null,
+      "nonoverlap_quote_coverage_pct": null,
+      "edge_validated": false
+    },
+    "raw_quote_snapshots": 37,
+    "quote_bindings": 14,
+    "completed_paper_intervals": 0,
+    "paper_net_return_pct": null,
+    "paper_buy_hold_return_pct": null,
+    "accuracy_70pct_validated": false,
+    "economic_edge_validated": false,
+    "V1_statistics_are_not_V2_claim_evidence": true
   },
   "original_36_status": {
     "prior_audit_source": "reports/DOGE_SYSTEM_AUDIT_2026-10-11.md",
@@ -99,7 +140,7 @@
     "candidate_selection_not_forward_validation": true,
     "fee_and_slippage_assumptions_applied": true
   },
-  "evolution_priority": "P0_VERIFY_TIMESTAMP_FRESHNESS_AND_MISSING_SOURCE",
+  "evolution_priority": "P0_REPAIR_OFFICIAL_V2_PREDICTION_ISSUANCE_COVERAGE",
   "evolution_process": [
     "inspect timestamp/coverage and keep missing visible",
     "verify matured frozen quote labels and independent minute labels separately",
@@ -129,7 +170,7 @@
     "new_24h_correct": null
   },
   "ledger_rows": 2,
-  "new_ledger_row": true,
+  "new_ledger_row": false,
   "ledger_last_date_utc": "2026-10-12",
   "ledger_integrity_checked": true
 }
