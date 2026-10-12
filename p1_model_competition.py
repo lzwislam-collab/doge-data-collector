@@ -197,16 +197,20 @@ def evaluate(v2, v1, policy, registry, scores):
                            "Ex-ante BTC momentum split is a proxy, not a full market-regime volatility classification"]}
 
 def verify_rule_precommitted(root, policy):
-    result = subprocess.run(["git","log","--format=%H","--",POLICY],cwd=root,
-                            capture_output=True,text=True,check=True)
-    revisions = result.stdout.splitlines()
-    if len(revisions) != 1:
-        raise ValueError("shadow protocol not committed exactly once; model version needs a new future cohort")
-    commit_time = subprocess.run(["git","show","-s","--format=%cI",revisions[0]],
-                                 cwd=root,capture_output=True,text=True,check=True).stdout.strip()
-    if utc(datetime.fromisoformat(commit_time).astimezone(timezone.utc).isoformat()) >= utc(policy["effective_from_utc"]):
-        raise ValueError("shadow rule not precommitted before effective date")
-    return revisions[0]
+    commits = {}
+    for path in (POLICY, "p1_model_competition.py"):
+        result = subprocess.run(["git","log","--format=%H","--",path],cwd=root,
+                                capture_output=True,text=True,check=True)
+        revisions = result.stdout.splitlines()
+        if len(revisions) != 1:
+            raise ValueError("P1 rule or evaluator revised: use a new future cohort (" + path + ")")
+        commit_time = subprocess.run(["git","show","-s","--format=%cI",revisions[0]],
+                                     cwd=root,capture_output=True,text=True,check=True).stdout.strip()
+        timestamp = datetime.fromisoformat(commit_time).astimezone(timezone.utc)
+        if timestamp >= utc(policy["effective_from_utc"]):
+            raise ValueError("P1 rule not precommitted before effective date: " + path)
+        commits[path] = revisions[0]
+    return commits[POLICY]
 
 def main():
     try:
