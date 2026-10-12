@@ -6,17 +6,24 @@ import forward_validation_v2 as v2
 import direction_forward_v42 as frozen
 import quote_evidence_v2 as evidence
 
-def fetch_operational_runs(since, request=None):
+def fetch_operational_runs(since, request=None, until=None):
     from urllib.parse import urlencode
     request=request or base.github_json
     workflow=request('/actions/workflows/okx_hourly_extreme_history.yml')['id']
-    rows={}
-    for page in range(1,11):
-        query=urlencode({'per_page':100,'page':page,'created':'>='+since.isoformat()})
-        batch=request('/actions/workflows/'+str(workflow)+'/runs?'+query)['workflow_runs']
-        for run in batch: rows[run['id']]=run
-        if len(batch)<100:return list(rows.values())
-    raise ValueError('operational run query exceeds 1000 records; cannot classify missing runs')
+    rows={};until=until or datetime.now(timezone.utc);start=since
+    # GitHub limits filtered run searches to 1000 results, regardless of pagination.
+    # Daily partitions keep 6/hour plus push/manual attempts safely below this limit.
+    while start<until:
+        end=min(start+timedelta(days=1),until)
+        span=start.isoformat().replace('+00:00','Z')+'..'+end.isoformat().replace('+00:00','Z')
+        for page in range(1,11):
+            query=urlencode({'per_page':100,'page':page,'created':span})
+            batch=request('/actions/workflows/'+str(workflow)+'/runs?'+query)['workflow_runs']
+            for run in batch:rows[run['id']]=run
+            if len(batch)<100:break
+        else:raise ValueError('one-day operational query exceeds 1000 records; cannot classify missing runs')
+        start=end
+    return list(rows.values())
 
 def alert_reasons(report):
     reasons=[]
@@ -78,7 +85,7 @@ def evaluate(root=frozen.ROOT, now=None, runs=None):
     base.locked_file(root,v2.PROTOCOL)
     if runs is None:
         recent=base.fetch_runs()
-        operational=fetch_operational_runs(max(frozen.utc(protocol['effective_from_utc']),now-timedelta(days=7,hours=24)))
+        operational=fetch_operational_runs(max(frozen.utc(protocol['effective_from_utc']),now-timedelta(days=7,hours=24)),until=now)
         runs=list({r['id']:r for r in recent+operational}.values())
     if not v2.protocol_witness(root,protocol,runs,False): raise ValueError('missing original protocol witness')
     legacy=base.evaluate(root,now,runs,persist_witnesses=False)

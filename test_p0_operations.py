@@ -5,6 +5,18 @@ import quote_capture_retry as retry
 import p0_operational_audit as audit
 
 class RunPaginationTests(unittest.TestCase):
+    def test_eight_days_of_ten_minute_polls_exceeds_1000_without_losing_runs(self):
+        from urllib.parse import parse_qs,urlparse
+        since=datetime(2026,10,1,tzinfo=timezone.utc);until=since+timedelta(days=8)
+        def request(path):
+            if '/runs?' not in path:return {'id':42}
+            query=parse_qs(urlparse(path).query);start,end=query['created'][0].split('..')
+            start=datetime.fromisoformat(start.replace('Z','+00:00'));end=datetime.fromisoformat(end.replace('Z','+00:00'))
+            self.assertLessEqual((end-start).total_seconds(),86400)
+            day=(start-since).days;page=int(query['page'][0]);count=range(100) if page==1 else range(100,144)
+            return {'workflow_runs':[{'id':day*144+i,'created_at':start.isoformat()} for i in count]}
+        rows=audit.fetch_operational_runs(since,request,until=until)
+        self.assertEqual(len(rows),1152)
     def test_daily_target_failure_alerts_when_hourly_is_healthy(self):
         report={'rolling_7d':{'1h':{'slots':[{'status':'verified_issued'}],'target_missing':0},
                  '24h':{'slots':[{'status':'verified_issued'}],'target_missing':1,'target_missing_ids':['daily-1']}}}

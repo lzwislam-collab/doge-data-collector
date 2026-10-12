@@ -50,10 +50,12 @@ class TestOperationalOrder(unittest.TestCase):
   self.assertIn('if: always()', '\n'.join(self.lines[d:d+3]))
   self.assertIn('if: always()', '\n'.join(self.lines[e:e+3]))
 
- def test_existing_cadence_not_duplicated_or_disabled(self):
+ def test_single_quote_poll_cadence_reserves_at_least_15_minutes_for_delay(self):
   crons=[line for line in self.lines if 'cron:' in line]
   self.assertEqual(len(crons),1)
-  self.assertIn("'13,33,53 * * * *'",crons[0])
+  minutes=sorted(int(x) for x in crons[0].split("'")[1].split()[0].split(','))
+  gaps=[b-a for a,b in zip(minutes,minutes[1:])]+[60+minutes[0]-minutes[-1]]
+  self.assertLessEqual(max(gaps),10,'25 minute target grace requires at least 15 minute delay reserve')
   self.assertIn('cancel-in-progress: false',self.text)
   self.assertIn('ref: main # read current data after the shared concurrency lock is acquired',self.text)
 
