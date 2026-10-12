@@ -1,0 +1,175 @@
+{
+  "schema_version": 1,
+  "status": "ok",
+  "audited_at_utc": "2026-10-12T11:20:59.611104+00:00",
+  "protocol_id": "DOGE_THREE_RISK_GATES_20261014_V1",
+  "source_v2_cutoff_utc": "2026-10-12T11:20:48.645107+00:00",
+  "official_V2_P1_P2_frozen_files_unchanged": true,
+  "catalogue": {
+    "catalogue_entries": 36,
+    "report_and_governance_groups": {
+      "KEEP_MERGE": 21,
+      "BACKEND_ONLY": 8,
+      "REMOVE_SCORE": 7
+    },
+    "verified_numeric_predictive_features_from_36": 0,
+    "zero_means_not_yet_authorized_not_proven_useless": true,
+    "excluded_unsupported_scores": [
+      "Whale Score",
+      "Resonance Score",
+      "Fragility Score",
+      "Stress Score",
+      "Opportunity Score",
+      "Extreme Move Probability",
+      "周期概率雷达"
+    ],
+    "not_a_numeric_36_feature_trained_model": true
+  },
+  "feature_ablation": {
+    "status": "historical_diagnostic_only",
+    "models_fit_from": "P1 V2 six candidate features",
+    "feature_groups_under_ablation": 5,
+    "folds": {
+      "1h": {
+        "fold_count": 3,
+        "test_points_per_fold": 48,
+        "min_purged_training": 239,
+        "full_model_historical_brier": 0.2496741,
+        "ablation": {
+          "DOGE return 1h": {
+            "brier_without_group": 0.24957629,
+            "delta_minus_full_brier": -9.781e-05,
+            "suggests_possible_overfit_if_negative": true
+          },
+          "DOGE return 24h": {
+            "brier_without_group": 0.2496861,
+            "delta_minus_full_brier": 1.2e-05,
+            "suggests_possible_overfit_if_negative": false
+          },
+          "BTC return 1h": {
+            "brier_without_group": 0.2496727,
+            "delta_minus_full_brier": -1.4e-06,
+            "suggests_possible_overfit_if_negative": true
+          },
+          "BTC return 24h": {
+            "brier_without_group": 0.24967539,
+            "delta_minus_full_brier": 1.29e-06,
+            "suggests_possible_overfit_if_negative": false
+          },
+          "DOGE abs return 24h": {
+            "brier_without_group": 0.24965817,
+            "delta_minus_full_brier": -1.593e-05,
+            "suggests_possible_overfit_if_negative": true
+          }
+        },
+        "is_real_independent_prospective_evaluation": false
+      },
+      "24h": {
+        "fold_count": 3,
+        "test_points_per_fold": 48,
+        "min_purged_training": 239,
+        "full_model_historical_brier": 0.2502134,
+        "ablation": {
+          "DOGE return 1h": {
+            "brier_without_group": 0.25011832,
+            "delta_minus_full_brier": -9.508e-05,
+            "suggests_possible_overfit_if_negative": true
+          },
+          "DOGE return 24h": {
+            "brier_without_group": 0.25021666,
+            "delta_minus_full_brier": 3.26e-06,
+            "suggests_possible_overfit_if_negative": false
+          },
+          "BTC return 1h": {
+            "brier_without_group": 0.25020545,
+            "delta_minus_full_brier": -7.96e-06,
+            "suggests_possible_overfit_if_negative": true
+          },
+          "BTC return 24h": {
+            "brier_without_group": 0.25021492,
+            "delta_minus_full_brier": 1.51e-06,
+            "suggests_possible_overfit_if_negative": false
+          },
+          "DOGE abs return 24h": {
+            "brier_without_group": 0.25004398,
+            "delta_minus_full_brier": -0.00016942,
+            "suggests_possible_overfit_if_negative": true
+          }
+        },
+        "is_real_independent_prospective_evaluation": false
+      }
+    },
+    "fixed_chronological_folds_and_purged_train_labels": true,
+    "has_first_ingested_provenance_field": true,
+    "historical_vintage_as_known_at_each_old_test_time_proven": false,
+    "results_authorize_add_or_remove_live_model_features": false,
+    "future_pit_feature_family_trials_registered": false,
+    "study_limit": "Historical backfill vintages, exploration and correlated groups prevent a genuine blind feature attribution claim"
+  },
+  "shadow_decision_gate": {
+    "action": "NO_TRADE",
+    "new_records": 0,
+    "all_shadow_records": 0,
+    "timely_audited_records": 0,
+    "may_count_missing_as_correct_direction": false,
+    "no_trade_subset_is_not_a_replacement_for_full_forecast_accuracy": true,
+    "unverified_calibrated_probability_or_expected_edge": true,
+    "post_public_executable_bid_ask_evidence": false,
+    "real_trading_authorized": false,
+    "no_trade_registry_path": "data/stage5/three_risk_gates/no_trade_decisions.csv"
+  },
+  "evidence_maturity": {
+    "p0": {
+      "seven_day_initial": "WAIT",
+      "p0_30d_higher_reliability": "WAIT",
+      "p0_7d_horizons": {
+        "1h": {
+          "closed_slots": 9,
+          "issued": 4,
+          "issuance_coverage_pct": 44.44444444444444,
+          "matured_targets": 3,
+          "target_coverage_pct": 100.0,
+          "seven_days_pass": false
+        },
+        "24h": {
+          "closed_slots": 0,
+          "issued": 0,
+          "issuance_coverage_pct": null,
+          "matured_targets": 0,
+          "target_coverage_pct": null,
+          "seven_days_pass": false
+        }
+      },
+      "p0_monitor_fresh_under_6h": true,
+      "thirty_day_rate_source_available": false
+    },
+    "p1": {
+      "official_nonoverlap_valid_24h": 0,
+      "official_due_24h": 0,
+      "preliminary_evidence_candidate": false,
+      "replication_sample_minimum_reached": false,
+      "paired_baseline_and_regime_replication_independently_verified": false,
+      "signal_edge_validated": false
+    },
+    "p2": {
+      "completed_independent_intervals": 0,
+      "paper_candidate": false,
+      "execution_bid_ask_verified": false,
+      "real_profit_validated": false
+    },
+    "overall": "REVISE",
+    "may_claim_70pct": false,
+    "may_claim_reliable_realized_profit": false,
+    "manual_review_mandatory": true,
+    "never_promote_on_sample_count_alone": true
+  },
+  "claims_permitted": "NONE",
+  "limitations": [
+    "Six price-model features are not the 36 report topics",
+    "Chronological purged historical ablation is exploratory; data vintage at each historical fold not proven",
+    "NO_TRADE logging during daily audit may be later than the actual issuance; it never constitutes an executable order",
+    "Probability alone cannot establish expected net return; executable post-public bid/ask and regime replication missing",
+    "Seven-day minimum does not imply thirty-day 99% stability or economic profitability",
+    "All technical success is separate from statistical edge, genuine execution and realized profit"
+  ]
+}
