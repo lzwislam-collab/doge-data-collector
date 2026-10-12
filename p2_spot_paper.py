@@ -336,6 +336,9 @@ def main():
                 "|净收益|"+ "|".join(money(z) for z in (a["net_return_pct"],out["btc_momentum_strategy"]["net_return_pct"],a["hold_net_return_pct"],a["cash_net_return_pct"],out["double_cost_stress"]["net_return_pct"]))+"|",
                 f"|已完成区间|{a['completed_intervals']}|{out['btc_momentum_strategy']['completed_intervals']}|{a['completed_intervals']}|{a['completed_intervals']}|{out['double_cost_stress']['completed_intervals']}|",
                 "",f"正式策略：交易腿数 {a['trade_legs']}，名义成交金额 {a['turnover_usdt']:.2f} USDT。",
+                "","|模拟交易成本（累计USDT）|金额|","|---|---:|",
+                *[f"|{k}|{v:.4f}|" for k,v in a["cost_usdt_components"].items()],
+                "",
                 f"正式策略最大检查点回撤：{money(a['checkpoint_max_drawdown_pct'])}；持币最大检查点回撤：{money(a['hold_checkpoint_max_drawdown_pct'])}。完整区间最大回撤未知。",
                 "费用和双倍成本压力测试是预先设定的研究假设；盘口成交与实际账户费率未经验证。",
                 "评估资格仅是纸面检查点候选，不是已证明交易盈利："+
