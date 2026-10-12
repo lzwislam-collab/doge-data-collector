@@ -3,7 +3,7 @@
 import json, os, urllib.request, urllib.error
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from stage1_rolling_integrity import evaluate as audit_rolling_local, utc as utc_stage1
+from stage1_rolling_integrity import evaluate as audit_rolling_local, utc as utc_stage1, monitor_quality
 
 ROOT=Path(__file__).resolve().parent
 OUTPUT=ROOT/'data/stage1/schedule_evidence.json'
@@ -112,6 +112,7 @@ def verify_rolling_link(local, run_loader=get):
 
 
 def rolling_integrity():
+ quality=monitor_quality(ROOT,NOW)
  try:
   local=audit_rolling_local(ROOT,NOW)
   evidence=verify_rolling_link(local)
@@ -119,15 +120,19 @@ def rolling_integrity():
   local['current_chain_automation_verified']=evidence['verified']
   if not evidence['verified']:
    local['state']='WAITING_FOR_VERIFIED_SCHEDULED_CHAIN'
+   quality['alerts'].append('UNVERIFIED_SCHEDULED_CHAIN')
+   quality['alert_required']=True
+   quality['state']='alert'
   elif local['current_unprocessed_whale_events']:
    local['state']='SCHEDULED_CHAIN_VERIFIED_WITH_NEW_SOURCE_BACKLOG'
   else:
    local['state']='SCHEDULED_CHAIN_VERIFIED_AND_CURRENT'
+  local['data_quality']=quality
   return local
  except (ValueError,KeyError,TypeError,OSError,json.JSONDecodeError) as exc:
   return {'state':'INVALID_LOCAL_DATA','local_data_integrity':'invalid',
           'current_chain_automation_verified':False,
-          'error':type(exc).__name__+': '+str(exc)[:280]}
+          'error':type(exc).__name__+': '+str(exc)[:280],'data_quality':quality}
 
 
 def audit():
@@ -209,11 +214,34 @@ def audit():
          'stage2_coverage_note':'Scheduled partial exchange notification windows are NOT 24-hour or market-wide liquidation totals; CoinGlass unavailable due to paid plan.',
          'limitations':['Run event and snapshot timestamp alignment does not prove causal commit attribution','Scheduled runs may be delayed or skipped by GitHub','Do not infer real exchange netflow from address balance samples','Partial liquidation observation windows may miss forced liquidations and are not representative of 24h totals']}
 
+def report_quality(obj):
+ rolling=obj.get('stage1_rolling_utxo',{})
+ q=rolling.get('data_quality',{})
+ for code in q.get('alerts',[]):
+  print('::error title=DOGE Stage 1 data quality::'+code)
+ summary=os.getenv('GITHUB_STEP_SUMMARY')
+ if summary:
+  with open(summary,'a',encoding='utf-8') as f:
+   f.write('## DOGE rolling UTXO data quality\n\n')
+   f.write('| Metric | Value |\n|---|---|\n')
+   for key in ('state','source_unique_events','audited_unique_events','coverage_pct',
+               'reconciled_coverage_pct','backlog_events','pending_reconciliation_events',
+               'oldest_pending_age_hours','duplicate_source_rows','duplicate_audit_rows',
+               'orphan_audit_events','missing_required_fields','invalid_amount_events',
+               'unreconciled_events','economic_ambiguity_events'):
+    f.write('| '+key+' | '+str(q.get(key))+' |\n')
+   f.write('\nAutomation verified: '+str(rolling.get('current_chain_automation_verified',False))+'\n')
+   f.write('\nAlerts: '+', '.join(q.get('alerts',[]))+'\n')
+   f.write('\nHistorical PoR address matches are not verified exchange netflow or trading signals.\n')
+ return (obj.get('status')=='error' or rolling.get('state')=='INVALID_LOCAL_DATA'
+         or q.get('alert_required') is True)
+
+
 def main():
  OUTPUT.parent.mkdir(parents=True,exist_ok=True)
  try:obj=audit()
  except Exception as exc:obj={'status':'error','generated_at_utc':NOW.isoformat(),'error':type(exc).__name__+': '+str(exc)[:350]}
  temp=OUTPUT.with_suffix('.json.tmp');temp.write_text(json.dumps(obj,ensure_ascii=False,indent=2)+'\n',encoding='utf-8');os.replace(temp,OUTPUT)
  print(json.dumps({'status':obj['status'],'error':obj.get('error')},ensure_ascii=False))
- return 1 if obj['status']=='error' or obj.get('stage1_rolling_utxo',{}).get('state')=='INVALID_LOCAL_DATA' else 0
+ return 1 if report_quality(obj) else 0
 if __name__=='__main__':raise SystemExit(main())
