@@ -362,15 +362,15 @@ def render(s,record):
  official=s['official_V2_forward_validation']
  if official['status']=='ok':
   one=official['1h'];h24=official['24h']
-  v2intro=(f"## 正式验收：V2 冻结前瞻（唯一有效正式成绩）\\n\\n"
-    f"- V2 报告UTC：{official['generated_at_utc']}，报价快照数：{official['raw_quote_snapshots']}。\\n"
-    f"- 1小时发行：{one['issued']}/{one['expected_issuances']}，覆盖率 {val(one['issuance_coverage_pct'])}。\\n"
+  v2intro=(f"## 正式验收：V2 冻结前瞻（唯一有效正式成绩）\n\n"
+    f"- V2 报告UTC：{official['generated_at_utc']}，报价快照数：{official['raw_quote_snapshots']}。\n"
+    f"- 1小时发行：{one['issued']}/{one['expected_issuances']}，覆盖率 {val(one['issuance_coverage_pct'])}。\n"
     f"- 24小时非重叠到期：{h24['nonoverlap_due']}，有效评分 {h24['nonoverlap_scored']}，漏评 {h24['nonoverlap_missing']}；"
-    f"准确率 {val(h24['nonoverlap_accuracy_pct'])}，Wilson95下限 {val(h24['nonoverlap_wilson95_lower_pct'])}。\\n"
+    f"准确率 {val(h24['nonoverlap_accuracy_pct'])}，Wilson95下限 {val(h24['nonoverlap_wilson95_lower_pct'])}。\n"
     f"- 前瞻现货纸面完成区间：{official['completed_paper_intervals']}；"
-    f"净收益 {val(official['paper_net_return_pct'])}。70%与盈利优势均未证明。\\n\\n")
+    f"净收益 {val(official['paper_net_return_pct'])}。70%与盈利优势均未证明。\n\n")
  else:
-  v2intro="## 正式验收：V2 不可用\\n\\n缺少正式 V2 成绩，不能采用旧协议替代。\\n\\n"
+  v2intro="## 正式验收：V2 不可用\n\n缺少正式 V2 成绩，不能采用旧协议替代。\n\n"
  return ('# DOGE 现货预测 Plus｜每日进化审计\n\n'
   f"**现货即时快照：** {quote_desc}  \n"
   f"**运行UTC：** {s['generated_at_utc']}  \n"
@@ -378,8 +378,8 @@ def render(s,record):
   '**注意：** 时效性 PASS 不等于数据覆盖全面，更不代表预测有效或现货盈利。五大模块均作为背景信息，尚未形成已验证的统一量化预测信号。  \n'
   f"**最新确认日线数据可用时点：** {s['underlying_sources']['last_daily_source_complete_at_utc']}  \n"
   f"**本日账本：** {'新建记录' if record else '保留本日首次记录，不重复写入'}\n\n"
-  v2intro
-  '## ① 旧 V4.2/V1 辅助诊断（不计入 V2 正式成绩）\n\n'
+  + v2intro
+  + '## ① 旧 V4.2/V1 辅助诊断（不计入 V2 正式成绩）\n\n'
   f"- 已发行可独立分箱预测：{p['locked_bin_registered']}；取得有效评分：{p['genuinely_scored']}；正确：{p['correct']}。\n"
   f"- 方向准确率：{val(p['accuracy_pct'])}；95% Wilson下限：{val(p['wilson95_lower_pct'])}；报价覆盖率：{val(p['coverage_pct'])}。\n"
   '- 70%有效优势：**未验证**。历史和冻结前诊断不计入正式成绩。\n'
