@@ -1,0 +1,198 @@
+{
+  "schema_version": 1,
+  "audit_id": "DOGE_SYSTEM_123_COMPREHENSIVE_AUDIT_20261013_JST",
+  "audited_at_utc": "2026-10-12T22:44:38.855489+00:00",
+  "source_repository": "lzwislam-collab/doge-data-collector",
+  "source_snapshot_commit": "f1570eb29bfb12499a62669acd0ffe7b9636153a",
+  "overall_status": "AUDIT_COMPLETE_ACCEPTANCE_BLOCKED",
+  "engineering_test_status": "441_TESTS_PASS_WITH_TWO_CONFIRMED_UNCOVERED_P2_DEFECTS",
+  "selection": {
+    "mechanism_status": "PASS_WITH_LIMITATIONS",
+    "efficacy_status": "WAIT_FORWARD_DATA",
+    "all_no_trade_still_scored": true,
+    "same_quote_target_and_feature_cutoff": true,
+    "historical_train_calibration_validation_purged": true,
+    "historical_proxy_not_forward_calibration": true,
+    "registered_pairs": 14,
+    "one_hour_all_due": 6,
+    "challenger_correct": 1,
+    "frozen_correct": 4,
+    "one_hour_nonoverlap_due": 3,
+    "nonoverlap_challenger_correct": 0,
+    "nonoverlap_frozen_correct": 2,
+    "brier_mean": 0.25764189244292734,
+    "half_probability_brier": 0.25,
+    "paper_long_n": 0,
+    "no_trade_n": 6,
+    "validated_70pct": false,
+    "regimes_scope": "BTC momentum UP/DOWN proxy only; leverage, sentiment and global liquidity not fabricated"
+  },
+  "model_evolution": {
+    "mechanism_status": "PASS_WITH_AUDIT_LIMITATIONS",
+    "promotion_status": "WAIT_NOT_AUTHORIZED",
+    "frozen_production_unchanged": true,
+    "14_real_prepared_probabilities_and_decisions_reproduced": true,
+    "7_public_witness_heads_28_record_and_prepared_blob_checks": true,
+    "5_comparators_2_horizons_cross_section_bonferroni": true,
+    "time_sequential_type1_control_verified": false,
+    "nonoverlap_guarantees_statistical_independence": false,
+    "broad_regime_replication_verified": false,
+    "statistics_dependency_freeze_complete": false,
+    "unlisted_statistics_dependency": "p1_model_competition.py",
+    "statistics_dependency_hash_now_attested": "47bb04db20a3242e4cdd7a8a4ae9dfb19fdd32bed71cdb9057e1c36beb59005b",
+    "attestation_is_not_retroactive_protocol_freezing": true,
+    "auxiliary_p1_league_and_adaptive_versions_do_not_inherit_paired_results": true
+  },
+  "paper_economics": {
+    "mechanism_status": "BLOCKED_ACCEPTANCE_DEFECTS",
+    "runtime_status": "WAIT_ACTIVATION",
+    "effective_from_utc": "2026-10-13T00:00:00+00:00",
+    "completed_formal_intervals": 0,
+    "public_book_raw_hash_and_costs_recomputed": true,
+    "independent_1h_24h_portfolios": true,
+    "continuous_hold_and_cash_benchmarks": true,
+    "no_trade_keeps_cash": true,
+    "fees_actual_spread_extra_slippage_and_double_cost_stress": true,
+    "lot_min_tick_depth_checks": true,
+    "missing_entry_exit_blocks_prefix": true,
+    "actual_account_fee_verified": false,
+    "actual_fill_verified": false,
+    "continuous_drawdown_verified": false,
+    "profitability_validated": false
+  },
+  "operations": {
+    "source_cutoff_utc": "2026-10-12T22:34:41.229854+00:00",
+    "historical_original_hourly_expected": 20,
+    "issued": 15,
+    "missing_retained": 5,
+    "coverage_pct": 75,
+    "paired_new_cohort_closed_slots": 6,
+    "paired_closed": 6,
+    "paired_coverage_pct": 100,
+    "p0_7d_accepted": false,
+    "new_cohort_does_not_erase_old_misses": true,
+    "full_git_history_verification": "Observed successful production CI step on run 38317407830; independent audit rechecked snapshot and witness blobs, not a new local full-history traversal",
+    "independent_external_retention_verified": false
+  },
+  "findings": [
+    {
+      "id": "P2-COVERAGE-DENOMINATOR",
+      "priority": "P1",
+      "status": "OPEN",
+      "blocks": "P2 acceptance",
+      "evidence": "120 hourly source rows: reserve verifies only60 1h /5 24h, yielding50%/4.1667% vs required90%. All source issuance and selected execution denominators are conflated.",
+      "required_change": "New immutable P2 version: separate all-source paired coverage from selected-interval verified execution coverage; reserve cannot depend on action or outcomes."
+    },
+    {
+      "id": "P2-TAIL-PATH-GAP",
+      "priority": "P1",
+      "status": "OPEN",
+      "blocks": "P2 acceptance",
+      "evidence": "Books minute1,20,40,61; audit minute600. Tail32340seconds exceeds1800, but path_gap_count=0 and completed_prefix=1.",
+      "required_change": "New immutable P2 version: assess tail age at audit time, report stale last mark and prevent review when any tail path is uncovered."
+    },
+    {
+      "id": "P1-SEQUENTIAL-INFERENCE",
+      "priority": "P1_FOR_STATISTICAL_ACCEPTANCE",
+      "status": "OPEN",
+      "evidence": "Fixed10-test correction does not precommit temporal looks/stopping; no automatic promotion exists.",
+      "required_change": "Before any efficacy declaration, preregister fixed future review milestones or valid sequential testing and dependence-aware robustness; do not retune current frozen model."
+    },
+    {
+      "id": "P1-STATISTICAL-DEPENDENCY-FREEZE",
+      "priority": "P2",
+      "status": "OPEN",
+      "evidence": "p1_model_competition.py supplies exact_mcnemar/wilson but is absent from paired CODE_FILES and official V2 REQUIRED_CODE.",
+      "required_change": "Bind all transitive statistical dependencies in the next immutable version; current audit captures hash without pretending it was frozen earlier."
+    },
+    {
+      "id": "REGIME-COVERAGE-PROXY",
+      "priority": "RESEARCH_LIMITATION",
+      "status": "WAIT",
+      "evidence": "BTC UP/DOWN counts alone do not prove broad volatility/liquidity/leverage regime replication."
+    },
+    {
+      "id": "P0-HISTORICAL-ISSUE-COVERAGE",
+      "priority": "OPERATIONS_ACCEPTANCE",
+      "status": "WAIT",
+      "evidence": "5 historical missing original issues remain in20-slot denominator; latest paired cohort6/6 does not remove them."
+    }
+  ],
+  "verification": {
+    "local_fresh_latest_snapshot_tests_passed": 441,
+    "tests_failed": 0,
+    "test_command": "python -X utf8 -m unittest discover -q",
+    "independent_review_related_tests_passed": 55,
+    "production_run_id": 38317407830,
+    "production_job_id": 115037228120,
+    "production_conclusion": "success",
+    "production_existing_tests_passed": 142,
+    "production_p2_tests_passed": 26,
+    "all_14_pairs_rechecked_with_verify_pair": true,
+    "prepared_fit_examples_probability_decisions_raw_quotes_and_publication_verified": true,
+    "raw_engineering_book_sha256": "ca70fb76efc4a1979c70189bfabc9e0df9f76d45d401a632c7744dfc12b377b0",
+    "reproductions_are_synthetic_audit_only_not_formal_samples": true
+  },
+  "code_sha256_lf_at_audit": {
+    "direction_baseline_v42.py": "57cc35c51e3ba7050df25ce0aec4ce2423bd330851a55f4982b36a5c80916195",
+    "direction_forward_v42.py": "16cd9563d1896505898f942fcaf3caf16767b747eb92dd194cfc2b237f7468c2",
+    "forward_execution_evidence.py": "148d6af548d6a115bd18f6e77ad120becb41f9d8090234630a225a5d6c9b0b29",
+    "p1_adaptive_v2.py": "39e886f04c59c36e20704ce8d19f05322dfc0d4745abd5913aec8d471adf3a5e",
+    "p1_model_competition.py": "47bb04db20a3242e4cdd7a8a4ae9dfb19fdd32bed71cdb9057e1c36beb59005b",
+    "p2_execution_registration.py": "692c8eecb2bdfae4ca8bc3dfc9150b67202a9c8defbe982ecdd9bf5235063cd0",
+    "p2_paired_execution_v2.py": "5d8709b0c10a5acc01a7ef89def4facdb6d8a54a92f010890ac6f31a58901132",
+    "paired_cohort_audit.py": "2833a262f10eb14d34c7694611ced271e6bc364c72781fabca885dbb71c58621",
+    "paired_forward_cohort.py": "b33489d253c7f0db229e424bd1ba4177c5e1655f23f425a39416791a9c4ae76c",
+    "paired_selection_v1.py": "b865a78918105e3db8b56e81ecb9cc7a6e9b4a6d35a25cf1681688d52ced4e27",
+    "paired_system_registration.py": "caa20499bd1ba341e1631ce37a618938dd6ba4540e5ce5acfc106d79ce610aaa",
+    "publish_forward_evidence.py": "43f0f4a990b2bdf5756632c6584c7887e03c763467572f0a32e0e27630674a26",
+    "quote_capture_retry.py": "c8effeda7a1220457974f64cb19a265b7ecf34b27478c218c36d5d4bc92017a9",
+    "quote_evidence_v2.py": "ca8ce0d7a86ffe41d51b40835b1a7b6af274bfdbaf4e2603580ddc5cb6f98cd2"
+  },
+  "active_registries": {
+    "system/current_paired_shadow.json": {
+      "schema_version": 1,
+      "version_id": "DOGE_PAIRED_SELECTIVE_SHADOW_V1_20261012_1600",
+      "registry_path": "system/versions/DOGE_PAIRED_SELECTIVE_SHADOW_V1_20261012_1600.json",
+      "registry_sha256": "1a4d3b525dd0d3dd6d72bed5687a2a2447360f825cdd345a5ebdcf00012caf93",
+      "layer": "paired_forecast_and_selective_paper_shadow",
+      "forward_efficacy_status": "WAIT_FUTURE_DATA",
+      "real_orders_authorized": false,
+      "authorized_action": "NO_TRADE",
+      "runtime_audit_path": "reports/DOGE_PAIRED_SELECTIVE_V1_RUNTIME_20261012.json",
+      "runtime_status": "VERIFIED_PRE_ACTIVATION_PUSH"
+    },
+    "system/current_p2_execution_shadow.json": {
+      "schema_version": 1,
+      "version_id": "DOGE_P2_PAIRED_EXECUTION_V2_20261013_0000",
+      "registry_path": "system/versions/DOGE_P2_PAIRED_EXECUTION_V2_20261013_0000.json",
+      "registry_sha256": "1823b81525b7c24e15a098923aaa5582d94cbeeaa2971a6c4e2198d426f6ff96",
+      "authorized_action": "NO_TRADE",
+      "real_orders_authorized": false,
+      "forward_profit_status": "WAIT_FUTURE_INTERVALS"
+    }
+  },
+  "boundaries": {
+    "real_orders_authorized": false,
+    "auto_promotion_authorized": false,
+    "paper_profit_acceptance_allowed": false,
+    "validated_70pct": false,
+    "dca_changed": false,
+    "frozen_protocols_or_models_modified": false,
+    "historical_ledgers_modified": false,
+    "new_cron_added": false,
+    "runtime_implementation_modified_by_this_audit": false,
+    "this_audit_records_acceptance_blockers_but_does_not_claim_runtime_repair": true
+  },
+  "next_required_steps": [
+    "Repair two P2 findings in a new future immutable namespace with regression tests and independent review; retain V2 bytes/history",
+    "Freeze full dependency manifest and future statistical review/stopping plan before efficacy acceptance",
+    "Continue genuine forecast/source/book collection and maturity scoring; preserve every missing record and NO_TRADE",
+    "Only after prerequisites and sufficient prospective data separately review forecast/calibration and net economics"
+  ],
+  "official_method_references": [
+    "https://scikit-learn.org/stable/modules/generated/sklearn.calibration.CalibratedClassifierCV.html",
+    "https://itl.nist.gov/div898/handbook/prc/section4/prc47.htm",
+    "https://www.okx.com/docs-v5/en/"
+  ]
+}
