@@ -55,6 +55,16 @@ class TestOperationalOrder(unittest.TestCase):
   self.assertIn('cancel-in-progress: false',self.text)
   self.assertIn('ref: main # read current data after the shared concurrency lock is acquired',self.text)
 
+ def test_fast_candle_and_issuance_precede_long_backfill(self):
+  quick=self.offset('Fast-refresh confirmed 1H bars before prediction issuance')
+  issue=self.offset('Issue and score DOGE UP/DOWN shadow forecasts from live ticker quote')
+  heavy=self.offset('Backfill confirmed UTC 1H data with source-ingestion timestamps')
+  self.assertLess(quick,issue)
+  self.assertLess(issue,heavy)
+  self.assertIn('DOGE_HOURLY_PAGE_BUDGET=0 python okx_hourly_research_history.py',
+                '\n'.join(self.lines[quick:issue]))
+  self.assertIn("steps.fast_hourly.outcome != 'success'",self.text)
+
  def test_direction_attempt_not_suppressed_by_backfill_failure(self):
   # A historical backfill outage must not silently skip an independent forecast.
   a=self.offset('Issue and score DOGE UP/DOWN shadow forecasts from live ticker quote')
