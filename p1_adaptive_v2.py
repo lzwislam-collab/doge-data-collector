@@ -186,8 +186,7 @@ def issue(root,now,policy,registry,raw=None):
     if age<0 or age>policy["max_candle_staleness_hours"]:
         raise ValueError("stale or future confirmed hourly features")
     if raw is None:
-        request=urllib.request.Request(quotes.URL,headers={"Accept":"application/json","User-Agent":"DOGE-P1-V2/1"})
-        with urllib.request.urlopen(request,timeout=18) as response: raw=response.read().decode("utf-8")
+        raise ValueError("issuer raw quote must be captured before observation clock")
     qid,price,stamp=create_snap(root,raw,now)
     if not 0<=(now-stamp).total_seconds()<=policy["max_quote_age_seconds"]:
         raise ValueError("unfresh issuer quote")
@@ -232,7 +231,12 @@ def score_due(root,now,policy,registry,scores,evidence=None,receipts=True):
         accepted=None;why="no_genuinely_observed_target_quote"
         issue_ok=True
         if receipts:
-            reg_commit=first_commit(root,REG)
+            # Per-ID first appearance, not the creation timestamp of the CSV itself.
+            # A late appended row must not inherit an older row's timely publication.
+            from forward_validation import history_receipts
+            hist = history_receipts(root,REG,C,registry)
+            rec = hist.get(fid)
+            reg_commit=utc(rec["committed_at_utc"]) if rec else None
             source_commit=first_commit(root,SNAPS+"/"+r["issue_quote_sha256"]+".json")
             issue_ok=bool(reg_commit and source_commit and
                           reg_commit<target and source_commit<target and
@@ -308,6 +312,13 @@ def main(root=ROOT,now=None,raw=None):
     precommit(root,p)
     registry=rows(root/REG,C);scores=rows(root/SCORE,SC)
     history_guard(root,REG,C,registry);history_guard(root,SCORE,SC,scores)
+    if raw is None and now>=utc(p["effective_from_utc"]) and any(
+            f"{p['model_id']}_{now:%Y%m%d}_{h}h" not in registry for h in (1,24)):
+        request=urllib.request.Request(quotes.URL,headers={"Accept":"application/json","User-Agent":"DOGE-P1-V2/1"})
+        with urllib.request.urlopen(request,timeout=18) as response:
+            raw=response.read().decode("utf-8")
+        # Clock must be AFTER the exchange reply, not before the network request.
+        now=datetime.now(timezone.utc)
     added=issue(root,now,p,registry,raw=raw)
     if added:write_rows(root/REG,registry,C)
     # A newly issued prediction cannot mature in the same daily run.
