@@ -244,5 +244,15 @@ class TestDailyEvolution(unittest.TestCase):
   self.assertFalse(result['current_spot_quote']['live_snapshot_verified'])
   self.assertEqual(result['current_spot_quote']['status'],'stale')
 
+ def test_backlog_is_reported_as_coverage_warning(self):
+  self.plus['five_pillar_evidence_audit']['pillars']['1']['sources']={
+    'utxo_candidate':{'state':'backlog','status':'partial_backlog',
+     'source_utc':AT.isoformat()}}
+  self.plus['five_pillar_evidence_audit']['quality_audit_age_hours']=0
+  self.save()
+  result=inspect(self.root,AT)
+  self.assertIn('1/utxo_candidate:backlog',result['source_health']['warning_sources'])
+  self.assertEqual(result['source_health']['grade'],'WARN')
+
 if __name__=='__main__':
  unittest.main(verbosity=2)
