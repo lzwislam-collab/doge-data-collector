@@ -52,8 +52,11 @@ def exact_mcnemar(wins, losses):
     if n == 0:
         return 1.0
     left = min(wins, losses)
-    # Exact two-sided paired-binomial p-value, capped at 1.
-    return min(1.0, 2 * sum(math.comb(n, j) for j in range(left+1)) / (2**n))
+    # Log-sum-exp avoids integer/float overflow as future independent samples grow.
+    logs = [math.lgamma(n+1)-math.lgamma(j+1)-math.lgamma(n-j+1)-n*math.log(2)
+            for j in range(left+1)]
+    peak = max(logs)
+    return min(1.0, 2 * math.exp(peak) * sum(math.exp(v-peak) for v in logs))
 
 def shadow(row):
     votes = [row[name] for name in ("majority_direction", "doge_reversal_direction", "btc_momentum_direction")]
@@ -68,7 +71,7 @@ def compare_row(row, name):
         return "DOWN"
     return row[name + "_direction"]
 
-def score_group(entries, now, effective, policy):
+def score_group(entries, now, effective, policy, issuance_coverage_pct=None):
     due = [x for x in entries if utc(x["forecast"]["issued_at_utc"]) >= effective
            and utc(x["forecast"]["target_utc"]) + timedelta(minutes=25) <= now]
     scored = [x for x in due if x["score"] is not None]
@@ -109,8 +112,10 @@ def score_group(entries, now, effective, policy):
                 and age_days >= policy["min_observation_days"]
                 and wilson(hits,n) >= policy["min_wilson95_lower_fraction"]
                 and total > 0 and n/total >= 0.9
+                and issuance_coverage_pct is not None and issuance_coverage_pct >= 90
                 and all(t["bonferroni_pass"] for t in pairs.values()))
     return {"due":total, "qualified_scores":n, "unresolved":total-n,
+            "source_issuance_coverage_pct":issuance_coverage_pct,
             "quote_coverage_pct":100*n/total if total else None,
             "accuracy_pct":100*hits/n if n else None,
             "wilson95_lower_pct":100*wilson(hits,n) if n else None,
@@ -173,7 +178,8 @@ def evaluate(v2, v1, policy, registry, scores):
         matured = [x for x in entries if utc(x["forecast"]["target_utc"])+timedelta(minutes=25) <= now]
         if len(matured) != official["due"] or sum(x["score"] is not None for x in matured) != official["scored"]:
             raise ValueError("V2 source snapshot differs from official evidence-qualified nonoverlap cohort")
-        results[name] = score_group(entries,now,effective,policy)
+        results[name] = score_group(entries,now,effective,policy,
+                                    v2["horizons"][name]["issuance"]["coverage_pct"])
         results[name]["official_v2_nonoverlap_baselines"] = official["models"]
         results[name]["pre_effective_rows_excluded"] = sum(utc(x["forecast"]["issued_at_utc"])<effective for x in entries)
     return {"schema_version":1, "status":"ok", "source_audited_at_utc":v2["audited_at_utc"],
