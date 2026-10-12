@@ -20,6 +20,7 @@ on:
       - 'forward_validation_v2.py'
       - 'quote_evidence_v2.py'
       - 'test_forward_validation_v2.py'
+      - 'test_workflow_operational_order.py'
       - 'test_quote_evidence_v2.py'
       - 'data/stage5/forward_validation_protocol_v2.json'
       - 'test_forward_validation.py'
@@ -48,8 +49,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Test hourly point-in-time registry causal restrictions
-        run: python -m unittest -v test_crash_forward_watch test_crash_v42_score test_direction_forward_v42 test_stage5_minute_shadow test_stage5_error_review test_spot_plus_quote_watch test_forward_validation test_quote_evidence_v2 test_forward_validation_v2
       - name: Fail closed before writes on full-history or frozen protocol mutation
         run: python forward_validation_v2.py --integrity-only
       - name: Score genuine due target quotes before long collection steps
@@ -113,6 +112,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python forward_validation_v2.py
+      - name: Test hourly point-in-time registry causal restrictions after time-sensitive evidence capture
+        run: python -m unittest -v test_crash_forward_watch test_crash_v42_score test_direction_forward_v42 test_stage5_minute_shadow test_stage5_error_review test_spot_plus_quote_watch test_forward_validation test_quote_evidence_v2 test_forward_validation_v2 test_workflow_operational_order
       - name: Persist data and diagnostics
         if: always()
         run: |
