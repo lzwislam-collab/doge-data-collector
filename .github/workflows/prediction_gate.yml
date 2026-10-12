@@ -12,6 +12,9 @@ on:
       - 'forward_validation_v2.py'
       - 'p1_model_competition.py'
       - 'p2_spot_paper.py'
+      - 'three_risk_gates.py'
+      - 'test_three_risk_gates.py'
+      - 'data/stage5/three_risk_gates_protocol.json'
       - 'test_p2_spot_paper.py'
       - 'data/stage5/p2_spot_paper_protocol.json'
       - 'test_p1_model_competition.py'
@@ -95,6 +98,13 @@ jobs:
         run: |
           python -m unittest -q test_p2_spot_paper
           python p2_spot_paper.py
+      - name: Audit frozen model leakage, no-trade research gate and evidence maturity
+        id: three_risk_gates
+        if: steps.forward_validation.outcome == 'success' && steps.p1_adaptive.outcome == 'success' && steps.p2_spot_paper.outcome == 'success'
+        continue-on-error: true
+        run: |
+          python -m unittest -q test_three_risk_gates
+          python three_risk_gates.py
       - name: Synchronize latest source health and timestamps before forecasting
         id: freshness
         continue-on-error: true
@@ -143,9 +153,10 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          for file in data/quality/latest.json data/prediction_gate/latest.json data/stage5/latest.json data/stage5/error_review/latest.json data/stage5/spot_plus/latest.json data/stage5/spot_plus/evolution_latest.json data/stage5/spot_plus/evolution_log.csv data/stage5/spot_plus/live_quote_latest.json data/stage5/forward_validation/daily_latest.json reports/DOGE_FORWARD_VALIDATION_DAILY.md reports/DOGE_SPOT_PLUS_DAILY.md data/stage5/forward_validation_v2/daily_latest.json reports/DOGE_FORWARD_VALIDATION_V2_DAILY.md data/stage5/p1_model_league/latest.json reports/DOGE_P1_MODEL_LEAGUE.md data/stage5/p2_spot_paper/latest.json reports/DOGE_P2_SPOT_PAPER.md; do
+          for file in data/quality/latest.json data/prediction_gate/latest.json data/stage5/latest.json data/stage5/error_review/latest.json data/stage5/spot_plus/latest.json data/stage5/spot_plus/evolution_latest.json data/stage5/spot_plus/evolution_log.csv data/stage5/spot_plus/live_quote_latest.json data/stage5/forward_validation/daily_latest.json reports/DOGE_FORWARD_VALIDATION_DAILY.md reports/DOGE_SPOT_PLUS_DAILY.md data/stage5/forward_validation_v2/daily_latest.json reports/DOGE_FORWARD_VALIDATION_V2_DAILY.md data/stage5/p1_model_league/latest.json reports/DOGE_P1_MODEL_LEAGUE.md data/stage5/p2_spot_paper/latest.json reports/DOGE_P2_SPOT_PAPER.md data/stage5/three_risk_gates/latest.json reports/DOGE_THREE_RISK_GATES.md; do
             if [ -f "$file" ]; then git add -f "$file"; fi
           done
+          if [ -f data/stage5/three_risk_gates/no_trade_decisions.csv ]; then git add -f data/stage5/three_risk_gates/no_trade_decisions.csv; fi
           if [ -d data/stage5/p1_adaptive_v2 ]; then git add -f data/stage5/p1_adaptive_v2; fi
           if [ -f reports/DOGE_P1_ADAPTIVE_V2.md ]; then git add -f reports/DOGE_P1_ADAPTIVE_V2.md; fi
           if ! git diff --cached --quiet; then
@@ -157,5 +168,5 @@ jobs:
             done
           fi
       - name: Fail on invalid input audit
-        if: steps.p2_spot_paper.outcome != 'success' || steps.p1_adaptive.outcome != 'success' || steps.p1_league.outcome != 'success' || steps.forward_validation.outcome != 'success' || steps.freshness.outcome != 'success' || steps.audit.outcome != 'success' || steps.stage5.outcome != 'success' || steps.error_review.outcome != 'success' || steps.spot_plus.outcome != 'success' || steps.evolution.outcome != 'success' || steps.spot_live.outcome != 'success'
+        if: steps.three_risk_gates.outcome != 'success' || steps.p2_spot_paper.outcome != 'success' || steps.p1_adaptive.outcome != 'success' || steps.p1_league.outcome != 'success' || steps.forward_validation.outcome != 'success' || steps.freshness.outcome != 'success' || steps.audit.outcome != 'success' || steps.stage5.outcome != 'success' || steps.error_review.outcome != 'success' || steps.spot_plus.outcome != 'success' || steps.evolution.outcome != 'success' || steps.spot_live.outcome != 'success'
         run: exit 1
