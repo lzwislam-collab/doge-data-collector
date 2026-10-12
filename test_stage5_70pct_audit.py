@@ -145,7 +145,7 @@ class AccuracyTests(unittest.TestCase):
             model_id='DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1',
             forecast_id='id-postlock')
         self.write(forecasts=[self.forecast,new],scores=[self.score])
-        hour=audit_locked_forward_trial(self.root)['horizons']['1h']
+        hour=audit_locked_forward_trial(self.root, datetime(2026,10,12,1,30,tzinfo=timezone.utc))['horizons']['1h']
         self.assertEqual(hour['locked_bins_with_issued_predictions'],1)
         self.assertEqual(hour['pending'],1)
         self.assertEqual(hour['scored'],0)
@@ -209,7 +209,7 @@ class AccuracyTests(unittest.TestCase):
             observed_at_utc='2026-10-12T02:10:05+00:00',
             target_quote_utc='2026-10-12T02:10:03+00:00')
         self.write(forecasts=[first,second],scores=[score])
-        hour=audit_locked_forward_trial(self.root)['horizons']['1h']
+        hour=audit_locked_forward_trial(self.root, datetime(2026,10,12,1,30,tzinfo=timezone.utc))['horizons']['1h']
         self.assertEqual(hour['locked_bins_with_issued_predictions'],1)
         self.assertEqual(hour['scored'],0)
         self.assertEqual(hour['pending'],1)
