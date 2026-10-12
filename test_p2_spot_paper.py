@@ -3,7 +3,7 @@ import json
 import unittest
 from datetime import datetime, timedelta, timezone
 from p2_spot_paper import (simulate,trade_long,verify_qualified_cohort,
-                           evaluate, max_dd, utc, positive)
+                           evaluate, max_dd, utc, positive, matured_missing_issuance_slots)
 
 START="2026-10-13T02:10:00+00:00"
 EFFECTIVE="2026-10-13T02:00:00+00:00"
@@ -137,6 +137,15 @@ class Tests(unittest.TestCase):
         out=evaluate(v2,v1,config(),{"a":f},{"a":s},raw)
         self.assertEqual(out["eligible_24h_nonoverlap_forecasts"],0)
         self.assertIsNone(out["strategy"]["net_return_pct"])
+
+    def test_matured_missing_issuance_is_not_silently_skipped(self):
+        effective=utc(EFFECTIVE)
+        before=utc("2026-10-15T02:24:00+00:00")
+        after=utc("2026-10-15T02:26:00+00:00")
+        self.assertEqual(matured_missing_issuance_slots({},effective,before),[])
+        self.assertEqual(matured_missing_issuance_slots({},effective,after),[EFFECTIVE])
+        f,s=source()
+        self.assertEqual(matured_missing_issuance_slots({"a":f},effective,after),[])
 
     def test_hash_mismatch_blocks(self):
         f,s=source()
