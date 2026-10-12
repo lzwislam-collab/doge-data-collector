@@ -52,7 +52,7 @@ class ThreeRiskGateTests(unittest.TestCase):
     def test_protocol_never_allows_trade(self):
         p=config()
         p["trade_gate"]["action"]="BUY"
-        with self.assertRaisesRegex(ValueError,"trade"): policy_guard(p)
+        with self.assertRaisesRegex(ValueError,"trading signal"): policy_guard(p)
         p=config();p["no_dca_changes"]=False
         with self.assertRaisesRegex(ValueError,"DCA"):policy_guard(p)
 
