@@ -103,6 +103,28 @@ class AdaptiveP1Tests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,"duplicate"):
                 m.rows(path,["forecast_id","status"])
 
+    def test_24h_overlap_is_prereserved_even_when_first_quote_missing(self):
+        a=datetime(2026,10,14,6,tzinfo=timezone.utc)
+        p=policy()
+        records={}
+        scores={}
+        for idx,clock in enumerate((a,a+timedelta(hours=23,minutes=55))):
+            fid=str(idx)
+            records[fid]={"forecast_id":fid,"horizon_hours":"24",
+                          "issued_at_utc":clock.isoformat(),
+                          "target_utc":(clock+timedelta(hours=24)).isoformat(),
+                          "direction":"UP","frozen_rule_recomputed":"UP",
+                          "historical_majority":"UP","btc_momentum":"UP",
+                          "always_up":"UP","always_down":"DOWN","p_up":".6"}
+            if idx==1:
+                scores[fid]={"status":"scored","correct":"1","realized_up":"UP","brier":"0.16"}
+        summary=m.report(p,records,scores,datetime(2026,10,17,tzinfo=timezone.utc))
+        track=summary["horizons"]["24h"]
+        self.assertEqual(track["fixed_nonoverlap_selected"],1)
+        self.assertEqual(track["overlap_excluded"],1)
+        self.assertEqual(track["due"],1)
+        self.assertEqual(track["scored"],0)
+
     def test_manual_promotion_and_five_way_threshold(self):
         p=policy()
         result=m.report(p,{}, {},datetime(2026,12,1,tzinfo=timezone.utc))
