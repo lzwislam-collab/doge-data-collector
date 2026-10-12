@@ -216,6 +216,22 @@ def simulate(prefix,policy,model,cost_multiplier):
         "excess_over_hold_pct_points":100*(balance-hold_end)/start if prefix else None,
         "excess_over_cash_pct_points":100*(balance-start)/start if prefix else None}
 
+def matured_missing_issuance_slots(registry, effective, now):
+    # Absence is confirmed only when an entire possible 24h issue bin AND its
+    # last possible 24h outcome +25-minute capture grace have expired.
+    horizon=timedelta(hours=24)
+    mature=now-effective-timedelta(hours=48,minutes=25)
+    eligible_bins=max(0,int(mature.total_seconds()//86400)+1)
+    observed=set()
+    for f in registry.values():
+        if int(f["horizon_hours"])!=24:
+            continue
+        issued=utc(f["issued_at_utc"])
+        if issued>=effective:
+            observed.add(int((issued-effective).total_seconds()//86400))
+    return [(effective+horizon*i).isoformat() for i in range(eligible_bins)
+            if i not in observed]
+
 def evaluate(v2,v1,protocol,registry,scores,source_bytes):
     now=verify_source(v2,v1,protocol,registry,scores,source_bytes)
     effective=utc(protocol["effective_from_utc"])
@@ -227,11 +243,17 @@ def evaluate(v2,v1,protocol,registry,scores,source_bytes):
         raise ValueError("unexpected benchmark strategy")
     items=verify_qualified_cohort(v2,registry,scores,now)
     matched=[x for x in items if utc(x[0]["issued_at_utc"])>=effective]
+    missing_slots=matured_missing_issuance_slots(registry,effective,now)
+    first_missing=utc(missing_slots[0]) if missing_slots else None
     prefix=[]
     unresolved=[]
     blocked=None
     prev_exit=None
     for f,s,mature in matched:
+        if first_missing is not None and utc(f["issued_at_utc"])>=first_missing:
+            blocked="MISSING_24H_ISSUANCE_SLOT_"+missing_slots[0]
+            unresolved.append({"slot_start_utc":missing_slots[0],"reason":"matured_missing_issuance"})
+            break
         if not mature:
             break
         if prev_exit is not None and utc(f["issued_at_utc"])<prev_exit:
@@ -244,6 +266,9 @@ def evaluate(v2,v1,protocol,registry,scores,source_bytes):
             break
         prefix.append((f,s))
         prev_exit=utc(s["target_quote_utc"])
+    if blocked is None and first_missing is not None:
+        blocked="MISSING_24H_ISSUANCE_SLOT_"+missing_slots[0]
+        unresolved.append({"slot_start_utc":missing_slots[0],"reason":"matured_missing_issuance"})
     base=simulate(prefix,protocol,"doge_reversal",1)
     btc=simulate(prefix,protocol,"btc_momentum",1)
     always=simulate(prefix,protocol,"always_interval_up",1)
@@ -267,6 +292,7 @@ def evaluate(v2,v1,protocol,registry,scores,source_bytes):
        "external_execution_quality_not_verified":True,
        "issuance_coverage_pct":day_issued,"due_quote_coverage_pct":quote_covered,
        "eligible_24h_nonoverlap_forecasts":len(matched),
+       "matured_missing_24h_issuance_slots":missing_slots,
        "completed_prefix_intervals":len(prefix),
        "blocked_forecast_id":blocked,"excluded_or_blocking":[*unresolved],
        "strategy":base,"btc_momentum_strategy":btc,"always_interval_up":always,
