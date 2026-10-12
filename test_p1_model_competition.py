@@ -38,7 +38,8 @@ def reports(selected, scored, now):
     for h in ("1h","24h"):
         ids=selected if h=="1h" else []
         v2["horizons"][h]={"nonoverlap":{"selected_ids":ids,
-            "due":len(ids),"scored":scored if h=="1h" else 0,"models":{}}}
+            "due":len(ids),"scored":scored if h=="1h" else 0,"models":{}},
+             "issuance":{"coverage_pct":100.0}}
     return v2,{"status":"ok","full_reachable_history_checked":True}
 
 class LeagueTests(unittest.TestCase):
@@ -51,6 +52,7 @@ class LeagueTests(unittest.TestCase):
         self.assertLess(wilson(1,1),0.3)
         self.assertAlmostEqual(exact_mcnemar(10,0),2/1024)
         self.assertEqual(exact_mcnemar(0,0),1.)
+        self.assertTrue(0 <= exact_mcnemar(2000,0) <= 1)
 
     def test_missing_kept_in_denominator(self):
         f=forecast("a","2026-10-13T01:00:00+00:00")
