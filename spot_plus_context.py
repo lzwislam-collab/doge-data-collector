@@ -33,7 +33,8 @@ def view_source(root,path,timefield,now,limit_hours,allowed=('ok',),status_field
  age=(now-when).total_seconds()/3600
  if age < -0.1:raise ValueError('future report timestamp '+path)
  state='current' if age<=limit_hours else 'stale'
- if status not in allowed:state='partial' if status in ('partial','ok_sample_complete') else 'unhealthy'
+ if status not in allowed:
+  state='backlog' if status=='partial_backlog' else ('partial' if status in ('partial','ok_sample_complete') else 'unhealthy')
  return {'state':state,'status':status,'source_file':path,
   'source_utc':when.isoformat(),'age_hours':round(age,2),'allowed_for_model':False}
 
@@ -119,10 +120,13 @@ def inspect(root,now):
  onchain=load(root,'data/onchain/metrics_latest.json')
  whales=load(root,'data/whales_blocks/latest.json')
  chain=load(root,'data/stage1/schedule_evidence.json')
+ utxo=load(root,'data/stage1/rolling_por_utxo_latest.json')
  stages['1_onchain_whales_exchange']['observations']={
   'active_addresses_last_complete_day':int(float(onchain['daily_activity_latest']['active_addresses'])) if onchain and onchain.get('daily_activity_latest',{}).get('active_addresses') is not None else None,
   'whale_scanner_confirmed_candidate_events':int(whales['cumulative_unique_whale_transactions']) if whales and whales.get('cumulative_unique_whale_transactions') is not None else None,
   'utxo_scheduled_chain_verified':bool(chain and chain.get('stage1_rolling_utxo_chain_verified') is True),
+  'utxo_pending_candidate_events':int(utxo['events_pending']) if utxo and utxo.get('events_pending') is not None else None,
+  'utxo_backlog_is_not_verified_exchange_flow':True,
   'verified_exchange_netflow':False}
  stages['2_liquidations_liquidity']={
   'sources':{
