@@ -37,6 +37,22 @@ class TestDailyEvolution(unittest.TestCase):
       'candidate':{'net_total_return_pct':-46.85}}}
   self.save()
 
+ def test_official_uses_newest_persisted_source_and_exact_timestamp(self):
+  daily=self.v2_fixture()
+  latest=self.v2_fixture();latest['audited_at_utc']='2026-10-12T10:00:00+00:00'
+  dump(self.root,'data/stage5/forward_validation_v2/latest.json',latest)
+  dump(self.root,'data/stage5/forward_validation_v2/daily_latest.json',daily)
+  at=datetime(2026,10,12,13,0,tzinfo=timezone.utc)
+  result=inspect_official_v2(self.root,at)
+  self.assertEqual(result['source_as_of_utc'],daily['audited_at_utc'])
+  self.assertTrue(result['source_file'].endswith('daily_latest.json'))
+  self.assertEqual(result['reporting_as_of_utc'],at.isoformat())
+  latest['audited_at_utc']='2026-10-12T12:45:00+00:00'
+  dump(self.root,'data/stage5/forward_validation_v2/latest.json',latest)
+  result=inspect_official_v2(self.root,at)
+  self.assertEqual(result['source_as_of_utc'],latest['audited_at_utc'])
+  self.assertTrue(result['source_file'].endswith('/latest.json'))
+
  def tearDown(self):self.t.cleanup()
 
  def save(self):

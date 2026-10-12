@@ -32,6 +32,9 @@ on:
       - 'test_stage5_error_review.py'
       - 'spot_plus_research.py'
       - 'spot_plus_context.py'
+      - 'source_evidence_snapshot.py'
+      - 'evidence_retention.py'
+      - 'supplemental_evidence_audit.py'
       - 'test_spot_plus_research.py'
       - 'spot_plus_daily_evolution.py'
       - 'test_spot_plus_daily_evolution.py'
@@ -146,6 +149,11 @@ jobs:
         continue-on-error: true
         if: steps.freshness.outcome == 'success' && steps.spot_plus.outcome == 'success' && steps.evolution.outcome == 'success'
         run: python prediction_gate.py
+      - name: Capture independent unified source cutoff and retention readiness
+        id: supplemental_evidence
+        if: always()
+        continue-on-error: true
+        run: python supplemental_evidence_audit.py
       - name: Commit result including failure evidence
         if: always()
         shell: bash
@@ -159,6 +167,10 @@ jobs:
           if [ -f data/stage5/three_risk_gates/no_trade_decisions.csv ]; then git add -f data/stage5/three_risk_gates/no_trade_decisions.csv; fi
           if [ -d data/stage5/p1_adaptive_v2 ]; then git add -f data/stage5/p1_adaptive_v2; fi
           if [ -f reports/DOGE_P1_ADAPTIVE_V2.md ]; then git add -f reports/DOGE_P1_ADAPTIVE_V2.md; fi
+          for d in data/evidence_snapshot/ data/supplemental_evidence/; do
+            if [ -d "$d" ]; then git add -f "$d"; fi
+          done
+          if [ -f reports/DOGE_SUPPLEMENTAL_EVIDENCE.md ]; then git add -f reports/DOGE_SUPPLEMENTAL_EVIDENCE.md; fi
           if ! git diff --cached --quiet; then
             git commit -m 'audit: DOGE forecast publication gate'
             for i in 1 2 3 4 5; do
@@ -167,6 +179,9 @@ jobs:
               sleep 4
             done
           fi
+      - name: Fail visibly on supplemental snapshot failure
+        if: always() && steps.supplemental_evidence.outcome != 'success'
+        run: exit 1
       - name: Fail on invalid input audit
         if: steps.three_risk_gates.outcome != 'success' || steps.p2_spot_paper.outcome != 'success' || steps.p1_adaptive.outcome != 'success' || steps.p1_league.outcome != 'success' || steps.forward_validation.outcome != 'success' || steps.freshness.outcome != 'success' || steps.audit.outcome != 'success' || steps.stage5.outcome != 'success' || steps.error_review.outcome != 'success' || steps.spot_plus.outcome != 'success' || steps.evolution.outcome != 'success' || steps.spot_live.outcome != 'success'
         run: exit 1

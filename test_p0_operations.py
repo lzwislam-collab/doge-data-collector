@@ -128,6 +128,17 @@ class SlotTests(unittest.TestCase):
     def test_rolling_window_retains_missing_denominator(self):
         out=audit.reconcile([],{},set(),self.t,self.t+timedelta(days=8),[])
         self.assertEqual(out['expected'],168);self.assertEqual(out['missing'],168)
+    def test_thirty_day_window_is_separate_and_keeps_all_missing_slots(self):
+        out=audit.reconcile([],{},set(),self.t,self.t+timedelta(days=31),[],window_days=30)
+        self.assertEqual(out['rolling_window_hours'],720)
+        self.assertEqual(out['expected'],720)
+        self.assertEqual(out['missing'],720)
+        self.assertTrue(out['full_window_observed'])
+        self.assertFalse(out['window_accepted'])
+    def test_three_days_cannot_pass_thirty_day_maturity(self):
+        out=audit.reconcile([],{},set(),self.t,self.t+timedelta(days=3),[],window_days=30)
+        self.assertFalse(out['full_window_observed'])
+        self.assertIsNone(out['target_coverage_pct'])
     def test_failed_run_distinguished_from_absent_run(self):
         run={'id':7,'created_at':self.t.isoformat(),'path':'.github/workflows/okx_hourly_extreme_history.yml','conclusion':'failure','event':'schedule'}
         out=audit.reconcile([],{},set(),self.t,self.t+timedelta(hours=1),[run])

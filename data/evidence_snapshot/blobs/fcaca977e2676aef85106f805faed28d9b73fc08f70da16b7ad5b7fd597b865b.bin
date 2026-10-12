@@ -1,0 +1,64 @@
+{
+  "schema_version": 2,
+  "status": "frozen_future_shadow",
+  "protocol_id": "DOGE_P1_ADAPTIVE_V2_20261014",
+  "effective_from_utc": "2026-10-14T00:00:00+00:00",
+  "model_id": "DOGE_P1_CAUSAL_LOGISTIC_V2",
+  "source": "OKX DOGE/BTC 1h closed candles; fresh OKX DOGE-USDT ticker for issue; hashed previously collected OKX ticker evidence for outcome",
+  "horizons_hours": [
+    1,
+    24
+  ],
+  "issuance_period": "one original real-time forecast per UTC day per horizon; existing daily audit run, not same forecast as official V2",
+  "candidate_features": [
+    "bias",
+    "DOGE return 1h",
+    "DOGE return 24h",
+    "BTC return 1h",
+    "BTC return 24h",
+    "DOGE abs return 24h"
+  ],
+  "fit": {
+    "optimizer": "full_batch_gradient_descent",
+    "iterations": 80,
+    "learning_rate": 0.09,
+    "l2": 0.006,
+    "training_max_anchors": 4000,
+    "minimum_train": 100,
+    "holdout_fraction": 0.2,
+    "embargo_bars": "horizon_hours",
+    "nonoverlap_training_for_24h": true,
+    "all_hyperparameters_fixed": true
+  },
+  "max_candle_staleness_hours": 3,
+  "max_quote_age_seconds": 120,
+  "max_issuance_delay_minutes": 45,
+  "target_quote_window_minutes": 25,
+  "comparators": [
+    "frozen_rule_recomputed",
+    "historical_majority",
+    "btc_momentum",
+    "always_up",
+    "always_down"
+  ],
+  "minimum_valid_nonoverlap": 100,
+  "minimum_observation_days": 30,
+  "required_issuance_coverage": 0.9,
+  "required_quote_coverage": 0.9,
+  "wilson95_lower_min": 0.7,
+  "paired_familywise_alpha": 0.05,
+  "bonferroni_per_comparison": 0.01,
+  "min_discordant_pairs": 30,
+  "manual_promotion_only": true,
+  "automatic_promotion": false,
+  "not_directly_paired_to_formal_v2_issuances": true,
+  "no_backfill": true,
+  "no_real_trades": true,
+  "dca_separate": true,
+  "limits": [
+    "Hourly candle-close label training is a proxy for true issue-to-target ticker outcome; prospective quotes decide real scores",
+    "Same-day hourly data may be revised; training source SHA and parameters recorded at issue; GitHub not independently immutable",
+    "No 70 percent claim without future nonoverlap evidence and operational reliability",
+    "P1 V2 issues independently of formal V2; comparing frozen rule at this same issue time is a recomputed baseline, not a historical formal V2 registered forecast"
+  ]
+}

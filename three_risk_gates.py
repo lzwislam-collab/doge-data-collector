@@ -265,6 +265,16 @@ def stage_gate(p, v2, p0, p1, p2, now):
     p0_fresh = -300 <= age_sec <= 6*3600
     p0_seven = p0_fresh and (p0 or {}).get("status") == "ok" and all(
         x["seven_days_pass"] for x in p0_tracks.values())
+    thirty = (p0 or {}).get("rolling_30d", {})
+    thirty_available = all(h in thirty for h in ("1h", "24h"))
+    p0_thirty = bool(p0_fresh and (p0 or {}).get("status") == "ok" and thirty_available
+        and all(thirty[h].get("full_window_observed") is True
+            and thirty[h].get("rolling_window_hours") == 24*a["p0_30d_days"]
+            and thirty[h].get("expected",0) >= int(24*a["p0_30d_days"]/int(h[:-1]))
+            and (thirty[h].get("coverage_pct") or 0) >= a["p0_30d_coverage_pct"]
+            and thirty[h].get("target_due",0)>0
+            and (thirty[h].get("target_coverage_pct") or 0) >= a["p0_30d_coverage_pct"]
+            for h in ("1h", "24h")))
     elapsed = (now - utc(v2["effective_from_utc"])).total_seconds()/86400
     n = v2["horizons"]["24h"]["nonoverlap"]
     official = n["models"]["doge_reversal"]
@@ -285,10 +295,11 @@ def stage_gate(p, v2, p0, p1, p2, now):
         and p2.get("paper_checkpoint_excess_review_candidate") is True)
     return {
         "p0": {"seven_day_initial": "PASS" if p0_seven else "WAIT",
-               "p0_30d_higher_reliability": "WAIT",
+               "p0_30d_higher_reliability": "PASS" if p0_thirty else "WAIT",
+               "p0_30d_horizons": thirty,
                "p0_7d_horizons": p0_tracks,
                "p0_monitor_fresh_under_6h": p0_fresh,
-               "thirty_day_rate_source_available": False},
+               "thirty_day_rate_source_available": thirty_available},
         "p1": {"official_nonoverlap_valid_24h":n["scored"],
                "official_due_24h":n["due"],
                "preliminary_evidence_candidate":p1_candidate,

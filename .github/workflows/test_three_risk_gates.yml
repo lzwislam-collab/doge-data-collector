@@ -5,6 +5,15 @@ on:
     paths:
       - 'three_risk_gates.py'
       - 'test_three_risk_gates.py'
+      - 'source_evidence_snapshot.py'
+      - 'evidence_retention.py'
+      - 'forward_execution_evidence.py'
+      - 'supplemental_evidence_audit.py'
+      - 'test_source_evidence_snapshot.py'
+      - 'test_evidence_retention.py'
+      - 'test_forward_execution_evidence.py'
+      - 'test_supplemental_evidence_audit.py'
+      - 'test_supplemental_workflow.py'
       - 'data/stage5/three_risk_gates_protocol.json'
       - '.github/workflows/test_three_risk_gates.yml'
   workflow_dispatch:
@@ -25,5 +34,6 @@ jobs:
         run: |
           python -m py_compile three_risk_gates.py
           python -m unittest -v test_three_risk_gates
+          python -m unittest -v test_source_evidence_snapshot test_evidence_retention test_forward_execution_evidence test_supplemental_evidence_audit test_supplemental_workflow
       - name: Run real source ablation and evidence gate with no GitHub writes
         run: python three_risk_gates.py

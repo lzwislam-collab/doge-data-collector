@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "status": "frozen_protocol",
+  "protocol_id": "DOGE_FORWARD_EVIDENCE_AND_SPOT_PAPER_20261012_V1",
+  "effective_from_utc": "2026-10-12T00:00:00+00:00",
+  "model_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1",
+  "max_publication_delay_minutes": 45,
+  "fee_fraction_each_side": 0.001,
+  "slippage_fraction_each_side": 0.0005,
+  "costs_are_fixed_research_assumptions_not_verified_account_fees": true,
+  "paper_strategy": "First 24h forecast in each UTC day; UP long and liquidate on original target quote, DOWN cash; cash between nonoverlapping intervals; stop at first missing or overlap",
+  "benchmarks": ["frozen majority", "BTC momentum exploratory", "always UP", "always DOWN", "DOGE continuous buy and hold", "cash"],
+  "minimum_quote_and_issuance_coverage_fraction": 0.9,
+  "minimum_valid_scores_per_horizon": 100,
+  "real_orders_authorized": false,
+  "dca_rules_modified": false,
+  "absolute_immutability_verified": false,
+  "note": "Must be publicly committed before effective_from_utc. Never modify this protocol after publication; changes need a new ID and future cohort. GitHub administrator rewrite and artifact deletion remain possible."
+}

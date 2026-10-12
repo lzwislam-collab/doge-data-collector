@@ -18,6 +18,7 @@ def config():
       "feature_ablation":{"candidate_columns":FEATURE_NAMES},
       "source_protocols":{"v2":"test-v2","p2":"test-p2","p1_adaptive":"test-p1"},
       "acceptance":{"p0_issuance_coverage_pct":90,"p0_target_coverage_pct":90,
+                    "p0_30d_days":30,"p0_30d_coverage_pct":99,
                     "p1_preliminary_days":30,"p1_preliminary_min_nonoverlap":100,
                     "p1_wilson_lower_pct":70,
                     "p1_replication_days":90,"p1_replication_min_nonoverlap":300,
@@ -101,6 +102,7 @@ class ThreeRiskGateTests(unittest.TestCase):
         self.assertFalse(stale["p0"]["p0_monitor_fresh_under_6h"])
 
     def test_no_trade_record_preserves_earlier_clock(self):
+        # Existing supplementary P0 metrics must never create a trading approval.
         with TemporaryDirectory() as d:
             root=Path(d)
             f={"forecast_id":"a","issued_at_utc":"2026-10-14T03:00:00+00:00",
@@ -117,6 +119,29 @@ class ThreeRiskGateTests(unittest.TestCase):
             self.assertEqual(entry["decision"],"NO_TRADE")
             self.assertEqual(entry["timely_pretrade_decision"],"1")
             self.assertEqual(entry["decision_recorded_at_utc"],"2026-10-14T03:30:00+00:00")
+
+    def test_thirty_day_rate_source_is_checked_without_profit_promotion(self):
+        v2,p0,p1,p2=scorefixture()
+        now=utc("2027-01-18T00:00:00+00:00")
+        p0["audited_at_utc"]="2027-01-17T23:00:00+00:00"
+        p0["rolling_30d"]={h:dict(full_window_observed=True,coverage_pct=100.,
+                           target_coverage_pct=100.,target_due=30,expected=720 if h=="1h" else 30,issued=720 if h=="1h" else 30,
+                           rolling_window_hours=720) for h in ("1h","24h")}
+        result=stage_gate(config(),v2,p0,p1,p2,now)
+        self.assertTrue(result["p0"]["thirty_day_rate_source_available"])
+        self.assertEqual(result["p0"]["p0_30d_higher_reliability"],"PASS")
+        self.assertFalse(result["may_claim_reliable_realized_profit"])
+        p0["rolling_30d"]["1h"]["coverage_pct"]=98.9
+        result=stage_gate(config(),v2,p0,p1,p2,now)
+        self.assertEqual(result["p0"]["p0_30d_higher_reliability"],"WAIT")
+
+    def test_stale_thirty_day_success_is_not_current_success(self):
+        v2,p0,p1,p2=scorefixture()
+        p0["rolling_30d"]={h:dict(full_window_observed=True,coverage_pct=100.,
+                           target_coverage_pct=100.,target_due=30,expected=30,issued=30,
+                           rolling_window_hours=720) for h in ("1h","24h")}
+        result=stage_gate(config(),v2,p0,p1,p2,utc("2027-01-18T00:00:00+00:00"))
+        self.assertEqual(result["p0"]["p0_30d_higher_reliability"],"WAIT")
 
     def test_late_decision_is_not_pretrade_proof(self):
         with TemporaryDirectory() as d:

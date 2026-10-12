@@ -3,7 +3,7 @@
 import csv,json,tempfile,unittest
 from datetime import datetime,timedelta,timezone
 from pathlib import Path
-from spot_plus_research import daily,signal,simulate,prices_scenario,evaluate
+from spot_plus_research import daily,signal,simulate,prices_scenario,evaluate,inspect_p2_protocol
 from spot_plus_context import inspect
 
 DAY=86400000
@@ -52,6 +52,32 @@ class SpotPlusTests(unittest.TestCase):
     'reference_price':'0.08521','target_utc':'2026-10-12T11:00:00+00:00',
     'horizon_hours':'24','doge_reversal_direction':'UP',
     'model_id':'DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1'}])
+
+ def test_reporting_contract_fails_closed_and_labels_registry_reuse(self):
+  result=evaluate(self.root,NOW)
+  self.assertEqual(result['reporting_as_of_utc'],NOW.isoformat())
+  self.assertEqual(result['p2_economic_protocol']['state'],'missing')
+  self.assertEqual(result['prospective_V42_reference']['forecast_origin'],'frozen_registry_reuse')
+  self.assertFalse(result['prospective_V42_reference']['calibrated_win_rate_available'])
+  self.assertIn('as_of_utc',result['five_pillar_evidence_audit'])
+
+ def test_p2_states_and_malformed_readback_fail_closed(self):
+  effective=NOW+timedelta(hours=1)
+  policy={'status':'frozen_paper_protocol','protocol_id':'DOGE_P2_SPOT_PAPER_20261013_0200_V1',
+   'effective_from_utc':effective.isoformat(),'no_trade_orders':True,'no_dca_changes':True,
+   'automatic_profit_claim':False}
+  dump(self.root/'data/stage5/p2_spot_paper_protocol.json',policy)
+  self.assertEqual(inspect_p2_protocol(self.root,NOW)['state'],'frozen_awaiting_readback')
+  readback={'status':'ok','protocol_id':policy['protocol_id'],'effective_from_utc':effective.isoformat(),
+   'source_audited_at_utc':NOW.isoformat(),'source_v2_qualified':True,
+   'completed_prefix_intervals':0,'economic_edge_validated':False,'real_profit_validated':False}
+  path=self.root/'data/stage5/p2_spot_paper/latest.json';dump(path,readback)
+  self.assertEqual(inspect_p2_protocol(self.root,NOW)['state'],'frozen_pre_effective')
+  active=inspect_p2_protocol(self.root,effective+timedelta(hours=1))
+  self.assertEqual(active['state'],'active_awaiting_evidence')
+  self.assertFalse(active['economic_edge_validated'])
+  readback['protocol_id']='wrong';dump(path,readback)
+  self.assertEqual(inspect_p2_protocol(self.root,NOW)['state'],'malformed')
 
  def tearDown(self):self.tmp.cleanup()
 

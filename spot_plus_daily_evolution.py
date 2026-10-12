@@ -10,6 +10,8 @@ import csv,hashlib,io,json,math,os
 from datetime import datetime,timedelta,timezone
 from pathlib import Path
 
+from spot_plus_research import inspect_p2_protocol
+
 ROOT=Path(__file__).resolve().parent
 BASE=ROOT/'data/stage5/spot_plus'
 LATEST=BASE/'evolution_latest.json'
@@ -164,7 +166,8 @@ def inspect(root=ROOT,now=None):
   raise ValueError('24h primary accuracy not supported by count')
  quality_age=float(context['quality_audit_age_hours'])
  qual_source=utc(plus['generated_at_utc'])
- quality_origin=qual_source-timedelta(hours=quality_age)
+ quality_origin=(utc(context['quality_source_as_of_utc']) if context.get('quality_source_as_of_utc')
+                 else qual_source-timedelta(hours=quality_age))
  effective_age=(now-quality_origin).total_seconds()/3600
  stale=(effective_age>3)
  source_warnings=[]
@@ -224,6 +227,15 @@ def inspect(root=ROOT,now=None):
  if official['status']=='missing' and now>=datetime(2026,10,12,3,0,tzinfo=timezone.utc):
   source_warnings.append('V2_OFFICIAL_REPORT:missing')
  return {'schema_version':1,'status':'ok','generated_at_utc':now.isoformat(),
+  'reporting_as_of_utc':now.isoformat(),
+  'p2_economic_protocol':inspect_p2_protocol(root,now),
+  'source_freshness':{name:{key:dict(entry,reporting_as_of_utc=now.isoformat(),
+      age_hours=round((now-utc(entry['source_utc'])).total_seconds()/3600,2) if entry.get('source_utc') else None,
+      freshness=('future' if now<utc(entry['source_utc']) else
+        'stale' if (now-utc(entry['source_utc'])).total_seconds()/3600>entry.get('freshness_limit_hours',48) else 'current')
+       if entry.get('source_utc') else 'missing')
+    for key,entry in pillar.get('sources',{}).items()}
+    for name,pillar in context['pillars'].items()},
   'ledger_date_utc':now.date().isoformat(),
   'underlying_sources':{'spot_plus_generated_at_utc':pt.isoformat(),
    'stage5_generated_at_utc':st.isoformat(),
@@ -280,7 +292,9 @@ def inspect(root=ROOT,now=None):
 
 def inspect_official_v2(root,now):
  """V2 is the ONLY official blind-forward evidence; older V1 is diagnostic."""
- file=root/'data/stage5/forward_validation_v2/latest.json'
+ candidates=[root/'data/stage5/forward_validation_v2'/name for name in ('latest.json','daily_latest.json')]
+ present=[(utc(read_json(path)['audited_at_utc']),path) for path in candidates if path.exists()]
+ file=max(present,key=lambda item:item[0])[1] if present else candidates[0]
  if not file.exists():
   return {'status':'missing','is_official':True,'available':False,
    'accuracy_70pct_validated':False,'economic_edge_validated':False,
@@ -317,6 +331,9 @@ def inspect_official_v2(root,now):
    'edge_validated':chosen['edge_validated'] is True}
  economic=v['prospective_spot_paper']
  return {'status':'ok','is_official':True,'available':True,
+  'source_file':file.relative_to(root).as_posix(),
+  'source_as_of_utc':stamp.isoformat(),'reporting_as_of_utc':now.isoformat(),
+  'freshness':'stale' if now-stamp>timedelta(hours=3) else 'current',
   'generated_at_utc':stamp.isoformat(),'age_hours':round((now-stamp).total_seconds()/3600,2),
   'is_stale_over_3h':now-stamp>timedelta(hours=3),
   'effective_from_utc':freeze.isoformat(),
@@ -371,14 +388,22 @@ def render(s,record):
     f"净收益 {val(official['paper_net_return_pct'])}。70%与盈利优势均未证明。\n\n")
  else:
   v2intro="## 正式验收：V2 不可用\n\n缺少正式 V2 成绩，不能采用旧协议替代。\n\n"
+ p2=s.get('p2_economic_protocol',{})
+ source_lines=''.join(f"- {name}/{key}：来源截至 {entry.get('source_utc','缺失')}；状态 {entry.get('freshness',entry.get('state','缺失'))}。\n"
+  for name,pillar in s.get('source_freshness',{}).items() for key,entry in pillar.items())
+ provenance=(f"## 统一报告时点与底层来源\n\n本次报告截至 {s.get('reporting_as_of_utc',s['generated_at_utc'])}。报告生成时间不代表底层来源同步更新。\n\n"
+  +source_lines+f"\nP2经济协议：{p2.get('state','missing')}；生效时间 {p2.get('effective_from_utc','未验证')}；读回来源截至 {p2.get('source_as_of_utc','缺失')}。现货盈利优势仍未验证。\n"
+  +"V4.2参考沿用冻结发行注册表，不是Plus新发行预测；没有经校准胜率。实体净流入、全市场清算和历史PIT宏观仍未获模型输入授权。\n\n")
  return ('# DOGE 现货预测 Plus｜每日进化审计\n\n'
   '实施顺序以 [最新权威路线图](DOGE_NEXT_STAGE_IMPLEMENTATION_2026-10-12.md) 为准：P0优先，P1/P2同步且不阻塞积累；工程PASS不等于运行、预测或盈利达标。冻结协议不变。\n\n'
+  '公开后盘口、来源版本归档及外部保留验证请查看 [补充证据审计](DOGE_SUPPLEMENTAL_EVIDENCE.md)。该层与冻结正式成绩分别验收。\n\n'
   f"**现货即时快照：** {quote_desc}  \n"
   f"**运行UTC：** {s['generated_at_utc']}  \n"
   f"**本次数据状态：** {s['source_health']['grade']}，来源警告：{warnings}  \n"
   '**注意：** 时效性 PASS 不等于数据覆盖全面，更不代表预测有效或现货盈利。五大模块均作为背景信息，尚未形成已验证的统一量化预测信号。  \n'
   f"**最新确认日线数据可用时点：** {s['underlying_sources']['last_daily_source_complete_at_utc']}  \n"
   f"**本日账本：** {'新建记录' if record else '保留本日首次记录，不重复写入'}\n\n"
+  + provenance
   + v2intro
   + '## ① 旧 V4.2/V1 辅助诊断（不计入 V2 正式成绩）\n\n'
   f"- 已发行可独立分箱预测：{p['locked_bin_registered']}；取得有效评分：{p['genuinely_scored']}；正确：{p['correct']}。\n"
@@ -429,7 +454,7 @@ def run(root=ROOT,now=None):
  summary['ledger_integrity_checked']=True
  # Compute and validate outputs BEFORE writing the ledger, to avoid partial evidence on failure.
  new_json=json.dumps(summary,ensure_ascii=False,indent=2)+'\n'
- new_markdown=render(summary,append)
+ new_markdown='\n'.join(line.rstrip() for line in render(summary,append).splitlines())+'\n'
  new_ledger=serial(old+[row]) if append else None
  if append:write_atomic(path,new_ledger)
  write_atomic(root/'data/stage5/spot_plus/evolution_latest.json',new_json)

@@ -167,7 +167,8 @@ def latest_forward(root,now):
    'horizon_hours','doge_reversal_direction','model_id'))
  valid=[r for r in reg if r['horizon_hours']=='24'
     and utc(r['issued_at_utc'])<=now and utc(r['target_utc'])>now]
- if not valid:return {'status':'no_pending_24h_forecast'}
+ if not valid:return {'status':'no_pending_24h_forecast','forecast_origin':'frozen_registry_reuse','not_a_new_plus_model_forecast':True,'forecast_origin':'frozen_registry_reuse',
+  'calibrated_win_rate_available':False,'calibrated_win_rate_available':False}
  valid.sort(key=lambda r:utc(r['issued_at_utc']))
  row=valid[-1]
  quote_at=utc(row['issued_at_utc'])
@@ -176,8 +177,42 @@ def latest_forward(root,now):
   'reference_price_usdt':float(row['reference_price']),
   'direction':row['doge_reversal_direction'],
   'forecast_age_minutes':round((now-quote_at).total_seconds()/60,1),
-  'not_a_new_plus_model_forecast':True,
+  'not_a_new_plus_model_forecast':True,'forecast_origin':'frozen_registry_reuse',
+  'calibrated_win_rate_available':False,
   'live_forecast_model_id':row['model_id']}
+
+def inspect_p2_protocol(root,now):
+ """Read frozen P2 and its persisted result; never confer economic permission."""
+ base={'protocol_frozen':False,'economic_edge_validated':False,
+       'real_profit_validated':False,'live_trading_authorized':False}
+ policy=root/'data/stage5/p2_spot_paper_protocol.json'
+ readback=root/'data/stage5/p2_spot_paper/latest.json'
+ if not policy.exists():return dict(base,state='missing')
+ try:
+  p=json.loads(policy.read_text(encoding='utf-8'))
+  effective=utc(p['effective_from_utc'])
+  if (p['status']!='frozen_paper_protocol' or p['no_trade_orders'] is not True
+      or p['no_dca_changes'] is not True or p['automatic_profit_claim'] is not False
+      or p['protocol_id']!='DOGE_P2_SPOT_PAPER_20261013_0200_V1'):
+   raise ValueError('invalid P2 freeze')
+  result=dict(base,protocol_frozen=True,protocol_id=p['protocol_id'],
+    effective_from_utc=effective.isoformat(),state='frozen_awaiting_readback',
+    protocol_source_file=policy.relative_to(root).as_posix())
+  if not readback.exists():return result
+  r=json.loads(readback.read_text(encoding='utf-8'))
+  stamp=utc(r['source_audited_at_utc'])
+  if (r['status']!='ok' or r['protocol_id']!=p['protocol_id']
+      or utc(r['effective_from_utc'])!=effective or stamp>now+timedelta(minutes=2)
+      or r['source_v2_qualified'] is not True or r['economic_edge_validated'] is not False
+      or r['real_profit_validated'] is not False):raise ValueError('invalid P2 readback')
+  completed=int(r['completed_prefix_intervals'])
+  if completed<0 or (stamp<effective and completed):raise ValueError('invalid P2 intervals')
+  result.update(state='frozen_pre_effective' if now<effective else 'active_awaiting_evidence',
+    source_as_of_utc=stamp.isoformat(),age_hours=round((now-stamp).total_seconds()/3600,2),
+    freshness='stale' if now-stamp>timedelta(hours=36) else 'current',
+    completed_intervals=completed,readback_source_file=readback.relative_to(root).as_posix())
+  return result
+ except (ValueError,KeyError,TypeError):return dict(base,state='malformed')
 
 def evaluate(root=ROOT,now=None):
  if now is None:now=datetime.now(timezone.utc)
@@ -208,6 +243,8 @@ def evaluate(root=ROOT,now=None):
  def date_of(i):return datetime.fromtimestamp(dog[i]['t']/1000,timezone.utc).date().isoformat()
  context=inspect_five_pillars(root,now)
  return {'schema_version':1,'status':'ok','generated_at_utc':now.isoformat(),
+  'reporting_as_of_utc':now.isoformat(),
+  'p2_economic_protocol':inspect_p2_protocol(root,now),
   'product':'DOGE 现货盈利预测 Plus v0.1 | research-only',
   'source':'OKX confirmed 1Dutc OHLCV; immutable V4.2 issuance-quote registry',
   'source_daily_latest_confirmed_start_utc':date_of(len(dog)-1)+'T00:00:00Z',
@@ -235,7 +272,7 @@ def evaluate(root=ROOT,now=None):
   'profit_edge_vs_hold_verified':False,'direction_accuracy_70pct_verified':False,
   'five_pillars_have_validated_numeric_weights':False,
   'live_trading_authorized':False,'dca_rules_changed':False,
-  'pending_economic_validation':['freeze independent spot-plus paper execution rules before forward comparison',
+  'pending_economic_validation':['verify frozen P2 protocol/readback state; accumulate post-effective independent economic evidence',
     'compare realized after-cost net equity and max drawdown to buy-and-hold and cash over multiple regimes',
     'log actual executable quotes at the decision and settlement moments',
     'measure no-signal coverage and genuine target observation completeness',

@@ -23,6 +23,10 @@ on:
       - 'test_workflow_operational_order.py'
       - 'quote_capture_retry.py'
       - 'p0_operational_audit.py'
+      - 'supplemental_evidence_audit.py'
+      - 'source_evidence_snapshot.py'
+      - 'forward_execution_evidence.py'
+      - 'evidence_retention.py'
       - 'test_p0_operations.py'
       - 'publish_forward_evidence.py'
       - '.github/scripts/p0_alert.cjs'
@@ -151,6 +155,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python p0_operational_audit.py
+      - name: Capture independent source versions and prospective post-publication depth
+        id: supplemental_evidence
+        if: always() && steps.operations.outcome == 'success'
+        continue-on-error: true
+        run: python supplemental_evidence_audit.py --capture-execution
       - name: Persist data and diagnostics
         id: persist
         if: always()
@@ -163,6 +172,10 @@ jobs:
           done
           git add -f data/quote_evidence_v2
           if [ -d data/p0_operations ]; then git add -f data/p0_operations; fi
+          for d in data/evidence_snapshot/ data/forward_execution_evidence/ data/supplemental_evidence/; do
+            if [ -d "$d" ]; then git add -f "$d"; fi
+          done
+          if [ -f reports/DOGE_SUPPLEMENTAL_EVIDENCE.md ]; then git add -f reports/DOGE_SUPPLEMENTAL_EVIDENCE.md; fi
           for f in data/stage5/forward_validation_v2/latest.json data/stage5/forward_validation_v2/protocol_witness.json reports/DOGE_FORWARD_VALIDATION_V2.md; do
             if [ -f "$f" ]; then git add -f "$f"; fi
           done
@@ -197,6 +210,13 @@ jobs:
             data/stage5/forward_validation_v2/
             reports/DOGE_FORWARD_VALIDATION_V2.md
             data/p0_operations/
+            data/evidence_snapshot/
+            data/forward_execution_evidence/
+            data/supplemental_evidence/
+            reports/DOGE_SUPPLEMENTAL_EVIDENCE.md
+      - name: Fail visibly on supplemental capture failure after preserving core evidence
+        if: always() && steps.supplemental_evidence.outcome != 'success'
+        run: exit 1
       - name: Fail on collector or quality error
         if: always() && (steps.validation.outcome != 'success' || steps.quote_watch.outcome != 'success' || steps.fast_hourly.outcome != 'success' || steps.collect.outcome != 'success' || steps.evaluate.outcome != 'success' || steps.forward.outcome != 'success' || steps.v42.outcome != 'success' || (steps.direction.outcome != 'success' && steps.direction_late_audit.outcome != 'success') || steps.minute_shadow.outcome != 'success' || steps.error_review.outcome != 'success' || steps.regression.outcome != 'success' || steps.early_publish.outcome != 'success' || steps.operations.outcome != 'success' || steps.persist.outcome != 'success' || steps.artifact.outcome != 'success' || steps.public_witness.outcome == 'failure')
         run: exit 1

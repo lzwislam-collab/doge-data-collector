@@ -25,7 +25,8 @@ def load(root,path):
 
 def view_source(root,path,timefield,now,limit_hours,allowed=('ok',),status_field='status'):
  src=load(root,path)
- if src is None:return {'state':'missing','source_file':path,'allowed_for_model':False}
+ if src is None:return {'state':'missing','freshness':'missing','source_as_of_utc':None,
+  'reporting_as_of_utc':now.isoformat(),'source_file':path,'allowed_for_model':False}
  status=src.get(status_field)
  stamp=src.get(timefield)
  if not stamp:raise ValueError('missing report timestamp '+path)
@@ -36,7 +37,8 @@ def view_source(root,path,timefield,now,limit_hours,allowed=('ok',),status_field
  if status not in allowed:
   state='backlog' if status=='partial_backlog' else ('partial' if status in ('partial','ok_sample_complete') else 'unhealthy')
  return {'state':state,'status':status,'source_file':path,
-  'source_utc':when.isoformat(),'age_hours':round(age,2),'allowed_for_model':False}
+  'source_utc':when.isoformat(),'source_as_of_utc':when.isoformat(),
+  'reporting_as_of_utc':now.isoformat(),'freshness':state,'freshness_limit_hours':limit_hours,'age_hours':round(age,2),'allowed_for_model':False}
 
 def read_latest_etfs(root,now):
  path=root/'data/etf/daily_flows.csv'
@@ -174,7 +176,8 @@ def inspect(root,now):
   'predictor_policy':'honor frozen V4.2 and future claim gate; historical spot simulation separately labeled',
   'unverified_features':['prospective_70pct_accuracy','prospective_positive_spot_net_edge']}
  base_history=load(root,'data/history/latest.json')
- return {'status':'ok','quality_audit_age_hours':sec_age,
+ return {'status':'ok','as_of_utc':now.isoformat(),
+  'quality_source_as_of_utc':qtime.isoformat(),'quality_audit_age_hours':sec_age,
   'quality_audit_stale_for_3h_realtime_claim':sec_age>3,
   'quality_critical_failures':len(quality['critical_failures']),
   'pillars':stages,'pillar_count':len(stages),

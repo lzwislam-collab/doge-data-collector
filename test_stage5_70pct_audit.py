@@ -105,7 +105,10 @@ class AccuracyTests(unittest.TestCase):
 
 
     def make_lock(self):
-        shutil.copyfile(Path(__file__).resolve().parent/'direction_forward_v42.py',self.root/'direction_forward_v42.py')
+        # Git's locked blob uses LF. Normalize checkout-only CRLF in the test
+        # fixture; never change the frozen production source or locked digest.
+        source=(Path(__file__).resolve().parent/'direction_forward_v42.py').read_bytes()
+        (self.root/'direction_forward_v42.py').write_bytes(source.replace(b'\r\n',b'\n'))
         folder=self.root/'data/stage5'
         folder.mkdir(parents=True,exist_ok=True)
         lock={'status':'frozen_protocol','protocol_id':'DOGE_V42_DIRECTION_SHADOW_LOCK_20261012',

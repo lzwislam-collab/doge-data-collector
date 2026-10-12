@@ -57,11 +57,14 @@ def alert_reasons(report):
                 'forecast_ids':metric['target_missing_ids']})
     return reasons
 
-def reconcile(rows, scores, eligible, effective, now, runs, horizon=1):
+def reconcile(rows, scores, eligible, effective, now, runs, horizon=1, window_days=7):
+    if window_days not in (7,30) or horizon not in (1,24):
+        raise ValueError('unsupported operational window/horizon')
     interval=timedelta(hours=horizon)
     grace=timedelta(minutes=45) if horizon==1 else interval
     closed=max(0,int((now-effective-grace).total_seconds()//interval.total_seconds())+1)
-    first=max(0,closed-int(168/horizon))
+    window_hours=window_days*24
+    first=max(0,closed-int(window_hours/horizon))
     groups={}
     for row in rows:
         if int(row['horizon_hours'])!=horizon: continue
@@ -98,7 +101,11 @@ def reconcile(rows, scores, eligible, effective, now, runs, horizon=1):
             'target_due':len(due),'target_scored':scored,'target_missing':len(due)-scored,
             'target_missing_ids':missing_ids,
             'target_coverage_pct':100*scored/len(due) if due else None,
-            'seven_full_days_observed':closed>=int(168/horizon),'rolling_window_hours':168,
+            'seven_full_days_observed':closed>=int(168/horizon),'rolling_window_hours':window_hours,
+            'full_window_observed':closed>=int(window_hours/horizon),
+            'window_accepted':bool(closed>=int(window_hours/horizon) and slots
+                and 100*issued/len(slots)>=(99 if window_days==30 else 90)
+                and due and 100*scored/len(due)>=(99 if window_days==30 else 90)),
             'original_effective_from_utc':effective.isoformat()}
 
 def evaluate(root=frozen.ROOT, now=None, runs=None):
@@ -107,7 +114,7 @@ def evaluate(root=frozen.ROOT, now=None, runs=None):
     base.locked_file(root,v2.PROTOCOL)
     if runs is None:
         recent=base.fetch_runs()
-        operational=fetch_operational_runs(max(frozen.utc(protocol['effective_from_utc']),now-timedelta(days=7,hours=24)),until=now)
+        operational=fetch_operational_runs(max(frozen.utc(protocol['effective_from_utc']),now-timedelta(days=30,hours=24)),until=now)
         runs=list({r['id']:r for r in recent+operational}.values())
     if not v2.protocol_witness(root,protocol,runs,False): raise ValueError('missing original protocol witness')
     legacy=base.evaluate(root,now,runs,persist_witnesses=False)
@@ -136,6 +143,7 @@ def evaluate(root=frozen.ROOT, now=None, runs=None):
                 valid_scores[fid]=score
         except (ValueError,base.subprocess.CalledProcessError) as exc: rejected[fid]=str(exc)
     horizons={str(h)+'h':reconcile(list(registry.values()),valid_scores,eligible,effective,now,runs,h) for h in (1,24)}
+    thirty={str(h)+'h':reconcile(list(registry.values()),valid_scores,eligible,effective,now,runs,h,window_days=30) for h in (1,24)}
     from okx_hourly_research_history import assess
     import csv
     with (root/'data/hourly_research/ohlc.csv').open(newline='',encoding='utf-8') as stream: hours=list(csv.DictReader(stream))
@@ -150,7 +158,9 @@ def evaluate(root=frozen.ROOT, now=None, runs=None):
             'scope':'supplementary strict P0 operational monitor; does not replace frozen V2 scores',
             'frozen_protocol_id':protocol['protocol_id'],'frozen_implementation_verified':True,
             'official_frozen_v2_issuance':{h:m['issuance'] for h,m in official.get('horizons',{}).items()},
-            'rolling_7d':horizons,'forecast_proofs':proofs,'rejected_evidence':rejected,'hourly_source':source,
+            'rolling_7d':horizons,'rolling_30d':thirty,
+            'p0_30d_accepted':all(m['window_accepted'] for m in thirty.values()),
+            'forecast_proofs':proofs,'rejected_evidence':rejected,'hourly_source':source,
             'monitor_code_sha256':hashlib.sha256((root/'p0_operational_audit.py').read_bytes()).hexdigest(),
             'p0_7d_accepted':all(m['seven_full_days_observed'] and (m['coverage_pct'] or 0)>=90 and m['target_due']>0 and (m['target_coverage_pct'] or 0)>=90 for m in horizons.values()),
             'p1_accuracy_accepted':False,'p2_profit_accepted':False,'no_retrospective_prediction_backfill':True}
