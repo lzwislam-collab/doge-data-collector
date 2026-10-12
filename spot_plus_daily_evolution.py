@@ -212,6 +212,17 @@ def inspect(root=ROOT,now=None):
   'coverage_priority_uses_prefreeze_collection_only_not_directional_accuracy':True}
  priority=make_priority(plus,ts,stale,source_warnings,ticker_quality)
  market_snapshot=checked_market_spot_snapshot(root,now)
+ official=inspect_official_v2(root,now)
+ if official['status']=='ok':
+  if official['is_stale_over_3h']:
+   source_warnings.append('V2_OFFICIAL_REPORT:older_than_3h')
+  issued=official['1h']
+  if issued['expected_issuances']>=3 and issued['issuance_coverage_pct'] is not None and issued['issuance_coverage_pct']<90:
+   priority='P0_REPAIR_OFFICIAL_V2_PREDICTION_ISSUANCE_COVERAGE'
+  elif official['24h']['nonoverlap_due']>=5 and official['24h']['nonoverlap_quote_coverage_pct'] is not None and official['24h']['nonoverlap_quote_coverage_pct']<90:
+   priority='P0_REPAIR_OFFICIAL_V2_TARGET_QUOTE_COVERAGE'
+ if official['status']=='missing' and now>=datetime(2026,10,12,3,0,tzinfo=timezone.utc):
+  source_warnings.append('V2_OFFICIAL_REPORT:missing')
  return {'schema_version':1,'status':'ok','generated_at_utc':now.isoformat(),
   'ledger_date_utc':now.date().isoformat(),
   'underlying_sources':{'spot_plus_generated_at_utc':pt.isoformat(),
@@ -227,6 +238,7 @@ def inspect(root=ROOT,now=None):
    'warning_sources':source_warnings,
    'snapshot_data_not_exchange_tick_realtime':True},
   'current_spot_quote':market_snapshot,
+  'official_V2_forward_validation':official,
   'original_36_status':context['original_36_items'],
   'all_five_pillars_in_inventory':True,
   'all_five_pillars_in_prediction_weights':False,
@@ -265,6 +277,58 @@ def inspect(root=ROOT,now=None):
   'daily_code_or_model_improvement_proven':False,
   'note':'A daily new audit is not evidence the signal has improved; 70% cannot be forced.'}
 
+
+def inspect_official_v2(root,now):
+ """V2 is the ONLY official blind-forward evidence; older V1 is diagnostic."""
+ file=root/'data/stage5/forward_validation_v2/latest.json'
+ if not file.exists():
+  return {'status':'missing','is_official':True,'available':False,
+   'accuracy_70pct_validated':False,'economic_edge_validated':False,
+   'reason':'No separately frozen V2 evidence has been persisted yet'}
+ v=read_json(file)
+ stamp=utc(v['audited_at_utc'])
+ freeze=utc(v['effective_from_utc'])
+ if stamp>now+timedelta(minutes=2):
+  raise ValueError('official V2 report timestamp is in future')
+ if v.get('protocol_id')!='DOGE_FORWARD_RAW_QUOTE_BOUND_V2_20261012_0200':
+  raise ValueError('unexpected V2 protocol identity')
+ if v.get('locked_implementation_checked') is not True:
+  raise ValueError('V2 implementation lock not checked')
+ if v.get('accuracy_70pct_validated') is not False or v.get('economic_edge_validated') is not False:
+  raise ValueError('unsupported V2 performance claim')
+ def hstat(h):
+  data=v['horizons'][h]
+  chosen=data['nonoverlap']
+  issue=data['issuance']
+  expected=int(issue['expected']);issued=int(issue['issued'])
+  due=int(chosen['due']);scored=int(chosen['scored']);unresolved=int(chosen['missing_or_unresolved'])
+  if min(expected,issued,due,scored,unresolved)<0 or issued>expected or scored+unresolved!=due:
+   raise ValueError('V2 issuance/scoring accounting mismatch '+h)
+  rate=(100*issued/expected) if expected else None
+  if rate is not None and abs(rate-float(issue['coverage_pct']))>0.1:
+   raise ValueError('V2 issuance coverage inconsistent '+h)
+  correct=int(chosen['models']['doge_reversal']['correct'])
+  if correct<0 or correct>scored:raise ValueError('V2 correct-count corruption')
+  return {'expected_issuances':expected,'issued':issued,'issuance_coverage_pct':round(rate,2) if rate is not None else None,
+   'nonoverlap_due':due,'nonoverlap_scored':scored,'nonoverlap_missing':unresolved,
+   'nonoverlap_accuracy_pct':chosen['models']['doge_reversal']['accuracy_pct'],
+   'nonoverlap_wilson95_lower_pct':chosen['models']['doge_reversal']['wilson95_lower_pct_descriptive_only'],
+   'nonoverlap_quote_coverage_pct':chosen['quote_coverage_pct'],
+   'edge_validated':chosen['edge_validated'] is True}
+ economic=v['prospective_spot_paper']
+ return {'status':'ok','is_official':True,'available':True,
+  'generated_at_utc':stamp.isoformat(),'age_hours':round((now-stamp).total_seconds()/3600,2),
+  'is_stale_over_3h':now-stamp>timedelta(hours=3),
+  'effective_from_utc':freeze.isoformat(),
+  '1h':hstat('1h'),'24h':hstat('24h'),
+  'raw_quote_snapshots':int(v['raw_quote_snapshots']),
+  'quote_bindings':int(v['quote_bindings']),
+  'completed_paper_intervals':int(economic['completed_intervals']),
+  'paper_net_return_pct':economic['strategy_net_return_pct'],
+  'paper_buy_hold_return_pct':economic['buy_hold_net_return_pct'],
+  'accuracy_70pct_validated':False,'economic_edge_validated':False,
+  'V1_statistics_are_not_V2_claim_evidence':True}
+
 def log_row(summary):
  p=summary['prospective_24h'];h=summary['historical_paper']
  raw={'date_utc':summary['ledger_date_utc'],
@@ -295,6 +359,18 @@ def render(s,record):
  quote_desc=(f"OKX DOGE/USDT {quote['price_usdt']}；报价UTC {quote['quote_at_utc']}；"
   "独立快照，不是连续行情或已验证交易成交价" if spot['live_snapshot_verified']
   else f"未验证（{spot['status']}），不可冒充实时价格")
+ official=s['official_V2_forward_validation']
+ if official['status']=='ok':
+  one=official['1h'];h24=official['24h']
+  v2intro=(f"## 正式验收：V2 冻结前瞻（唯一有效正式成绩）\\n\\n"
+    f"- V2 报告UTC：{official['generated_at_utc']}，报价快照数：{official['raw_quote_snapshots']}。\\n"
+    f"- 1小时发行：{one['issued']}/{one['expected_issuances']}，覆盖率 {val(one['issuance_coverage_pct'])}。\\n"
+    f"- 24小时非重叠到期：{h24['nonoverlap_due']}，有效评分 {h24['nonoverlap_scored']}，漏评 {h24['nonoverlap_missing']}；"
+    f"准确率 {val(h24['nonoverlap_accuracy_pct'])}，Wilson95下限 {val(h24['nonoverlap_wilson95_lower_pct'])}。\\n"
+    f"- 前瞻现货纸面完成区间：{official['completed_paper_intervals']}；"
+    f"净收益 {val(official['paper_net_return_pct'])}。70%与盈利优势均未证明。\\n\\n")
+ else:
+  v2intro="## 正式验收：V2 不可用\\n\\n缺少正式 V2 成绩，不能采用旧协议替代。\\n\\n"
  return ('# DOGE 现货预测 Plus｜每日进化审计\n\n'
   f"**现货即时快照：** {quote_desc}  \n"
   f"**运行UTC：** {s['generated_at_utc']}  \n"
@@ -302,7 +378,8 @@ def render(s,record):
   '**注意：** 时效性 PASS 不等于数据覆盖全面，更不代表预测有效或现货盈利。五大模块均作为背景信息，尚未形成已验证的统一量化预测信号。  \n'
   f"**最新确认日线数据可用时点：** {s['underlying_sources']['last_daily_source_complete_at_utc']}  \n"
   f"**本日账本：** {'新建记录' if record else '保留本日首次记录，不重复写入'}\n\n"
-  '## ① 预测能力（仅冻结后独立24小时正式样本）\n\n'
+  v2intro
+  '## ① 旧 V4.2/V1 辅助诊断（不计入 V2 正式成绩）\n\n'
   f"- 已发行可独立分箱预测：{p['locked_bin_registered']}；取得有效评分：{p['genuinely_scored']}；正确：{p['correct']}。\n"
   f"- 方向准确率：{val(p['accuracy_pct'])}；95% Wilson下限：{val(p['wilson95_lower_pct'])}；报价覆盖率：{val(p['coverage_pct'])}。\n"
   '- 70%有效优势：**未验证**。历史和冻结前诊断不计入正式成绩。\n'
