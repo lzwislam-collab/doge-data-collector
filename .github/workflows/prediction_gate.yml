@@ -10,6 +10,9 @@ on:
       - 'stage5_forward_quality.py'
       - 'forward_validation.py'
       - 'forward_validation_v2.py'
+      - 'p1_model_competition.py'
+      - 'test_p1_model_competition.py'
+      - 'data/stage5/p1_model_league_protocol.json'
       - 'quote_evidence_v2.py'
       - 'test_forward_validation_v2.py'
       - 'test_quote_evidence_v2.py'
@@ -65,6 +68,13 @@ jobs:
         run: |
           python -m unittest -q test_forward_validation test_quote_evidence_v2 test_forward_validation_v2
           python forward_validation_v2.py --daily
+      - name: Score independent P1 challenger after official V2 evidence validation
+        id: p1_league
+        if: steps.forward_validation.outcome == 'success'
+        continue-on-error: true
+        run: |
+          python -m unittest -q test_p1_model_competition
+          python p1_model_competition.py
       - name: Synchronize latest source health and timestamps before forecasting
         id: freshness
         continue-on-error: true
@@ -113,7 +123,7 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          for file in data/quality/latest.json data/prediction_gate/latest.json data/stage5/latest.json data/stage5/error_review/latest.json data/stage5/spot_plus/latest.json data/stage5/spot_plus/evolution_latest.json data/stage5/spot_plus/evolution_log.csv data/stage5/spot_plus/live_quote_latest.json data/stage5/forward_validation/daily_latest.json reports/DOGE_FORWARD_VALIDATION_DAILY.md reports/DOGE_SPOT_PLUS_DAILY.md data/stage5/forward_validation_v2/daily_latest.json reports/DOGE_FORWARD_VALIDATION_V2_DAILY.md; do
+          for file in data/quality/latest.json data/prediction_gate/latest.json data/stage5/latest.json data/stage5/error_review/latest.json data/stage5/spot_plus/latest.json data/stage5/spot_plus/evolution_latest.json data/stage5/spot_plus/evolution_log.csv data/stage5/spot_plus/live_quote_latest.json data/stage5/forward_validation/daily_latest.json reports/DOGE_FORWARD_VALIDATION_DAILY.md reports/DOGE_SPOT_PLUS_DAILY.md data/stage5/forward_validation_v2/daily_latest.json reports/DOGE_FORWARD_VALIDATION_V2_DAILY.md data/stage5/p1_model_league/latest.json reports/DOGE_P1_MODEL_LEAGUE.md; do
             if [ -f "$file" ]; then git add -f "$file"; fi
           done
           if ! git diff --cached --quiet; then
@@ -125,5 +135,5 @@ jobs:
             done
           fi
       - name: Fail on invalid input audit
-        if: steps.forward_validation.outcome != 'success' || steps.freshness.outcome != 'success' || steps.audit.outcome != 'success' || steps.stage5.outcome != 'success' || steps.error_review.outcome != 'success' || steps.spot_plus.outcome != 'success' || steps.evolution.outcome != 'success' || steps.spot_live.outcome != 'success'
+        if: steps.p1_league.outcome != 'success' || steps.forward_validation.outcome != 'success' || steps.freshness.outcome != 'success' || steps.audit.outcome != 'success' || steps.stage5.outcome != 'success' || steps.error_review.outcome != 'success' || steps.spot_plus.outcome != 'success' || steps.evolution.outcome != 'success' || steps.spot_live.outcome != 'success'
         run: exit 1
