@@ -259,7 +259,11 @@ def stage_gate(p, v2, p0, p1, p2, now):
             "matured_targets": m.get("target_due",0),
             "target_coverage_pct": m.get("target_coverage_pct"),
             "seven_days_pass": bool(good)}
-    p0_seven = (p0 or {}).get("status") == "ok" and all(
+    # An old successful P0 file must never pass when the hourly monitor has stopped.
+    audited = (p0 or {}).get("audited_at_utc")
+    age_sec = (now-utc(audited)).total_seconds() if audited else float("inf")
+    p0_fresh = -300 <= age_sec <= 6*3600
+    p0_seven = p0_fresh and (p0 or {}).get("status") == "ok" and all(
         x["seven_days_pass"] for x in p0_tracks.values())
     elapsed = (now - utc(v2["effective_from_utc"])).total_seconds()/86400
     n = v2["horizons"]["24h"]["nonoverlap"]
@@ -283,6 +287,7 @@ def stage_gate(p, v2, p0, p1, p2, now):
         "p0": {"seven_day_initial": "PASS" if p0_seven else "WAIT",
                "p0_30d_higher_reliability": "WAIT",
                "p0_7d_horizons": p0_tracks,
+               "p0_monitor_fresh_under_6h": p0_fresh,
                "thirty_day_rate_source_available": False},
         "p1": {"official_nonoverlap_valid_24h":n["scored"],
                "official_due_24h":n["due"],
