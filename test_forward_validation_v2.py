@@ -1,4 +1,4 @@
-import importlib,tempfile,unittest,json,subprocess
+import importlib,tempfile,unittest,json,subprocess,os
 from pathlib import Path
 from datetime import datetime,timezone,timedelta
 
@@ -42,7 +42,9 @@ class V2Tests(unittest.TestCase):
      'fee_fraction_each_side':.001,'slippage_fraction_each_side':.0005}
    path=fixture.root/self.v.PROTOCOL;path.parent.mkdir(parents=True,exist_ok=True);path.write_text(json.dumps(p))
    subprocess.run(['git','add','.'],cwd=fixture.root,check=True)
-   subprocess.run(['git','-c','user.name=QA','-c','user.email=qa@example.test','commit','-qm','protocol'],cwd=fixture.root,check=True)
+   # All fixture clocks are synthetic; never depend on the wall clock of CI.
+   protocol_env=dict(os.environ,GIT_AUTHOR_DATE=(self.now-timedelta(hours=2)).isoformat(),GIT_COMMITTER_DATE=(self.now-timedelta(hours=2)).isoformat())
+   subprocess.run(['git','-c','user.name=QA','-c','user.email=qa@example.test','commit','-qm','protocol'],cwd=fixture.root,check=True,env=protocol_env)
    head=subprocess.check_output(['git','rev-parse','HEAD'],cwd=fixture.root,text=True).strip()
    clock=self.now+timedelta(minutes=13)
    class Clock(datetime):
@@ -54,11 +56,14 @@ class V2Tests(unittest.TestCase):
     def read(self):return json.dumps({'code':'0','data':[{'instId':'DOGE-USDT','last':price,'ts':str(int(clock.timestamp()*1000))}]}).encode()
    price='.11'
    with patch.object(q,'datetime',Clock),patch.object(q.urllib.request,'urlopen',return_value=Response()):
-    q.collect(fixture.root,'direction');clock+=timedelta(hours=1,minutes=1);price='.12';q.collect(fixture.root,'watch')
+    q.collect(fixture.root,'direction')
+    # Publish ISSUE evidence before fetching any target outcome.
+    subprocess.run(['git','add','.'],cwd=fixture.root,check=True)
+    issue_env=dict(os.environ,GIT_AUTHOR_DATE=(clock+timedelta(minutes=1)).isoformat(),GIT_COMMITTER_DATE=(clock+timedelta(minutes=1)).isoformat())
+    subprocess.run(['git','-c','user.name=QA','-c','user.email=qa@example.test','commit','-qm','issue evidence'],cwd=fixture.root,check=True,env=issue_env)
+    public_head=subprocess.check_output(['git','rev-parse','HEAD'],cwd=fixture.root,text=True).strip()
+    clock+=timedelta(hours=1,minutes=1);price='.12';q.collect(fixture.root,'watch')
    reg=f.read_rows(fixture.root/self.v.base.REG,f.FCOLS)
-   subprocess.run(['git','add','.'],cwd=fixture.root,check=True)
-   subprocess.run(['git','-c','user.name=QA','-c','user.email=qa@example.test','commit','-qm','quote evidence'],cwd=fixture.root,check=True)
-   public_head=subprocess.check_output(['git','rev-parse','HEAD'],cwd=fixture.root,text=True).strip()
    public={fid:{'observed_public_utc':(f.utc(r['issued_at_utc'])+timedelta(minutes=20)).isoformat(),'head_sha':public_head} for fid,r in reg.items()}
    runs=[{'id':1,'head_sha':head,'created_at':(self.now-timedelta(hours=2)).isoformat()}]
    with patch.object(self.v.base,'evaluate',return_value={'verified_remote_head_witnesses':public}):
