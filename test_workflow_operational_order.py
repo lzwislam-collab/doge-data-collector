@@ -1,0 +1,65 @@
+#!/usr/bin/env python3
+"""Regression guard: production evidence capture cannot be blocked by a test fixture.
+
+The frozen protocol and quote-binding integrity check MUST execute first.
+The scheduled source capture and prospective registration MUST happen before
+non-production unit tests; tests still fail the workflow for independent alerting.
+No additional cron or modification of frozen model implementations is needed.
+"""
+import unittest
+from pathlib import Path
+
+WORKFLOW=Path(__file__).resolve().parent/'.github/workflows/okx_hourly_extreme_history.yml'
+
+class TestOperationalOrder(unittest.TestCase):
+ @classmethod
+ def setUpClass(cls):
+  cls.text=WORKFLOW.read_text(encoding='utf-8')
+  cls.lines=cls.text.splitlines()
+
+ def offset(self,fragment):
+  found=[i for i,line in enumerate(self.lines) if fragment in line]
+  self.assertEqual(len(found),1,'missing/duplicate operational step: '+fragment)
+  return found[0]
+
+ def test_frozen_integrity_check_precedes_all_quote_source_writes(self):
+  a=self.offset('Fail closed before writes on full-history or frozen protocol mutation')
+  b=self.offset('Score genuine due target quotes before long collection steps')
+  c=self.offset('Backfill confirmed UTC 1H data with source-ingestion timestamps')
+  d=self.offset('Issue and score DOGE UP/DOWN shadow forecasts from live ticker quote')
+  self.assertLess(a,b)
+  self.assertLess(a,c)
+  self.assertLess(a,d)
+
+ def test_time_sensitive_scoring_and_issuance_precede_fixture_tests(self):
+  a=self.offset('Score genuine due target quotes before long collection steps')
+  b=self.offset('Issue and score DOGE UP/DOWN shadow forecasts from live ticker quote')
+  t=self.offset('- name: Test hourly point-in-time registry causal restrictions after time-sensitive evidence capture')
+  self.assertLess(a,t)
+  self.assertLess(b,t)
+
+ def test_nonproduction_test_failure_still_fails_job_and_evidence_is_saved(self):
+  t=self.offset('- name: Test hourly point-in-time registry causal restrictions after time-sensitive evidence capture')
+  d=self.offset('- name: Persist data and diagnostics')
+  e=self.offset('- name: Preserve per-run forecast and score evidence snapshot')
+  self.assertLess(t,d)
+  self.assertLess(d,e)
+  self.assertEqual(self.lines[t+1].strip().startswith('run: python -m unittest -v'),True)
+  self.assertIn('if: always()', '\n'.join(self.lines[d:d+3]))
+  self.assertIn('if: always()', '\n'.join(self.lines[e:e+3]))
+
+ def test_existing_cadence_not_duplicated_or_disabled(self):
+  crons=[line for line in self.lines if 'cron:' in line]
+  self.assertEqual(len(crons),1)
+  self.assertIn("'13,33,53 * * * *'",crons[0])
+  self.assertIn('cancel-in-progress: false',self.text)
+  self.assertIn('ref: main # read current data after the shared concurrency lock is acquired',self.text)
+
+ def test_v2_frozen_code_validation_preserved(self):
+  self.assertIn('run: python forward_validation_v2.py --integrity-only',self.text)
+  self.assertIn('run: python quote_evidence_v2.py direction',self.text)
+  self.assertIn('run: python forward_validation_v2.py',self.text)
+  self.assertIn('test_forward_validation_v2',self.text)
+
+if __name__=='__main__':
+ unittest.main(verbosity=2)
