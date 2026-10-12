@@ -22,6 +22,38 @@ class RunPaginationTests(unittest.TestCase):
                  '24h':{'slots':[{'status':'verified_issued'}],'target_missing':1,'target_missing_ids':['daily-1']}}}
         out=audit.alert_reasons(report)
         self.assertEqual(out,[{'horizon':'24h','kind':'missing_target_evidence','forecast_ids':['daily-1']}])
+    def test_old_missing_slots_still_alert_when_latest_slot_is_healthy(self):
+        t=datetime(2026,10,12,11,30,tzinfo=timezone.utc)
+        rows=[{'status':'workflow_failed','slot_start_utc':'2026-10-12T02:00:00+00:00'},
+              {'status':'workflow_failed','slot_start_utc':'2026-10-12T03:00:00+00:00'},
+              {'status':'verified_issued','slot_start_utc':'2026-10-12T04:00:00+00:00'}]
+        report={'audited_at_utc':t.isoformat(),'rolling_7d':{'1h':{
+            'slots':rows,'expected':3,'issued':1,'target_missing':0}}}
+        alerts=audit.alert_reasons(report)
+        self.assertEqual(alerts,[{'horizon':'1h',
+            'kind':'issuance_coverage_below_90pct','audit_day_utc':'2026-10-12',
+            'required_pct':90}])
+
+    def test_daily_coverage_alert_is_stable_across_retries(self):
+        def report(n):
+            rows=([{'status':'workflow_failed'}]*(n-1)+[{'status':'verified_issued'}])
+            return {'audited_at_utc':f'2026-10-12T11:{n:02d}:00+00:00',
+              'rolling_7d':{'1h':{'slots':rows,'expected':n,'issued':1}}}
+        self.assertEqual(audit.alert_reasons(report(4)),audit.alert_reasons(report(5)))
+
+    def test_full_coverage_or_no_closed_slots_do_not_alert(self):
+        report={'audited_at_utc':'2026-10-12T11:30:00+00:00',
+          'rolling_7d':{'1h':{'slots':[{'status':'verified_issued'}],
+                           'expected':1,'issued':1},
+                        '24h':{'slots':[],'expected':0,'issued':0}}}
+        self.assertEqual(audit.alert_reasons(report),[])
+
+    def test_alert_rejects_inconsistent_denominators(self):
+        report={'rolling_7d':{'1h':{'slots':[{'status':'workflow_failed'}],
+            'expected':1,'issued':2}}}
+        with self.assertRaisesRegex(ValueError,'slot-count mismatch'):
+            audit.alert_reasons(report)
+
     def test_operational_runs_include_second_page(self):
         calls=[]
         def request(path):
