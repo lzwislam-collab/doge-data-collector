@@ -2,10 +2,10 @@
 
 **结论：REVISE。本层仅补录未来证据，不替代冻结V2/P1/P2正式成绩，也不授权交易。**
 
-报告统一观察时点UTC：2026-10-12T12:07:53.585574+00:00；各来源原始截止仍分别列示。
-来源版本清单：[data/evidence_snapshot/manifests/20261012T120753585672Z_0f9a5d85c21e4cb8a6fae92e67971bc0.json](../data/evidence_snapshot/manifests/20261012T120753585672Z_0f9a5d85c21e4cb8a6fae92e67971bc0.json)。
+报告统一观察时点UTC：2026-10-12T12:08:34.271558+00:00；各来源原始截止仍分别列示。
+来源版本清单：[data/evidence_snapshot/manifests/20261012T120834473102Z_802ddcc36f914d99872e8ac6581014c8.json](../data/evidence_snapshot/manifests/20261012T120834473102Z_802ddcc36f914d99872e8ac6581014c8.json)。
 外部保留验证：NOT_CONFIGURED；independent_retention_verified=False。
-公开后盘口采样：not_requested_daily_snapshot_only；错误：无。
+公开后盘口采样：captured；错误：无。
 
 已修复证据记录能力：首次可用时点及版本归档、公开后盘口深度、VWAP纸面估值及采样路径缺口、独立30天可靠性统计。
 实际新增预测或报价须严格晚于补充层启用与预测公开时点；历史缺失不补造。迟到记录显示排除/漏采，不改原预测。
