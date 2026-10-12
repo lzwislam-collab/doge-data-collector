@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "version_id": "DOGE_PAIRED_SELECTIVE_SHADOW_V1_20261012_1600",
+  "verdict": "PASS_ENGINEERING_AND_PRE_ACTIVATION_DEPLOYMENT_WAIT_FORWARD",
+  "verified_at_utc": "2026-10-12T14:13:00+00:00",
+  "code_commit": "f57373b240afd8ccf4ae430a882601ff689961a0",
+  "data_readback_commit": "88e4f6da33a5b27e6df3ad8393e4217fe841f1b9",
+  "system_registered_and_readback_exact": true,
+  "frozen_production_or_history_changes": [],
+  "run": {
+    "id": 38261092588,
+    "job_id": 114851477205,
+    "event": "push",
+    "conclusion": "success",
+    "url": "https://github.com/lzwislam-collab/doge-data-collector/actions/runs/38261092588",
+    "production_tests_passed": 142,
+    "post_registration_schedule_verified": false
+  },
+  "tests": {
+    "local_full_passed": 415,
+    "failed": 0,
+    "independent_review_related": 38
+  },
+  "source_and_live_checks": {
+    "confirmed_hourly_close_utc": "2026-10-12T14:00:00+00:00",
+    "model_prepared_at_utc": "2026-10-12T14:12:02.548711+00:00",
+    "live_book_validator_passed": true,
+    "live_book_raw_packet_independently_archived_by_smoke": false,
+    "smoke_is_an_issued_forecast": false,
+    "smoke_new_forecasts": 0
+  },
+  "smoke_models": {
+    "1": {
+      "p_up": 0.5099621144538566,
+      "calibration_n": 799,
+      "validation_n": 800,
+      "validation_selected_n": 0,
+      "decision": {
+        "paper_action": "NO_TRADE",
+        "reasons": [
+          "insufficient_up_confidence_or_down_forecast",
+          "insufficient_validation_selected_n",
+          "historical_validation_not_better_than_half_probability",
+          "insufficient_conservative_return_proxy_after_cost"
+        ],
+        "roundtrip_cost_plus_reserve_fraction": 0.0045,
+        "selection_is_historical_proxy": true,
+        "forward_probability_calibration_validated": false,
+        "authorized_action": "NO_TRADE",
+        "real_orders_authorized": false,
+        "does_not_remove_direction_from_accuracy_denominator": true
+      }
+    },
+    "24": {
+      "p_up": 0.45287761267846505,
+      "calibration_n": 160,
+      "validation_n": 161,
+      "validation_selected_n": 0,
+      "decision": {
+        "paper_action": "NO_TRADE",
+        "reasons": [
+          "insufficient_up_confidence_or_down_forecast",
+          "insufficient_validation_selected_n",
+          "insufficient_conservative_return_proxy_after_cost"
+        ],
+        "roundtrip_cost_plus_reserve_fraction": 0.0045,
+        "selection_is_historical_proxy": true,
+        "forward_probability_calibration_validated": false,
+        "authorized_action": "NO_TRADE",
+        "real_orders_authorized": false,
+        "does_not_remove_direction_from_accuracy_denominator": true
+      }
+    }
+  },
+  "production": {
+    "new_predictions": 2,
+    "new_ids": [
+      "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1791810000000_1h",
+      "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1791810000000_24h"
+    ],
+    "public_readback_verified_files": 106,
+    "new_formal_paired_records": 0,
+    "activation_state": "WAIT_ACTIVATION",
+    "paired_publication_files_verified": 1
+  },
+  "future": {
+    "activation_utc": "2026-10-12T16:00:00+00:00",
+    "first_live_pair_verified": false,
+    "paired_accuracy_or_calibration_validated": false,
+    "selective_paper_profit_validated": false,
+    "automatic_promotion": false,
+    "authorized_action": "NO_TRADE",
+    "real_orders_authorized": false,
+    "remaining": "At/after activation require genuine new pairs in public pre-target head, same qualified outcomes, full NO_TRADE-inclusive and independent cohort scoring. 100/30-day and 300/90-day reviews remain pending."
+  },
+  "data_sources": [
+    "GitHub Actions job decoded logs",
+    "Main-branch exact readback of system registry and issue/audit/publication/smoke JSON",
+    "OKX fresh live book checked by deployed validator; smoke summary is engineering telemetry, not archived original quote or fill evidence"
+  ]
+}
