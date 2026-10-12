@@ -72,7 +72,7 @@ class TestOperationalOrder(unittest.TestCase):
   direction='\n'.join(self.lines[a:b])
   self.assertIn('run: python quote_evidence_v2.py direction',direction)
   self.assertNotIn("if: steps.collect.outcome == 'success'",direction)
-  late='\n'.join(self.lines[b:self.offset('Independently score target outcomes using confirmed OKX 1m bars')])
+  late='\n'.join(self.lines[b:self.offset('Backfill confirmed UTC 1H data with source-ingestion timestamps')])
   self.assertIn("if: steps.direction.outcome != 'success'",late)
   self.assertNotIn("steps.collect.outcome == 'success'",late)
 
