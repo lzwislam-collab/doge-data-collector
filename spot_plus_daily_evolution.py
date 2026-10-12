@@ -172,7 +172,7 @@ def inspect(root=ROOT,now=None):
  for name,pillar in context['pillars'].items():
   for src,entry in pillar.get('sources',{}).items():
    reported=entry.get('state')
-   if reported in ('missing','unhealthy','stale'):
+   if reported in ('missing','unhealthy','stale','backlog'):
     source_warnings.append(f'{name}/{src}:{reported}')
     continue
    stamp=entry.get('source_utc')
