@@ -1,0 +1,31 @@
+name: Test P1 adaptive future-only shadow
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'p1_adaptive_v2.py'
+      - 'test_p1_adaptive_v2.py'
+      - 'data/stage5/p1_adaptive_v2_protocol.json'
+      - '.github/workflows/prediction_gate.yml'
+      - '.github/workflows/test_p1_adaptive_v2.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Test adaptive causal cutoff, immutable slots, target evidence and five-way gate
+        run: |
+          python -m py_compile p1_adaptive_v2.py test_p1_adaptive_v2.py
+          python -m unittest -v test_p1_adaptive_v2 test_p1_model_competition
+      - name: Guard existing frozen V2 source and prospective evidence
+        run: |
+          python forward_validation_v2.py --integrity-only
