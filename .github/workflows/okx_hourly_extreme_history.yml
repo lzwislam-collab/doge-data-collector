@@ -32,6 +32,14 @@ on:
       - 'p0_open_target_guard.py'
       - 'test_forward_diagnostics.py'
       - 'test_p0_open_target_guard.py'
+      - 'paired_selection_v1.py'
+      - 'paired_forward_cohort.py'
+      - 'paired_cohort_audit.py'
+      - 'test_paired_selection_v1.py'
+      - 'test_paired_forward_cohort.py'
+      - 'test_paired_cohort_audit.py'
+      - 'data/stage5/paired_selection_v1_protocol.json'
+      - 'system/current_paired_shadow.json'
       - 'test_p0_operations.py'
       - 'publish_forward_evidence.py'
       - '.github/scripts/p0_alert.cjs'
@@ -78,7 +86,7 @@ jobs:
       - name: Issue and score DOGE UP/DOWN shadow forecasts from live ticker quote
         id: direction
         continue-on-error: true
-        run: python quote_capture_retry.py direction
+        run: python paired_forward_cohort.py issue
       - name: Verify benign late-registration skip without changing frozen deadline
         id: direction_late_audit
         if: steps.direction.outcome != 'success'
@@ -100,7 +108,7 @@ jobs:
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: python publish_forward_evidence.py
+        run: python paired_forward_cohort.py publish
       - name: Create pre-target public server witness using existing read-only CI
         id: public_witness
         if: steps.early_publish.outputs.new_predictions == 'true'
@@ -157,7 +165,7 @@ jobs:
       - name: Test hourly point-in-time registry causal restrictions after time-sensitive evidence capture
         id: regression
         continue-on-error: true
-        run: python -m unittest -v test_crash_forward_watch test_crash_v42_score test_direction_forward_v42 test_stage5_minute_shadow test_stage5_error_review test_spot_plus_quote_watch test_forward_validation test_quote_evidence_v2 test_forward_validation_v2 test_workflow_operational_order test_p0_operations test_publish_forward_evidence test_forward_diagnostics test_p0_open_target_guard
+        run: python -m unittest -v test_crash_forward_watch test_crash_v42_score test_direction_forward_v42 test_stage5_minute_shadow test_stage5_error_review test_spot_plus_quote_watch test_forward_validation test_quote_evidence_v2 test_forward_validation_v2 test_workflow_operational_order test_p0_operations test_publish_forward_evidence test_forward_diagnostics test_p0_open_target_guard test_paired_selection_v1 test_paired_forward_cohort test_paired_cohort_audit
       - name: Reconcile strict rolling seven-day issuance and target evidence
         id: operations
         if: always() && steps.validation.outcome == 'success'
@@ -165,6 +173,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python p0_operational_audit.py
+      - name: Independently audit same-event challengers and all NO_TRADE forecasts
+        id: paired_audit
+        if: always() && steps.operations.outcome == 'success'
+        continue-on-error: true
+        run: python paired_cohort_audit.py
+      - name: Verify real paired model preparation and live book without issuing smoke forecasts
+        id: paired_smoke
+        if: github.event_name == 'push' && steps.operations.outcome == 'success'
+        continue-on-error: true
+        run: python paired_forward_cohort.py smoke
       - name: Capture independent source versions and prospective post-publication depth
         id: supplemental_evidence
         if: always() && steps.operations.outcome == 'success'
@@ -192,12 +210,15 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           python -c 'from publish_forward_evidence import validate_state; from direction_forward_v42 import ROOT; validate_state(ROOT)'
+          python -c 'import paired_forward_cohort as p; p.guard(p.ROOT); p.history_guard(p.ROOT)'
           for f in data/hourly_research/ohlc.csv data/hourly_research/latest.json data/crash_research/pilot_1h_latest.json data/crash_research/prospective_hourly.csv data/crash_research/prospective_scores.json data/crash_research/v42_scores.json data/direction_v42/forward_registry.csv data/direction_v42/forward_scores.csv data/direction_v42/forward_latest.json data/stage5/minute_shadow/latest.json data/stage5/minute_shadow/minute_scores.csv data/stage5/error_review/latest.json data/stage5/spot_plus/quote_watch_latest.json data/stage5/forward_validation/latest.json data/stage5/forward_validation/remote_witnesses.csv data/stage5/forward_validation/verified_run_metadata.csv reports/DOGE_FORWARD_VALIDATION.md; do
             if [ -f "$f" ]; then git add -f "$f"; fi
           done
           git add -f data/quote_evidence_v2
           if [ -d data/forward_diagnostics_v1 ]; then git add -f data/forward_diagnostics_v1; fi
           if [ -f reports/DOGE_FORWARD_DIAGNOSTICS_V1.md ]; then git add -f reports/DOGE_FORWARD_DIAGNOSTICS_V1.md; fi
+          if [ -d data/paired_forward_v1 ]; then git add -f data/paired_forward_v1; fi
+          if [ -f reports/DOGE_PAIRED_SELECTIVE_SHADOW_V1.md ]; then git add -f reports/DOGE_PAIRED_SELECTIVE_SHADOW_V1.md; fi
           if [ -d data/p0_operations ]; then git add -f data/p0_operations; fi
           for d in data/plus_evidence_v1_0/; do
             if [ -d "$d" ]; then git add -f "$d"; fi
@@ -239,6 +260,11 @@ jobs:
             data/p0_operations/
             data/forward_diagnostics_v1/
             reports/DOGE_FORWARD_DIAGNOSTICS_V1.md
+            data/paired_forward_v1/
+            reports/DOGE_PAIRED_SELECTIVE_SHADOW_V1.md
+            data/stage5/paired_selection_v1_protocol.json
+            system/current_paired_shadow.json
+            system/versions/DOGE_PAIRED_SELECTIVE_SHADOW_V1_20261012_1600.json
       - name: Preserve new-version evidence separately from frozen forecast artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -256,6 +282,9 @@ jobs:
         run: exit 1
       - name: Fail visibly on open target guard or diagnostic errors after saving evidence
         if: always() && (steps.open_target_guard.outcome == 'failure' || steps.diagnostics.outcome == 'failure')
+        run: exit 1
+      - name: Fail visibly on paired cohort audit error after saving original evidence
+        if: always() && (steps.paired_audit.outcome == 'failure' || steps.paired_smoke.outcome == 'failure')
         run: exit 1
       - name: Fail on collector or quality error
         if: always() && (steps.validation.outcome != 'success' || steps.quote_watch.outcome != 'success' || steps.fast_hourly.outcome != 'success' || steps.collect.outcome != 'success' || steps.evaluate.outcome != 'success' || steps.forward.outcome != 'success' || steps.v42.outcome != 'success' || (steps.direction.outcome != 'success' && steps.direction_late_audit.outcome != 'success') || steps.minute_shadow.outcome != 'success' || steps.error_review.outcome != 'success' || steps.regression.outcome != 'success' || steps.early_publish.outcome != 'success' || steps.operations.outcome != 'success' || steps.persist.outcome != 'success' || steps.artifact.outcome != 'success' || steps.public_witness.outcome == 'failure')

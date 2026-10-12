@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "version_id": "DOGE_PAIRED_SELECTIVE_SHADOW_V1_20261012_1600",
+  "effective_from_utc": "2026-10-12T16:00:00+00:00",
+  "registered_at_utc": "2026-10-12T14:10:59.855568+00:00",
+  "layer": "paired_forecast_and_selective_paper_shadow",
+  "data_namespace": "data/paired_forward_v1",
+  "code_sha256_lf": {
+    "paired_selection_v1.py": "b865a78918105e3db8b56e81ecb9cc7a6e9b4a6d35a25cf1681688d52ced4e27",
+    "paired_forward_cohort.py": "b33489d253c7f0db229e424bd1ba4177c5e1655f23f425a39416791a9c4ae76c",
+    "paired_cohort_audit.py": "2833a262f10eb14d34c7694611ced271e6bc364c72781fabca885dbb71c58621",
+    "p1_adaptive_v2.py": "39e886f04c59c36e20704ce8d19f05322dfc0d4745abd5913aec8d471adf3a5e",
+    "direction_forward_v42.py": "16cd9563d1896505898f942fcaf3caf16767b747eb92dd194cfc2b237f7468c2",
+    "direction_baseline_v42.py": "57cc35c51e3ba7050df25ce0aec4ce2423bd330851a55f4982b36a5c80916195",
+    "quote_evidence_v2.py": "ca8ce0d7a86ffe41d51b40835b1a7b6af274bfdbaf4e2603580ddc5cb6f98cd2"
+  },
+  "protocol_sha256": "8e986c32eae1245ffcd8cc4128ddeb93c823896f12ee28538005d8cc6135cd71",
+  "selection_rule": {
+    "confidence_up_min": 0.6,
+    "calibration_min_n": 100,
+    "validation_min_n": 100,
+    "validation_selected_min_n": 30,
+    "validation_brier_max": 0.25,
+    "fee_each_side_bps": 10,
+    "half_spread_each_side_bps": 2.5,
+    "slippage_each_side_bps": 5,
+    "edge_reserve_bps": 10,
+    "book_max_spread_bps": 20,
+    "book_max_age_seconds": 30,
+    "visible_depth_min_usdt": 100,
+    "doge_abs_return24h_max": 0.15,
+    "btc_abs_return24h_max": 0.12,
+    "train_max_anchors": 4000,
+    "iterations": 80,
+    "learning_rate": 0.09,
+    "l2": 0.006
+  },
+  "engineering_audit_pass": true,
+  "audit": {
+    "schema_version": 1,
+    "version_id": "DOGE_PAIRED_SELECTIVE_SHADOW_V1_20261012_1600",
+    "engineering_pass": true,
+    "independent_review_pass": true,
+    "tests_passed": 415,
+    "tests_failed": 0,
+    "independent_review_related_tests": 38,
+    "audited_at_utc": "2026-10-12T14:10:59.743458+00:00",
+    "code_sha256_lf": {
+      "paired_selection_v1.py": "b865a78918105e3db8b56e81ecb9cc7a6e9b4a6d35a25cf1681688d52ced4e27",
+      "paired_forward_cohort.py": "b33489d253c7f0db229e424bd1ba4177c5e1655f23f425a39416791a9c4ae76c",
+      "paired_cohort_audit.py": "2833a262f10eb14d34c7694611ced271e6bc364c72781fabca885dbb71c58621",
+      "p1_adaptive_v2.py": "39e886f04c59c36e20704ce8d19f05322dfc0d4745abd5913aec8d471adf3a5e",
+      "direction_forward_v42.py": "16cd9563d1896505898f942fcaf3caf16767b747eb92dd194cfc2b237f7468c2",
+      "direction_baseline_v42.py": "57cc35c51e3ba7050df25ce0aec4ce2423bd330851a55f4982b36a5c80916195",
+      "quote_evidence_v2.py": "ca8ce0d7a86ffe41d51b40835b1a7b6af274bfdbaf4e2603580ddc5cb6f98cd2"
+    },
+    "protocol_sha256": "8e986c32eae1245ffcd8cc4128ddeb93c823896f12ee28538005d8cc6135cd71",
+    "real_orders_authorized": false,
+    "forward_efficacy": "WAIT_FUTURE_DATA",
+    "deployment_log_readback": "PENDING_AT_ENGINEERING_AUDIT",
+    "review_findings": {
+      "blocking_after_fixes": 0,
+      "resolved": [
+        "Repeated cumulative ledger scans replaced by exact append-diff replay and per-ID public records with bounded caches"
+      ]
+    },
+    "verification_scope": [
+      "Causal train/calibration/validation purge",
+      "Same original quote/target/confirmed-feature cutoff",
+      "Model prepared before original issue",
+      "Decision within30seconds before target",
+      "No historical challenger attachment",
+      "All NO_TRADE directions retained in full accuracy",
+      "Exact pre-target public head contains pair and model snapshot",
+      "Ten-test multiple-comparison family",
+      "Full reachable append history and tail integrity",
+      "Independent system exact-byte registration",
+      "Shadow errors preserve frozen issuer; no orders or DCA changes"
+    ]
+  },
+  "forward_efficacy_status": "WAIT_FUTURE_DATA",
+  "real_orders_authorized": false,
+  "automatic_promotion": false,
+  "dca_changed": false,
+  "old_models_and_ledgers_preserved": true
+}
