@@ -1,0 +1,29 @@
+name: Test DOGE three risk gates
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'three_risk_gates.py'
+      - 'test_three_risk_gates.py'
+      - 'data/stage5/three_risk_gates_protocol.json'
+      - '.github/workflows/test_three_risk_gates.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Test P1 leakage, NO_TRADE, and statistical maturity gates
+        run: |
+          python -m py_compile three_risk_gates.py
+          python -m unittest -v test_three_risk_gates
+      - name: Run real source ablation and evidence gate with no GitHub writes
+        run: python three_risk_gates.py
