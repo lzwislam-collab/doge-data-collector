@@ -68,4 +68,4 @@ python -m unittest -v test_doge_rolling_utxo test_stage1_quality test_stage1_rol
 
 ## 最新①②③综合审计（2026-10-13 JST）
 
-[完整审计与复现证据](reports/DOGE_SYSTEM_123_COMPREHENSIVE_AUDIT_20261013.md)已登记至[当前系统审计](system/current_comprehensive_audit.json)。①②基础前瞻机制通过，有效性仍WAIT；③覆盖率分母和尾部采样缺口两项实现问题使盈利验收BLOCKED。441项测试通过不代表新发现的问题已经修复。原始采集继续，冻结版本、历史、定投及真实交易权限不变。
+[完整审计与复现证据](reports/DOGE_SYSTEM_123_COMPREHENSIVE_AUDIT_20261013.md)已登记至[当前系统审计](system/current_comprehensive_audit.json)。③两项实现缺陷已在独立V3.1修复并通过线上验证，详见[修复验收](reports/DOGE_SYSTEM_123_V3_1_REPAIR_20261013.md)。当前③指针为[注册V3.1](system/current_p2_execution_shadow_v3_1.json)，前瞻盈利仍WAIT；①②统计有效性及晋级仍未验收。完整510项测试通过不等于准确率或盈利通过。失败V3、冻结版本、历史漏发与原始证据保留；定投及真实交易权限不变。
