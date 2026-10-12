@@ -1,0 +1,134 @@
+{
+  "schema_version": 1,
+  "upgrade_id": "DOGE_FORWARD_DIAGNOSTICS_V1_20261012",
+  "verdict": "PASS_ENGINEERING_WAIT_VALIDATION",
+  "verification_cutoff_utc": "2026-10-12T13:11:36+00:00",
+  "code_commit": "ef1d5f50ed690e382758ad365eacc8e35a3bfc95",
+  "data_readback_commit": "e667ed1c0f15feb3de9385437571ed3b36def3eb",
+  "change_paths": [
+    "forward_diagnostics.py",
+    "p0_open_target_guard.py",
+    "test_forward_diagnostics.py",
+    "test_p0_open_target_guard.py",
+    "test_workflow_operational_order.py",
+    ".github/workflows/okx_hourly_extreme_history.yml",
+    "docs/FORWARD_INCREMENTAL_DIAGNOSTICS_V1.md"
+  ],
+  "unintended_code_or_frozen_ledger_changes": [],
+  "tests": {
+    "local_full": 386,
+    "failed": 0,
+    "independent_review_related": 26,
+    "production_job": 117
+  },
+  "production_run": {
+    "id": 38253649388,
+    "job_id": 114826018612,
+    "event": "push",
+    "conclusion": "success",
+    "url": "https://github.com/lzwislam-collab/doge-data-collector/actions/runs/38253649388",
+    "post_upgrade_schedule_verified": false,
+    "open_target_guard_actual": "SKIP_NO_OPEN_TARGET",
+    "live_open_target_guard_recovery_verified": false
+  },
+  "new_real_data": {
+    "forecast_ids": [
+      "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1791806400000_1h",
+      "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1791806400000_24h"
+    ],
+    "issued_at_utc": "2026-10-12T13:09:03.141514+00:00",
+    "reference_price": 0.08615,
+    "issue_quote_sha256": "2dee687b507379ff38d31cf68dd7b2d60de20b9483ad75497d3f4b4c995a44a7",
+    "raw_snapshot_file_sha256_independently_matched": true,
+    "server_witness": {
+      "run_id": 38253681353,
+      "event": "workflow_dispatch",
+      "created_at_utc": "2026-10-12T13:09:08+00:00",
+      "head_sha": "ed2537cbb78fb94f56687a4ff54173f6c8a4fc44",
+      "conclusion": "success"
+    },
+    "book_observations": 2,
+    "book_quote_utc": "2026-10-12T13:09:29.053+00:00",
+    "book_record_sha256": "dade7d522b2f794993e66f6a66acb72ce43601f1dab67fe8e50a63c2f06fed23",
+    "book_hash_chain_independently_verified": true,
+    "book_is_fill": false,
+    "new_1h_target_utc": "2026-10-12T14:09:03.141514+00:00",
+    "new_24h_target_utc": "2026-10-13T13:09:03.141514+00:00",
+    "new_forecast_scores": "WAIT_TARGET",
+    "new_confirmed_hourly_rows": 3,
+    "hourly_latest": {
+      "symbols": {
+        "DOGE-USDT": {
+          "hours": 19335,
+          "earliest_utc": "2024-07-28T22:00:00+00:00",
+          "last_confirmed_start_utc": "2026-10-12T12:00:00+00:00",
+          "missing_hours_between_endpoints": 0
+        },
+        "BTC-USDT": {
+          "hours": 19335,
+          "earliest_utc": "2024-07-28T22:00:00+00:00",
+          "last_confirmed_start_utc": "2026-10-12T12:00:00+00:00",
+          "missing_hours_between_endpoints": 0
+        },
+        "ETH-USDT": {
+          "hours": 19335,
+          "earliest_utc": "2024-07-28T22:00:00+00:00",
+          "last_confirmed_start_utc": "2026-10-12T12:00:00+00:00",
+          "missing_hours_between_endpoints": 0
+        }
+      },
+      "duplicate_keys": 0
+    }
+  },
+  "formal_snapshot": {
+    "audit_utc": "2026-10-12T13:09:22.679678+00:00",
+    "issuance": {
+      "1h": {
+        "expected": 11,
+        "issued": 6,
+        "missing": 5,
+        "coverage_pct": 54.54545454545455,
+        "window_minutes": 45
+      },
+      "24h": {
+        "expected": 0,
+        "issued": 0,
+        "missing": 0,
+        "coverage_pct": null,
+        "window_minutes": 1440
+      }
+    },
+    "one_hour_due": 5,
+    "one_hour_scored": 5,
+    "one_hour_model": {
+      "n": 5,
+      "correct": 3,
+      "accuracy_pct": 60,
+      "wilson95_lower_pct_descriptive_only": 23.072428127601945
+    },
+    "p0_7d_accepted": false,
+    "p0_30d_accepted": false
+  },
+  "remaining": {
+    "schedule_stability": "WAIT_FUTURE_DATA",
+    "p1_edge_and_calibration": "WAIT_FUTURE_DATA",
+    "p2_net_profit_drawdown": "WAIT_FUTURE_DATA",
+    "external_retention": "BLOCKED_NOT_CONFIGURED",
+    "sheets_automation": "BLOCKED_NOT_INDEPENDENTLY_VERIFIED",
+    "full_earlier_hourly_history": "INCOMPLETE",
+    "full_continuous_drawdown_and_fills": "BLOCKED_NO_EXECUTION_EVIDENCE"
+  },
+  "scope": {
+    "action": "NO_TRADE",
+    "dca_changed": false,
+    "frozen_protocols_changed": false,
+    "historical_missing_issuance_retained": 5,
+    "new_cron_count": 0,
+    "automatic_promotion": false
+  },
+  "methods": [
+    "https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows",
+    "https://scikit-learn.org/stable/modules/calibration.html",
+    "https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.TimeSeriesSplit.html"
+  ]
+}
