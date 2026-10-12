@@ -1,9 +1,20 @@
 {
   "schema_version": 1,
-  "run_utc": "2026-10-11T18:36:13.437216+00:00",
+  "run_utc": "2026-10-12T00:57:49.011419+00:00",
   "status": "ok",
   "source": "OKX confirmed daily data/history/daily.csv",
-  "scores": [],
+  "scores": [
+    {
+      "forecast_id": "doge_laplace_v1_2026-10-10_1d",
+      "target_date": "2026-10-11",
+      "horizon_days": 1,
+      "realized_up": 1,
+      "brier": 0.265582875,
+      "brier_50pct_baseline": 0.25,
+      "forecast_probability": 0.484652666,
+      "target_close": 0.08679
+    }
+  ],
   "quarantined": [
     {
       "forecast_id": "doge_laplace_v1_2026-10-09_1d",
@@ -19,10 +30,6 @@
     }
   ],
   "pending": [
-    {
-      "forecast_id": "doge_laplace_v1_2026-10-10_1d",
-      "reason": "target_not_closed"
-    },
     {
       "forecast_id": "doge_laplace_v1_2026-10-10_30d",
       "reason": "target_not_closed"
@@ -40,9 +47,9 @@
   ],
   "horizon_summary": {
     "1d": {
-      "n": 0,
-      "mean_brier": null,
-      "brier_improvement_vs_50pct": null,
+      "n": 1,
+      "mean_brier": 0.265582875,
+      "brier_improvement_vs_50pct": -0.015582875,
       "minimum_evaluation_sample": 100,
       "eligible_for_predictive_claim": false
     },
@@ -66,7 +73,7 @@
     "classification_sum_matches_registry": true
   },
   "registered": 6,
-  "scored": 0,
-  "pending_count": 3,
+  "scored": 1,
+  "pending_count": 2,
   "quarantined_count": 3
 }
