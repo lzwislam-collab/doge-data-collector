@@ -3,7 +3,7 @@
 import csv,json,tempfile,unittest
 from datetime import datetime,timedelta,timezone
 from pathlib import Path
-from spot_plus_daily_evolution import inspect,run,read_ledger
+from spot_plus_daily_evolution import inspect,run,read_ledger,inspect_official_v2
 
 AT=datetime(2026,10,11,13,0,tzinfo=timezone.utc)
 
@@ -42,6 +42,42 @@ class TestDailyEvolution(unittest.TestCase):
  def save(self):
   dump(self.root,'data/stage5/spot_plus/latest.json',self.plus)
   dump(self.root,'data/stage5/latest.json',self.stage)
+
+ def v2_fixture(self):
+  return {'status':'ok','audited_at_utc':'2026-10-12T12:30:00+00:00',
+   'effective_from_utc':'2026-10-12T02:00:00+00:00',
+   'protocol_id':'DOGE_FORWARD_RAW_QUOTE_BOUND_V2_20261012_0200',
+   'locked_implementation_checked':True,
+   'accuracy_70pct_validated':False,'economic_edge_validated':False,
+   'raw_quote_snapshots':30,'quote_bindings':10,
+   'horizons':{h:{'issuance':{'expected':6,'issued':1,'coverage_pct':100/6},
+      'nonoverlap':{'due':0,'scored':0,'missing_or_unresolved':0,'quote_coverage_pct':None,
+        'models':{'doge_reversal':{'correct':0,'accuracy_pct':None,
+           'wilson95_lower_pct_descriptive_only':None}},
+        'edge_validated':False}} for h in ('1h','24h')},
+   'prospective_spot_paper':{'completed_intervals':0,'strategy_net_return_pct':None,
+       'buy_hold_net_return_pct':None}}
+
+ def test_v2_official_prospect_replaces_legacy_claim(self):
+  dump(self.root,'data/stage5/forward_validation_v2/latest.json',self.v2_fixture())
+  d=inspect_official_v2(self.root,datetime(2026,10,12,13,0,tzinfo=timezone.utc))
+  self.assertTrue(d['is_official'])
+  self.assertEqual(d['1h']['issuance_coverage_pct'],16.67)
+  self.assertEqual(d['24h']['nonoverlap_scored'],0)
+  self.assertFalse(d['economic_edge_validated'])
+  self.assertTrue(d['V1_statistics_are_not_V2_claim_evidence'])
+
+ def test_v2_issuance_count_mismatch_rejected(self):
+  d=self.v2_fixture()
+  d['horizons']['1h']['issuance']['issued']=7
+  dump(self.root,'data/stage5/forward_validation_v2/latest.json',d)
+  with self.assertRaisesRegex(ValueError,'accounting mismatch'):
+   inspect_official_v2(self.root,datetime(2026,10,12,13,0,tzinfo=timezone.utc))
+
+ def test_missing_v2_cannot_be_replaced_by_v1_score(self):
+  d=inspect_official_v2(self.root,datetime(2026,10,12,13,0,tzinfo=timezone.utc))
+  self.assertFalse(d['available'])
+  self.assertFalse(d['accuracy_70pct_validated'])
 
  def test_first_ledger_and_same_day_are_idempotent(self):
   a=run(self.root,AT);b=run(self.root,AT+timedelta(minutes=4))
