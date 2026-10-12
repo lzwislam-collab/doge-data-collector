@@ -44,7 +44,9 @@ class TestOperationalOrder(unittest.TestCase):
   e=self.offset('- name: Preserve per-run forecast and score evidence snapshot')
   self.assertLess(t,d)
   self.assertLess(d,e)
-  self.assertEqual(self.lines[t+1].strip().startswith('run: python -m unittest -v'),True)
+  test_step='\n'.join(self.lines[t:d])
+  self.assertIn('run: python -m unittest -v',test_step)
+  self.assertIn('continue-on-error: true',test_step)
   self.assertIn('if: always()', '\n'.join(self.lines[d:d+3]))
   self.assertIn('if: always()', '\n'.join(self.lines[e:e+3]))
 
@@ -70,7 +72,7 @@ class TestOperationalOrder(unittest.TestCase):
   a=self.offset('Issue and score DOGE UP/DOWN shadow forecasts from live ticker quote')
   b=self.offset('Verify benign late-registration skip without changing frozen deadline')
   direction='\n'.join(self.lines[a:b])
-  self.assertIn('run: python quote_evidence_v2.py direction',direction)
+  self.assertIn('run: python quote_capture_retry.py direction',direction)
   self.assertNotIn("if: steps.collect.outcome == 'success'",direction)
   late='\n'.join(self.lines[b:self.offset('Backfill confirmed UTC 1H data with source-ingestion timestamps')])
   self.assertIn("if: steps.direction.outcome != 'success'",late)
@@ -78,7 +80,7 @@ class TestOperationalOrder(unittest.TestCase):
 
  def test_v2_frozen_code_validation_preserved(self):
   self.assertIn('run: python forward_validation_v2.py --integrity-only',self.text)
-  self.assertIn('run: python quote_evidence_v2.py direction',self.text)
+  self.assertIn('run: python quote_capture_retry.py direction',self.text)
   self.assertIn('run: python forward_validation_v2.py',self.text)
   self.assertIn('test_forward_validation_v2',self.text)
 
