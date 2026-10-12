@@ -9,6 +9,10 @@ on:
       - 'evidence_retention.py'
       - 'forward_execution_evidence.py'
       - 'supplemental_evidence_audit.py'
+      - 'plus_evidence_version.py'
+      - 'audited_forward_refresh.py'
+      - 'test_plus_evidence_version.py'
+      - 'test_audited_forward_refresh.py'
       - 'test_source_evidence_snapshot.py'
       - 'test_evidence_retention.py'
       - 'test_forward_execution_evidence.py'
@@ -35,5 +39,6 @@ jobs:
           python -m py_compile three_risk_gates.py
           python -m unittest -v test_three_risk_gates
           python -m unittest -v test_source_evidence_snapshot test_evidence_retention test_forward_execution_evidence test_supplemental_evidence_audit test_supplemental_workflow
+          python -m unittest -v test_plus_evidence_version test_audited_forward_refresh
       - name: Run real source ablation and evidence gate with no GitHub writes
         run: python three_risk_gates.py

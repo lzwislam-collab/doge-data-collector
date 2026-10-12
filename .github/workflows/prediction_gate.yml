@@ -35,6 +35,8 @@ on:
       - 'source_evidence_snapshot.py'
       - 'evidence_retention.py'
       - 'supplemental_evidence_audit.py'
+      - 'plus_evidence_version.py'
+      - 'audited_forward_refresh.py'
       - 'test_spot_plus_research.py'
       - 'spot_plus_daily_evolution.py'
       - 'test_spot_plus_daily_evolution.py'
@@ -79,7 +81,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           python -m unittest -q test_forward_validation test_quote_evidence_v2 test_forward_validation_v2
-          python forward_validation_v2.py --daily
+          python audited_forward_refresh.py
       - name: Score independent P1 challenger after official V2 evidence validation
         id: p1_league
         if: steps.forward_validation.outcome == 'success'
@@ -167,10 +169,10 @@ jobs:
           if [ -f data/stage5/three_risk_gates/no_trade_decisions.csv ]; then git add -f data/stage5/three_risk_gates/no_trade_decisions.csv; fi
           if [ -d data/stage5/p1_adaptive_v2 ]; then git add -f data/stage5/p1_adaptive_v2; fi
           if [ -f reports/DOGE_P1_ADAPTIVE_V2.md ]; then git add -f reports/DOGE_P1_ADAPTIVE_V2.md; fi
-          for d in data/evidence_snapshot/ data/supplemental_evidence/; do
+          for d in data/plus_evidence_v1_0/; do
             if [ -d "$d" ]; then git add -f "$d"; fi
           done
-          if [ -f reports/DOGE_SUPPLEMENTAL_EVIDENCE.md ]; then git add -f reports/DOGE_SUPPLEMENTAL_EVIDENCE.md; fi
+          if [ -f reports/DOGE_PLUS_EVIDENCE_V1_0.md ]; then git add -f reports/DOGE_PLUS_EVIDENCE_V1_0.md; fi
           if ! git diff --cached --quiet; then
             git commit -m 'audit: DOGE forecast publication gate'
             for i in 1 2 3 4 5; do
@@ -179,6 +181,18 @@ jobs:
               sleep 4
             done
           fi
+      - name: Preserve V1.0 evidence even if repository persistence fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: doge-plus-evidence-v1-0-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 90
+          if-no-files-found: error
+          path: |
+            data/plus_evidence_v1_0/
+            system/versions/DOGE_PLUS_EVIDENCE_V1_0_20261012.json
+            system/current_plus_evidence.json
+            reports/DOGE_PLUS_EVIDENCE_V1_0.md
       - name: Fail visibly on supplemental snapshot failure
         if: always() && steps.supplemental_evidence.outcome != 'success'
         run: exit 1

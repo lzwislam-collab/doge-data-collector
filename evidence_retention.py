@@ -8,6 +8,7 @@ import argparse
 import hashlib
 import json
 import uuid
+from source_evidence_snapshot import storage_path, DEFAULT_STORAGE_NAMESPACE, PLUS_STORAGE_NAMESPACE
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -64,16 +65,23 @@ def verify_receipt(config, expected_sha256, client=None, now=None):
     return result
 
 
-def export_manifest(root, manifest, config=None, client=None):
+def export_manifest(root, manifest, config=None, client=None, storage_namespace=None):
     root, manifest = Path(root).resolve(), Path(manifest).resolve()
-    if not manifest.is_relative_to(root/'data/evidence_snapshot/manifests'):
+    if storage_namespace is None:
+        matches = [n for n in (DEFAULT_STORAGE_NAMESPACE, PLUS_STORAGE_NAMESPACE)
+                   if manifest.is_relative_to((root/n/'manifests').resolve())]
+        if len(matches) != 1:
+            raise ValueError('expected supplemental snapshot manifest')
+        storage_namespace = matches[0]
+    storage, namespace = storage_path(root, storage_namespace)
+    if not manifest.is_relative_to(storage/'manifests'):
         raise ValueError('expected supplemental snapshot manifest')
     objects = []
     visited = set()
     current = manifest
     expected_manifest_sha = None
     while current is not None:
-        if not current.is_relative_to(root/'data/evidence_snapshot/manifests') or current in visited:
+        if not current.is_relative_to(storage/'manifests') or current in visited:
             raise ValueError('unsafe or cyclic manifest ancestry')
         visited.add(current)
         raw = current.read_bytes()
@@ -81,13 +89,15 @@ def export_manifest(root, manifest, config=None, client=None):
         if expected_manifest_sha is not None and sha!=expected_manifest_sha:
             raise ValueError('predecessor manifest hash mismatch')
         snapshot = json.loads(raw)
+        if snapshot.get('storage_namespace', DEFAULT_STORAGE_NAMESPACE) != namespace:
+            raise ValueError('manifest namespace mismatch')
         objects.append({'local_path': current.relative_to(root).as_posix(), 'sha256': sha,
                         'kind': 'snapshot_manifest' if current==manifest else 'ancestor_manifest'})
         evidence_items = list(snapshot['sources'].values()) + list(snapshot.get('supporting_evidence', {}).values())
         for item in evidence_items:
             if item.get('sha256'):
                 path = (root/item['archive_path']).resolve()
-                if not path.is_relative_to(root/'data/evidence_snapshot/blobs'):
+                if not path.is_relative_to(storage/'blobs'):
                     raise ValueError('unsafe evidence archive path')
                 if hashlib.sha256(path.read_bytes()).hexdigest()!=item['sha256']:
                     raise ValueError('evidence content hash mismatch')
@@ -103,13 +113,14 @@ def export_manifest(root, manifest, config=None, client=None):
         obj['retention_receipt'] = verify_receipt(receipts.get(obj['local_path']), obj['sha256'], client=client)
     verified = all(o['retention_receipt']['independent_retention_verified'] for o in objects)
     configured = any(o['retention_receipt']['status']!='NOT_CONFIGURED' for o in objects)
-    result = {'schema_version': 1, 'exported_at_utc': datetime.now(timezone.utc).isoformat(),
+    result = {'schema_version': 1, 'storage_namespace': namespace,
+              'version_id': snapshot.get('version_id', 'LEGACY_EVIDENCE_SNAPSHOT'), 'exported_at_utc': datetime.now(timezone.utc).isoformat(),
               'status': 'VERIFIED' if verified else 'NOT_VERIFIED' if configured else 'NOT_CONFIGURED',
               'independent_retention_verified': verified, 'objects': objects,
               'requirements': ['Each manifest and content blob requires its own pinned non-null S3 version',
                                'Read-only API verification of enabled Object Lock, active COMPLIANCE retention and exact SHA256 readback',
                                'Local evidence is mutable by a local administrator; hashes alone are not WORM']}
-    out = root/'data/evidence_snapshot/retention_exports'/f'{uuid.uuid4().hex}.json'
+    out = storage/'retention_exports'/f'{uuid.uuid4().hex}.json'
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open('x', encoding='utf-8') as stream:
         json.dump(result, stream, ensure_ascii=False, indent=2)
@@ -120,11 +131,12 @@ def export_manifest(root, manifest, config=None, client=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parent)
+    parser.add_argument('--storage-namespace', help='Optional storage root; inferred for supported namespaces')
     parser.add_argument('--manifest', type=Path, required=True)
     parser.add_argument('--receipt-config', type=Path, help='JSON objects map: local_path -> provider,bucket,key,version_id,optional region')
     args = parser.parse_args()
     config = json.loads(args.receipt_config.read_text(encoding='utf-8')) if args.receipt_config else None
-    path, result = export_manifest(args.root, args.manifest, config)
+    path, result = export_manifest(args.root, args.manifest, config, storage_namespace=args.storage_namespace)
     print(json.dumps({'status': result['status'], 'export_path': str(path)}, ensure_ascii=False))
 
 

@@ -26,6 +26,48 @@ class SnapshotTests(unittest.TestCase):
         with patch.object(self.module, 'clock_utc', return_value=self.now):
             return self.module.capture(self.root, cutoff=cutoff)
 
+    def test_namespaces_isolate_availability_and_chain(self):
+        self.source()
+        legacy = self.capture()
+        self.now += timedelta(hours=1)
+        namespace = 'data/plus_evidence_v1_0/sources'
+        with patch.object(self.module, 'clock_utc', return_value=self.now):
+            fresh = self.module.capture(self.root, storage_namespace=namespace)
+            again = self.module.capture(self.root, storage_namespace=namespace)
+        self.assertIsNone(fresh['previous_manifest_path'])
+        self.assertEqual(fresh['sources']['onchain']['first_seen_utc'], self.now.isoformat())
+        self.assertNotEqual(legacy['sources']['onchain']['archive_path'], fresh['sources']['onchain']['archive_path'])
+        self.assertEqual(again['previous_manifest_path'], fresh['manifest_path'])
+        self.assertEqual(fresh['version_id'], 'DOGE_PLUS_EVIDENCE_V1_0_20261012')
+        self.assertEqual(fresh['storage_namespace'], namespace)
+        (self.root/fresh['sources']['onchain']['archive_path']).write_bytes(b'forged')
+        with patch.object(self.module, 'clock_utc', return_value=self.now):
+            with self.assertRaisesRegex(ValueError, 'hash'):
+                self.module.capture(self.root, storage_namespace=namespace)
+
+    def test_new_namespace_archives_execution_with_legacy_context_and_missing_predecessor(self):
+        namespace = 'data/plus_evidence_v1_0/sources'
+        execution = self.root/'data/plus_evidence_v1_0/execution/observations.jsonl'
+        execution.parent.mkdir(parents=True)
+        execution.write_bytes(b'new execution')
+        legacy = self.root/'data/forward_execution_evidence/observations.jsonl'
+        legacy.parent.mkdir(parents=True)
+        legacy.write_bytes(b'legacy execution')
+        with patch.object(self.module, 'clock_utc', return_value=self.now):
+            first = self.module.capture(self.root, storage_namespace=namespace)
+            self.module.capture(self.root, storage_namespace=namespace)
+            items = first['supporting_evidence']
+            self.assertEqual(items[execution.relative_to(self.root).as_posix()]['evidence_role'], 'current_version_execution')
+            self.assertEqual(items[legacy.relative_to(self.root).as_posix()]['evidence_role'], 'archived_context')
+            (self.root/first['manifest_path']).unlink()
+            with self.assertRaisesRegex(ValueError, 'predecessor'):
+                self.module.capture(self.root, storage_namespace=namespace)
+
+    def test_unsafe_namespace_rejected(self):
+        for namespace in ('../escape', '/absolute', 'data/../escape', 'data\\..\\escape', 'C:/escape'):
+            with self.assertRaises(ValueError):
+                self.module.capture(self.root, storage_namespace=namespace)
+
     def test_historical_observation_never_backdates_availability(self):
         self.source()
         record = self.capture(datetime(2026, 10, 11, tzinfo=timezone.utc))

@@ -13,6 +13,26 @@ import uuid
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
+DEFAULT_STORAGE_NAMESPACE = 'data/evidence_snapshot'
+PLUS_STORAGE_NAMESPACE = 'data/plus_evidence_v1_0/sources'
+VERSION_ID = 'DOGE_PLUS_EVIDENCE_V1_0_20261012'
+
+
+def storage_path(root, storage_namespace=None):
+    namespace = DEFAULT_STORAGE_NAMESPACE if storage_namespace is None else str(storage_namespace)
+    parts = namespace.replace('\\', '/').split('/')
+    if (not parts or parts[0] != 'data' or any(p in ('', '.', '..') or ':' in p for p in parts)
+            or len(parts) < 2):
+        raise ValueError('unsafe storage namespace')
+    path = (Path(root)/Path(*parts)).resolve()
+    if not path.is_relative_to(Path(root).resolve()/'data'):
+        raise ValueError('unsafe storage namespace')
+    for child in ('blobs', 'manifests', 'reports', 'retention_exports'):
+        if not (path/child).resolve().is_relative_to(path):
+            raise ValueError('unsafe storage namespace child')
+    return path, '/'.join(parts)
+
+
 SOURCES = {
     'onchain': (1, 'data/onchain/metrics_latest.json', 'collected_at_utc', 36),
     'confirmed_whales': (1, 'data/whales_blocks/latest.json', 'ended_at_utc', 2),
@@ -59,13 +79,14 @@ def exclusive(path, raw):
         stream.write(raw)
 
 
-def prior_versions(root, now):
+def prior_versions(root, now, storage_namespace=None):
     """Check captured bytes before reusing a version's earlier availability."""
+    storage, namespace = storage_path(root, storage_namespace)
     versions = {}
     manifests = {}
     predecessors = set()
     supporting_paths = set()
-    for path in sorted((root/'data/evidence_snapshot/manifests').glob('*.json')):
+    for path in sorted((storage/'manifests').glob('*.json')):
         raw_manifest = path.read_bytes()
         record = json.loads(raw_manifest)
         relative = str(path.relative_to(root)).replace('\\', '/')
@@ -73,7 +94,7 @@ def prior_versions(root, now):
         previous = record.get('previous_manifest_path')
         if previous:
             predecessor = (root/previous).resolve()
-            if not predecessor.is_relative_to((root/'data/evidence_snapshot/manifests').resolve()):
+            if not predecessor.is_relative_to((storage/'manifests').resolve()):
                 raise ValueError('unsafe predecessor path')
             if not predecessor.exists():
                 raise ValueError('missing predecessor manifest')
@@ -82,6 +103,8 @@ def prior_versions(root, now):
             if previous == relative:
                 raise ValueError('self-linked predecessor')
             predecessors.add(previous)
+        if record.get('storage_namespace', DEFAULT_STORAGE_NAMESPACE) != namespace:
+            raise ValueError('manifest namespace mismatch')
         captured = utc(record['captured_at_utc'])
         if captured > now:
             raise ValueError('archive capture time is in future')
@@ -91,7 +114,7 @@ def prior_versions(root, now):
             if not item.get('sha256'):
                 continue
             archive = (root/item['archive_path']).resolve()
-            if not archive.is_relative_to((root/'data/evidence_snapshot/blobs').resolve()):
+            if not archive.is_relative_to((storage/'blobs').resolve()):
                 raise ValueError('unsafe archive path')
             if digest(archive.read_bytes()) != item['sha256']:
                 raise ValueError('archive content hash mismatch')
@@ -109,8 +132,9 @@ def prior_versions(root, now):
     return versions, tip, manifests.get(tip), supporting_paths
 
 
-def supporting_files(root):
+def supporting_files(root, storage_namespace=None):
     """Archive public operational evidence, without interpreting its timestamps."""
+    _, namespace = storage_path(root, storage_namespace)
     paths = {'data/direction_v42/forward_registry.csv', 'data/direction_v42/forward_scores.csv',
              'data/stage5/pre_registration.json', 'data/quote_evidence_v2/bindings.csv',
              'data/p0_operations/publication_latest.json'}
@@ -118,14 +142,16 @@ def supporting_files(root):
         if not path.is_file():
             continue
         relative = path.relative_to(root).as_posix()
-        if relative.startswith('data/evidence_snapshot/'):
+        if (relative.startswith(namespace+'/') or relative.startswith('data/evidence_snapshot/') or
+                relative.startswith(PLUS_STORAGE_NAMESPACE+'/')):
             continue
         name = path.name
         if (('protocol' in name and name.endswith('.json')) or 'pre_registration' in name
                 or 'registry' in name or 'scores' in name or name.endswith('.activation.json')
                 or relative.startswith('data/quote_evidence_v2/')
                 or relative.startswith('data/p0_operations/')
-                or relative == 'data/forward_execution_evidence/observations.jsonl'):
+                or relative == 'data/forward_execution_evidence/observations.jsonl'
+                or relative.startswith('data/plus_evidence_v1_0/execution/')):
             paths.add(relative)
     return paths
 
@@ -146,14 +172,16 @@ def timestamps(raw, path, field):
     return [data[field]], data.get('status', 'unknown')
 
 
-def capture(root, cutoff=None):
+def capture(root, cutoff=None, storage_namespace=None):
     root = Path(root).resolve()
+    storage, namespace = storage_path(root, storage_namespace)
     now = utc(clock_utc().isoformat())
     cutoff = now if cutoff is None else utc(cutoff.isoformat())
     if cutoff > now:
         raise ValueError('report cutoff cannot be future')
-    versions, previous, previous_sha, known_support = prior_versions(root, now)
-    record = {'schema_version': 2, 'captured_at_utc': now.isoformat(),
+    versions, previous, previous_sha, known_support = prior_versions(root, now, namespace)
+    record = {'schema_version': 2, 'storage_namespace': namespace,
+              'version_id': VERSION_ID if namespace == PLUS_STORAGE_NAMESPACE else ('LEGACY_EVIDENCE_SNAPSHOT' if namespace == DEFAULT_STORAGE_NAMESPACE else namespace), 'captured_at_utc': now.isoformat(),
               'report_cutoff_utc': cutoff.isoformat(), 'pillar_count': 5,
               'trained_weights_authorized': False, 'local_append_only_not_worm': True,
               'shared_cutoff_does_not_mean_shared_refresh': True,
@@ -171,7 +199,7 @@ def capture(root, cutoff=None):
             continue
         raw = source.read_bytes()
         sha = digest(raw)
-        archive = 'data/evidence_snapshot/blobs/'+sha+'.bin'
+        archive = namespace+'/blobs/'+sha+'.bin'
         blob = root/archive
         if blob.exists():
             if digest(blob.read_bytes()) != sha:
@@ -200,16 +228,17 @@ def capture(root, cutoff=None):
             item['available_as_of_cutoff'] = first <= cutoff and not future
         except (ValueError, KeyError, TypeError, UnicodeError) as exc:
             item.update(state='invalid', error=str(exc))
-    for path in sorted(supporting_files(root) | known_support):
+    for path in sorted(supporting_files(root, namespace) | known_support):
         item = {'source_file': path, 'state': 'missing', 'allowed_for_model': False,
-                'semantic_timestamp_inferred': False}
+                'semantic_timestamp_inferred': False,
+                'evidence_role': 'current_version_execution' if path.startswith('data/plus_evidence_v1_0/execution/') else 'archived_context'}
         record['supporting_evidence'][path] = item
         source = root/path
         if not source.exists():
             continue
         raw = source.read_bytes()
         sha = digest(raw)
-        archive = 'data/evidence_snapshot/blobs/'+sha+'.bin'
+        archive = namespace+'/blobs/'+sha+'.bin'
         blob = root/archive
         if blob.exists():
             if digest(blob.read_bytes()) != sha:
@@ -223,8 +252,8 @@ def capture(root, cutoff=None):
                 and all(s['state']!='missing' for s in record['supporting_evidence'].values()))
     record['status'] = 'complete_inventory_with_limits' if complete else 'incomplete_or_stale_inventory'
     identifier = now.strftime('%Y%m%dT%H%M%S%fZ')+'_'+uuid.uuid4().hex
-    manifest = root/'data/evidence_snapshot/manifests'/f'{identifier}.json'
-    report = root/'data/evidence_snapshot/reports'/f'{identifier}.md'
+    manifest = storage/'manifests'/f'{identifier}.json'
+    report = storage/'reports'/f'{identifier}.md'
     record['manifest_path'] = str(manifest.relative_to(root)).replace('\\', '/')
     record['report_path'] = str(report.relative_to(root)).replace('\\', '/')
     exclusive(manifest, (json.dumps(record, ensure_ascii=False, indent=2)+'\n').encode('utf-8'))
@@ -244,9 +273,10 @@ def capture(root, cutoff=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parent)
+    parser.add_argument('--storage-namespace', help='Safe relative storage root; defaults to legacy namespace')
     parser.add_argument('--cutoff', help='Optional UTC audit cutoff; never backdates captured availability')
     args = parser.parse_args()
-    result = capture(args.root, utc(args.cutoff) if args.cutoff else None)
+    result = capture(args.root, utc(args.cutoff) if args.cutoff else None, args.storage_namespace)
     print(json.dumps({k: result[k] for k in ('status', 'captured_at_utc', 'manifest_path', 'report_path')}, ensure_ascii=False))
 
 

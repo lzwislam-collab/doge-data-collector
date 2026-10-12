@@ -32,6 +32,25 @@ class RetentionTests(unittest.TestCase):
         self.spec = {'provider': 'aws_s3_object_lock', 'bucket': 'bucket', 'key': 'key', 'version_id': 'v1'}
         self.sha = hashlib.sha256(b'proof').hexdigest()
 
+    def test_new_namespace_export_autodetection_and_ancestry(self):
+        import source_evidence_snapshot as snapshot
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            namespace = 'data/plus_evidence_v1_0/sources'
+            with patch.object(snapshot, 'clock_utc', return_value=self.now):
+                first = snapshot.capture(root, storage_namespace=namespace)
+                second = snapshot.capture(root, storage_namespace=namespace)
+            output, result = self.module.export_manifest(root, root/second['manifest_path'])
+            self.assertTrue(output.is_relative_to(root/namespace/'retention_exports'))
+            self.assertFalse(result['independent_retention_verified'])
+            self.assertEqual(result['storage_namespace'], namespace)
+            self.assertIn(first['manifest_path'], {o['local_path'] for o in result['objects']})
+            with self.assertRaises(ValueError):
+                self.module.export_manifest(root, root/second['manifest_path'], storage_namespace='data/evidence_snapshot')
+            (root/first['manifest_path']).write_bytes(b'forged')
+            with self.assertRaisesRegex(ValueError, 'hash'):
+                self.module.export_manifest(root, root/second['manifest_path'])
+
     def test_local_hash_and_flag_never_prove_worm(self):
         result = self.module.verify_receipt({'worm': True, 'sha256': self.sha}, self.sha, now=self.now)
         self.assertEqual(result['status'], 'NOT_CONFIGURED')

@@ -24,6 +24,7 @@ on:
       - 'quote_capture_retry.py'
       - 'p0_operational_audit.py'
       - 'supplemental_evidence_audit.py'
+      - 'plus_evidence_version.py'
       - 'source_evidence_snapshot.py'
       - 'forward_execution_evidence.py'
       - 'evidence_retention.py'
@@ -172,10 +173,10 @@ jobs:
           done
           git add -f data/quote_evidence_v2
           if [ -d data/p0_operations ]; then git add -f data/p0_operations; fi
-          for d in data/evidence_snapshot/ data/forward_execution_evidence/ data/supplemental_evidence/; do
+          for d in data/plus_evidence_v1_0/; do
             if [ -d "$d" ]; then git add -f "$d"; fi
           done
-          if [ -f reports/DOGE_SUPPLEMENTAL_EVIDENCE.md ]; then git add -f reports/DOGE_SUPPLEMENTAL_EVIDENCE.md; fi
+          if [ -f reports/DOGE_PLUS_EVIDENCE_V1_0.md ]; then git add -f reports/DOGE_PLUS_EVIDENCE_V1_0.md; fi
           for f in data/stage5/forward_validation_v2/latest.json data/stage5/forward_validation_v2/protocol_witness.json reports/DOGE_FORWARD_VALIDATION_V2.md; do
             if [ -f "$f" ]; then git add -f "$f"; fi
           done
@@ -210,10 +211,18 @@ jobs:
             data/stage5/forward_validation_v2/
             reports/DOGE_FORWARD_VALIDATION_V2.md
             data/p0_operations/
-            data/evidence_snapshot/
-            data/forward_execution_evidence/
-            data/supplemental_evidence/
-            reports/DOGE_SUPPLEMENTAL_EVIDENCE.md
+      - name: Preserve new-version evidence separately from frozen forecast artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: doge-plus-evidence-v1-0-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 90
+          if-no-files-found: error
+          path: |
+            data/plus_evidence_v1_0/
+            system/versions/DOGE_PLUS_EVIDENCE_V1_0_20261012.json
+            system/current_plus_evidence.json
+            reports/DOGE_PLUS_EVIDENCE_V1_0.md
       - name: Fail visibly on supplemental capture failure after preserving core evidence
         if: always() && steps.supplemental_evidence.outcome != 'success'
         run: exit 1

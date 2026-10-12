@@ -15,7 +15,7 @@ class SupplementalAuditTests(unittest.TestCase):
             self.assertFalse(out['real_orders_authorized'])
             self.assertEqual(out['retention_status'],'NOT_CONFIGURED')
             self.assertFalse(out['independent_retention_verified'])
-            self.assertTrue((Path(tmp)/'reports/DOGE_SUPPLEMENTAL_EVIDENCE.md').exists())
+            self.assertTrue((Path(tmp)/'reports/DOGE_PLUS_EVIDENCE_V1_0.md').exists())
     def test_execution_failure_is_visible_and_snapshot_still_saved(self):
         self.assertIsNotNone(audit,'supplemental integration must exist')
         with tempfile.TemporaryDirectory() as tmp:

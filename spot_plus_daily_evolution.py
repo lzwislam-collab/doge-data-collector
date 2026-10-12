@@ -396,7 +396,7 @@ def render(s,record):
   +"V4.2参考沿用冻结发行注册表，不是Plus新发行预测；没有经校准胜率。实体净流入、全市场清算和历史PIT宏观仍未获模型输入授权。\n\n")
  return ('# DOGE 现货预测 Plus｜每日进化审计\n\n'
   '实施顺序以 [最新权威路线图](DOGE_NEXT_STAGE_IMPLEMENTATION_2026-10-12.md) 为准：P0优先，P1/P2同步且不阻塞积累；工程PASS不等于运行、预测或盈利达标。冻结协议不变。\n\n'
-  '公开后盘口、来源版本归档及外部保留验证请查看 [补充证据审计](DOGE_SUPPLEMENTAL_EVIDENCE.md)。该层与冻结正式成绩分别验收。\n\n'
+  '新版独立补充证据见 [Plus证据层V1.0](DOGE_PLUS_EVIDENCE_V1_0.md)；本报告仍属于旧Plus研究轨，历史收益和正式V2成绩不合并进新版。\n\n'
   f"**现货即时快照：** {quote_desc}  \n"
   f"**运行UTC：** {s['generated_at_utc']}  \n"
   f"**本次数据状态：** {s['source_health']['grade']}，来源警告：{warnings}  \n"

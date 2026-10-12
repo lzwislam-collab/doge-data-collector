@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "version_id": "DOGE_PLUS_EVIDENCE_V1_0_20261012",
+  "registered_at_utc": "2026-10-12T12:21:46.026891+00:00",
+  "layer": "supplementary_evidence_only",
+  "data_namespace": "data/plus_evidence_v1_0",
+  "source_namespace": "data/plus_evidence_v1_0/sources",
+  "report_path": "reports/DOGE_PLUS_EVIDENCE_V1_0.md",
+  "code_sha256_lf": {
+    "plus_evidence_version.py": "d6013f974a416ae0a07a70f31f0b1f8d315bd67544e1f703d2188930c144bea4",
+    "supplemental_evidence_audit.py": "cc8e5f2a9c12228fbe13fb080150662979812109658b8d1da96bfd642a0ad68f",
+    "source_evidence_snapshot.py": "53ec2d10e14237b33e2094e8f7f9ead9a068b991be173d6c3276f66211fc14b2",
+    "evidence_retention.py": "9e93a2fb7a200b5c0e7d07d76d92d5dc8459d1afb2fb9170969b11f09e13a725",
+    "forward_execution_evidence.py": "148d6af548d6a115bd18f6e77ad120becb41f9d8090234630a225a5d6c9b0b29",
+    "audited_forward_refresh.py": "0beec2ea8e5d048f0daeed73a4603cf911753e58c83626641ea5987c42e81e27"
+  },
+  "audit": {
+    "schema_version": 1,
+    "version_id": "DOGE_PLUS_EVIDENCE_V1_0_20261012",
+    "audited_at_utc": "2026-10-12T12:21:44Z",
+    "engineering_pass": true,
+    "tests_passed": 366,
+    "tests_failed": 0,
+    "code_sha256_lf": {
+      "plus_evidence_version.py": "d6013f974a416ae0a07a70f31f0b1f8d315bd67544e1f703d2188930c144bea4",
+      "supplemental_evidence_audit.py": "cc8e5f2a9c12228fbe13fb080150662979812109658b8d1da96bfd642a0ad68f",
+      "source_evidence_snapshot.py": "53ec2d10e14237b33e2094e8f7f9ead9a068b991be173d6c3276f66211fc14b2",
+      "evidence_retention.py": "9e93a2fb7a200b5c0e7d07d76d92d5dc8459d1afb2fb9170969b11f09e13a725",
+      "forward_execution_evidence.py": "148d6af548d6a115bd18f6e77ad120becb41f9d8090234630a225a5d6c9b0b29",
+      "audited_forward_refresh.py": "0beec2ea8e5d048f0daeed73a4603cf911753e58c83626641ea5987c42e81e27"
+    },
+    "overall": "REVISE",
+    "real_orders_authorized": false,
+    "verification": {
+      "full_suite": "python -X utf8 -m unittest discover -q; 366 tests OK",
+      "real_forward_bridge": "actual run success, attempt 1; original V1 and official V2 receipts qualified",
+      "real_frozen_consumers": "P1 league ok, P2 ok, three gates REVISE/NONE",
+      "old_scores_migrated": false,
+      "new_model_issued": false,
+      "external_retention": "NOT_CONFIGURED",
+      "sheets_trigger_detail": "not yet independently verified"
+    }
+  },
+  "overall": "REVISE",
+  "new_prediction_model": false,
+  "automatic_promotion": false,
+  "real_orders_authorized": false,
+  "dca_rules_changed": false,
+  "legacy_versions": [
+    {
+      "version": "SPOT_PLUS_v0.1",
+      "role": "legacy_historical_research",
+      "data": "data/stage5/spot_plus",
+      "report": "reports/DOGE_SPOT_PLUS_DAILY.md"
+    },
+    {
+      "version": "FORWARD_V1",
+      "role": "legacy_diagnostic_and_integrity_receipt",
+      "data": "data/stage5/forward_validation"
+    },
+    {
+      "version": "FORWARD_V2",
+      "role": "frozen_official_forward_scores",
+      "data": "data/stage5/forward_validation_v2"
+    },
+    {
+      "version": "SUPPLEMENTAL_PRE_RELEASE",
+      "role": "archived_pre_registration_evidence",
+      "data": "data/supplemental_evidence",
+      "sources": "data/evidence_snapshot",
+      "execution": "data/forward_execution_evidence"
+    }
+  ],
+  "separation_rules": [
+    "No historical scores or activations copied into the new namespace",
+    "Old records remain in their original paths; current source copies are context only",
+    "New evidence is not a replacement for frozen V2/P1/P2 official performance",
+    "Model promotion and actual trading are never authorized by this registry"
+  ]
+}

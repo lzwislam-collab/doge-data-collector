@@ -6,9 +6,10 @@ from urllib.request import Request,urlopen
 import source_evidence_snapshot as sources
 import evidence_retention as retention
 import forward_execution_evidence as execution
+import plus_evidence_version as version
 
 def capture_execution_quote(root):
-    output=root/'data/forward_execution_evidence/observations.jsonl'
+    output=root/version.DATA_NAMESPACE/'execution/observations.jsonl'
     forecasts=execution.load_forecasts(root/'data/p0_operations/latest.json',root/'data/direction_v42/forward_registry.csv')
     execution.activate(output)
     requested=datetime.now(timezone.utc)
@@ -21,7 +22,9 @@ def capture_execution_quote(root):
 def run(root, capture_execution=False, receipt_config=None):
     root=Path(root)
     now=datetime.now(timezone.utc)
-    result={'schema_version':1,'reporting_as_of_utc':now.isoformat(),'status':'ok',
+    result={'schema_version':2,'version_id':version.VERSION_ID,
+            'data_namespace':version.DATA_NAMESPACE,'registry_state':version.inspect_registration(root),
+            'reporting_as_of_utc':now.isoformat(),'status':'ok',
             'verdict':'REVISE','real_orders_authorized':False,'automatic_promotion':False,
             'frozen_protocols_changed':False,'execution_capture_requested':capture_execution}
     if capture_execution:
@@ -34,20 +37,22 @@ def run(root, capture_execution=False, receipt_config=None):
             result.update(status='blocked',execution_error=type(exc).__name__+': '+str(exc))
     else:
         result['execution_capture']={'status':'not_requested_daily_snapshot_only'}
-    snapshot=sources.capture(root)
+    snapshot=sources.capture(root,storage_namespace=version.SOURCE_NAMESPACE)
     result.update(manifest_path=snapshot['manifest_path'],source_inventory_status=snapshot['status'])
     export_path,export=retention.export_manifest(root,root/snapshot['manifest_path'],receipt_config)
     result.update(retention_export_path=export_path.relative_to(root).as_posix(),
         retention_status=export['status'],independent_retention_verified=export['independent_retention_verified'])
-    base=root/'data/supplemental_evidence'
+    base=root/version.DATA_NAMESPACE
     base.mkdir(parents=True,exist_ok=True)
     temp=base/'latest.json.tmp'
     temp.write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
     os.replace(temp,base/'latest.json')
-    report=root/'reports/DOGE_SUPPLEMENTAL_EVIDENCE.md'
+    report=root/version.REPORT
     report.parent.mkdir(parents=True,exist_ok=True)
-    lines=['# DOGE 补充证据审计','',
+    lines=['# DOGE Plus 补充证据层 V1.0','',
         '**结论：REVISE。本层仅补录未来证据，不替代冻结V2/P1/P2正式成绩，也不授权交易。**','',
+        f"独立版本：{version.VERSION_ID}；系统登记：{result['registry_state']}；数据：{version.DATA_NAMESPACE}。",
+        '旧SPOT_PLUS_v0.1、V1诊断、冻结V2及预发行补充记录分别保留。旧收益/胜率不升级或合并为本版本成绩。',
         f"报告统一观察时点UTC：{result['reporting_as_of_utc']}；各来源原始截止仍分别列示。",
         f"来源版本清单：[{snapshot['manifest_path']}](../{snapshot['manifest_path']})。",
         f"外部保留验证：{export['status']}；independent_retention_verified={export['independent_retention_verified']}。",
