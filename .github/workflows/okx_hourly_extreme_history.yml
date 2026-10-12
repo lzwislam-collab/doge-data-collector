@@ -79,12 +79,11 @@ jobs:
         run: python crash_v42_score.py
       - name: Issue and score DOGE UP/DOWN shadow forecasts from live ticker quote
         id: direction
-        if: steps.collect.outcome == 'success'
         continue-on-error: true
         run: python quote_evidence_v2.py direction
       - name: Verify benign late-registration skip without changing frozen deadline
         id: direction_late_audit
-        if: steps.direction.outcome != 'success' && steps.collect.outcome == 'success'
+        if: steps.direction.outcome != 'success'
         shell: bash
         run: |
           python - <<'PY'
