@@ -84,6 +84,7 @@ class ThreeRiskGateTests(unittest.TestCase):
         cohort["scored"]=cohort["due"]=100
         cohort["models"]["doge_reversal"]["wilson95_lower_pct_descriptive_only"]=72.
         v2["horizons"]["24h"]["issuance"]["coverage_pct"]=100
+        p0["audited_at_utc"]="2027-01-17T23:00:00+00:00"
         p0["rolling_7d"]={h:dict(seven_full_days_observed=True,coverage_pct=100.,
                                  target_coverage_pct=100.,target_due=7,
                                  expected=7,issued=7) for h in ("1h","24h")}
@@ -94,6 +95,10 @@ class ThreeRiskGateTests(unittest.TestCase):
         self.assertTrue(results["p1"]["preliminary_evidence_candidate"])
         self.assertFalse(results["p1"]["signal_edge_validated"])
         self.assertEqual(results["overall"],"REVISE")
+
+        stale=stage_gate(config(),v2,p0,p1,p2,utc("2027-01-19T00:00:00+00:00"))
+        self.assertEqual(stale["p0"]["seven_day_initial"],"WAIT")
+        self.assertFalse(stale["p0"]["p0_monitor_fresh_under_6h"])
 
     def test_no_trade_record_preserves_earlier_clock(self):
         with TemporaryDirectory() as d:
