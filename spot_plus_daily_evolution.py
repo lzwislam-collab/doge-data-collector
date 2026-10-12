@@ -372,6 +372,7 @@ def render(s,record):
  else:
   v2intro="## 正式验收：V2 不可用\n\n缺少正式 V2 成绩，不能采用旧协议替代。\n\n"
  return ('# DOGE 现货预测 Plus｜每日进化审计\n\n'
+  '实施顺序以 [最新权威路线图](DOGE_NEXT_STAGE_IMPLEMENTATION_2026-10-12.md) 为准：P0优先，P1/P2同步且不阻塞积累；工程PASS不等于运行、预测或盈利达标。冻结协议不变。\n\n'
   f"**现货即时快照：** {quote_desc}  \n"
   f"**运行UTC：** {s['generated_at_utc']}  \n"
   f"**本次数据状态：** {s['source_health']['grade']}，来源警告：{warnings}  \n"

@@ -2,6 +2,8 @@
 
 # DOGE 现货预测 Plus｜每日进化审计
 
+实施顺序以 [最新权威路线图](DOGE_NEXT_STAGE_IMPLEMENTATION_2026-10-12.md) 为准：P0优先，P1/P2同步且不阻塞积累；工程PASS不等于运行、预测或盈利达标。冻结协议不变。
+
 **现货即时快照：** OKX DOGE/USDT 0.08713；报价UTC 2026-10-12T11:21:02.067000+00:00；独立快照，不是连续行情或已验证交易成交价  
 **运行UTC：** 2026-10-12T11:21:03.117656+00:00  
 **本次数据状态：** WARN，来源警告：1_onchain_whales_exchange/utxo_candidate:backlog  

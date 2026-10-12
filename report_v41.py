@@ -86,6 +86,7 @@ def main():
  first_delay=round((datetime.fromisoformat(first_registered.replace('Z','+00:00'))-prev_close_utc).total_seconds()/60,2) if first_registered else None
  t=['# DOGE全面预测报告 V4.1｜自动研究版','','**状态：RESEARCH_ONLY / NO_VALIDATED_EDGE；非买卖指令。**',
     f'生成于：{now.isoformat()}；行情起点：OKX已收盘1Dutc {cutoff}；DOGE起点价格：{fmt(prices[-1],5)} USDT。',
+    '实施顺序以 [最新权威路线图](DOGE_NEXT_STAGE_IMPLEMENTATION_2026-10-12.md) 为准：P0优先，P1/P2同步且不阻塞积累；工程PASS不等于运行、预测或盈利达标。冻结协议不变。',
     '预测对象为目标UTC日线收盘价，不是盘中最高最低价。不能把历史频率当成已校准真实概率。',
     f'**时点警示：UTC收盘基准 {forecast.get("origin_close_at_utc","未提供")}，原始预测首次不可修改登记 {first_registered or "未登记"}（日线收盘后 {first_delay if first_delay is not None else "N/A"} 分钟），本报告生成已过 {forecast.get("target_window_elapsed_before_issue_minutes","未提供")} 分钟；这不是报告发布后完整24小时预测。**','',
     '## F01｜首要目标：DOGE四周期涨跌方向预测（70%待验证）',
