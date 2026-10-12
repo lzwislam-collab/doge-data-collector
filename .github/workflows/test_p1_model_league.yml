@@ -1,0 +1,27 @@
+name: Test DOGE P1 prospective model league
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'p1_model_competition.py'
+      - 'test_p1_model_competition.py'
+      - 'data/stage5/p1_model_league_protocol.json'
+      - '.github/workflows/test_p1_model_league.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Test P1 no-hindsight, missing denominator, matched samples and promotion gate
+        run: |
+          python -m py_compile p1_model_competition.py
+          python -m unittest -v test_p1_model_competition
