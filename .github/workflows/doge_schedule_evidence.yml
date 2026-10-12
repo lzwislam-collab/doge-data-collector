@@ -8,6 +8,21 @@ on:
       - 'test_doge_schedule_evidence.py'
       - 'stage1_rolling_integrity.py'
       - 'test_stage1_rolling_integrity.py'
+      - 'doge_rolling_utxo.py'
+      - 'test_doge_rolling_utxo.py'
+      - 'test_stage1_quality.py'
+      - '.github/workflows/doge_rolling_utxo.yml'
+      - '.github/workflows/doge_schedule_evidence.yml'
+  pull_request:
+    paths:
+      - 'doge_schedule_evidence.py'
+      - 'test_doge_schedule_evidence.py'
+      - 'stage1_rolling_integrity.py'
+      - 'test_stage1_rolling_integrity.py'
+      - 'doge_rolling_utxo.py'
+      - 'test_doge_rolling_utxo.py'
+      - 'test_stage1_quality.py'
+      - '.github/workflows/doge_rolling_utxo.yml'
       - '.github/workflows/doge_schedule_evidence.yml'
   schedule:
     - cron: '44 2,8,14,20 * * *'
@@ -21,9 +36,21 @@ concurrency:
   group: doge-schedule-evidence
   cancel-in-progress: false
 jobs:
+  test:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest -v test_doge_rolling_utxo test_stage1_quality test_stage1_rolling_integrity test_doge_schedule_evidence
   audit:
-    # A completed UTXO job triggers read-only verification. Skips and failures do not count.
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    # Also inspect failures immediately; skipped jobs outside 03 UTC do not run this job.
+    if: github.event_name != 'pull_request' && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'skipped')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
@@ -31,14 +58,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: main
+          fetch-depth: 0
           persist-credentials: true
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - name: Test healthy partial-window evidence policy
         run: |
-          python -m py_compile doge_schedule_evidence.py stage1_rolling_integrity.py
-          python -m unittest -v test_doge_schedule_evidence test_stage1_rolling_integrity
+          python -m py_compile doge_schedule_evidence.py stage1_rolling_integrity.py doge_rolling_utxo.py
+          python -m unittest -v test_doge_schedule_evidence test_stage1_rolling_integrity test_stage1_quality test_doge_rolling_utxo
       - name: Verify schedule run events and persisted snapshot timestamps
         id: audit
         continue-on-error: true

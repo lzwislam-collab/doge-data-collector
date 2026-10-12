@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 """Offline tests for limited OKX liquidation listening-window eligibility."""
 import unittest
+import tempfile
+import os
+import io
+from contextlib import redirect_stdout
+from pathlib import Path
+from unittest.mock import patch
+from doge_schedule_evidence import report_quality, rolling_integrity
 from doge_schedule_evidence import snapshot_status_eligible,verify_rolling_link
 
 class ScheduleEvidenceTests(unittest.TestCase):
@@ -67,6 +74,39 @@ class RollingActionLinkTests(unittest.TestCase):
   local,up,down=self.sample()
   down['event']='push'
   self.assertFalse(verify_rolling_link(local,lambda url:up if url.endswith('/100') else down)['verified'])
+
+
+class QualityAlertIntegrationTests(unittest.TestCase):
+ sample=RollingActionLinkTests.sample
+ def test_alert_fails_and_writes_existing_actions_summary(self):
+  obj={'status':'all_evidence_matched','stage1_rolling_utxo':{
+   'current_chain_automation_verified':True,
+   'data_quality':{'alert_required':True,'alerts':['BACKLOG_OVER_30H'],
+                   'coverage_pct':50,'backlog_events':1}}}
+  with tempfile.TemporaryDirectory() as tmp:
+   path=Path(tmp)/'summary.md'
+   captured=io.StringIO()
+   with patch.dict(os.environ,{'GITHUB_STEP_SUMMARY':str(path)}), redirect_stdout(captured):
+    self.assertTrue(report_quality(obj))
+   self.assertIn('::error',captured.getvalue())
+   self.assertIn('BACKLOG_OVER_30H',path.read_text())
+   self.assertIn('coverage_pct',path.read_text())
+
+ def test_normal_backlog_does_not_fail(self):
+  with patch.dict(os.environ,{'GITHUB_STEP_SUMMARY':''}):
+   self.assertFalse(report_quality({'status':'all_evidence_matched',
+    'stage1_rolling_utxo':{'data_quality':{'alert_required':False,'alerts':[]}}}))
+
+ def test_unverified_chain_alerts_even_with_healthy_local_data(self):
+  with patch('doge_schedule_evidence.monitor_quality',return_value={'alerts':[],
+              'alert_required':False}), \
+       patch('doge_schedule_evidence.audit_rolling_local',return_value={
+              'current_unprocessed_whale_events':0}), \
+       patch('doge_schedule_evidence.verify_rolling_link',return_value={
+              'verified':False,'reason':'run failed'}):
+   result=rolling_integrity()
+  self.assertIn('UNVERIFIED_SCHEDULED_CHAIN',result['data_quality']['alerts'])
+  self.assertTrue(result['data_quality']['alert_required'])
 
  def test_upstream_run_identity_cannot_be_spoofed(self):
   local,up,down=self.sample()
