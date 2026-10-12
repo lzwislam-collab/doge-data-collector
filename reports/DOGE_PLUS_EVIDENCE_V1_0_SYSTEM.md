@@ -4,6 +4,8 @@
 
 版本：`DOGE_PLUS_EVIDENCE_V1_0_20261012`。系统登记见[不可覆盖版本记录](../system/versions/DOGE_PLUS_EVIDENCE_V1_0_20261012.json)，当前补充层入口见[独立版本指针](../system/current_plus_evidence.json)。此指针只控制补充证据层，不改变生产模型、定投或V2正式成绩来源。
 
+工程已通过与待验收项目见[验收状态记录](DOGE_PLUS_EVIDENCE_V1_0_VALIDATION_STATUS.md)及[系统状态JSON](../system/validation_status/DOGE_PLUS_EVIDENCE_V1_0_20261012.json)。需要未来数据的项目沿既有工作流继续积累；配置、访问核验及专项证据缺口另列ACTION_REQUIRED，不会因等待时间自动通过。原注册记录和冻结协议保持原样。
+
 ## 版本隔离
 
 |版本或轨道|用途|独立位置|成绩规则|

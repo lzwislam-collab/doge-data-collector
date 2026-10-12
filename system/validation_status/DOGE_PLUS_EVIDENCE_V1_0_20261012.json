@@ -1,0 +1,415 @@
+{
+  "schema_version": 1,
+  "version_id": "DOGE_PLUS_EVIDENCE_V1_0_20261012",
+  "record_role": "administrative_validation_snapshot",
+  "recorded_at_utc": "2026-10-12T12:46:07.699799+00:00",
+  "source_head": "d731c3f09d2f6d94973665017cab786884ab8acf",
+  "status_report_path": "reports/DOGE_PLUS_EVIDENCE_V1_0_VALIDATION_STATUS.md",
+  "implementation_authority": "reports/DOGE_NEXT_STAGE_IMPLEMENTATION_2026-10-12.md",
+  "frozen_version_registry_path": "system/versions/DOGE_PLUS_EVIDENCE_V1_0_20261012.json",
+  "frozen_version_registry_sha256": "f04caeb7260a7a55b5cd2ae8f954c9fc701edabbf32595fb2ac8bdc6ea60b896",
+  "overall": "REVISE",
+  "claims_permitted": "NONE",
+  "new_prediction_model": false,
+  "automatic_promotion": false,
+  "real_orders_authorized": false,
+  "dca_rules_changed": false,
+  "duplicate_triggers_created": false,
+  "existing_workflows_continue": true,
+  "snapshot_not_live_verdict": true,
+  "status_definitions": {
+    "PASS_ENGINEERING": "已审计的实现能力；不扩展为运行、预测或盈利PASS",
+    "WAIT_FUTURE_DATA": "沿既有工作流继续采集真实未来数据；时间与样本仅为复核入口",
+    "ACTION_REQUIRED": "需要配置、访问核验或专项证据，不能仅靠等待时间",
+    "NOT_AUTHORIZED": "未授权且不会因时间或研究PASS自动授权"
+  },
+  "observed": {
+    "p0": {
+      "rolling_7d": {
+        "1h": {
+          "expected": 10,
+          "issued": 5,
+          "missing": 5,
+          "coverage_pct": 50.0,
+          "target_due": 5,
+          "target_scored": 5,
+          "target_missing": 0,
+          "target_coverage_pct": 100.0,
+          "full_window_observed": false,
+          "window_accepted": false
+        },
+        "24h": {
+          "expected": 0,
+          "issued": 0,
+          "missing": 0,
+          "coverage_pct": null,
+          "target_due": 0,
+          "target_scored": 0,
+          "target_missing": 0,
+          "target_coverage_pct": null,
+          "full_window_observed": false,
+          "window_accepted": false
+        }
+      },
+      "rolling_30d": {
+        "1h": {
+          "expected": 10,
+          "issued": 5,
+          "missing": 5,
+          "coverage_pct": 50.0,
+          "target_due": 5,
+          "target_scored": 5,
+          "target_missing": 0,
+          "target_coverage_pct": 100.0,
+          "full_window_observed": false,
+          "window_accepted": false
+        },
+        "24h": {
+          "expected": 0,
+          "issued": 0,
+          "missing": 0,
+          "coverage_pct": null,
+          "target_due": 0,
+          "target_scored": 0,
+          "target_missing": 0,
+          "target_coverage_pct": null,
+          "full_window_observed": false,
+          "window_accepted": false
+        }
+      }
+    },
+    "formal_v2": {
+      "1h": {
+        "due": 5,
+        "scored": 5,
+        "nonoverlap_scored": 3
+      },
+      "24h": {
+        "due": 0,
+        "scored": 0,
+        "nonoverlap_scored": 0
+      }
+    },
+    "p1_effective_from_utc": {
+      "v1": "2026-10-13T00:00:00+00:00",
+      "v2": "2026-10-14T00:00:00+00:00"
+    },
+    "p2_effective_from_utc": "2026-10-13T02:00:00+00:00",
+    "p2_completed_prefix_intervals": 0,
+    "source_inventory_status": "incomplete_or_stale_inventory",
+    "retention_status": "NOT_CONFIGURED",
+    "actual_fill": false,
+    "real_profit_validated": false,
+    "independent_gate_overall": "REVISE"
+  },
+  "items": [
+    {
+      "id": "version_separation",
+      "label": "版本登记、账本、来源清单、启用时点、报告和归档隔离",
+      "status": "PASS_ENGINEERING",
+      "acceptance_scope": "已登记的实现及审计；不代表连续运行、完整来源、预测优势、外部服务或盈利通过",
+      "evidence_paths": [
+        "system/versions/DOGE_PLUS_EVIDENCE_V1_0_20261012.json"
+      ]
+    },
+    {
+      "id": "p0_measurement",
+      "label": "7天与30天发行及到期报价度量；保留缺失分母",
+      "status": "PASS_ENGINEERING",
+      "acceptance_scope": "已登记的实现及审计；不代表连续运行、完整来源、预测优势、外部服务或盈利通过",
+      "evidence_paths": [
+        "data/p0_operations/latest.json"
+      ]
+    },
+    {
+      "id": "frozen_audit_bridge",
+      "label": "原始完整性凭证与正式V2联合核对、有限传输重试和失败归档",
+      "status": "PASS_ENGINEERING",
+      "acceptance_scope": "已登记的实现及审计；不代表连续运行、完整来源、预测优势、外部服务或盈利通过",
+      "evidence_paths": [
+        "reports/DOGE_PLUS_EVIDENCE_V1_0_AUDIT.json"
+      ]
+    },
+    {
+      "id": "source_version_archive",
+      "label": "首次捕获、来源版本、原始字节归档及前序清单校验能力",
+      "status": "PASS_ENGINEERING",
+      "acceptance_scope": "已登记的实现及审计；不代表连续运行、完整来源、预测优势、外部服务或盈利通过",
+      "evidence_paths": [
+        "data/plus_evidence_v1_0/latest.json"
+      ]
+    },
+    {
+      "id": "execution_observation",
+      "label": "公开后盘口、指示性VWAP与采样路径缺口记录能力",
+      "status": "PASS_ENGINEERING",
+      "acceptance_scope": "已登记的实现及审计；不代表连续运行、完整来源、预测优势、外部服务或盈利通过",
+      "evidence_paths": [
+        "data/plus_evidence_v1_0/latest.json"
+      ]
+    },
+    {
+      "id": "p2_protocol_reporting",
+      "label": "实际冻结协议、生效状态、持币现金对照、假设成本与检查点回撤展示",
+      "status": "PASS_ENGINEERING",
+      "acceptance_scope": "已登记的实现及审计；不代表连续运行、完整来源、预测优势、外部服务或盈利通过",
+      "evidence_paths": [
+        "data/stage5/p2_spot_paper/latest.json"
+      ]
+    },
+    {
+      "id": "retention_verifier_interface",
+      "label": "外部版本保留锁及逐对象回读校验接口",
+      "status": "PASS_ENGINEERING",
+      "acceptance_scope": "已登记的实现及审计；不代表连续运行、完整来源、预测优势、外部服务或盈利通过",
+      "evidence_paths": [
+        "reports/DOGE_PLUS_EVIDENCE_V1_0_AUDIT.json"
+      ]
+    },
+    {
+      "id": "p0_reliability",
+      "label": "P0连续正式发行及合格到期报价",
+      "status": "WAIT_FUTURE_DATA",
+      "priority": 1,
+      "acceptance_requirements": {
+        "initial": {
+          "full_observation_days": 7,
+          "issuance_coverage_min_pct": 90,
+          "qualified_due_quote_coverage_min_pct": 90
+        },
+        "long_term": {
+          "full_observation_days": 30,
+          "issuance_coverage_min_pct": 99,
+          "qualified_due_quote_coverage_min_pct": 99
+        }
+      },
+      "additional_requirements": [
+        "各周期分别验收，无成熟分母为空",
+        "保留原生效时点、缺失、失败及重复；不补造历史",
+        "完整窗口且两种覆盖率同时达标后独立审计"
+      ],
+      "evidence_paths": [
+        "data/p0_operations/latest.json",
+        "data/stage5/forward_validation_v2/latest.json"
+      ]
+    },
+    {
+      "id": "production_and_p1_validation",
+      "label": "冻结生产模型、基准与各P1挑战者的独立前瞻评分",
+      "status": "WAIT_FUTURE_DATA",
+      "priority": 2,
+      "parallel_nonblocking": true,
+      "acceptance_requirements": {
+        "initial_review": {
+          "minimum_independent_samples_per_model_per_horizon": 100,
+          "minimum_observation_days": 30
+        },
+        "regime_replication_review": {
+          "minimum_independent_samples_per_model_per_horizon": 300,
+          "minimum_observation_days": 90,
+          "cross_regime_required": true
+        }
+      },
+      "additional_requirements": [
+        "仅各自冻结生效后真实发行与合格到期报价",
+        "样本量与天数同时满足；不同模型/周期/重叠区间不得合并凑数",
+        "置信下限、配对基准、多重比较、校准与跨行情独立审计",
+        "P1 V2重算基准不冒充同一生产发行时点竞争；每日模型可能需更长时间积累",
+        "达到门槛只进入人工复核，禁止自动晋级"
+      ],
+      "evidence_paths": [
+        "data/stage5/forward_validation_v2/latest.json",
+        "data/stage5/p1_model_league/latest.json",
+        "data/stage5/p1_adaptive_v2/latest.json"
+      ]
+    },
+    {
+      "id": "p2_paper_economics",
+      "label": "P2纯现货长期纸面经济性",
+      "status": "WAIT_FUTURE_DATA",
+      "priority": 3,
+      "parallel_nonblocking": true,
+      "acceptance_requirements": {
+        "minimum_completed_independent_intervals_for_review": 100,
+        "minimum_observation_days": 30,
+        "hold_and_cash_comparators": true,
+        "double_cost_stress": true,
+        "long_term_and_cross_regime_review_required": true,
+        "issuance_coverage_min_pct": 90,
+        "qualified_due_quote_coverage_min_pct": 90
+      },
+      "additional_requirements": [
+        "按既有24h冻结协议与完整前缀积累；缺失或重叠停止点必须保留",
+        "100区间仅研究复核入口，不等于盈利通过",
+        "检查点回撤及采样回撤不得冒充连续盘中最大回撤",
+        "费用、滑点和价差仍属假设；不得声称可执行真实利润"
+      ],
+      "evidence_paths": [
+        "data/stage5/p2_spot_paper/latest.json"
+      ]
+    },
+    {
+      "id": "future_source_and_book_path",
+      "label": "来源首次可用版本及公开后盘口路径积累",
+      "status": "WAIT_FUTURE_DATA",
+      "additional_requirements": [
+        "只记录启用后实际捕获的数据，不继承老版first_seen或盘口入场",
+        "保留未捕获/迟到/路径缺口；原始盘口不等于实际成交",
+        "完整历史PIT、实体归属、全球覆盖和宏观因果仍需专项证据"
+      ],
+      "evidence_paths": [
+        "data/plus_evidence_v1_0/latest.json"
+      ]
+    },
+    {
+      "id": "external_retention",
+      "label": "外部不可改写存证配置与回读",
+      "status": "ACTION_REQUIRED",
+      "blocking_kind": "EXTERNAL_CONFIGURATION",
+      "required_action": "配置独立版本保留锁存储，并提供逐对象、逐版本及全部前序清单的保留状态与SHA回读凭证；当前NOT_CONFIGURED",
+      "time_alone_sufficient": false,
+      "evidence_paths": [
+        "data/plus_evidence_v1_0/latest.json"
+      ]
+    },
+    {
+      "id": "sheets_automation_verification",
+      "label": "Sheets与Apps Script自动采集实际核验",
+      "status": "ACTION_REQUIRED",
+      "blocking_kind": "ACCESS_AND_RUNTIME_VERIFICATION",
+      "required_action": "核对实际已安装runOkxDaily定时触发器、对应执行记录及新增数据表格回读；手测只运行runOkxDaily，不新增触发器",
+      "time_alone_sufficient": false,
+      "evidence_paths": [
+        "reports/DOGE_PLUS_EVIDENCE_V1_0_AUDIT.json",
+        "data/quality/latest.json"
+      ]
+    },
+    {
+      "id": "five_pillar_evidence",
+      "label": "五模块专项数据与因果证据",
+      "status": "ACTION_REQUIRED",
+      "blocking_kind": "SOURCE_AND_RESEARCH_EVIDENCE",
+      "required_action": "补齐可信实体标签、全球强平覆盖、ETF/宏观发布历史版本及因果研究，并独立核验；未来来源归档只能积累新证据，不能修复未知历史",
+      "time_alone_sufficient": false,
+      "evidence_paths": [
+        "data/quality/latest.json",
+        "data/plus_evidence_v1_0/latest.json"
+      ]
+    },
+    {
+      "id": "executable_profit_evidence",
+      "label": "实际成本、成交及执行质量",
+      "status": "ACTION_REQUIRED",
+      "blocking_kind": "INDEPENDENT_EXECUTION_EVIDENCE",
+      "required_action": "需要真实公开后可成交盘口、实际成本及成交质量证明，才能审议可执行利润；当前只有纸面与观察能力，禁止为补证启动真实交易",
+      "time_alone_sufficient": false,
+      "evidence_paths": [
+        "data/stage5/p2_spot_paper/latest.json",
+        "data/plus_evidence_v1_0/latest.json"
+      ]
+    }
+  ],
+  "always_required_gates": [
+    "时点可见性、过拟合、消融与多重比较门禁",
+    "NO_TRADE、概率与执行证据门禁",
+    "证据成熟度独立总闸"
+  ],
+  "not_authorized": [
+    "真实交易",
+    "自动模型晋级",
+    "DOGE定投规则修改",
+    "重复定时触发器"
+  ],
+  "legacy_retained": [
+    "DOGE/BTC/ETH历史与续采、缺失/重复/时间戳检查",
+    "五模块来源和原始上下文",
+    "冻结生产模型、V1诊断、V2正式评分及缺失分母",
+    "P1两版挑战者、P2账本和持币现金成本回撤对照",
+    "三个门禁、旧报告、旧预发行归档和失败记录"
+  ],
+  "transition_policy": [
+    "本状态记录不改变冻结协议、注册审计、生产模型、正式评分、25分钟到期报价窗口或历史账本",
+    "新证据独立保存；旧成绩不得计入新版",
+    "达到样本/天数只进入独立复核，不自动改PASS或授权",
+    "每次更新须引用新的真实证据、各自截止及独立审计结果，保留Git变更历史；时间不等于验收"
+  ],
+  "evidence": [
+    {
+      "source_path": "system/versions/DOGE_PLUS_EVIDENCE_V1_0_20261012.json",
+      "source_commit": "d731c3f09d2f6d94973665017cab786884ab8acf",
+      "sha256": "f04caeb7260a7a55b5cd2ae8f954c9fc701edabbf32595fb2ac8bdc6ea60b896",
+      "as_of_utc": "2026-10-12T12:21:46.026891+00:00",
+      "hash_basis": "exact_git_blob_bytes_at_source_commit"
+    },
+    {
+      "source_path": "reports/DOGE_PLUS_EVIDENCE_V1_0_AUDIT.json",
+      "source_commit": "d731c3f09d2f6d94973665017cab786884ab8acf",
+      "sha256": "e1be95c4420b812efb9254c1d724d2b1b0c2541a69124311ddf5f511f92f4e47",
+      "as_of_utc": "2026-10-12T12:21:44Z",
+      "hash_basis": "exact_git_blob_bytes_at_source_commit"
+    },
+    {
+      "source_path": "data/p0_operations/latest.json",
+      "source_commit": "d731c3f09d2f6d94973665017cab786884ab8acf",
+      "sha256": "9ce2a21d927c81c7d16b4f7e6b56e688cfb01a9d80b767082e5a7312d1b2fba1",
+      "as_of_utc": "2026-10-12T12:33:00.407159+00:00",
+      "hash_basis": "exact_git_blob_bytes_at_source_commit"
+    },
+    {
+      "source_path": "data/stage5/forward_validation_v2/latest.json",
+      "source_commit": "d731c3f09d2f6d94973665017cab786884ab8acf",
+      "sha256": "8fe1283e15a06b600b4f10d8ac2f45481f37649bbc9fb9178b05db249bcf9d53",
+      "as_of_utc": "2026-10-12T12:32:53.833818+00:00",
+      "hash_basis": "exact_git_blob_bytes_at_source_commit"
+    },
+    {
+      "source_path": "data/stage5/forward_validation_v2/daily_latest.json",
+      "source_commit": "d731c3f09d2f6d94973665017cab786884ab8acf",
+      "sha256": "9f1e0a8c56586aae35efebcee676e59dd6318f8ee2cb0b21ca37d874ba9ed7cc",
+      "as_of_utc": "2026-10-12T12:27:41.211704+00:00",
+      "hash_basis": "exact_git_blob_bytes_at_source_commit"
+    },
+    {
+      "source_path": "data/stage5/p1_model_league/latest.json",
+      "source_commit": "d731c3f09d2f6d94973665017cab786884ab8acf",
+      "sha256": "9f487d8afac4d5eb844633b9c50b8c313d71e0d7f0ee6a4eff9e7836f7860198",
+      "as_of_utc": "2026-10-12T12:27:41.211704+00:00",
+      "hash_basis": "exact_git_blob_bytes_at_source_commit"
+    },
+    {
+      "source_path": "data/stage5/p1_adaptive_v2/latest.json",
+      "source_commit": "d731c3f09d2f6d94973665017cab786884ab8acf",
+      "sha256": "7408f11f88ae24e7de6f6dc702b0be69076447bbae1d31166613e8913515e58f",
+      "as_of_utc": "2026-10-12T12:27:48.361904+00:00",
+      "hash_basis": "exact_git_blob_bytes_at_source_commit"
+    },
+    {
+      "source_path": "data/stage5/p2_spot_paper/latest.json",
+      "source_commit": "d731c3f09d2f6d94973665017cab786884ab8acf",
+      "sha256": "9543dc426dfbdba3d7b0c8d70e965e5034480d36631157bc1d618435408d88b5",
+      "as_of_utc": "2026-10-12T12:27:41.211704+00:00",
+      "hash_basis": "exact_git_blob_bytes_at_source_commit"
+    },
+    {
+      "source_path": "data/stage5/three_risk_gates/latest.json",
+      "source_commit": "d731c3f09d2f6d94973665017cab786884ab8acf",
+      "sha256": "92b33a93682ea7d5941a6f0a42346c5255edfc1a123883e090bb012262eb6df9",
+      "as_of_utc": "2026-10-12T12:27:48.706436+00:00",
+      "hash_basis": "exact_git_blob_bytes_at_source_commit"
+    },
+    {
+      "source_path": "data/plus_evidence_v1_0/latest.json",
+      "source_commit": "d731c3f09d2f6d94973665017cab786884ab8acf",
+      "sha256": "e8c368b29795b1c3ccd88ea71489b0b4bc336c597fd6eaeb02bff64589bce51a",
+      "as_of_utc": "2026-10-12T12:33:06.778645+00:00",
+      "hash_basis": "exact_git_blob_bytes_at_source_commit"
+    },
+    {
+      "source_path": "data/quality/latest.json",
+      "source_commit": "d731c3f09d2f6d94973665017cab786884ab8acf",
+      "sha256": "ded7c5585b192b85bf92c930ddeb2d9ae540155292d1abd7dd20b5306fe9906c",
+      "as_of_utc": "2026-10-12T12:27:49.732152+00:00",
+      "hash_basis": "exact_git_blob_bytes_at_source_commit"
+    }
+  ]
+}
