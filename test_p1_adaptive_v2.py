@@ -125,6 +125,38 @@ class AdaptiveP1Tests(unittest.TestCase):
         self.assertEqual(track["due"],1)
         self.assertEqual(track["scored"],0)
 
+    def test_end_to_end_future_issuance_and_idempotence(self):
+        import csv
+        now=datetime(2026,10,14,5,37,tzinfo=timezone.utc)
+        old_times,prices=toy_series()
+        newest=now.replace(hour=4,minute=0,second=0)
+        stamps=[int((newest-timedelta(hours=len(old_times)-i-1)).timestamp()*1000)
+                for i in range(len(old_times))]
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            file=root/"data/hourly_research/ohlc.csv"
+            file.parent.mkdir(parents=True)
+            with file.open("w",newline="",encoding="utf-8") as stream:
+                writer=csv.writer(stream)
+                writer.writerow(["symbol","open_utc_ms","close"])
+                for sym in ("DOGE-USDT","BTC-USDT","ETH-USDT"):
+                    vals=prices.get(sym,prices["DOGE-USDT"])
+                    writer.writerows((sym,t,format(v,".12g")) for t,v in zip(stamps,vals))
+            raw=json.dumps({"code":"0","data":[{"instId":"DOGE-USDT",
+                "last":"0.081","ts":str(int((now-timedelta(seconds=1)).timestamp()*1000))}]})
+            registry={}
+            new=m.issue(root,now,policy(),registry,raw=raw)
+            self.assertEqual(len(new),2)
+            self.assertEqual(len(registry),2)
+            self.assertEqual(m.issue(root,now,policy(),registry,raw=raw),[])
+            for item in registry.values():
+                self.assertEqual(item["issued_at_utc"],now.isoformat())
+                self.assertTrue(0<float(item["p_up"])<1)
+                self.assertEqual(m.utc(item["target_utc"]),
+                    now+timedelta(hours=int(item["horizon_hours"])))
+                self.assertTrue((root/m.SNAPS/(item["issue_quote_sha256"]+".json")).is_file())
+                self.assertEqual(len(json.loads(item["weights_json"])),6)
+
     def test_manual_promotion_and_five_way_threshold(self):
         p=policy()
         result=m.report(p,{}, {},datetime(2026,12,1,tzinfo=timezone.utc))
