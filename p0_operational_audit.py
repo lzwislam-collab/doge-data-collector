@@ -6,6 +6,28 @@ import forward_validation_v2 as v2
 import direction_forward_v42 as frozen
 import quote_evidence_v2 as evidence
 
+def fetch_operational_runs(since, request=None):
+    from urllib.parse import urlencode
+    request=request or base.github_json
+    workflow=request('/actions/workflows/okx_hourly_extreme_history.yml')['id']
+    rows={}
+    for page in range(1,11):
+        query=urlencode({'per_page':100,'page':page,'created':'>='+since.isoformat()})
+        batch=request('/actions/workflows/'+str(workflow)+'/runs?'+query)['workflow_runs']
+        for run in batch: rows[run['id']]=run
+        if len(batch)<100:return list(rows.values())
+    raise ValueError('operational run query exceeds 1000 records; cannot classify missing runs')
+
+def alert_reasons(report):
+    reasons=[]
+    for h,metric in report.get('rolling_7d',{}).items():
+        slots=metric.get('slots',[])
+        if slots and slots[-1]['status']!='verified_issued':
+            reasons.append({'horizon':h,'kind':'missing_issuance','slot_start_utc':slots[-1]['slot_start_utc'],'status':slots[-1]['status']})
+        if metric.get('target_missing',0):
+            reasons.append({'horizon':h,'kind':'missing_target_evidence','forecast_ids':metric['target_missing_ids']})
+    return reasons
+
 def reconcile(rows, scores, eligible, effective, now, runs, horizon=1):
     interval=timedelta(hours=horizon)
     grace=timedelta(minutes=45) if horizon==1 else interval
@@ -40,10 +62,12 @@ def reconcile(rows, scores, eligible, effective, now, runs, horizon=1):
                       'run_ids':sorted(r['id'] for r in attempts),
                       'runs':[{'id':r['id'],'event':r.get('event'),'conclusion':r.get('conclusion'),'created_at':r['created_at']} for r in sorted(attempts,key=lambda r:r['id'])]})
     issued=sum(s['status']=='verified_issued' for s in slots)
-    scored=sum(r['forecast_id'] in eligible and scores.get(r['forecast_id'],{}).get('status')=='scored' for r in due)
+    missing_ids=sorted(r['forecast_id'] for r in due if r['forecast_id'] not in eligible or scores.get(r['forecast_id'],{}).get('status')!='scored')
+    scored=len(due)-len(missing_ids)
     return {'expected':len(slots),'issued':issued,'missing':len(slots)-issued,
             'coverage_pct':100*issued/len(slots) if slots else None,'slots':slots,
             'target_due':len(due),'target_scored':scored,'target_missing':len(due)-scored,
+            'target_missing_ids':missing_ids,
             'target_coverage_pct':100*scored/len(due) if due else None,
             'seven_full_days_observed':closed>=int(168/horizon),'rolling_window_hours':168,
             'original_effective_from_utc':effective.isoformat()}
@@ -52,7 +76,10 @@ def evaluate(root=frozen.ROOT, now=None, runs=None):
     now=now or datetime.now(timezone.utc)
     protocol=json.loads((root/v2.PROTOCOL).read_text());v2.check_protocol(protocol);v2.check_code(root,protocol)
     base.locked_file(root,v2.PROTOCOL)
-    runs=base.fetch_runs() if runs is None else runs
+    if runs is None:
+        recent=base.fetch_runs()
+        operational=fetch_operational_runs(max(frozen.utc(protocol['effective_from_utc']),now-timedelta(days=7,hours=24)))
+        runs=list({r['id']:r for r in recent+operational}.values())
     if not v2.protocol_witness(root,protocol,runs,False): raise ValueError('missing original protocol witness')
     legacy=base.evaluate(root,now,runs,persist_witnesses=False)
     registry=frozen.read_rows(root/base.REG,frozen.FCOLS);scores=frozen.read_rows(root/base.SCORES,frozen.SCOLS)
@@ -90,7 +117,7 @@ def evaluate(root=frozen.ROOT, now=None, runs=None):
         age=(now-frozen.utc(item['last_confirmed_start_utc'])-timedelta(hours=1)).total_seconds()/60
         item['feature_age_minutes']=round(age,2)
     official=json.loads((root/'data/stage5/forward_validation_v2/latest.json').read_text())
-    return {'schema_version':1,'status':'ok','audited_at_utc':now.isoformat(),'input_head':base.git(root,'rev-parse','HEAD'),
+    out={'schema_version':1,'status':'ok','audited_at_utc':now.isoformat(),'input_head':base.git(root,'rev-parse','HEAD'),
             'scope':'supplementary strict P0 operational monitor; does not replace frozen V2 scores',
             'frozen_protocol_id':protocol['protocol_id'],'frozen_implementation_verified':True,
             'official_frozen_v2_issuance':{h:m['issuance'] for h,m in official.get('horizons',{}).items()},
@@ -98,6 +125,8 @@ def evaluate(root=frozen.ROOT, now=None, runs=None):
             'monitor_code_sha256':hashlib.sha256((root/'p0_operational_audit.py').read_bytes()).hexdigest(),
             'p0_7d_accepted':all(m['seven_full_days_observed'] and (m['coverage_pct'] or 0)>=90 and m['target_due']>0 and (m['target_coverage_pct'] or 0)>=90 for m in horizons.values()),
             'p1_accuracy_accepted':False,'p2_profit_accepted':False,'no_retrospective_prediction_backfill':True}
+    out['alert_reasons']=alert_reasons(out)
+    return out
 
 def main():
     try: out=evaluate()

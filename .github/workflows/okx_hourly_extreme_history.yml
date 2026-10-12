@@ -209,16 +209,12 @@ jobs:
             const fs = require('fs');
             let report = null;
             try { report = JSON.parse(fs.readFileSync('data/p0_operations/latest.json', 'utf8')); } catch {}
-            const slots = report?.rolling_7d?.['1h']?.slots || [];
-            const latest = slots[slots.length - 1];
-            const missing = latest && latest.status !== 'verified_issued';
-            const target = report?.rolling_7d?.['1h'];
+            const reasons = report?.alert_reasons || [];
             const failed = process.env.JOB_FAILED === 'true';
-            const targetMissing = target && target.target_missing > 0;
-            if (!failed && !missing && !targetMissing) return;
-            const key = failed ? `run-${context.runId}` : `slot-${latest?.slot_start_utc}-target-${target?.target_missing || 0}`;
+            if (!failed && reasons.length === 0) return;
+            const key = failed ? `run-${context.runId}` : require('crypto').createHash('sha256').update(JSON.stringify(reasons)).digest('hex');
             const marker = `<!-- DOGE-P0:${key} -->`;
             const comments = await github.paginate(github.rest.issues.listComments, {...context.repo, issue_number: 5, per_page: 100});
             if (comments.some(c => c.body.includes(marker))) return;
             await github.rest.issues.createComment({...context.repo, issue_number: 5,
-              body: `${marker}\nP0 operational alert: ${failed ? 'execution failed' : 'missing issuance or target evidence'}.\nRun: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\nLatest closed slot: ${latest?.slot_start_utc || 'unavailable'} / ${latest?.status || 'unavailable'}.\nMatured targets: ${target?.target_due ?? 'N/A'}, verified: ${target?.target_scored ?? 'N/A'}.\nNo historical forecasts or target quotes have been fabricated. P0 seven-day, P1 accuracy and P2 profit acceptance remain separate.`});
+              body: `${marker}\nP0 operational alert: ${failed ? 'execution failed' : 'missing issuance or target evidence'}.\nRun: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\nAffected horizons and evidence: ${JSON.stringify(reasons)}.\nNo historical forecasts or target quotes have been fabricated. P0 seven-day, P1 accuracy and P2 profit acceptance remain separate.`});

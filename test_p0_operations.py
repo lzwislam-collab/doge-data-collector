@@ -4,6 +4,24 @@ from datetime import datetime, timedelta, timezone
 import quote_capture_retry as retry
 import p0_operational_audit as audit
 
+class RunPaginationTests(unittest.TestCase):
+    def test_daily_target_failure_alerts_when_hourly_is_healthy(self):
+        report={'rolling_7d':{'1h':{'slots':[{'status':'verified_issued'}],'target_missing':0},
+                 '24h':{'slots':[{'status':'verified_issued'}],'target_missing':1,'target_missing_ids':['daily-1']}}}
+        out=audit.alert_reasons(report)
+        self.assertEqual(out,[{'horizon':'24h','kind':'missing_target_evidence','forecast_ids':['daily-1']}])
+    def test_operational_runs_include_second_page(self):
+        calls=[]
+        def request(path):
+            calls.append(path)
+            if '/runs?' not in path:return {'id':42}
+            page=2 if 'page=2' in path else 1
+            rows=[{'id':i,'created_at':'2026-10-12T02:00:00Z'} for i in range(100)] if page==1 else [{'id':101,'created_at':'2026-10-12T01:00:00Z'}]
+            return {'workflow_runs':rows}
+        rows=audit.fetch_operational_runs(datetime(2026,10,12,tzinfo=timezone.utc),request)
+        self.assertEqual(len(rows),101);self.assertIn(101,{r['id'] for r in rows})
+        self.assertTrue(any('page=2' in path for path in calls))
+
 class RetryTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
