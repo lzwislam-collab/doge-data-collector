@@ -216,4 +216,14 @@ class SpotPlusTests(unittest.TestCase):
   self.assertFalse(x['probability_forecast_calibrated'])
   self.assertLess(x['p10_implied_price'],x['p90_implied_price'])
 
+ def test_utxo_processing_backlog_is_not_collector_outage(self):
+  dump(self.root/'data/stage1/rolling_por_utxo_latest.json',
+       {'status':'partial_backlog','generated_at_utc':NOW.isoformat(),
+        'events_pending':45})
+  report=inspect(self.root,NOW)
+  unit=report['pillars']['1_onchain_whales_exchange']
+  self.assertEqual(unit['sources']['utxo_candidate']['state'],'backlog')
+  self.assertEqual(unit['observations']['utxo_pending_candidate_events'],45)
+  self.assertFalse(unit['observations']['verified_exchange_netflow'])
+
 if __name__=='__main__':unittest.main(verbosity=2)
