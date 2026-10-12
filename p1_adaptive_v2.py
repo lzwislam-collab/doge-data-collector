@@ -98,7 +98,7 @@ def history_guard(root,rel,cols,data):
 def precommit(root,policy):
     if (policy["status"]!="frozen_future_shadow" or
         policy["automatic_promotion"] or not policy["manual_promotion_only"] or
-        policy["bonferroni_per_comparison"]!=0.01 or len(policy["comparators"])!=5):
+        policy["bonferroni_per_comparison"]!=0.01 or tuple(policy["comparators"])!=NAMES):
         raise ValueError("invalid P1 V2 protocol")
     for rel in (POLICY,"p1_adaptive_v2.py"):
         commits=subprocess.run(["git","log","--format=%H","--",rel],cwd=root,
@@ -296,6 +296,7 @@ def report(policy,registry,scores,now):
                   and all(x["passes_fiveway_bonferroni"] for x in pairs.values()))
         summary[str(h)+"h"]={"expected_closed_daily_issue_slots":closed,"issued":covered,
             "missing_issue_slots":closed-covered,"issued_predictions":len(group),
+            "fixed_nonoverlap_selected":len(selected),"overlap_excluded":len(group)-len(selected),
             "due":len(eligible),"scored":n,"unscorable_or_missing":len(eligible)-n,
             "issuance_coverage_pct":100*issuance if issuance is not None else None,
             "quote_coverage_pct":100*quote_cov if quote_cov is not None else None,
