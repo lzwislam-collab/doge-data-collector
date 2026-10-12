@@ -40,6 +40,11 @@ on:
       - 'test_paired_cohort_audit.py'
       - 'data/stage5/paired_selection_v1_protocol.json'
       - 'system/current_paired_shadow.json'
+      - 'p2_paired_execution_v2.py'
+      - 'p2_execution_registration.py'
+      - 'test_p2_paired_execution_v2.py'
+      - 'test_p2_execution_records.py'
+      - 'data/stage5/p2_paired_execution_v2_protocol.json'
       - 'test_p0_operations.py'
       - 'publish_forward_evidence.py'
       - '.github/scripts/p0_alert.cjs'
@@ -183,6 +188,21 @@ jobs:
         if: github.event_name == 'push' && steps.operations.outcome == 'success'
         continue-on-error: true
         run: python paired_forward_cohort.py smoke
+      - name: Capture public paired decisions into independent P2 spot paper portfolios
+        id: p2_execution
+        if: always() && steps.paired_audit.outcome == 'success'
+        continue-on-error: true
+        run: python p2_paired_execution_v2.py capture
+      - name: Verify P2 raw book capacity and cost arithmetic without fake intervals
+        id: p2_execution_smoke
+        if: github.event_name == 'push' && steps.paired_audit.outcome == 'success'
+        continue-on-error: true
+        run: python p2_paired_execution_v2.py smoke
+      - name: Test independent P2 chronology costs benchmarks and immutable evidence
+        id: p2_execution_tests
+        if: always()
+        continue-on-error: true
+        run: python -m unittest -q test_p2_paired_execution_v2 test_p2_execution_records
       - name: Capture independent source versions and prospective post-publication depth
         id: supplemental_evidence
         if: always() && steps.operations.outcome == 'success'
@@ -211,6 +231,7 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           python -c 'from publish_forward_evidence import validate_state; from direction_forward_v42 import ROOT; validate_state(ROOT)'
           python -c 'import paired_forward_cohort as p; p.guard(p.ROOT); p.history_guard(p.ROOT)'
+          python -c 'import p2_paired_execution_v2 as p; p.guard(p.ROOT); p.history_guard(p.ROOT)'
           for f in data/hourly_research/ohlc.csv data/hourly_research/latest.json data/crash_research/pilot_1h_latest.json data/crash_research/prospective_hourly.csv data/crash_research/prospective_scores.json data/crash_research/v42_scores.json data/direction_v42/forward_registry.csv data/direction_v42/forward_scores.csv data/direction_v42/forward_latest.json data/stage5/minute_shadow/latest.json data/stage5/minute_shadow/minute_scores.csv data/stage5/error_review/latest.json data/stage5/spot_plus/quote_watch_latest.json data/stage5/forward_validation/latest.json data/stage5/forward_validation/remote_witnesses.csv data/stage5/forward_validation/verified_run_metadata.csv reports/DOGE_FORWARD_VALIDATION.md; do
             if [ -f "$f" ]; then git add -f "$f"; fi
           done
@@ -219,6 +240,8 @@ jobs:
           if [ -f reports/DOGE_FORWARD_DIAGNOSTICS_V1.md ]; then git add -f reports/DOGE_FORWARD_DIAGNOSTICS_V1.md; fi
           if [ -d data/paired_forward_v1 ]; then git add -f data/paired_forward_v1; fi
           if [ -f reports/DOGE_PAIRED_SELECTIVE_SHADOW_V1.md ]; then git add -f reports/DOGE_PAIRED_SELECTIVE_SHADOW_V1.md; fi
+          if [ -d data/p2_paired_execution_v2 ]; then git add -f data/p2_paired_execution_v2; fi
+          if [ -f reports/DOGE_P2_PAIRED_EXECUTION_V2.md ]; then git add -f reports/DOGE_P2_PAIRED_EXECUTION_V2.md; fi
           if [ -d data/p0_operations ]; then git add -f data/p0_operations; fi
           for d in data/plus_evidence_v1_0/; do
             if [ -d "$d" ]; then git add -f "$d"; fi
@@ -265,6 +288,11 @@ jobs:
             data/stage5/paired_selection_v1_protocol.json
             system/current_paired_shadow.json
             system/versions/DOGE_PAIRED_SELECTIVE_SHADOW_V1_20261012_1600.json
+            data/p2_paired_execution_v2/
+            reports/DOGE_P2_PAIRED_EXECUTION_V2.md
+            data/stage5/p2_paired_execution_v2_protocol.json
+            system/current_p2_execution_shadow.json
+            system/versions/DOGE_P2_PAIRED_EXECUTION_V2_20261013_0000.json
       - name: Preserve new-version evidence separately from frozen forecast artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -285,6 +313,9 @@ jobs:
         run: exit 1
       - name: Fail visibly on paired cohort audit error after saving original evidence
         if: always() && (steps.paired_audit.outcome == 'failure' || steps.paired_smoke.outcome == 'failure')
+        run: exit 1
+      - name: Fail visibly on independent P2 execution or verification errors after evidence is saved
+        if: always() && (steps.p2_execution.outcome == 'failure' || steps.p2_execution_smoke.outcome == 'failure' || steps.p2_execution_tests.outcome != 'success')
         run: exit 1
       - name: Fail on collector or quality error
         if: always() && (steps.validation.outcome != 'success' || steps.quote_watch.outcome != 'success' || steps.fast_hourly.outcome != 'success' || steps.collect.outcome != 'success' || steps.evaluate.outcome != 'success' || steps.forward.outcome != 'success' || steps.v42.outcome != 'success' || (steps.direction.outcome != 'success' && steps.direction_late_audit.outcome != 'success') || steps.minute_shadow.outcome != 'success' || steps.error_review.outcome != 'success' || steps.regression.outcome != 'success' || steps.early_publish.outcome != 'success' || steps.operations.outcome != 'success' || steps.persist.outcome != 'success' || steps.artifact.outcome != 'success' || steps.public_witness.outcome == 'failure')
