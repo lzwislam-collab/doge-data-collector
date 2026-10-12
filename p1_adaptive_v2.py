@@ -267,7 +267,12 @@ def report(policy,registry,scores,now):
     for h in (1,24):
         closed=max(0,int((now-eff-timedelta(days=0,hours=24)).total_seconds()//86400)+1)
         group=[r for r in registry.values() if int(r["horizon_hours"])==h and utc(r["issued_at_utc"])>=eff]
-        eligible=[r for r in group if utc(r["target_utc"])+timedelta(minutes=25)<=now]
+        group.sort(key=lambda r:(utc(r["issued_at_utc"]),r["forecast_id"]))
+        selected=[];reserved=None
+        for r in group:
+            if reserved is None or utc(r["issued_at_utc"])>=reserved:
+                selected.append(r);reserved=utc(r["target_utc"])+timedelta(minutes=25)
+        eligible=[r for r in selected if utc(r["target_utc"])+timedelta(minutes=25)<=now]
         qualified=[(r,scores[r["forecast_id"]]) for r in eligible
                    if scores.get(r["forecast_id"],{}).get("status")=="scored"]
         covered=len({utc(r["issued_at_utc"]).date() for r in group
