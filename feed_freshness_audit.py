@@ -35,7 +35,9 @@ def check_stage2_csvs(base=BASE, now=None):
  if now is None:now=datetime.now(timezone.utc)
  checks={}; failures=[]
  for key,(file,id_field,ts_field,utc_field,count_field) in STAGE2_CSVS.items():
-  result={'file':file,'status':'error','rows':0,'duplicates':0,'invalid_timestamps':0,'unsorted_timestamps':0,'issues':[]}
+  result={'file':file,'status':'error','rows':0,'duplicates':0,'invalid_timestamps':0,'unsorted_timestamps':0,'issues':[],
+          'delayed_notifications':0,'late_events':[],'timestamp_policy':'Event time and first reception are different clocks; use reception or later for prediction, never backdate delayed messages',
+          'raw_legacy_packet_verified':False}
   try:
    with (Path(base)/file).open(newline='',encoding='utf-8-sig') as stream:
     rd=csv.DictReader(stream);columns=rd.fieldnames or []
@@ -60,8 +62,15 @@ def check_stage2_csvs(base=BASE, now=None):
      if utc_field:
       stamp=datetime.fromisoformat((row.get(utc_field) or '').replace('Z','+00:00'))
       if stamp.tzinfo is None:raise ValueError('timestamp lacks UTC offset')
-      if abs((stamp-datetime.fromtimestamp(tick/1000,timezone.utc)).total_seconds())>600:
+      delay=(stamp-datetime.fromtimestamp(tick/1000,timezone.utc)).total_seconds()
+      if stamp>now+timedelta(minutes=15) or delay < -5:
        result['invalid_timestamps']+=1
+      elif delay>600:
+       result['delayed_notifications']+=1
+       result['late_events'].append({'event_key':event_id,'event_ts_ms':tick,'received_at_utc':stamp.astimezone(timezone.utc).isoformat(),
+          'delay_seconds':round(delay,3),'usable_from_utc':stamp.astimezone(timezone.utc).isoformat(),
+          'historical_event_time_feature_allowed':False,'disposition':'late_notification_quarantine_for_event_time_features',
+          'provider_event_clock_independently_verified':False})
      else:
       if row['instrument']!='DOGE-USDT-SWAP':raise ValueError('instrument changed')
       bid=float(row['best_bid']);ask=float(row['best_ask'])

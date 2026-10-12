@@ -50,6 +50,13 @@ on:
       - 'test_p2_execution_records_v3_1.py'
       - 'test_p2_paired_execution_v3_1_regressions.py'
       - 'test_p2_registration_deployed_bytes.py'
+      - 'derived_four_hour.py'
+      - 'feature_ablation.py'
+      - 'enhancement_sources.py'
+      - 'evidence_append_guard.py'
+      - 'test_derived_four_hour.py'
+      - 'test_feature_ablation.py'
+      - 'data/stage5/feature_ablation_v1_protocol.json'
       - 'data/stage5/p2_paired_execution_v3_1_protocol.json'
       - 'data/stage5/p2_paired_execution_v2_protocol.json'
       - 'test_p0_operations.py'
@@ -95,10 +102,21 @@ jobs:
         continue-on-error: true
         run: |
           DOGE_HOURLY_PAGE_BUDGET=0 python okx_hourly_research_history.py
+      - name: Prepare UTC4H and causal feature context before original issuance
+        id: feature_prepare
+        continue-on-error: true
+        run: |
+          python derived_four_hour.py
+          python feature_ablation.py prepare
       - name: Issue and score DOGE UP/DOWN shadow forecasts from live ticker quote
         id: direction
         continue-on-error: true
         run: python paired_forward_cohort.py issue
+      - name: Bind genuinely new original events to isolated feature ablations
+        id: feature_bind
+        if: always() && steps.feature_prepare.outcome == 'success'
+        continue-on-error: true
+        run: python feature_ablation.py bind
       - name: Verify benign late-registration skip without changing frozen deadline
         id: direction_late_audit
         if: steps.direction.outcome != 'success'
@@ -121,6 +139,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python paired_forward_cohort.py publish
+      - name: Verify staged feature archive on actual remote publication
+        id: feature_publication
+        if: steps.early_publish.outcome == 'success' && steps.feature_bind.outcome == 'success'
+        continue-on-error: true
+        run: python feature_ablation.py publication
       - name: Create pre-target public server witness using existing read-only CI
         id: public_witness
         if: steps.early_publish.outputs.new_predictions == 'true'
@@ -225,6 +248,13 @@ jobs:
         if: always()
         continue-on-error: true
         run: python -m unittest -q test_p2_paired_execution_v3_1 test_p2_execution_records_v3_1 test_p2_paired_execution_v3_1_regressions test_p2_registration_deployed_bytes
+      - name: Audit isolated feature comparisons and net economics
+        id: feature_audit
+        if: always() && steps.operations.outcome == 'success'
+        continue-on-error: true
+        run: |
+          python -m unittest -q test_derived_four_hour test_feature_ablation
+          python feature_ablation.py audit
       - name: Capture independent source versions and prospective post-publication depth
         id: supplemental_evidence
         if: always() && steps.operations.outcome == 'success'
@@ -267,6 +297,8 @@ jobs:
           if [ -f reports/DOGE_P2_PAIRED_EXECUTION_V2.md ]; then git add -f reports/DOGE_P2_PAIRED_EXECUTION_V2.md; fi
           if [ -d data/p2_paired_execution_v3_1 ]; then git add -f data/p2_paired_execution_v3_1; fi
           if [ -f reports/DOGE_P2_PAIRED_EXECUTION_V3_1.md ]; then git add -f reports/DOGE_P2_PAIRED_EXECUTION_V3_1.md; fi
+          if [ -d data/derived_4h_v1 ]; then git add -f data/derived_4h_v1; fi
+          if [ -d data/feature_ablation_v1 ]; then git add -f data/feature_ablation_v1; fi
           if [ -d data/p0_operations ]; then git add -f data/p0_operations; fi
           for d in data/plus_evidence_v1_0/; do
             if [ -d "$d" ]; then git add -f "$d"; fi
@@ -319,6 +351,11 @@ jobs:
             system/current_p2_execution_shadow.json
             system/versions/DOGE_P2_PAIRED_EXECUTION_V2_20261013_0000.json
             data/p2_paired_execution_v3_1/
+            data/derived_4h_v1/
+            data/feature_ablation_v1/
+            data/enhancement_sources_v1/
+            data/stage5/feature_ablation_v1_protocol.json
+            system/versions/DOGE_FEATURE_ABLATION_V1_20261013_0200.json
             reports/DOGE_P2_PAIRED_EXECUTION_V3_1.md
             data/stage5/p2_paired_execution_v3_1_protocol.json
             system/current_p2_execution_shadow_v3_1.json
@@ -349,6 +386,9 @@ jobs:
         run: exit 1
       - name: Fail visibly on repaired V3 P2 errors after saving evidence
         if: always() && (steps.p2_execution_v3.outcome == 'failure' || steps.p2_execution_v3_smoke.outcome == 'failure' || steps.p2_execution_v3_tests.outcome != 'success')
+        run: exit 1
+      - name: Fail visibly on enhancement errors after preserving original evidence
+        if: always() && (steps.feature_prepare.outcome == 'failure' || steps.feature_bind.outcome == 'failure' || steps.feature_publication.outcome == 'failure' || steps.feature_audit.outcome == 'failure')
         run: exit 1
       - name: Fail on collector or quality error
         if: always() && (steps.validation.outcome != 'success' || steps.quote_watch.outcome != 'success' || steps.fast_hourly.outcome != 'success' || steps.collect.outcome != 'success' || steps.evaluate.outcome != 'success' || steps.forward.outcome != 'success' || steps.v42.outcome != 'success' || (steps.direction.outcome != 'success' && steps.direction_late_audit.outcome != 'success') || steps.minute_shadow.outcome != 'success' || steps.error_review.outcome != 'success' || steps.regression.outcome != 'success' || steps.early_publish.outcome != 'success' || steps.operations.outcome != 'success' || steps.persist.outcome != 'success' || steps.artifact.outcome != 'success' || steps.public_witness.outcome == 'failure')

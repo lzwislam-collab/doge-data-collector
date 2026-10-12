@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - 'policy_events_collector.py'
+      - 'enhancement_sources.py'
+      - 'evidence_append_guard.py'
+      - 'test_enhancement_sources.py'
       - '.github/workflows/policy_events.yml'
   schedule:
     - cron: '18 2,14 * * *'
@@ -19,6 +22,8 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -28,11 +33,18 @@ jobs:
         id: collector
         continue-on-error: true
         run: python policy_events_collector.py
-      - name: Persist events and diagnostics
+      - name: Collect public feature evidence without buying subscriptions
+        if: always()
+        run: python enhancement_sources.py
+      - name: Test audited feature source parsing
+        if: always()
+        run: python -m unittest -q test_enhancement_sources
+      - name: Persist original policy events and new feature evidence
         if: always()
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if [ -d data/enhancement_sources_v1 ]; then git add -f data/enhancement_sources_v1; fi
           for f in data/policy_events/latest.json data/policy_events/events.csv; do
             if [ -f "$f" ]; then git add -f "$f"; fi
           done

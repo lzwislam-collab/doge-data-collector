@@ -6,6 +6,7 @@ on:
     paths:
       - 'feed_freshness_audit.py'
       - 'test_feed_quality.py'
+      - 'test_enhancement_data.py'
       - '.github/workflows/feed_freshness_audit.yml'
   schedule:
     - cron: '39 */4 * * *'
@@ -24,7 +25,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Test source-independent freshness rules
-        run: python -m unittest -v test_feed_quality
+        run: python -m unittest -v test_feed_quality test_enhancement_data
       - name: Check freshness and statuses
         id: check
         continue-on-error: true
