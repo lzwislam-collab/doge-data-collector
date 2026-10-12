@@ -55,6 +55,17 @@ class TestOperationalOrder(unittest.TestCase):
   self.assertIn('cancel-in-progress: false',self.text)
   self.assertIn('ref: main # read current data after the shared concurrency lock is acquired',self.text)
 
+ def test_direction_attempt_not_suppressed_by_backfill_failure(self):
+  # A historical backfill outage must not silently skip an independent forecast.
+  a=self.offset('Issue and score DOGE UP/DOWN shadow forecasts from live ticker quote')
+  b=self.offset('Verify benign late-registration skip without changing frozen deadline')
+  direction='\n'.join(self.lines[a:b])
+  self.assertIn('run: python quote_evidence_v2.py direction',direction)
+  self.assertNotIn("if: steps.collect.outcome == 'success'",direction)
+  late='\n'.join(self.lines[b:self.offset('Independently score target outcomes using confirmed OKX 1m bars')])
+  self.assertIn("if: steps.direction.outcome != 'success'",late)
+  self.assertNotIn("steps.collect.outcome == 'success'",late)
+
  def test_v2_frozen_code_validation_preserved(self):
   self.assertIn('run: python forward_validation_v2.py --integrity-only',self.text)
   self.assertIn('run: python quote_evidence_v2.py direction',self.text)
