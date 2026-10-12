@@ -1,0 +1,41 @@
+name: P0 isolated alert delivery self-test
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/scripts/p0_alert.cjs'
+      - '.github/scripts/test_p0_alert.cjs'
+      - '.github/workflows/p0_alert_selftest.yml'
+  pull_request:
+    paths:
+      - '.github/scripts/p0_alert.cjs'
+      - '.github/scripts/test_p0_alert.cjs'
+      - '.github/workflows/p0_alert_selftest.yml'
+permissions:
+  contents: read
+  issues: write
+jobs:
+  self-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test alert selection, quiet success and deduplication
+        run: node --test .github/scripts/test_p0_alert.cjs
+      - name: Isolated intentional fault to exercise the production notification code
+        id: fault
+        if: github.event_name != 'pull_request'
+        continue-on-error: true
+        run: |
+          echo 'CONTROLLED SELF-TEST: no production data or collector operation'
+          exit 1
+      - name: Deliver clearly marked controlled alert on existing Issue 5
+        if: github.event_name != 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const notify = require('./.github/scripts/p0_alert.cjs');
+            const result = await notify({github, context, report:null, failed:${{ steps.fault.outcome == 'failure' }}, selftest:true});
+            if (!result.delivered && !result.deduplicated) throw new Error('controlled alert was not delivered');
+            core.info(JSON.stringify(result));
