@@ -26,13 +26,35 @@ def fetch_operational_runs(since, request=None, until=None):
     return list(rows.values())
 
 def alert_reasons(report):
+    """Flag *all* missing issuance, not just the last slot.
+
+    One stable daily coverage alert per horizon prevents a 10-minute poll from
+    creating a new Issue comment on every run when earlier slots are missing.
+    The detailed missing slots remain in rolling_7d for forensic inspection.
+    """
     reasons=[]
+    at=frozen.utc(report['audited_at_utc']) if report.get('audited_at_utc') else None
     for h,metric in report.get('rolling_7d',{}).items():
         slots=metric.get('slots',[])
+        expected=int(metric.get('expected',len(slots)))
+        issued=int(metric.get('issued',sum(x['status']=='verified_issued' for x in slots)))
+        if expected<0 or issued<0 or issued>expected or expected!=len(slots):
+            raise ValueError('P0 slot-count mismatch for '+h)
+        if expected and issued/expected<.90:
+            if not at:
+                # Backward-compatible unit-test reports may omit audit time.
+                # Use a fixed non-realtime marker, not an invented execution time.
+                day='unknown'
+            else:
+                day=at.date().isoformat()
+            reasons.append({'horizon':h,'kind':'issuance_coverage_below_90pct',
+                'audit_day_utc':day,'required_pct':90})
         if slots and slots[-1]['status']!='verified_issued':
-            reasons.append({'horizon':h,'kind':'missing_issuance','slot_start_utc':slots[-1]['slot_start_utc'],'status':slots[-1]['status']})
+            reasons.append({'horizon':h,'kind':'missing_issuance',
+                'slot_start_utc':slots[-1]['slot_start_utc'],'status':slots[-1]['status']})
         if metric.get('target_missing',0):
-            reasons.append({'horizon':h,'kind':'missing_target_evidence','forecast_ids':metric['target_missing_ids']})
+            reasons.append({'horizon':h,'kind':'missing_target_evidence',
+                'forecast_ids':metric['target_missing_ids']})
     return reasons
 
 def reconcile(rows, scores, eligible, effective, now, runs, horizon=1):
