@@ -13,6 +13,9 @@ on:
       - 'p1_model_competition.py'
       - 'test_p1_model_competition.py'
       - 'data/stage5/p1_model_league_protocol.json'
+      - 'p1_adaptive_v2.py'
+      - 'test_p1_adaptive_v2.py'
+      - 'data/stage5/p1_adaptive_v2_protocol.json'
       - 'quote_evidence_v2.py'
       - 'test_forward_validation_v2.py'
       - 'test_quote_evidence_v2.py'
@@ -75,6 +78,13 @@ jobs:
         run: |
           python -m unittest -q test_p1_model_competition
           python p1_model_competition.py
+      - name: Train and issue prospective P1 V2 shadow from real current market quote
+        id: p1_adaptive
+        if: steps.forward_validation.outcome == 'success'
+        continue-on-error: true
+        run: |
+          python -m unittest -q test_p1_adaptive_v2
+          python p1_adaptive_v2.py
       - name: Synchronize latest source health and timestamps before forecasting
         id: freshness
         continue-on-error: true
@@ -126,6 +136,8 @@ jobs:
           for file in data/quality/latest.json data/prediction_gate/latest.json data/stage5/latest.json data/stage5/error_review/latest.json data/stage5/spot_plus/latest.json data/stage5/spot_plus/evolution_latest.json data/stage5/spot_plus/evolution_log.csv data/stage5/spot_plus/live_quote_latest.json data/stage5/forward_validation/daily_latest.json reports/DOGE_FORWARD_VALIDATION_DAILY.md reports/DOGE_SPOT_PLUS_DAILY.md data/stage5/forward_validation_v2/daily_latest.json reports/DOGE_FORWARD_VALIDATION_V2_DAILY.md data/stage5/p1_model_league/latest.json reports/DOGE_P1_MODEL_LEAGUE.md; do
             if [ -f "$file" ]; then git add -f "$file"; fi
           done
+          if [ -d data/stage5/p1_adaptive_v2 ]; then git add -f data/stage5/p1_adaptive_v2; fi
+          if [ -f reports/DOGE_P1_ADAPTIVE_V2.md ]; then git add -f reports/DOGE_P1_ADAPTIVE_V2.md; fi
           if ! git diff --cached --quiet; then
             git commit -m 'audit: DOGE forecast publication gate'
             for i in 1 2 3 4 5; do
@@ -135,5 +147,5 @@ jobs:
             done
           fi
       - name: Fail on invalid input audit
-        if: steps.p1_league.outcome != 'success' || steps.forward_validation.outcome != 'success' || steps.freshness.outcome != 'success' || steps.audit.outcome != 'success' || steps.stage5.outcome != 'success' || steps.error_review.outcome != 'success' || steps.spot_plus.outcome != 'success' || steps.evolution.outcome != 'success' || steps.spot_live.outcome != 'success'
+        if: steps.p1_adaptive.outcome != 'success' || steps.p1_league.outcome != 'success' || steps.forward_validation.outcome != 'success' || steps.freshness.outcome != 'success' || steps.audit.outcome != 'success' || steps.stage5.outcome != 'success' || steps.error_review.outcome != 'success' || steps.spot_plus.outcome != 'success' || steps.evolution.outcome != 'success' || steps.spot_live.outcome != 'success'
         run: exit 1
