@@ -44,12 +44,13 @@ on:
       - 'p2_execution_registration.py'
       - 'test_p2_paired_execution_v2.py'
       - 'test_p2_execution_records.py'
-      - 'p2_paired_execution_v3.py'
-      - 'p2_execution_registration_v3.py'
-      - 'test_p2_paired_execution_v3.py'
-      - 'test_p2_execution_records_v3.py'
-      - 'test_p2_paired_execution_v3_regressions.py'
-      - 'data/stage5/p2_paired_execution_v3_protocol.json'
+      - 'p2_paired_execution_v3_1.py'
+      - 'p2_execution_registration_v3_1.py'
+      - 'test_p2_paired_execution_v3_1.py'
+      - 'test_p2_execution_records_v3_1.py'
+      - 'test_p2_paired_execution_v3_1_regressions.py'
+      - 'test_p2_registration_deployed_bytes.py'
+      - 'data/stage5/p2_paired_execution_v3_1_protocol.json'
       - 'data/stage5/p2_paired_execution_v2_protocol.json'
       - 'test_p0_operations.py'
       - 'publish_forward_evidence.py'
@@ -213,17 +214,17 @@ jobs:
         id: p2_execution_v3
         if: always() && steps.paired_audit.outcome == 'success'
         continue-on-error: true
-        run: python p2_paired_execution_v3.py capture
+        run: python p2_paired_execution_v3_1.py capture
       - name: Verify V3 live book without creating formal intervals
         id: p2_execution_v3_smoke
         if: github.event_name == 'push' && steps.paired_audit.outcome == 'success'
         continue-on-error: true
-        run: python p2_paired_execution_v3.py smoke
+        run: python p2_paired_execution_v3_1.py smoke
       - name: Test V3 coverage tail gaps and preserved execution behavior
         id: p2_execution_v3_tests
         if: always()
         continue-on-error: true
-        run: python -m unittest -q test_p2_paired_execution_v3 test_p2_execution_records_v3 test_p2_paired_execution_v3_regressions
+        run: python -m unittest -q test_p2_paired_execution_v3_1 test_p2_execution_records_v3_1 test_p2_paired_execution_v3_1_regressions test_p2_registration_deployed_bytes
       - name: Capture independent source versions and prospective post-publication depth
         id: supplemental_evidence
         if: always() && steps.operations.outcome == 'success'
@@ -253,7 +254,7 @@ jobs:
           python -c 'from publish_forward_evidence import validate_state; from direction_forward_v42 import ROOT; validate_state(ROOT)'
           python -c 'import paired_forward_cohort as p; p.guard(p.ROOT); p.history_guard(p.ROOT)'
           python -c 'import p2_paired_execution_v2 as p; p.guard(p.ROOT); p.history_guard(p.ROOT)'
-          python -c 'import p2_paired_execution_v3 as p; p.guard(p.ROOT); p.history_guard(p.ROOT)'
+          python -c 'import p2_paired_execution_v3_1 as p; p.guard(p.ROOT); p.history_guard(p.ROOT)'
           for f in data/hourly_research/ohlc.csv data/hourly_research/latest.json data/crash_research/pilot_1h_latest.json data/crash_research/prospective_hourly.csv data/crash_research/prospective_scores.json data/crash_research/v42_scores.json data/direction_v42/forward_registry.csv data/direction_v42/forward_scores.csv data/direction_v42/forward_latest.json data/stage5/minute_shadow/latest.json data/stage5/minute_shadow/minute_scores.csv data/stage5/error_review/latest.json data/stage5/spot_plus/quote_watch_latest.json data/stage5/forward_validation/latest.json data/stage5/forward_validation/remote_witnesses.csv data/stage5/forward_validation/verified_run_metadata.csv reports/DOGE_FORWARD_VALIDATION.md; do
             if [ -f "$f" ]; then git add -f "$f"; fi
           done
@@ -264,8 +265,8 @@ jobs:
           if [ -f reports/DOGE_PAIRED_SELECTIVE_SHADOW_V1.md ]; then git add -f reports/DOGE_PAIRED_SELECTIVE_SHADOW_V1.md; fi
           if [ -d data/p2_paired_execution_v2 ]; then git add -f data/p2_paired_execution_v2; fi
           if [ -f reports/DOGE_P2_PAIRED_EXECUTION_V2.md ]; then git add -f reports/DOGE_P2_PAIRED_EXECUTION_V2.md; fi
-          if [ -d data/p2_paired_execution_v3 ]; then git add -f data/p2_paired_execution_v3; fi
-          if [ -f reports/DOGE_P2_PAIRED_EXECUTION_V3.md ]; then git add -f reports/DOGE_P2_PAIRED_EXECUTION_V3.md; fi
+          if [ -d data/p2_paired_execution_v3_1 ]; then git add -f data/p2_paired_execution_v3_1; fi
+          if [ -f reports/DOGE_P2_PAIRED_EXECUTION_V3_1.md ]; then git add -f reports/DOGE_P2_PAIRED_EXECUTION_V3_1.md; fi
           if [ -d data/p0_operations ]; then git add -f data/p0_operations; fi
           for d in data/plus_evidence_v1_0/; do
             if [ -d "$d" ]; then git add -f "$d"; fi
@@ -317,11 +318,11 @@ jobs:
             data/stage5/p2_paired_execution_v2_protocol.json
             system/current_p2_execution_shadow.json
             system/versions/DOGE_P2_PAIRED_EXECUTION_V2_20261013_0000.json
-            data/p2_paired_execution_v3/
-            reports/DOGE_P2_PAIRED_EXECUTION_V3.md
-            data/stage5/p2_paired_execution_v3_protocol.json
-            system/current_p2_execution_shadow_v3.json
-            system/versions/DOGE_P2_PAIRED_EXECUTION_V3_20261013_0000.json
+            data/p2_paired_execution_v3_1/
+            reports/DOGE_P2_PAIRED_EXECUTION_V3_1.md
+            data/stage5/p2_paired_execution_v3_1_protocol.json
+            system/current_p2_execution_shadow_v3_1.json
+            system/versions/DOGE_P2_PAIRED_EXECUTION_V3_1_20261013_0000.json
       - name: Preserve new-version evidence separately from frozen forecast artifacts
         if: always()
         uses: actions/upload-artifact@v4
