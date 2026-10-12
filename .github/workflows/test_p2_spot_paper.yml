@@ -1,0 +1,27 @@
+name: Test DOGE P2 spot paper accounting
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'p2_spot_paper.py'
+      - 'test_p2_spot_paper.py'
+      - 'data/stage5/p2_spot_paper_protocol.json'
+      - '.github/workflows/test_p2_spot_paper.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Test real-source parity, P2 economic ledger, no hindsight and blocked profits
+        run: |
+          python -m py_compile p2_spot_paper.py
+          python -m unittest -v test_p2_spot_paper
