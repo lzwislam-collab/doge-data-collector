@@ -86,5 +86,20 @@ class TestOperationalOrder(unittest.TestCase):
   self.assertIn('run: python forward_validation_v2.py',self.text)
   self.assertIn('test_forward_validation_v2',self.text)
 
+ def test_second_quote_pass_is_after_backfill_and_before_formal_audit(self):
+  guard=self.offset('run: python p0_open_target_guard.py')
+  heavy=self.offset('Backfill confirmed UTC 1H data with source-ingestion timestamps')
+  formal=self.offset('Audit original quotes, publication receipts, baselines and prospective spot paper')
+  self.assertLess(heavy,guard)
+  self.assertLess(guard,formal)
+  self.assertIn("steps.open_target_guard.outcome == 'failure'",self.text)
+
+ def test_diagnostic_evidence_cannot_overwrite_official_outputs(self):
+  diag=self.offset('python forward_diagnostics.py')
+  persist=self.offset('- name: Persist data and diagnostics')
+  self.assertLess(diag,persist)
+  self.assertIn('git add -f data/forward_diagnostics_v1',self.text)
+  self.assertIn('test_forward_diagnostics test_p0_open_target_guard',self.text)
+
 if __name__=='__main__':
  unittest.main(verbosity=2)

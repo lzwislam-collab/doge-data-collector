@@ -28,6 +28,10 @@ on:
       - 'source_evidence_snapshot.py'
       - 'forward_execution_evidence.py'
       - 'evidence_retention.py'
+      - 'forward_diagnostics.py'
+      - 'p0_open_target_guard.py'
+      - 'test_forward_diagnostics.py'
+      - 'test_p0_open_target_guard.py'
       - 'test_p0_operations.py'
       - 'publish_forward_evidence.py'
       - '.github/scripts/p0_alert.cjs'
@@ -139,6 +143,11 @@ jobs:
         if: steps.collect.outcome == 'success'
         continue-on-error: true
         run: python stage5_error_review.py
+      - name: Recheck genuinely open target windows after slow collection steps
+        id: open_target_guard
+        if: always() && steps.quote_watch.outcome != 'skipped'
+        continue-on-error: true
+        run: python p0_open_target_guard.py
       - name: Audit original quotes, publication receipts, baselines and prospective spot paper
         id: validation
         continue-on-error: true
@@ -148,7 +157,7 @@ jobs:
       - name: Test hourly point-in-time registry causal restrictions after time-sensitive evidence capture
         id: regression
         continue-on-error: true
-        run: python -m unittest -v test_crash_forward_watch test_crash_v42_score test_direction_forward_v42 test_stage5_minute_shadow test_stage5_error_review test_spot_plus_quote_watch test_forward_validation test_quote_evidence_v2 test_forward_validation_v2 test_workflow_operational_order test_p0_operations test_publish_forward_evidence
+        run: python -m unittest -v test_crash_forward_watch test_crash_v42_score test_direction_forward_v42 test_stage5_minute_shadow test_stage5_error_review test_spot_plus_quote_watch test_forward_validation test_quote_evidence_v2 test_forward_validation_v2 test_workflow_operational_order test_p0_operations test_publish_forward_evidence test_forward_diagnostics test_p0_open_target_guard
       - name: Reconcile strict rolling seven-day issuance and target evidence
         id: operations
         if: always() && steps.validation.outcome == 'success'
@@ -161,6 +170,21 @@ jobs:
         if: always() && steps.operations.outcome == 'success'
         continue-on-error: true
         run: python supplemental_evidence_audit.py --capture-execution
+      - name: Audit deadline risk probability reliability and prospective cost stress separately
+        id: diagnostics
+        if: always() && steps.supplemental_evidence.outcome == 'success'
+        continue-on-error: true
+        run: |
+          python forward_diagnostics.py
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          r=json.loads(Path('data/forward_diagnostics_v1/latest.json').read_text())
+          counts={s:sum(x['state']==s for x in r['deadline_radar']) for s in ('DUE_OPEN','DUE_URGENT','MISSED_WINDOW')}
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as f:
+              f.write('### DOGE forward diagnostics V1\n\nNO_TRADE; frozen scores unchanged.\n\n'+json.dumps(counts)+'\n')
+          if counts['DUE_URGENT']: print('::warning::Genuine target quote window closes within 10 minutes; no backfill allowed')
+          PY
       - name: Persist data and diagnostics
         id: persist
         if: always()
@@ -172,6 +196,8 @@ jobs:
             if [ -f "$f" ]; then git add -f "$f"; fi
           done
           git add -f data/quote_evidence_v2
+          if [ -d data/forward_diagnostics_v1 ]; then git add -f data/forward_diagnostics_v1; fi
+          if [ -f reports/DOGE_FORWARD_DIAGNOSTICS_V1.md ]; then git add -f reports/DOGE_FORWARD_DIAGNOSTICS_V1.md; fi
           if [ -d data/p0_operations ]; then git add -f data/p0_operations; fi
           for d in data/plus_evidence_v1_0/; do
             if [ -d "$d" ]; then git add -f "$d"; fi
@@ -211,6 +237,8 @@ jobs:
             data/stage5/forward_validation_v2/
             reports/DOGE_FORWARD_VALIDATION_V2.md
             data/p0_operations/
+            data/forward_diagnostics_v1/
+            reports/DOGE_FORWARD_DIAGNOSTICS_V1.md
       - name: Preserve new-version evidence separately from frozen forecast artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -225,6 +253,9 @@ jobs:
             reports/DOGE_PLUS_EVIDENCE_V1_0.md
       - name: Fail visibly on supplemental capture failure after preserving core evidence
         if: always() && steps.supplemental_evidence.outcome != 'success'
+        run: exit 1
+      - name: Fail visibly on open target guard or diagnostic errors after saving evidence
+        if: always() && (steps.open_target_guard.outcome == 'failure' || steps.diagnostics.outcome == 'failure')
         run: exit 1
       - name: Fail on collector or quality error
         if: always() && (steps.validation.outcome != 'success' || steps.quote_watch.outcome != 'success' || steps.fast_hourly.outcome != 'success' || steps.collect.outcome != 'success' || steps.evaluate.outcome != 'success' || steps.forward.outcome != 'success' || steps.v42.outcome != 'success' || (steps.direction.outcome != 'success' && steps.direction_late_audit.outcome != 'success') || steps.minute_shadow.outcome != 'success' || steps.error_review.outcome != 'success' || steps.regression.outcome != 'success' || steps.early_publish.outcome != 'success' || steps.operations.outcome != 'success' || steps.persist.outcome != 'success' || steps.artifact.outcome != 'success' || steps.public_witness.outcome == 'failure')
