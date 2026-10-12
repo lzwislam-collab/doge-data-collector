@@ -1,0 +1,53 @@
+{
+  "schema_version": 3,
+  "protocol_id": "DOGE_P2_PAIRED_EXECUTION_V3_20261013_0000",
+  "effective_from_utc": "2026-10-13T00:00:00+00:00",
+  "status": "frozen_future_paired_spot_paper",
+  "source_protocol_id": "DOGE_PAIRED_SELECTIVE_SHADOW_V1_20261012_1600",
+  "horizons_hours": [
+    1,
+    24
+  ],
+  "initial_equity_each_usdt": 1000,
+  "strategy": "Source PAPER_LONG buys spot at first qualifying post-public observed book and exits at first qualifying target book; NO_TRADE holds cash. Reserve original forecasts before knowing execution success, decision or outcome. Stop continuous prefix at first missing entry/exit/source. No shorting.",
+  "hold_benchmark": "Same initial1000 and first entry book, bought once, quantity held continuously through interval/cash gaps, valued using current bid-depth liquidation proxy with fees/slippage. Never repeatedly rebought at interval boundaries.",
+  "cash_benchmark_return_pct": 0,
+  "fees_each_side": 0.001,
+  "extra_slippage_each_side": 0.0005,
+  "spread": "Included by actual observed ask/bid depth sweeps; no separate half-spread assumption in nominal scenario",
+  "stress": "Double fee and extra slippage, plus one observed half-spread each side as additional stress. Separate stress hold benchmark.",
+  "entry_max_seconds_after_publication": 600,
+  "entry_request_after_publication": true,
+  "quote_max_age_seconds": 30,
+  "max_execution_spread_bps": 20,
+  "visible_depth_band_pct": 1,
+  "instrument_lot_minimum_tick_and_live_state_checked": true,
+  "quantity_rounded_down_to_live_lot_size": true,
+  "target_window_minutes": 25,
+  "nonoverlap_reservation_includes_target_grace": true,
+  "maximum_sampling_gap_seconds": 1800,
+  "source_must_be_verified_at_capture_not_only_replay": true,
+  "minimum_completed_mature_intervals_for_paper_review": 100,
+  "minimum_observation_days_for_paper_review": 30,
+  "minimum_source_and_due_book_coverage": 0.9,
+  "manual_independent_review_required": true,
+  "no_real_orders": true,
+  "no_backfill": true,
+  "no_dca_changes": true,
+  "no_automatic_profit_claim": true,
+  "limitations": [
+    "Paper execution is a visible quote/depth proxy, not actual fills or latency/impact certainty",
+    "Standard fee and extra slippage are declared research assumptions, not verified account-level cost",
+    "Sampled drawdown and missing marks/gaps are reported; continuous maximum drawdown not proven",
+    "New namespace cannot inherit legacy P2, old forecasts, old books, prior returns or prior activation",
+    "NO_TRADE intervals remain in coverage and require hold benchmark observations",
+    "Maturity and positive excess returns only allow independent paper review, never real-trading authorization"
+  ],
+  "replaces_acceptance_defective_v2_only": true,
+  "coverage_denominators": {
+    "source": "All closed original hourly slots with independent paired audit confirmation",
+    "selected_source": "All fixed nonoverlap reserved original IDs",
+    "due_book": "All matured reserved intervals"
+  },
+  "tail_sampling_gap_checked_at_audit": true
+}
