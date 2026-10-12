@@ -21,6 +21,10 @@ on:
       - 'quote_evidence_v2.py'
       - 'test_forward_validation_v2.py'
       - 'test_workflow_operational_order.py'
+      - 'quote_capture_retry.py'
+      - 'p0_operational_audit.py'
+      - 'test_p0_operations.py'
+      - 'publish_forward_evidence.py'
       - 'test_quote_evidence_v2.py'
       - 'data/stage5/forward_validation_protocol_v2.json'
       - 'test_forward_validation.py'
@@ -33,7 +37,8 @@ on:
     - cron: '13,33,53 * * * *' # same existing workflow: extra quote-scoring polls; hourly forecasts unchanged
 permissions:
   contents: write
-  actions: read
+  actions: write # dispatch existing read-only CI as a pre-target server witness
+  issues: write # P0 failure alerts on existing Issue 5
 concurrency:
   group: okx-hourly-extreme-history # shared with daily audit and short raw-quote job; long scans are separate
   cancel-in-progress: false
@@ -54,7 +59,7 @@ jobs:
       - name: Score genuine due target quotes before long collection steps
         id: quote_watch
         continue-on-error: true
-        run: python quote_evidence_v2.py watch
+        run: python quote_capture_retry.py watch
       - name: Fast-refresh confirmed 1H bars before prediction issuance
         id: fast_hourly
         continue-on-error: true
@@ -63,10 +68,11 @@ jobs:
       - name: Issue and score DOGE UP/DOWN shadow forecasts from live ticker quote
         id: direction
         continue-on-error: true
-        run: python quote_evidence_v2.py direction
+        run: python quote_capture_retry.py direction
       - name: Verify benign late-registration skip without changing frozen deadline
         id: direction_late_audit
         if: steps.direction.outcome != 'success'
+        continue-on-error: true
         shell: bash
         run: |
           python - <<'PY'
@@ -78,6 +84,23 @@ jobs:
           assert report.get('new_ids')==[], 'late forecast must never register new predictions'
           print('LATE_BUT_SAFE: no forecast backdated; scoring proceeds independently')
           PY
+      - name: Publish time-sensitive evidence and verify remote readback before backfill
+        id: early_publish
+        if: always() && steps.quote_watch.outcome != 'skipped'
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python publish_forward_evidence.py
+      - name: Create pre-target public server witness using existing read-only CI
+        id: public_witness
+        if: steps.early_publish.outputs.new_predictions == 'true'
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              ...context.repo, workflow_id: 'test_forward_validation.yml', ref: 'main'
+            });
       - name: Backfill confirmed UTC 1H data with source-ingestion timestamps
         id: collect
         continue-on-error: true
@@ -117,16 +140,28 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: python forward_validation_v2.py
       - name: Test hourly point-in-time registry causal restrictions after time-sensitive evidence capture
-        run: python -m unittest -v test_crash_forward_watch test_crash_v42_score test_direction_forward_v42 test_stage5_minute_shadow test_stage5_error_review test_spot_plus_quote_watch test_forward_validation test_quote_evidence_v2 test_forward_validation_v2 test_workflow_operational_order
+        id: regression
+        continue-on-error: true
+        run: python -m unittest -v test_crash_forward_watch test_crash_v42_score test_direction_forward_v42 test_stage5_minute_shadow test_stage5_error_review test_spot_plus_quote_watch test_forward_validation test_quote_evidence_v2 test_forward_validation_v2 test_workflow_operational_order test_p0_operations test_publish_forward_evidence
+      - name: Reconcile strict rolling seven-day issuance and target evidence
+        id: operations
+        if: always() && steps.validation.outcome == 'success'
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python p0_operational_audit.py
       - name: Persist data and diagnostics
+        id: persist
         if: always()
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          python -c 'from publish_forward_evidence import validate_state; from direction_forward_v42 import ROOT; validate_state(ROOT)'
           for f in data/hourly_research/ohlc.csv data/hourly_research/latest.json data/crash_research/pilot_1h_latest.json data/crash_research/prospective_hourly.csv data/crash_research/prospective_scores.json data/crash_research/v42_scores.json data/direction_v42/forward_registry.csv data/direction_v42/forward_scores.csv data/direction_v42/forward_latest.json data/stage5/minute_shadow/latest.json data/stage5/minute_shadow/minute_scores.csv data/stage5/error_review/latest.json data/stage5/spot_plus/quote_watch_latest.json data/stage5/forward_validation/latest.json data/stage5/forward_validation/remote_witnesses.csv data/stage5/forward_validation/verified_run_metadata.csv reports/DOGE_FORWARD_VALIDATION.md; do
             if [ -f "$f" ]; then git add -f "$f"; fi
           done
           git add -f data/quote_evidence_v2
+          if [ -d data/p0_operations ]; then git add -f data/p0_operations; fi
           for f in data/stage5/forward_validation_v2/latest.json data/stage5/forward_validation_v2/protocol_witness.json reports/DOGE_FORWARD_VALIDATION_V2.md; do
             if [ -f "$f" ]; then git add -f "$f"; fi
           done
@@ -140,6 +175,7 @@ jobs:
             done
           fi
       - name: Preserve per-run forecast and score evidence snapshot
+        id: artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -159,6 +195,26 @@ jobs:
             data/stage5/forward_validation_protocol_v2.json
             data/stage5/forward_validation_v2/
             reports/DOGE_FORWARD_VALIDATION_V2.md
+            data/p0_operations/
       - name: Fail on collector or quality error
-        if: steps.validation.outcome != 'success' || steps.quote_watch.outcome != 'success' || steps.fast_hourly.outcome != 'success' || steps.collect.outcome != 'success' || steps.evaluate.outcome != 'success' || steps.forward.outcome != 'success' || steps.v42.outcome != 'success' || (steps.direction.outcome != 'success' && steps.direction_late_audit.outcome != 'success') || steps.minute_shadow.outcome != 'success' || steps.error_review.outcome != 'success'
+        if: always() && (steps.validation.outcome != 'success' || steps.quote_watch.outcome != 'success' || steps.fast_hourly.outcome != 'success' || steps.collect.outcome != 'success' || steps.evaluate.outcome != 'success' || steps.forward.outcome != 'success' || steps.v42.outcome != 'success' || (steps.direction.outcome != 'success' && steps.direction_late_audit.outcome != 'success') || steps.minute_shadow.outcome != 'success' || steps.error_review.outcome != 'success' || steps.regression.outcome != 'success' || steps.early_publish.outcome != 'success' || steps.operations.outcome != 'success' || steps.persist.outcome != 'success' || steps.artifact.outcome != 'success' || steps.public_witness.outcome == 'failure')
         run: exit 1
+      - name: Alert existing P0 issue on failed execution or newly closed missing slot
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          JOB_FAILED: ${{ job.status == 'failure' }}
+        with:
+          script: |
+            const fs = require('fs');
+            let report = null;
+            try { report = JSON.parse(fs.readFileSync('data/p0_operations/latest.json', 'utf8')); } catch {}
+            const reasons = report?.alert_reasons || [];
+            const failed = process.env.JOB_FAILED === 'true';
+            if (!failed && reasons.length === 0) return;
+            const key = failed ? `run-${context.runId}` : require('crypto').createHash('sha256').update(JSON.stringify(reasons)).digest('hex');
+            const marker = `<!-- DOGE-P0:${key} -->`;
+            const comments = await github.paginate(github.rest.issues.listComments, {...context.repo, issue_number: 5, per_page: 100});
+            if (comments.some(c => c.body.includes(marker))) return;
+            await github.rest.issues.createComment({...context.repo, issue_number: 5,
+              body: `${marker}\nP0 operational alert: ${failed ? 'execution failed' : 'missing issuance or target evidence'}.\nRun: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\nAffected horizons and evidence: ${JSON.stringify(reasons)}.\nNo historical forecasts or target quotes have been fabricated. P0 seven-day, P1 accuracy and P2 profit acceptance remain separate.`});
