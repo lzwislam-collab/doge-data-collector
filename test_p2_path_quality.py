@@ -57,7 +57,7 @@ class PathQualityTests(unittest.TestCase):
             audit.evaluate([event(10, 1), event(9, 2)], T + timedelta(minutes=30))
         with self.assertRaisesRegex(ValueError, "duplicate"):
             audit.evaluate([event(1, 1), event(2, 1)], T + timedelta(minutes=30))
-        with self.assertRaisesRegex(ValueError, "future"):
+        with self.assertRaisesRegex(ValueError, "invalid book captured/quote times"):
             audit.evaluate([event(31, 1)], T + timedelta(minutes=30))
         with self.assertRaisesRegex(ValueError, "naive"):
             audit.clock("2026-10-13T00:01:00")
