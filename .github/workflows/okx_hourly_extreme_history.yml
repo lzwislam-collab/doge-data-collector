@@ -29,6 +29,7 @@ on:
       - 'forward_execution_evidence.py'
       - 'evidence_retention.py'
       - 'pit_retention_preparation.py'
+      - 'feature_publication_gate.py'
       - 'forward_diagnostics.py'
       - 'p0_open_target_guard.py'
       - 'test_forward_diagnostics.py'
@@ -127,7 +128,10 @@ jobs:
         id: feature_bind
         if: always() && steps.feature_prepare.outcome == 'success'
         continue-on-error: true
-        run: python feature_ablation.py bind
+        run: |
+          python feature_ablation.py bind > "$RUNNER_TEMP/doge-feature-bind.json"
+          cat "$RUNNER_TEMP/doge-feature-bind.json"
+          python feature_publication_gate.py < "$RUNNER_TEMP/doge-feature-bind.json" >> "$GITHUB_OUTPUT"
       - name: Verify benign late-registration skip without changing frozen deadline
         id: direction_late_audit
         if: steps.direction.outcome != 'success'
@@ -157,7 +161,7 @@ jobs:
         run: python minimal_market_forward.py publication
       - name: Verify staged feature archive on actual remote publication
         id: feature_publication
-        if: steps.early_publish.outcome == 'success' && steps.feature_bind.outcome == 'success'
+        if: steps.early_publish.outcome == 'success' && steps.feature_bind.outcome == 'success' && steps.feature_bind.outputs.needs_publication == 'true'
         continue-on-error: true
         run: python feature_ablation.py publication
       - name: Create pre-target public server witness using existing read-only CI
