@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at_utc": "2026-10-13T07:31:23.262944+00:00",
+  "generated_at_utc": "2026-10-13T19:37:23.652988+00:00",
   "data_scope": "DOGE chain activity, whale block scanner, OKX PoR address balance sampling",
   "exchange_netflow_verified": false,
   "scheduled_execution_verified": false,
@@ -11,42 +11,42 @@
   "checks": {
     "chain": {
       "status": "ok",
-      "age_hours": 5.83,
+      "age_hours": 17.93,
       "block_height": 6412849
     },
     "daily_metrics": {
       "status": "ok",
-      "age_hours": 5.64,
+      "age_hours": 17.74,
       "complete_day_utc": "2026-10-12",
       "historical_days": 4693
     },
     "whales": {
-      "status": "ok",
-      "age_hours": 0.41,
-      "completed_height": 6413141,
-      "tip_at_run": 6413141,
-      "backlog_at_run_end": 0,
-      "new_whale_transactions": 5,
+      "status": "idle",
+      "age_hours": 0.42,
+      "completed_height": 6413783,
+      "tip_at_run": 6413836,
+      "backlog_at_run_end": 53,
+      "new_whale_transactions": 0,
       "errors": []
     },
     "okx_addresses": {
       "status": "ok",
-      "age_hours": 0.34,
-      "sampled": 11475,
+      "age_hours": 0.1,
+      "sampled": 13275,
       "total": 40134,
-      "fraction_pct": 28.5917,
-      "next_index": 11475,
+      "fraction_pct": 33.0767,
+      "next_index": 13275,
       "cycle": 1,
       "errors": []
     },
     "okx_current_csv": {
       "exists": true,
-      "rows": 11475,
+      "rows": 13275,
       "duplicates": 0
     },
     "okx_observations_csv": {
       "exists": true,
-      "rows": 11475,
+      "rows": 13275,
       "duplicates": 0
     }
   },
@@ -56,6 +56,8 @@
     "PoR-listed addresses are neither ownership verified nor comprehensive",
     "Automated schedule run IDs and event types are not confirmed by this read-only audit"
   ],
-  "issues": [],
-  "status": "ok_partial_coverage"
+  "issues": [
+    "whale scanner stale/error"
+  ],
+  "status": "needs_attention"
 }
