@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "protocol_id": "DOGE_P2_LOCKED_FORWARD_COHORT_20261014_0000",
+  "effective_from_utc": "2026-10-14T00:00:00+00:00",
+  "registered_on": "2026-10-13",
+  "locked_code_git_blob_sha": "f3dcf0bdc6ee50630327ca3cf1e01482f51285ba",
+  "status": "precommitted_future_paper_cohort",
+  "source_protocol_id": "DOGE_P2_PAIRED_EXECUTION_V3_1_20261013_0000",
+  "horizons_hours": [
+    1,
+    24
+  ],
+  "initial_usdt": 1000,
+  "cash_benchmark_pct": 0,
+  "model_production_unchanged": true,
+  "max_gap_seconds": 1800,
+  "minimum_issuance_and_target_coverage_pct": 90,
+  "minimum_observation_days": 30,
+  "minimum_completed_intervals": 100,
+  "read_only": true,
+  "no_auto_reset": true,
+  "original_v3_1_data_unmodified": true,
+  "preselect_all_original_issues_before_outcome": true,
+  "no_backfill": true,
+  "no_new_schedules": true,
+  "minimum_live_quote_age_requirement": "P2 V3.1 observed raw book/quote timestamp <= 30 seconds before capture",
+  "returns_and_fees": "Reuse frozen V3.1 fee=0.001, additional slippage=0.0005 each side, actual displayed bid/ask depth and double-cost stress, not exchange fills",
+  "gap_policy": "Every >1800s gap in genuinely captured books after effective time remains counted for this cohort; cannot restart or cherry-pick a clean suffix",
+  "source_coverage_denominator": "All expired 1-hour issuance slots after fixed activation independently by 1h/24h; never omit missing original issues.",
+  "outcome_coverage_denominator": "All matured original first-selected fixed nonoverlap reserved intervals including missed price/book/window",
+  "economics": "Same-period strategy vs cash and continuous buy/hold under nominal and double stressed fees using the original P2 depth observations; sampled drawdown is not continuous maximum drawdown",
+  "promotion": "Even REVIEW_ONLY cannot establish economic edge without separate independent statistical and PIT review",
+  "limitations": [
+    "Frozen source and study versions still require external tamper-resistant retention separately.",
+    "GitHub Actions scheduling and event discovery can fail; missing intervals remain in denominator.",
+    "30 days alone cannot yield 100 independent 24h intervals; each horizon requires its own maturation.",
+    "No automatic reset, no DCA, no live trading."
+  ]
+}
