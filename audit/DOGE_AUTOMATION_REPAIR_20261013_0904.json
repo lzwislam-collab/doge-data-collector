@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "audit_id": "DOGE_AUTOMATION_REPAIR_20261013_0904",
+  "audited_at_utc": "2026-10-13T09:04:40Z",
+  "automation_id": "doge-1h-24h",
+  "status": "PASS_ACTUAL_AUTOMATED_TRIGGER",
+  "root_cause": "COUNT=2 daily schedule used the installed scheduler UTC fallback instead of local-clock fast path.",
+  "historical_1715_execution_confirmed": false,
+  "historical_1715_record_fabricated": false,
+  "corrected_schedule": "RDATE:20261013T090400Z,20261014T071500Z",
+  "nominal_trigger_utc": "2026-10-13T09:04:00Z",
+  "actual_last_run_at_utc": "2026-10-13T09:04:16.675Z",
+  "heartbeat_message_utc": "2026-10-13T09:04:16.685Z",
+  "trigger_delay_seconds": 16.675,
+  "trigger_evidence": [
+    "Native heartbeat message in this chat",
+    "Read-only scheduler database last_run_at matching message time",
+    "Scheduler next_run_at advanced to the second explicit date"
+  ],
+  "cron_automation_runs_row_expected": false,
+  "note": "This is a same-chat heartbeat; no separate standalone cron run row is used as proof.",
+  "next_run_utc": "2026-10-14T07:15:00Z",
+  "next_run_jst": "2026-10-14T16:15:00+09:00",
+  "one_hour_acceptance_unchanged": true,
+  "twentyfour_hour_target_scoring_accepted": false,
+  "full_production_acceptance": false,
+  "independent_retention_verified": false,
+  "prediction_edge_accepted": false,
+  "real_orders_authorized": false
+}
