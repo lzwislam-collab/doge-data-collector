@@ -193,23 +193,16 @@
   "engineering_closure": {
     "schema_version": 1,
     "version_id": "DOGE_ENGINEERING_CLOSURE_V1_20261013_0628",
-    "status": "SCHEDULE_AND_NEW_ISSUANCE_ACCEPTED_TARGET_SCORING_PENDING",
-    "audit_id": "DOGE_ENGINEERING_LIVE_ISSUANCE_20261013_0736",
-    "audit_path": "audit/DOGE_ENGINEERING_LIVE_ISSUANCE_20261013_0736.json",
-    "audit_sha256": "57feaf2a708141ffc5cf902d54f83494a6315e72d51b77474b363f86b05b84ab",
+    "status": "ONE_HOUR_TARGET_SCORING_ACCEPTED_24H_PENDING",
+    "audit_id": "DOGE_1H_TARGET_ACCEPTANCE_20261013_0844",
+    "audit_path": "audit/DOGE_1H_TARGET_ACCEPTANCE_20261013_0844.json",
+    "audit_sha256": "29225be04366b182638125b37d3a579e302f45abc1aab5dfc414a81a0ee8ab90",
     "report_path": "reports/DOGE_ENGINEERING_LIVE_ISSUANCE_20261013_0736.md",
-    "audited_at_utc": "2026-10-13T07:37:18Z",
+    "audited_at_utc": "2026-10-13T08:43:20Z",
     "engineering_code_and_fault_tests_accepted": true,
     "full_production_acceptance": false,
     "all_project_acceptance": false,
     "pending_live_acceptance": [
-      {
-        "id": "POST_FINAL_VERSION_1H_TARGET_QUOTE_SCORING",
-        "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1791871200000_1h",
-        "status": "待到期运行验收",
-        "target_utc": "2026-10-13T08:07:10.756935+00:00",
-        "note": "Require genuine target quote in the frozen target-to-target+25-minute window and raw binding/publication/score checks; no historical reconstruction."
-      },
       {
         "id": "POST_FINAL_VERSION_24H_TARGET_QUOTE_SCORING",
         "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1791871200000_24h",
@@ -224,9 +217,9 @@
     "economic_edge_accepted": false,
     "real_orders_authorized": false,
     "previous_audit": {
-      "audit_id": "DOGE_ENGINEERING_CLOSURE_20261013_0628",
-      "audit_path": "audit/DOGE_ENGINEERING_CLOSURE_20261013_0628.json",
-      "audit_sha256": "020f81cfaa2c5ab9653fb2591285a44cc11e99ac69d148f336c6c99b8ebd4e9d"
+      "audit_id": "DOGE_ENGINEERING_LIVE_ISSUANCE_20261013_0736",
+      "audit_path": "audit/DOGE_ENGINEERING_LIVE_ISSUANCE_20261013_0736.json",
+      "audit_sha256": "57feaf2a708141ffc5cf902d54f83494a6315e72d51b77474b363f86b05b84ab"
     },
     "live_issuance_acceptance": {
       "scheduled_execution": true,
@@ -235,8 +228,41 @@
       "new_forecasts": 2,
       "public_witness_run_id": 38360694021,
       "archive_content_verified": true,
-      "one_hour_target_scoring": false,
+      "one_hour_target_scoring": true,
       "twentyfour_hour_target_scoring": false
+    },
+    "one_hour_scoring_acceptance": {
+      "schema_version": 1,
+      "audit_id": "DOGE_1H_TARGET_ACCEPTANCE_20261013_0844",
+      "audited_at_utc": "2026-10-13T08:43:20Z",
+      "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1791871200000_1h",
+      "status": "PASS_RAW_BOUND_1H_SCORE",
+      "source": "OKX genuine ticker quote",
+      "issued_at_utc": "2026-10-13T07:07:10.756935+00:00",
+      "target_utc": "2026-10-13T08:07:10.756935+00:00",
+      "target_quote_utc": "2026-10-13T08:25:00.267000+00:00",
+      "observed_at_utc": "2026-10-13T08:25:01.103102+00:00",
+      "reference_price": 0.08476,
+      "target_price": 0.08499,
+      "realized_direction": "UP",
+      "target_quote_id": "2b491e835652c1a2ad3df015aeefaa49dec6723f5653e7e0d1c7ddad91e35606",
+      "raw_binding_verifier": "quote_evidence_v2.verify_bound",
+      "raw_binding_verifier_passed": true,
+      "publication_witness_run_id": 38360694021,
+      "latest_p0_audit_utc": "2026-10-13T08:30:31.414837+00:00",
+      "scheduled_run_id": 38369634215,
+      "scheduled_run_conclusion": "success",
+      "majority_correct": true,
+      "doge_reversal_correct": false,
+      "btc_momentum_correct": true,
+      "automatic_1715_review_execution_confirmed": false,
+      "review_performed_in_current_user_triggered_turn": true,
+      "one_hour_target_scoring_accepted": true,
+      "twentyfour_hour_target_scoring_accepted": false,
+      "full_production_acceptance": false,
+      "prediction_edge_accepted": false,
+      "independent_retention_verified": false,
+      "real_orders_authorized": false
     }
   }
 }
