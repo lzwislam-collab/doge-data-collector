@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "status": "ok",
-  "audited_at_utc": "2026-10-13T08:00:01.947647+00:00",
+  "audited_at_utc": "2026-10-13T08:30:20.032493+00:00",
   "effective_from_utc": "2026-10-12T02:00:00+00:00",
   "protocol_id": "DOGE_FORWARD_RAW_QUOTE_BOUND_V2_20261012_0200",
   "protocol_remote_witness": {
@@ -10,8 +10,8 @@
     "created_at": "2026-10-11T23:42:03Z"
   },
   "locked_implementation_checked": true,
-  "raw_quote_snapshots": 249,
-  "quote_bindings": 104,
+  "raw_quote_snapshots": 252,
+  "quote_bindings": 108,
   "horizons": {
     "1h": {
       "due": 24,
@@ -134,95 +134,95 @@
       "formal_status": "覆盖率不足"
     },
     "24h": {
-      "due": 0,
-      "scored": 0,
+      "due": 1,
+      "scored": 1,
       "missing_or_unresolved": 0,
-      "quote_coverage_pct": null,
-      "coverage_state": "NO_MATURED_SAMPLE",
+      "quote_coverage_pct": 100.0,
+      "coverage_state": "OBSERVED_AT_LEAST_90",
       "models": {
         "doge_reversal": {
-          "n": 0,
-          "correct": 0,
-          "accuracy_pct": null,
-          "wilson95_lower_pct_descriptive_only": null
+          "n": 1,
+          "correct": 1,
+          "accuracy_pct": 100.0,
+          "wilson95_lower_pct_descriptive_only": 20.654931437724645
         },
         "majority": {
-          "n": 0,
-          "correct": 0,
-          "accuracy_pct": null,
-          "wilson95_lower_pct_descriptive_only": null
+          "n": 1,
+          "correct": 1,
+          "accuracy_pct": 100.0,
+          "wilson95_lower_pct_descriptive_only": 20.654931437724645
         },
         "btc_momentum": {
-          "n": 0,
+          "n": 1,
           "correct": 0,
-          "accuracy_pct": null,
-          "wilson95_lower_pct_descriptive_only": null
+          "accuracy_pct": 0.0,
+          "wilson95_lower_pct_descriptive_only": 0.0
         },
         "always_up": {
-          "n": 0,
+          "n": 1,
           "correct": 0,
-          "accuracy_pct": null,
-          "wilson95_lower_pct_descriptive_only": null
+          "accuracy_pct": 0.0,
+          "wilson95_lower_pct_descriptive_only": 0.0
         },
         "always_down": {
-          "n": 0,
-          "correct": 0,
-          "accuracy_pct": null,
-          "wilson95_lower_pct_descriptive_only": null
+          "n": 1,
+          "correct": 1,
+          "accuracy_pct": 100.0,
+          "wilson95_lower_pct_descriptive_only": 20.654931437724645
         }
       },
       "paired_primary_vs_majority": {
         "wins": 0,
         "losses": 0,
-        "ties": 0,
-        "accuracy_difference_pct_points": null,
+        "ties": 1,
+        "accuracy_difference_pct_points": 0.0,
         "same_quotes_and_same_rows": true
       },
       "edge_validated": false,
       "all_bin_scores_descriptive_may_overlap": true,
       "nonoverlap": {
-        "due": 0,
-        "scored": 0,
+        "due": 1,
+        "scored": 1,
         "missing_or_unresolved": 0,
-        "quote_coverage_pct": null,
-        "coverage_state": "NO_MATURED_SAMPLE",
+        "quote_coverage_pct": 100.0,
+        "coverage_state": "OBSERVED_AT_LEAST_90",
         "models": {
           "doge_reversal": {
-            "n": 0,
-            "correct": 0,
-            "accuracy_pct": null,
-            "wilson95_lower_pct_descriptive_only": null
+            "n": 1,
+            "correct": 1,
+            "accuracy_pct": 100.0,
+            "wilson95_lower_pct_descriptive_only": 20.654931437724645
           },
           "majority": {
-            "n": 0,
-            "correct": 0,
-            "accuracy_pct": null,
-            "wilson95_lower_pct_descriptive_only": null
+            "n": 1,
+            "correct": 1,
+            "accuracy_pct": 100.0,
+            "wilson95_lower_pct_descriptive_only": 20.654931437724645
           },
           "btc_momentum": {
-            "n": 0,
+            "n": 1,
             "correct": 0,
-            "accuracy_pct": null,
-            "wilson95_lower_pct_descriptive_only": null
+            "accuracy_pct": 0.0,
+            "wilson95_lower_pct_descriptive_only": 0.0
           },
           "always_up": {
-            "n": 0,
+            "n": 1,
             "correct": 0,
-            "accuracy_pct": null,
-            "wilson95_lower_pct_descriptive_only": null
+            "accuracy_pct": 0.0,
+            "wilson95_lower_pct_descriptive_only": 0.0
           },
           "always_down": {
-            "n": 0,
-            "correct": 0,
-            "accuracy_pct": null,
-            "wilson95_lower_pct_descriptive_only": null
+            "n": 1,
+            "correct": 1,
+            "accuracy_pct": 100.0,
+            "wilson95_lower_pct_descriptive_only": 20.654931437724645
           }
         },
         "paired_primary_vs_majority": {
           "wins": 0,
           "losses": 0,
-          "ties": 0,
-          "accuracy_difference_pct_points": null,
+          "ties": 1,
+          "accuracy_difference_pct_points": 0.0,
           "same_quotes_and_same_rows": true
         },
         "edge_validated": false,
@@ -239,18 +239,24 @@
         "window_minutes": 1440
       },
       "missing_raw_quote_or_publication_ids": [],
-      "formal_status": "尚无成熟样本"
+      "formal_status": "继续积累独立样本，未验收预测优势"
     }
   },
   "prospective_spot_paper": {
-    "completed_intervals": 0,
+    "completed_intervals": 1,
     "blocked_forecast_id": null,
-    "all_selected_intervals_complete": false,
-    "strategy_net_return_pct": null,
-    "buy_hold_net_return_pct": null,
+    "all_selected_intervals_complete": true,
+    "strategy_net_return_pct": 0.0,
+    "buy_hold_net_return_pct": -3.5186191523438826,
     "cash_net_return_pct": 0,
-    "strategy_checkpoint_max_drawdown_pct": null,
-    "intervals": [],
+    "strategy_checkpoint_max_drawdown_pct": 0.0,
+    "intervals": [
+      {
+        "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1791784800000_24h",
+        "entry_utc": "2026-10-12T07:40:25.839584+00:00",
+        "exit_utc": "2026-10-13T07:54:27.965000+00:00"
+      }
+    ],
     "economic_edge_validated": false,
     "paper_only_not_executable_fills": true,
     "drawdown_between_checkpoints_unmeasured": true,
