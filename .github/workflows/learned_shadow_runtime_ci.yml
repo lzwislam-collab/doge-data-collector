@@ -1,0 +1,49 @@
+name: Verify learned DOGE runtime before activation
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, 'research/phase1-*']
+    paths: ['learned_shadow_runtime.py', 'test_learned_shadow_runtime.py', 'config/learned_shadow_runtime_v1.json', '.github/workflows/learned_shadow_live.yml', '.github/workflows/learned_shadow_runtime_ci.yml']
+  pull_request:
+    paths: ['learned_shadow_runtime.py', 'test_learned_shadow_runtime.py', 'config/learned_shadow_runtime_v1.json', '.github/workflows/learned_shadow_live.yml', '.github/workflows/learned_shadow_runtime_ci.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PYTHONUTF8: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install numpy==2.3.5
+      - name: Adapter failure boundaries and original journal
+        run: |
+          python -m unittest test_learned_shadow_runtime -q
+          python forward_validation_v2.py --integrity-only
+      - name: Read actual runtime registration without issuing any predictions
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python learned_shadow_runtime.py inspect
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: learned-runtime-ci-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            learned-shadow-runtime-output/
+            learned_shadow_runtime.py
+            test_learned_shadow_runtime.py
+            config/learned_shadow_runtime_v1.json
+            .github/workflows/learned_shadow_live.yml
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
