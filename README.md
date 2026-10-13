@@ -69,3 +69,14 @@ python -m unittest -v test_doge_rolling_utxo test_stage1_quality test_stage1_rol
 ## 最新①②③综合审计（2026-10-13 JST）
 
 [完整审计与复现证据](reports/DOGE_SYSTEM_123_COMPREHENSIVE_AUDIT_20261013.md)已登记至[当前系统审计](system/current_comprehensive_audit.json)。③两项实现缺陷已在独立V3.1修复并通过线上验证，详见[修复验收](reports/DOGE_SYSTEM_123_V3_1_REPAIR_20261013.md)。当前③指针为[注册V3.1](system/current_p2_execution_shadow_v3_1.json)，前瞻盈利仍WAIT；①②统计有效性及晋级仍未验收。完整510项测试通过不等于准确率或盈利通过。失败V3、冻结版本、历史漏发与原始证据保留；定投及真实交易权限不变。
+
+## DOGE 极简方向报告（2026-10-13）
+
+以 [系统当前规则](system/current_minimal_direction_report.json) 为唯一报告入口，
+报告自动生成到 [DOGE_MINIMAL_DIRECTION.md](reports/DOGE_MINIMAL_DIRECTION.md)。
+正式 1H/24H 方向仅由已经发行的冻结模型 `doge_reversal_direction` 给出，
+验证只采用正式 V2 非重叠前瞻样本。到期缺报价、漏发、未核验公开登记和小样本
+必须明确保留；所有结果与预测参考价及时间戳绑定，不改写方向，不使用研究模型或
+实时行情情绪对冲原预测。现有工作流自动更新，无新增定时器。
+
+审核测试：`python -m unittest -q test_minimal_direction_report`。

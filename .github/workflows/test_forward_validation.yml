@@ -4,6 +4,9 @@ on:
   pull_request:
     paths:
       - 'forward_validation.py'
+      - 'minimal_direction_report.py'
+      - 'test_minimal_direction_report.py'
+      - 'system/current_minimal_direction_report.json'
       - 'minimal_market_candidate.py'
       - 'minimal_market_forward.py'
       - 'p2_economic_acceptance.py'
@@ -44,3 +47,4 @@ jobs:
       - run: python -m unittest discover -v
       - run: python minimal_market_forward.py prepare
       - run: python forward_validation_v2.py --integrity-only
+      - run: python minimal_direction_report.py

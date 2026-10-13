@@ -298,6 +298,13 @@ jobs:
               f.write('### DOGE forward diagnostics V1\n\nNO_TRADE; frozen scores unchanged.\n\n'+json.dumps(counts)+'\n')
           if counts['DUE_URGENT']: print('::warning::Genuine target quote window closes within 10 minutes; no backfill allowed')
           PY
+      - name: Audit and render unambiguous frozen DOGE 1h/24h forecast report
+        id: minimal_direction
+        if: always() && steps.validation.outcome == 'success'
+        continue-on-error: true
+        run: |
+          python -m unittest -q test_minimal_direction_report
+          python minimal_direction_report.py
       - name: Persist data and diagnostics
         id: persist
         if: always()
@@ -332,6 +339,9 @@ jobs:
           for f in data/stage5/forward_validation_v2/latest.json data/stage5/forward_validation_v2/protocol_witness.json reports/DOGE_FORWARD_VALIDATION_V2.md; do
             if [ -f "$f" ]; then git add -f "$f"; fi
           done
+          for f in data/minimal_direction_report/latest.json reports/DOGE_MINIMAL_DIRECTION.md; do
+            if [ -f "$f" ]; then git add -f "$f"; fi
+          done
           if ! git diff --cached --quiet; then
             git commit -m 'data: extend OKX 1H research history'
             for attempt in 1 2 3 4 5; do
@@ -362,6 +372,8 @@ jobs:
             data/stage5/forward_validation_protocol_v2.json
             data/stage5/forward_validation_v2/
             reports/DOGE_FORWARD_VALIDATION_V2.md
+            data/minimal_direction_report/latest.json
+            reports/DOGE_MINIMAL_DIRECTION.md
             data/p0_operations/
             data/forward_diagnostics_v1/
             reports/DOGE_FORWARD_DIAGNOSTICS_V1.md
@@ -423,7 +435,7 @@ jobs:
         if: always() && (steps.minimal_prepare.outcome == 'failure' || steps.minimal_bind.outcome == 'failure' || steps.minimal_publication.outcome == 'failure' || steps.minimal_audit.outcome == 'failure')
         run: exit 1
       - name: Fail on collector or quality error
-        if: always() && (steps.validation.outcome != 'success' || steps.quote_watch.outcome != 'success' || steps.fast_hourly.outcome != 'success' || steps.collect.outcome != 'success' || steps.evaluate.outcome != 'success' || steps.forward.outcome != 'success' || steps.v42.outcome != 'success' || (steps.direction.outcome != 'success' && steps.direction_late_audit.outcome != 'success') || steps.minute_shadow.outcome != 'success' || steps.error_review.outcome != 'success' || steps.regression.outcome != 'success' || steps.early_publish.outcome != 'success' || steps.operations.outcome != 'success' || steps.persist.outcome != 'success' || steps.artifact.outcome != 'success' || steps.public_witness.outcome == 'failure')
+        if: always() && (steps.validation.outcome != 'success' || steps.quote_watch.outcome != 'success' || steps.fast_hourly.outcome != 'success' || steps.collect.outcome != 'success' || steps.evaluate.outcome != 'success' || steps.forward.outcome != 'success' || steps.v42.outcome != 'success' || (steps.direction.outcome != 'success' && steps.direction_late_audit.outcome != 'success') || steps.minute_shadow.outcome != 'success' || steps.error_review.outcome != 'success' || steps.regression.outcome != 'success' || steps.early_publish.outcome != 'success' || steps.operations.outcome != 'success' || steps.minimal_direction.outcome != 'success' || steps.persist.outcome != 'success' || steps.artifact.outcome != 'success' || steps.public_witness.outcome == 'failure')
         run: exit 1
       - name: Alert existing P0 issue on failed execution or newly closed missing slot
         if: always()
