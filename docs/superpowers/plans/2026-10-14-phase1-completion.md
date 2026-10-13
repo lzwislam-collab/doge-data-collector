@@ -19,4 +19,5 @@
 - 日采集实际项目/source、唯一时钟触发器、7次成功执行、最新Cloud logs与同run_id的原表新增行/Overview权威区已回读；旧Task Status非该采集器权威，已更正之前判断。无脚本/表格修改，无手动执行。
 - 独立审查3项P1已逐项修复：24H见证丢失→每事件实际server locator；批次后续失败丢首份目标→隔离错误先保存再报告；dispatch失败不可恢复→窗口内实际pending见证重试。新增测试从缺接口失败到通过。
 - 本地Windows CRLF使原模型raw checkout哈希不同；适配器绑定原协议的canonical LF哈希c93004，没修改任何旧文件，实际inspect已通过并返回WAIT_RUNTIME_PREREGISTRATION/0预测。
+- 首次实际云端触发4次测试失败：新测试的临时目录没有Git历史，GITHUB_ACTIONS=true正确阻断。已本地复现RED，测试创建真实临时Git初始提交后GREEN；未削弱生产history guard。首次运行ID38486549940/38486549866/38486554617/38486554632保留。
 - 当前16新增测试通过；全回归744项，742通过、2平台条件跳过；原生产全历史审计通过。主分支固定合并快照3295个既有文件工作字节仍一致。

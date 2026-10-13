@@ -1,6 +1,7 @@
 import copy
 import tempfile
 import json
+import subprocess
 import unittest
 from pathlib import Path
 from datetime import timedelta
@@ -38,7 +39,11 @@ class Runtime(unittest.TestCase):
     def test_journal_never_overwrites_or_accepts_symlink(self):
         m = self.module()
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp); path = m.append_record(root, 'events', '123_1', {'a': 1})
+            root = Path(tmp)
+            subprocess.run(['git','init',tmp],check=True,capture_output=True)
+            subprocess.run(['git','-c','user.name=Fixture','-c','user.email=fixture@example.invalid',
+                            'commit','--allow-empty','-m','fixture history'],cwd=root,check=True,capture_output=True)
+            path = m.append_record(root, 'events', '123_1', {'a': 1})
             with self.assertRaises(FileExistsError): m.append_record(root, 'events', '123_1', {'a': 2})
             self.assertEqual(path.read_bytes(), m.shadow.encode({'a': 1}))
             with self.assertRaises(ValueError): m.append_record(root, 'events', '../x', {})
