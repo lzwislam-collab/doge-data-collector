@@ -47,9 +47,12 @@ def rows(root, filename):
 def load(root, filename):
     return json.loads((root / filename).read_text(encoding="utf-8"))
 
-def audit_score(pred, score):
+def audit_score(pred, score, now):
     if score is None:
         return "未评分", None
+    observed = utc(score["observed_at_utc"])
+    if observed > now + timedelta(seconds=5):
+        raise ValueError("future outcome observation forbidden")
     state = score["status"]
     if state != "scored":
         if state == "unscorable_missing_target_quote":
@@ -59,7 +62,7 @@ def audit_score(pred, score):
     actual_at = utc(score["target_quote_utc"])
     if not target <= actual_at <= target + GRACE:
         raise ValueError("target quote outside allowed scoring window")
-    if utc(score["observed_at_utc"]) < actual_at:
+    if observed < actual_at:
         raise ValueError("outcome observed before quote")
     actual = float(score["target_price"])
     reference = float(pred["reference_price"])
@@ -75,6 +78,10 @@ def evaluate(root=ROOT, now=None):
     now = now or datetime.now(timezone.utc)
     if now.tzinfo is None or now.utcoffset() != timedelta(0):
         raise ValueError("now must be UTC")
+    audited = load(root, V2)
+    if audited.get("protocol_id") != "DOGE_FORWARD_RAW_QUOTE_BOUND_V2_20261012_0200" or not audited.get("locked_implementation_checked"):
+        raise ValueError("official frozen V2 audit unavailable")
+    effective = utc(audited["effective_from_utc"])
     register = rows(root, REG)
     scores = rows(root, SCORES)
     if any(fid not in register for fid in scores):
@@ -95,11 +102,9 @@ def evaluate(root=ROOT, now=None):
                 or target != issue + timedelta(hours=h)):
             raise ValueError("invalid issued prediction: " + fid)
         if fid in scores:
-            audit_score(record, scores[fid])
-        forecasts[h].append(record)
-    audited = load(root, V2)
-    if audited.get("protocol_id") != "DOGE_FORWARD_RAW_QUOTE_BOUND_V2_20261012_0200" or not audited.get("locked_implementation_checked"):
-        raise ValueError("official frozen V2 audit unavailable")
+            audit_score(record, scores[fid], now)
+        if issue >= effective:
+            forecasts[h].append(record)
     audit_at = utc(audited["audited_at_utc"])
     if audit_at > now + timedelta(seconds=5):
         raise ValueError("official audit is from the future")
@@ -123,7 +128,7 @@ def evaluate(root=ROOT, now=None):
             due_result = {"forecast_id": latest_due["forecast_id"],
                           "target_utc": latest_due["target_utc"]}
             due_result["result"], due_result["target_price"] = audit_score(
-                latest_due, scores.get(latest_due["forecast_id"]))
+                latest_due, scores.get(latest_due["forecast_id"]), now)
         official = audited["horizons"][str(h) + "h"]
         fixed = official["nonoverlap"]
         tested = fixed["models"]["doge_reversal"]
