@@ -1,6 +1,7 @@
 import copy
 import importlib.util
 import json
+import subprocess
 import tempfile
 import unittest
 from datetime import datetime, timezone, timedelta
@@ -65,6 +66,13 @@ class DerivativeTests(unittest.TestCase):
         self.requested = self.seen - timedelta(seconds=2)
         self.ms = int(self.seen.timestamp()*1000)
 
+    def repository(self, directory):
+        root = Path(directory)
+        subprocess.run(['git', 'init', '-q'], cwd=root, check=True)
+        subprocess.run(['git', '-c', 'user.name=PIT-test', '-c', 'user.email=pit-test@example.invalid',
+                        'commit', '-q', '--allow-empty', '-m', 'test fixture initial history'], cwd=root, check=True)
+        return root
+
     def raw(self, kind='OI', **changes):
         row = {'instId': 'DOGE-USDT-SWAP', 'ts': str(self.ms-1000),
                'oi': '100', 'oiCcy': '1000', 'oiUsd': '85'} if kind == 'OI' else {
@@ -98,7 +106,7 @@ class DerivativeTests(unittest.TestCase):
 
     def test_archive_replays_raw_and_preserves_earlier_captures(self):
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = self.repository(directory)
             self.d.append(root, 'OI', self.raw(), self.requested, self.seen)
             before = (root/self.d.LEDGER).read_bytes()
             self.d.append(root, 'OI', self.raw(), self.requested, self.seen)
@@ -114,7 +122,7 @@ class DerivativeTests(unittest.TestCase):
 
     def test_changed_value_even_with_rehashed_chain_rejected_by_raw_replay(self):
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = self.repository(directory)
             row = self.d.append(root, 'OI', self.raw(), self.requested, self.seen)
             row['value'] = 999
             row.pop('record_sha256')
@@ -124,7 +132,7 @@ class DerivativeTests(unittest.TestCase):
 
     def test_failed_source_cannot_be_zero_or_full_success(self):
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = self.repository(directory)
             def fetch(kind):
                 if kind == 'FUNDING': raise OSError('unavailable')
                 return self.raw(), self.requested, self.seen
@@ -140,7 +148,7 @@ class DerivativeTests(unittest.TestCase):
 
     def test_rejected_schema_retains_raw_and_receipt_without_eligible_value(self):
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = self.repository(directory)
             raw = self.raw(oi='-1')
             report = self.d.collect(root, fetch=lambda kind: (raw, self.requested, self.seen))
             self.assertEqual(report['status'], 'BLOCKED')
