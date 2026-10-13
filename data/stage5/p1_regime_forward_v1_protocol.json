@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "protocol_id": "DOGE_P1_RELATIVE_VOL_REGIME_V1_20261014",
+  "effective_from_utc": "2026-10-14T00:00:00+00:00",
+  "status": "precommitted_derived_shadow_research",
+  "model_code_blob_sha": "6ddcf73587f0ed2a3492cbfdbaa2cca4b9d96845",
+  "model_training": "none_fixed_rule",
+  "feature_source": "Previously public and verified minimal_market_forward_v1 confirmed 25-bar DOGE/BTC ex-ante snapshot. Use no news/macro/liquidation or post-issue signals.",
+  "feature_dependencies": [
+    "DOGE/BTC 1h log return",
+    "DOGE/BTC 24h log return",
+    "DOGE/BTC 24h realized volatility",
+    "DOGE latest volume divided by prior 24h mean"
+  ],
+  "horizons_hours": [
+    1,
+    24
+  ],
+  "decision_formula": "For horizon h: DOGE standardized return_h + BTC regime weight*BTC standardized return_h + 0.5*DOGE minus BTC 24h relative strength normalized by sqrt(24)*max(vols). h=1 or 24; normalize h=24 returns by sqrt(24); sign is direction, exactly 0 abstains.",
+  "volatility_stress_ratio": 1.8,
+  "doge_volume_stress_ratio": 2,
+  "btc_weight_stress": 2,
+  "btc_weight_normal": 1,
+  "relative_strength_weight": 0.5,
+  "weights_selection": "A priori fixed research hypothesis; no historical accuracy search or evidence of optimality",
+  "origin_clock": "Prepared original 25 closed hour bars ingested before publication, original issue registered before target; audit per-context public witness via existing minimal_market_forward.audit",
+  "evaluation": "Preselected formal frozen V2 nonoverlap forecast IDs at original issue time; exact same original score / target quote; all missing/abstention retained in denominator",
+  "comparators": [
+    "doge_reversal",
+    "majority",
+    "btc_momentum",
+    "always_up",
+    "always_down"
+  ],
+  "minimum_forward_nonoverlap_scores": 100,
+  "minimum_observation_days": 30,
+  "required_issuer_and_quote_coverage_pct": 90,
+  "reports": "Accuracy all valid; missing-as-wrong; balanced accuracy; up/down recall; paired McNemar descriptive only; no probability calibration",
+  "zero_signal": "Explicit abstention, counted as unqualified, never removed from total denominator",
+  "paper_action": "NO_TRADE",
+  "read_only": true,
+  "no_backfill": true,
+  "no_auto_promotion": true,
+  "no_real_orders": true,
+  "production_model_unchanged": true,
+  "limitations": [
+    "This candidate is derived deterministically from publicly pre-target source contexts, not independently separately time-issued forecast rows.",
+    "Uncalibrated raw signal magnitude must never be shown as p_up, odds, or 70% likelihood.",
+    "Existing scheduled workflow only, no new trigger.",
+    "Source first release and immutable external WORM still pending.",
+    "Research candidate may underperform, gains must be observed prospectively over different regimes."
+  ]
+}
