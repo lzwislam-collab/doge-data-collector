@@ -1,0 +1,64 @@
+name: Review prospective factor gain and retirement evidence
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'factor_evaluation_v1.py'
+      - 'factor_evaluation_evidence_v1.py'
+      - 'test_factor_evaluation*.py'
+      - 'config/factor_evaluation_v1.json'
+      - 'system/factor_evaluation_v1_registry.json'
+      - '.github/workflows/factor_evaluation_v1.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'factor_evaluation_v1.py'
+      - 'factor_evaluation_evidence_v1.py'
+      - 'test_factor_evaluation*.py'
+      - 'config/factor_evaluation_v1.json'
+      - 'system/factor_evaluation_v1_registry.json'
+      - '.github/workflows/factor_evaluation_v1.yml'
+  workflow_run:
+    workflows: ['Backfill DOGE BTC ETH 1H extreme-event research history']
+    types: [completed]
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: factor-evaluation-v1-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  review:
+    # workflow_run checks trusted default-branch code only, never executes PR
+    # source downloaded from an untrusted upstream artifact.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install frozen bootstrap runtime
+        run: python -m pip install numpy==2.3.5
+      - name: Full regression suite
+        if: github.event_name != 'workflow_run'
+        run: python -m unittest discover -q
+      - name: Verify frozen boundary
+        run: python forward_validation_v2.py --integrity-only
+      - name: Evaluate real evidence without changing models
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python factor_evaluation_evidence_v1.py
+      - name: Preserve exact review outputs including WAIT and failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: factor-evaluation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            data/factor_evaluation_v1/
+            config/factor_evaluation_v1.json
+            system/factor_evaluation_v1_registry.json
+          if-no-files-found: error
+          retention-days: 90
