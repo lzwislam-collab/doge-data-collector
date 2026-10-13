@@ -54,6 +54,8 @@ on:
       - 'test_p2_paired_execution_v3_1.py'
       - 'test_p2_execution_records_v3_1.py'
       - 'test_p2_paired_execution_v3_1_regressions.py'
+      - 'p2_path_quality.py'
+      - 'test_p2_path_quality.py'
       - 'test_p2_registration_deployed_bytes.py'
       - 'derived_four_hour.py'
       - 'feature_ablation.py'
@@ -265,6 +267,13 @@ jobs:
         if: always()
         continue-on-error: true
         run: python -m unittest -q test_p2_paired_execution_v3_1 test_p2_execution_records_v3_1 test_p2_paired_execution_v3_1_regressions test_p2_registration_deployed_bytes
+      - name: Audit actual P2 book sampling gaps and preserve original source records
+        id: p2_path
+        if: always() && steps.p2_execution_v3.outcome == 'success'
+        continue-on-error: true
+        run: |
+          python -m unittest -q test_p2_path_quality
+          python p2_path_quality.py
       - name: Audit minimal future pairs and independent P2 acceptance
         id: minimal_audit
         if: always() && steps.operations.outcome == 'success'
@@ -346,6 +355,7 @@ jobs:
           if [ -d data/p2_paired_execution_v2 ]; then git add -f data/p2_paired_execution_v2; fi
           if [ -f reports/DOGE_P2_PAIRED_EXECUTION_V2.md ]; then git add -f reports/DOGE_P2_PAIRED_EXECUTION_V2.md; fi
           if [ -d data/p2_paired_execution_v3_1 ]; then git add -f data/p2_paired_execution_v3_1; fi
+          if [ -d data/p2_path_quality ]; then git add -f data/p2_path_quality; fi
           if [ -f reports/DOGE_P2_PAIRED_EXECUTION_V3_1.md ]; then git add -f reports/DOGE_P2_PAIRED_EXECUTION_V3_1.md; fi
           if [ -d data/derived_4h_v1 ]; then git add -f data/derived_4h_v1; fi
           if [ -d data/feature_ablation_v1 ]; then git add -f data/feature_ablation_v1; fi
@@ -401,6 +411,7 @@ jobs:
             system/current_p2_execution_shadow.json
             system/versions/DOGE_P2_PAIRED_EXECUTION_V2_20261013_0000.json
             data/p2_paired_execution_v3_1/
+            data/p2_path_quality/
             data/minimal_market_forward_v1/
             data/p2_economic_acceptance_v1/
             data/stage5/minimal_market_forward_v1_protocol.json
@@ -471,7 +482,7 @@ jobs:
         if: always() && (steps.p2_execution.outcome == 'failure' || steps.p2_execution_smoke.outcome == 'failure' || steps.p2_execution_tests.outcome != 'success')
         run: exit 1
       - name: Fail visibly on repaired V3 P2 errors after saving evidence
-        if: always() && (steps.p2_execution_v3.outcome == 'failure' || steps.p2_execution_v3_smoke.outcome == 'failure' || steps.p2_execution_v3_tests.outcome != 'success')
+        if: always() && (steps.p2_execution_v3.outcome == 'failure' || steps.p2_execution_v3_smoke.outcome == 'failure' || steps.p2_execution_v3_tests.outcome != 'success' || steps.p2_path.outcome == 'failure')
         run: exit 1
       - name: Fail visibly on enhancement errors after preserving original evidence
         if: always() && (steps.feature_prepare.outcome == 'failure' || steps.feature_bind.outcome == 'failure' || steps.feature_publication.outcome == 'failure' || steps.feature_audit.outcome == 'failure')
