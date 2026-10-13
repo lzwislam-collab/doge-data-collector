@@ -28,6 +28,7 @@ class MinimalDirectionReportTests(unittest.TestCase):
         self.scores = []
         self.v2 = {"protocol_id":"DOGE_FORWARD_RAW_QUOTE_BOUND_V2_20261012_0200",
                    "locked_implementation_checked":True, "audited_at_utc":at(-.5),
+                   "effective_from_utc":at(-2),
                    "accuracy_70pct_validated":False,
                    "horizons":{
                      "1h":{"issuance":{"expected":10,"issued":8,"missing":2,"coverage_pct":80},
@@ -64,7 +65,7 @@ class MinimalDirectionReportTests(unittest.TestCase):
                           majority_correct="1",doge_reversal_correct="0",
                           btc_momentum_correct="1",reason="")]
         self.save()
-        self.assertEqual(evaluate(self.root,T)["horizons"]["1h"]["most_recent_due"]["result"],"错误")
+        self.assertEqual(evaluate(self.root,T+timedelta(minutes=2))["horizons"]["1h"]["most_recent_due"]["result"],"错误")
 
     def test_score_inconsistent_fails_closed(self):
         self.scores=[dict(forecast_id=self.id1,status="scored",observed_at_utc=at(minutes=1),
@@ -73,7 +74,7 @@ class MinimalDirectionReportTests(unittest.TestCase):
                           btc_momentum_correct="0",reason="")]
         self.save()
         with self.assertRaisesRegex(ValueError,"conflicts"):
-            evaluate(self.root,T)
+            evaluate(self.root,T+timedelta(minutes=2))
 
     def test_publication_not_verified_is_explicit(self):
         self.pub["new_ids"]=[]
@@ -94,8 +95,27 @@ class MinimalDirectionReportTests(unittest.TestCase):
                           realized_up="",majority_correct="",doge_reversal_correct="",
                           btc_momentum_correct="",reason="late")]
         self.save()
-        result=evaluate(self.root,T)
+        result=evaluate(self.root,T+timedelta(minutes=30))
         self.assertEqual(result["horizons"]["1h"]["most_recent_due"]["result"],"到期报价缺失")
+
+    def test_future_outcome_rejected(self):
+        self.scores=[dict(forecast_id=self.id1,status="scored",observed_at_utc=at(minutes=1),
+                          target_quote_utc=at(),target_price="0.08",realized_up="DOWN",
+                          majority_correct="1",doge_reversal_correct="0",
+                          btc_momentum_correct="1",reason="")]
+        self.save()
+        with self.assertRaisesRegex(ValueError,"future outcome"):
+            evaluate(self.root,T)
+
+    def test_prefreeze_due_prediction_not_substituted(self):
+        old=dict(self.reg[1])
+        old["forecast_id"]="legacy_24h"
+        old["issued_at_utc"]=at(-30)
+        old["source_quote_utc"]=at(-30,minutes=-1)
+        old["target_utc"]=at(-6)
+        self.reg.append(old)
+        self.save()
+        self.assertIsNone(evaluate(self.root,T)["horizons"]["24h"]["most_recent_due"])
 
     def test_future_target_and_early_score_rejected(self):
         self.reg[0]["target_utc"]=at(10)
