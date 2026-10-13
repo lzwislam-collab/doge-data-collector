@@ -1,0 +1,371 @@
+{
+  "schema_version": 4,
+  "status": "partial_or_unverified",
+  "generated_at_utc": "2026-10-13T21:09:41.024625+00:00",
+  "repository": "lzwislam-collab/doge-data-collector",
+  "checks": {
+    "whales": {
+      "workflow": ".github/workflows/whale_blocks.yml",
+      "snapshot": "data/whales_blocks/latest.json",
+      "state": "UNVERIFIED",
+      "allowed_snapshot_statuses": [
+        "ok"
+      ],
+      "scheduled_completed_last_48h": 29,
+      "scheduled_success_last_48h": 28,
+      "scheduled_failure_last_48h": 1,
+      "latest_scheduled_success": {
+        "id": 38463887031,
+        "created_at": "2026-10-13T20:34:25Z",
+        "updated_at": "2026-10-13T20:43:12Z",
+        "html_url": "https://github.com/lzwislam-collab/doge-data-collector/actions/runs/38463887031"
+      },
+      "snapshot_observed_utc": "2026-10-13T20:42:34.198446+00:00",
+      "snapshot_age_hours": 0.45,
+      "snapshot_status": "idle",
+      "reason": "Snapshot status or partial subscription quality not eligible: idle"
+    },
+    "okx_addresses": {
+      "workflow": ".github/workflows/okx_doge_balances.yml",
+      "snapshot": "data/okx_address_balances/latest.json",
+      "state": "SCHEDULE_AND_SNAPSHOT_TIME_MATCH",
+      "allowed_snapshot_statuses": [
+        "ok"
+      ],
+      "scheduled_completed_last_48h": 30,
+      "scheduled_success_last_48h": 30,
+      "scheduled_failure_last_48h": 0,
+      "latest_scheduled_success": {
+        "id": 38465450853,
+        "created_at": "2026-10-13T20:46:20Z",
+        "updated_at": "2026-10-13T20:48:03Z",
+        "html_url": "https://github.com/lzwislam-collab/doge-data-collector/actions/runs/38465450853"
+      },
+      "snapshot_observed_utc": "2026-10-13T20:47:51.335189+00:00",
+      "snapshot_age_hours": 0.36,
+      "snapshot_status": "ok",
+      "scope": "SOURCE_DEFINED_SNAPSHOT",
+      "matched_run_id": 38465450853,
+      "reason": "Schedule event, success and compatible committed snapshot timestamp; commit attribution not proven"
+    },
+    "onchain": {
+      "workflow": ".github/workflows/onchain.yml",
+      "snapshot": "data/onchain/latest.json",
+      "state": "SCHEDULE_AND_SNAPSHOT_TIME_MATCH",
+      "allowed_snapshot_statuses": [
+        "ok"
+      ],
+      "scheduled_completed_last_48h": 2,
+      "scheduled_success_last_48h": 2,
+      "scheduled_failure_last_48h": 0,
+      "latest_scheduled_success": {
+        "id": 38333336203,
+        "created_at": "2026-10-13T01:41:32Z",
+        "updated_at": "2026-10-13T01:41:45Z",
+        "html_url": "https://github.com/lzwislam-collab/doge-data-collector/actions/runs/38333336203"
+      },
+      "snapshot_observed_utc": "2026-10-13T01:41:39.909000+00:00",
+      "snapshot_age_hours": 19.47,
+      "snapshot_status": "ok",
+      "scope": "SOURCE_DEFINED_SNAPSHOT",
+      "matched_run_id": 38333336203,
+      "reason": "Schedule event, success and compatible committed snapshot timestamp; commit attribution not proven"
+    },
+    "daily_metrics": {
+      "workflow": ".github/workflows/onchain_metrics.yml",
+      "snapshot": "data/onchain/metrics_latest.json",
+      "state": "SCHEDULE_AND_SNAPSHOT_TIME_MATCH",
+      "allowed_snapshot_statuses": [
+        "ok"
+      ],
+      "scheduled_completed_last_48h": 2,
+      "scheduled_success_last_48h": 2,
+      "scheduled_failure_last_48h": 0,
+      "latest_scheduled_success": {
+        "id": 38334255400,
+        "created_at": "2026-10-13T01:53:10Z",
+        "updated_at": "2026-10-13T01:53:22Z",
+        "html_url": "https://github.com/lzwislam-collab/doge-data-collector/actions/runs/38334255400"
+      },
+      "snapshot_observed_utc": "2026-10-13T01:53:16.530565+00:00",
+      "snapshot_age_hours": 19.27,
+      "snapshot_status": "ok",
+      "scope": "SOURCE_DEFINED_SNAPSHOT",
+      "matched_run_id": 38334255400,
+      "reason": "Schedule event, success and compatible committed snapshot timestamp; commit attribution not proven"
+    }
+  },
+  "stage1_rolling_utxo": {
+    "state": "INVALID_LOCAL_DATA",
+    "local_data_integrity": "invalid",
+    "current_chain_automation_verified": false,
+    "error": "ValueError: upstream or downstream status not healthy",
+    "data_quality": {
+      "schema_version": 1,
+      "generated_at_utc": "2026-10-13T21:09:41.024625+00:00",
+      "alerts": [
+        "INVALID_LOCAL_DATA"
+      ],
+      "missing_files": [],
+      "missing_required_fields": 0,
+      "invalid_amount_events": 0,
+      "coverage_pct": 77.76,
+      "reconciled_coverage_pct": 77.76,
+      "verified_exchange_netflow": false,
+      "results_not_for_trading_signals": true,
+      "source_unique_events": 643,
+      "audited_unique_events": 500,
+      "covered_unique_events": 500,
+      "reconciled_events": 500,
+      "backlog_events": 143,
+      "pending_reconciliation_events": 143,
+      "unreconciled_events": 0,
+      "economic_ambiguity_events": 75,
+      "duplicate_source_rows": 0,
+      "duplicate_audit_rows": 0,
+      "orphan_audit_events": 0,
+      "oldest_pending_age_hours": 16.76,
+      "whale_age_hours": 0.45,
+      "utxo_age_hours": 17.16,
+      "integrity_error": "upstream or downstream status not healthy",
+      "alert_required": true,
+      "state": "alert",
+      "policy": {
+        "max_pending_age_hours": 30,
+        "max_utxo_age_hours": 30,
+        "max_whale_age_hours": 2,
+        "backlog_batch_capacity": 240,
+        "economic_ambiguity_is_informational": true
+      }
+    }
+  },
+  "stage1_rolling_utxo_chain_verified": false,
+  "stage2_status": "all_evidence_matched_with_coverage_limits",
+  "stage2_checks": {
+    "liquidations_okx": {
+      "workflow": ".github/workflows/liquidations.yml",
+      "snapshot": "data/liquidations/latest.json",
+      "state": "SCHEDULE_AND_SNAPSHOT_TIME_MATCH",
+      "allowed_snapshot_statuses": [
+        "ok"
+      ],
+      "scheduled_completed_last_48h": 30,
+      "scheduled_success_last_48h": 30,
+      "scheduled_failure_last_48h": 0,
+      "latest_scheduled_success": {
+        "id": 38466367866,
+        "created_at": "2026-10-13T20:53:19Z",
+        "updated_at": "2026-10-13T21:01:37Z",
+        "html_url": "https://github.com/lzwislam-collab/doge-data-collector/actions/runs/38466367866"
+      },
+      "snapshot_observed_utc": "2026-10-13T21:01:31.359168+00:00",
+      "snapshot_age_hours": 0.14,
+      "snapshot_status": "partial",
+      "scope": "PARTIAL_SUBSCRIPTION_ONLY_NOT_MARKET_TOTAL",
+      "matched_run_id": 38466367866,
+      "reason": "Schedule event, success and compatible committed snapshot timestamp; commit attribution not proven"
+    },
+    "liquidity_okx": {
+      "workflow": ".github/workflows/liquidity.yml",
+      "snapshot": "data/liquidity/latest.json",
+      "state": "SCHEDULE_AND_SNAPSHOT_TIME_MATCH",
+      "allowed_snapshot_statuses": [
+        "ok"
+      ],
+      "scheduled_completed_last_48h": 30,
+      "scheduled_success_last_48h": 30,
+      "scheduled_failure_last_48h": 0,
+      "latest_scheduled_success": {
+        "id": 38464727380,
+        "created_at": "2026-10-13T20:40:42Z",
+        "updated_at": "2026-10-13T20:43:46Z",
+        "html_url": "https://github.com/lzwislam-collab/doge-data-collector/actions/runs/38464727380"
+      },
+      "snapshot_observed_utc": "2026-10-13T20:40:49.356000+00:00",
+      "snapshot_age_hours": 0.48,
+      "snapshot_status": "ok",
+      "scope": "SOURCE_DEFINED_SNAPSHOT",
+      "matched_run_id": 38464727380,
+      "reason": "Schedule event, success and compatible committed snapshot timestamp; commit attribution not proven"
+    },
+    "liquidations_binance": {
+      "workflow": ".github/workflows/binance_liquidations.yml",
+      "snapshot": "data/binance_liquidations/latest.json",
+      "state": "SCHEDULE_AND_SNAPSHOT_TIME_MATCH",
+      "allowed_snapshot_statuses": [
+        "partial"
+      ],
+      "scheduled_completed_last_48h": 30,
+      "scheduled_success_last_48h": 30,
+      "scheduled_failure_last_48h": 0,
+      "latest_scheduled_success": {
+        "id": 38465001474,
+        "created_at": "2026-10-13T20:42:57Z",
+        "updated_at": "2026-10-13T20:51:35Z",
+        "html_url": "https://github.com/lzwislam-collab/doge-data-collector/actions/runs/38465001474"
+      },
+      "snapshot_observed_utc": "2026-10-13T20:51:13.497740+00:00",
+      "snapshot_age_hours": 0.31,
+      "snapshot_status": "partial",
+      "scope": "PARTIAL_SUBSCRIPTION_ONLY_NOT_MARKET_TOTAL",
+      "matched_run_id": 38465001474,
+      "reason": "Schedule event, success and compatible committed snapshot timestamp; commit attribution not proven"
+    },
+    "liquidations_bybit": {
+      "workflow": ".github/workflows/bybit_liquidations.yml",
+      "snapshot": "data/bybit_liquidations/latest.json",
+      "state": "SCHEDULE_AND_SNAPSHOT_TIME_MATCH",
+      "allowed_snapshot_statuses": [
+        "partial"
+      ],
+      "scheduled_completed_last_48h": 29,
+      "scheduled_success_last_48h": 29,
+      "scheduled_failure_last_48h": 0,
+      "latest_scheduled_success": {
+        "id": 38463477368,
+        "created_at": "2026-10-13T20:31:20Z",
+        "updated_at": "2026-10-13T20:39:32Z",
+        "html_url": "https://github.com/lzwislam-collab/doge-data-collector/actions/runs/38463477368"
+      },
+      "snapshot_observed_utc": "2026-10-13T20:39:27.788274+00:00",
+      "snapshot_age_hours": 0.5,
+      "snapshot_status": "partial",
+      "scope": "PARTIAL_SUBSCRIPTION_ONLY_NOT_MARKET_TOTAL",
+      "matched_run_id": 38463477368,
+      "reason": "Schedule event, success and compatible committed snapshot timestamp; commit attribution not proven"
+    }
+  },
+  "stage3_status": "all_evidence_matched_data_quality_unverified",
+  "stage3_checks": {
+    "btc_eth_etf": {
+      "workflow": ".github/workflows/etf_flows.yml",
+      "snapshot": "data/etf/latest.json",
+      "state": "SCHEDULE_AND_SNAPSHOT_TIME_MATCH",
+      "allowed_snapshot_statuses": [
+        "ok"
+      ],
+      "scheduled_completed_last_48h": 5,
+      "scheduled_success_last_48h": 5,
+      "scheduled_failure_last_48h": 0,
+      "latest_scheduled_success": {
+        "id": 38409625516,
+        "created_at": "2026-10-13T14:00:09Z",
+        "updated_at": "2026-10-13T14:00:26Z",
+        "html_url": "https://github.com/lzwislam-collab/doge-data-collector/actions/runs/38409625516"
+      },
+      "snapshot_observed_utc": "2026-10-13T14:00:22.368555+00:00",
+      "snapshot_age_hours": 7.16,
+      "snapshot_status": "ok",
+      "scope": "SOURCE_DEFINED_SNAPSHOT",
+      "matched_run_id": 38409625516,
+      "reason": "Schedule event, success and compatible committed snapshot timestamp; commit attribution not proven"
+    }
+  },
+  "stage4_status": "all_evidence_matched_with_pit_limits",
+  "stage4_checks": {
+    "fred_macro": {
+      "workflow": ".github/workflows/macro.yml",
+      "snapshot": "data/macro/latest.json",
+      "state": "SCHEDULE_AND_SNAPSHOT_TIME_MATCH",
+      "allowed_snapshot_statuses": [
+        "ok"
+      ],
+      "scheduled_completed_last_48h": 4,
+      "scheduled_success_last_48h": 4,
+      "scheduled_failure_last_48h": 0,
+      "latest_scheduled_success": {
+        "id": 38425058825,
+        "created_at": "2026-10-13T15:47:26Z",
+        "updated_at": "2026-10-13T15:47:40Z",
+        "html_url": "https://github.com/lzwislam-collab/doge-data-collector/actions/runs/38425058825"
+      },
+      "snapshot_observed_utc": "2026-10-13T15:47:35.494512+00:00",
+      "snapshot_age_hours": 5.37,
+      "snapshot_status": "ok",
+      "scope": "SOURCE_DEFINED_SNAPSHOT",
+      "matched_run_id": 38425058825,
+      "reason": "Schedule event, success and compatible committed snapshot timestamp; commit attribution not proven"
+    },
+    "fed_bls_calendar": {
+      "workflow": ".github/workflows/policy_events.yml",
+      "snapshot": "data/policy_events/latest.json",
+      "state": "SCHEDULE_AND_SNAPSHOT_TIME_MATCH",
+      "allowed_snapshot_statuses": [
+        "ok"
+      ],
+      "scheduled_completed_last_48h": 4,
+      "scheduled_success_last_48h": 4,
+      "scheduled_failure_last_48h": 0,
+      "latest_scheduled_success": {
+        "id": 38414680800,
+        "created_at": "2026-10-13T14:35:34Z",
+        "updated_at": "2026-10-13T14:35:49Z",
+        "html_url": "https://github.com/lzwislam-collab/doge-data-collector/actions/runs/38414680800"
+      },
+      "snapshot_observed_utc": "2026-10-13T14:35:42.725338+00:00",
+      "snapshot_age_hours": 6.57,
+      "snapshot_status": "ok",
+      "scope": "SOURCE_DEFINED_SNAPSHOT",
+      "matched_run_id": 38414680800,
+      "reason": "Schedule event, success and compatible committed snapshot timestamp; commit attribution not proven"
+    },
+    "cftc_regulatory": {
+      "workflow": ".github/workflows/regulatory_events.yml",
+      "snapshot": "data/regulatory_events/latest.json",
+      "state": "SCHEDULE_AND_SNAPSHOT_TIME_MATCH",
+      "allowed_snapshot_statuses": [
+        "ok"
+      ],
+      "scheduled_completed_last_48h": 4,
+      "scheduled_success_last_48h": 4,
+      "scheduled_failure_last_48h": 0,
+      "latest_scheduled_success": {
+        "id": 38427553664,
+        "created_at": "2026-10-13T16:05:01Z",
+        "updated_at": "2026-10-13T16:05:17Z",
+        "html_url": "https://github.com/lzwislam-collab/doge-data-collector/actions/runs/38427553664"
+      },
+      "snapshot_observed_utc": "2026-10-13T16:05:11.535901+00:00",
+      "snapshot_age_hours": 5.07,
+      "snapshot_status": "ok",
+      "scope": "SOURCE_DEFINED_SNAPSHOT",
+      "matched_run_id": 38427553664,
+      "reason": "Schedule event, success and compatible committed snapshot timestamp; commit attribution not proven"
+    },
+    "sec_regulatory": {
+      "workflow": ".github/workflows/sec_events.yml",
+      "snapshot": "data/sec_events/latest.json",
+      "state": "SCHEDULE_AND_SNAPSHOT_TIME_MATCH",
+      "allowed_snapshot_statuses": [
+        "ok"
+      ],
+      "scheduled_completed_last_48h": 4,
+      "scheduled_success_last_48h": 4,
+      "scheduled_failure_last_48h": 0,
+      "latest_scheduled_success": {
+        "id": 38432577654,
+        "created_at": "2026-10-13T16:41:31Z",
+        "updated_at": "2026-10-13T16:41:43Z",
+        "html_url": "https://github.com/lzwislam-collab/doge-data-collector/actions/runs/38432577654"
+      },
+      "snapshot_observed_utc": "2026-10-13T16:41:38.172453+00:00",
+      "snapshot_age_hours": 4.47,
+      "snapshot_status": "ok",
+      "scope": "SOURCE_DEFINED_SNAPSHOT",
+      "matched_run_id": 38432577654,
+      "reason": "Schedule event, success and compatible committed snapshot timestamp; commit attribution not proven"
+    }
+  },
+  "stage4_historical_release_vintages_verified": false,
+  "stage4_regulatory_feed_is_comprehensive": false,
+  "stage3_etf_data_history_complete": false,
+  "stage3_etf_backfill_point_in_time_verified": false,
+  "stage2_verified_market_wide_liquidations": false,
+  "stage2_coverage_note": "Scheduled partial exchange notification windows are NOT 24-hour or market-wide liquidation totals; CoinGlass unavailable due to paid plan.",
+  "limitations": [
+    "Run event and snapshot timestamp alignment does not prove causal commit attribution",
+    "Scheduled runs may be delayed or skipped by GitHub",
+    "Do not infer real exchange netflow from address balance samples",
+    "Partial liquidation observation windows may miss forced liquidations and are not representative of 24h totals"
+  ]
+}
