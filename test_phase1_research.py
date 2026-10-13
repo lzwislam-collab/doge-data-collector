@@ -54,6 +54,14 @@ class ResearchTests(unittest.TestCase):
         self.assertEqual(a,before)
         self.assertEqual(a['mean'],[2.,3.])
 
+    def test_machine_epsilon_does_not_change_saved_experiment(self):
+        m=self.module()
+        self.assertEqual(m.encode({'weight':.12345678901231}),m.encode({'weight':.1234567890123101}))
+        self.assertEqual(m.predict({'mean':[0.],'scale':[1.],'weights':[0.],'intercept':0.},[[1.]]),[.5])
+        model=m.fit(np.array([[.1234567890123],[.4234567890123],[.6234567890123]]),np.array([0,1,1]),self.policy())
+        for key in ('mean','scale','weights'):
+            self.assertTrue(all(v==round(v,12) for v in model[key]))
+
     def test_future_mutation_cannot_change_earlier_features(self):
         m=self.module();f=self.frame();a=m.features(f,1,'candle_close_research')
         f['DOGE-USDT']['close'][300:]=[10000]*100

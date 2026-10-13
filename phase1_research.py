@@ -79,7 +79,7 @@ def features(frame,h,mode):
            float(np.max(ld[i-24:i+1])-np.min(ld[i-24:i+1])),v[i]/prior_volume-1,
            lb[i]-lb[i-1],lb[i]-lb[i-4],lb[i]-lb[i-24]]
         rows[i]={'index':i,'event_id':str(anchor)+'_'+str(h),'anchor_ms':anchor,
-                 'label_end_ms':t[i+h]+3600000,'x':[float(q) for q in x],
+                 'label_end_ms':t[i+h]+3600000,'x':[round(float(q),12) for q in x],
                  'label_available_ms':max(t[i+h]+3600000,frame['DOGE-USDT']['seen'][i+h] or 10**30)
                                      if mode=='receipt_time' else t[i+h]+3600000,
                  'y':int(d[i+h]>d[i]),'frozen_direction':int(d[i]<=d[i-h]),
@@ -97,13 +97,14 @@ def fit(x,y,p):
         pred=1/(1+np.exp(-np.clip(z@w+intercept,-30,30)));error=pred-y
         w-=p['learning_rate']*(z.T@error/len(x)+p['l2']*w)
         intercept-=p['learning_rate']*float(error.mean())
-    return {'mean':mean.tolist(),'scale':scale.tolist(),'weights':w.tolist(),'intercept':intercept,
+    return {'mean':canonical(mean.tolist()),'scale':canonical(scale.tolist()),
+            'weights':canonical(w.tolist()),'intercept':round(intercept,12),
             'n_train':len(x),'probability_calibration_validated':False}
 
 
 def predict(model,x):
     z=np.clip((np.asarray(x,dtype=float)-model['mean'])/model['scale'],-10,10)
-    return (1/(1+np.exp(-np.clip(z@np.asarray(model['weights'])+model['intercept'],-30,30)))).tolist()
+    return canonical((1/(1+np.exp(-np.clip(z@np.asarray(model['weights'])+model['intercept'],-30,30)))).tolist())
 
 
 def metrics(events,name):
@@ -197,7 +198,21 @@ def experiment(frame,p):
     return result
 
 
-def encode(value):return (json.dumps(value,sort_keys=True,indent=2,allow_nan=False)+'\n').encode()
+def canonical(value):
+    """Versioned 12-place contract, far below market measurement noise.
+
+    Features/models/probabilities are quantized before downstream use so saved
+    directions and metrics use the saved values. Never round timestamps/IDs.
+    """
+    if isinstance(value,float):
+        if not math.isfinite(value):raise ValueError('nonfinite artifact value')
+        return round(value,12)+0.0
+    if isinstance(value,list):return [canonical(v) for v in value]
+    if isinstance(value,dict):return {k:canonical(v) for k,v in value.items()}
+    return value
+
+
+def encode(value):return (json.dumps(canonical(value),sort_keys=True,indent=2,allow_nan=False)+'\n').encode()
 
 
 def register(directory,record):
