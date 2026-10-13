@@ -56,6 +56,9 @@ on:
       - 'test_p2_paired_execution_v3_1_regressions.py'
       - 'p2_path_quality.py'
       - 'test_p2_path_quality.py'
+      - 'p1_regime_forward_v1.py'
+      - 'test_p1_regime_forward_v1.py'
+      - 'data/stage5/p1_regime_forward_v1_protocol.json'
       - 'p2_locked_forward_v1.py'
       - 'test_p2_locked_forward_v1.py'
       - 'data/stage5/p2_locked_forward_v1_protocol.json'
@@ -291,9 +294,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          python -m unittest -q test_minimal_market_candidate test_minimal_market_forward test_minimal_market_workflow test_p2_economic_acceptance
+          python -m unittest -q test_minimal_market_candidate test_minimal_market_forward test_minimal_market_workflow test_p2_economic_acceptance test_p1_regime_forward_v1
           python minimal_market_forward.py audit
           python p2_economic_acceptance.py
+          python p1_regime_forward_v1.py
       - name: Audit isolated feature comparisons and net economics
         id: feature_audit
         if: always() && steps.operations.outcome == 'success'
@@ -367,6 +371,7 @@ jobs:
           if [ -d data/p2_paired_execution_v3_1 ]; then git add -f data/p2_paired_execution_v3_1; fi
           if [ -d data/p2_path_quality ]; then git add -f data/p2_path_quality; fi
           if [ -d data/p2_locked_forward_v1 ]; then git add -f data/p2_locked_forward_v1; fi
+          if [ -d data/p1_regime_forward_v1 ]; then git add -f data/p1_regime_forward_v1; fi
           if [ -f reports/DOGE_P2_PAIRED_EXECUTION_V3_1.md ]; then git add -f reports/DOGE_P2_PAIRED_EXECUTION_V3_1.md; fi
           if [ -d data/derived_4h_v1 ]; then git add -f data/derived_4h_v1; fi
           if [ -d data/feature_ablation_v1 ]; then git add -f data/feature_ablation_v1; fi
@@ -424,6 +429,8 @@ jobs:
             data/p2_paired_execution_v3_1/
             data/p2_path_quality/
             data/p2_locked_forward_v1/
+            data/p1_regime_forward_v1/
+            data/stage5/p1_regime_forward_v1_protocol.json
             data/stage5/p2_locked_forward_v1_protocol.json
             data/minimal_market_forward_v1/
             data/p2_economic_acceptance_v1/
