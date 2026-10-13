@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "audit_id": "DOGE_P0_P1_P2_LIVE_EXECUTION_REVIEW_20261013",
+  "status": "REVISE_ENGINEERING_RUNTIME_OBSERVED_P0_WINDOW_P1_EDGE_P2_ECONOMICS_NOT_ACCEPTED",
+  "evidence_cutoff_utc": "2026-10-13T09:26:35Z",
+  "non_mutation_scope": "Evidence-based execution and audit only. Frozen forecasts, model parameters, pre-registrations, scores, triggers, and trading rules unchanged.",
+  "source_refs": {
+    "p0": "data/p0_operations/latest.json",
+    "p1": "data/stage5/forward_validation_v2/latest.json",
+    "p1_paired": "data/paired_forward_v1/audit_latest.json",
+    "p1_vote": "data/stage5/p1_model_league/latest.json",
+    "p1_adaptive": "data/stage5/p1_adaptive_v2/latest.json",
+    "p2": "data/p2_economic_acceptance_v1/latest.json",
+    "workflow": "https://github.com/lzwislam-collab/doge-data-collector/actions/runs/38375591961",
+    "evidence_artifact_id": 11801026548
+  },
+  "p0": {
+    "source_audited_at_utc": "2026-10-13T09:21:13.163486Z",
+    "issuer_1h": {
+      "expected": 31,
+      "issued": 26,
+      "missing": 5,
+      "coverage_pct": 83.87096774193549,
+      "rolling_7d_target_pct": 90,
+      "status": "WAIT_ROLLING_WINDOW"
+    },
+    "quote_1h": {
+      "due": 25,
+      "valid": 25,
+      "coverage_pct": 100,
+      "status": "OBSERVED_PASS_NOT_7DAY_ACCEPTANCE"
+    },
+    "issuer_24h": {
+      "expected": 1,
+      "issued": 1,
+      "coverage_pct": 100,
+      "status": "WAIT_ROLLING_WINDOW"
+    },
+    "quote_24h": {
+      "due": 1,
+      "valid": 1,
+      "coverage_pct": 100,
+      "status": "INSUFFICIENT_TIME_SPAN"
+    },
+    "original_effective_from_utc": "2026-10-12T02:00:00Z",
+    "earliest_possible_full_7d_observation_utc": "2026-10-19T02:00:00Z",
+    "hourly_source_rows_per_symbol": 26655,
+    "checked_symbols": [
+      "DOGE-USDT",
+      "BTC-USDT",
+      "ETH-USDT"
+    ],
+    "source_missing_hours_between_endpoints": 0,
+    "rejected_evidence_count": 0,
+    "recent_scheduled_run": {
+      "id": 38375591961,
+      "conclusion": "success",
+      "created_at_utc": "2026-10-13T09:20:24Z",
+      "evidence_artifact_id": 11801026548
+    },
+    "assessment": "Current latest run succeeded with genuine issuance and scoring evidence. Historical 5 missing windows remain immutable; cannot repair their historical scores. Roll-forward coverage needs future actual executions and seven full days."
+  },
+  "p1": {
+    "score_audited_at_utc": "2026-10-13T09:21:04.567554Z",
+    "frozen_1h_nonoverlap": {
+      "n": 13,
+      "doge_reversal_correct": 6,
+      "accuracy_pct": 46.15384615384615,
+      "always_down_correct": 8,
+      "always_down_accuracy_pct": 61.53846153846154
+    },
+    "paired_challenger_1h_all": {
+      "n": 16,
+      "challenger_accuracy_pct": 37.5,
+      "frozen_on_same_pairs_pct": 43.75
+    },
+    "adaptive_v2_effective_from_utc": "2026-10-14T00:00:00Z",
+    "min_prospective_nonoverlap_scored_for_review": 100,
+    "precommit_baselines_and_regimes_required": true,
+    "production_model_promotion_allowed": false,
+    "edge_proven": false,
+    "assessment": "Existing same-event comparator, challenger, forecast abstention, forward score and calibration research are deployed. No credible superiority or calibrated 70% performance shown."
+  },
+  "p2": {
+    "audit_at_utc": "2026-10-13T09:21:31.587320Z",
+    "status": "WAIT",
+    "one_hour": {
+      "strategy_net_pct": 0,
+      "hold_net_pct": 2.6801980564489902,
+      "cash_net_pct": 0,
+      "extra_path_gap_present": true
+    },
+    "twentyfour_hour": {
+      "complete_economic_intervals": 0
+    },
+    "cost_model": "Existing V3.1 supports fee/spread/slippage and double-cost stress, hypotheticals only.",
+    "economic_edge_validated": false,
+    "assessment": "Zero transactions with 0% strategy return cannot establish positive trading edge; cash and hold comparisons and tail source gaps remain blockers."
+  },
+  "quality_gates": {
+    "no_retrospective_prediction_backfill": true,
+    "no_frozen_model_change": true,
+    "no_new_schedule_trigger": true,
+    "no_p1_p2_claim_on_test_success": true,
+    "complete_point_in_time_validation": false,
+    "external_immutable_retention_verified": false,
+    "production_7d_p0_accepted": false,
+    "model_70pct_validated": false,
+    "spot_profitability_validated": false
+  },
+  "next_actual_acceptance": [
+    "Continue existing cron; require a future 7-day window with >=90% issuer AND genuine scored quote coverage separately.",
+    "Accumulate >=100 valid future nonoverlapping directional scores per requested horizon with precommitted baselines, regimes and probability-calibration testing.",
+    "Accumulate >=30 days and >=100 matured economic intervals without path gaps, compare net returns versus cash and hold under nominal and stressed costs."
+  ]
+}
