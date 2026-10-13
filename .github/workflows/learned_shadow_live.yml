@@ -1,0 +1,62 @@
+name: Publish frozen learned DOGE shadow candidates
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ['Backfill DOGE BTC ETH 1H extreme-event research history', 'Audit future learned DOGE shadow candidate registration']
+    types: [completed]
+permissions:
+  contents: write
+  actions: write
+concurrency:
+  group: okx-hourly-extreme-history
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.event != 'pull_request')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    env:
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install numpy==2.3.5
+      - name: Guard original production journal before adapter writes
+        run: python forward_validation_v2.py --integrity-only
+      - name: Capture real due targets and current planned candidates
+        id: runtime
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          EVENT_WITNESS_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: python learned_shadow_runtime.py publish
+      - name: Append isolated candidate journal; reject concurrent main changes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if [ -d data/learned_shadow_v1 ]; then git add -f data/learned_shadow_v1; fi
+          if ! git diff --cached --quiet; then
+            git commit -m 'data: append actual-clock learned shadow evidence'
+            git push origin HEAD:main
+          fi
+      - name: Explicitly dispatch exact-byte server witness after successful publication
+        if: steps.runtime.outputs.request_witness == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python learned_shadow_runtime.py dispatch
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: learned-shadow-runtime-${{ github.run_id }}-${{ github.run_attempt }}
+          path: learned-shadow-runtime-output/
+          if-no-files-found: warn
+          retention-days: 90
+      - name: Report isolated failures after first records were preserved
+        if: steps.runtime.outputs.has_errors == 'true'
+        run: exit 1
