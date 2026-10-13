@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "audit_id": "DOGE_P1_RELATIVE_VOL_REGIME_DEPLOYMENT_20261013",
+  "evidence_cutoff_utc": "2026-10-13T11:20:00Z",
+  "verdict": "ENGINEERING_CI_AND_PREACTIVATION_MAIN_WORKFLOW_VERIFIED_FUTURE_EDGE_WAIT",
+  "rationale": "Official V2 1h fixed nonoverlap 6/14=42.86%, BTC momentum 8/14=57.14%, always down 9/14=64.29% on same events; do not pick winner after observing these data.",
+  "source": {
+    "official": "data/stage5/forward_validation_v2/latest.json",
+    "source_audited_at_utc": "2026-10-13T11:19:23.218515+00:00",
+    "p0_audited_at_utc": "2026-10-13T11:19:31.438640+00:00",
+    "original_scored_1h_nonoverlap": 14,
+    "original_reversal_correct": 6,
+    "btc_momentum_correct": 8,
+    "always_down_correct": 9,
+    "issuer_coverage_1h": "28/33=84.85%",
+    "quote_coverage_pct": 100
+  },
+  "implementation": {
+    "pr_url": "https://github.com/lzwislam-collab/doge-data-collector/pull/24",
+    "merge_commit": "317e1b44898b6c6e153b284d69d515113bd19bae",
+    "CI_run_id": 38389257815,
+    "CI_passed": true,
+    "CI_tests_passed": 636,
+    "deployed_main_run_id": 38389338789,
+    "deployed_trigger": "push",
+    "deployed_workflow_conclusion": "success",
+    "research_step_conclusion": "success",
+    "evidence_artifact_id": 11808635468,
+    "output": "data/p1_regime_forward_v1/latest.json",
+    "output_readback_verified": true,
+    "output_status": "WAIT_ACTIVATION",
+    "code_blob_sha": "6ddcf73587f0ed2a3492cbfdbaa2cca4b9d96845",
+    "original_production_model_unchanged": true,
+    "no_new_triggers": true,
+    "model_scores_were_not_backfilled": true
+  },
+  "protocol": {
+    "id": "DOGE_P1_RELATIVE_VOL_REGIME_V1_20261014",
+    "effective_from_utc": "2026-10-14T00:00:00+00:00",
+    "ex_ante_inputs": [
+      "BTC/DOGE 1h return",
+      "BTC/DOGE 24h return",
+      "relative 24h momentum",
+      "24h realized volatility",
+      "DOGE relative volume"
+    ],
+    "algorithm": "Fixed, no-fitted standardized relative-volatility direction rule with predeclared high-volatility regime weight",
+    "source_publication": "reuses verified original minimal market prepared context",
+    "scoring": "same original official V2 quote and preselected nonoverlap ID; missing-as-wrong and balanced recall also tracked",
+    "no_probabilities": true,
+    "no_auto_promotion": true,
+    "future_review_minimum_nonoverlap_samples_per_horizon": 100,
+    "economic_edge_claim_allowed": false
+  },
+  "acceptance": {
+    "code_and_CI_passed": true,
+    "activation_after_2026_10_14_0000_utc": false,
+    "genuine_postactivation_issuance_verified": false,
+    "independent_forecast_gain_verified": false,
+    "calibrated_probability_verified": false,
+    "performance_70pct_verified": false,
+    "PIT_complete": false,
+    "external_WORM_verified": false
+  },
+  "limitations": [
+    "A fixed rule derived from pretarget issued and published inputs is a shadow signal; not an independently issued original prediction row.",
+    "Weights were predeclared as an exploratory hypothesis, not historically optimized or empirically superior.",
+    "GitHub edit access remains mutable without external WORM; future source witness and outcome audit require further runs.",
+    "No valid samples exist until model effective time; engineering PASS does not establish a predictive edge."
+  ]
+}
