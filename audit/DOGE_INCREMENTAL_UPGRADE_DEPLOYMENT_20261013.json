@@ -1,0 +1,159 @@
+{
+  "schema_version": 1,
+  "audit_id": "DOGE_INCREMENTAL_UPGRADE_DEPLOYMENT_20261013",
+  "checked_at_utc": "2026-10-13 00:50:29 UTC",
+  "pr_url": "https://github.com/lzwislam-collab/doge-data-collector/pull/15",
+  "pr_head": "e9043b0daabf291b77fef299dd83045a83348a14",
+  "merge_commit": "d284b9101bd6a9e2c99a91520e3664f75b54f35d",
+  "readback_commit": "6563c879c714af94be9e94aea541356bf9da31ab",
+  "local_tests_passed": 569,
+  "remote_ci": {
+    "full_suite": {
+      "run_id": 38327865530,
+      "status": "success",
+      "tests_passed": 569,
+      "market_preparation": "PREPARED_NOT_ISSUED",
+      "frozen_v2_integrity": "passed"
+    },
+    "risk_gates": {
+      "run_id": 38327865508,
+      "status": "success"
+    }
+  },
+  "production_execution": {
+    "run_id": 38328718004,
+    "job_id": 115073311686,
+    "event": "push",
+    "status": "success",
+    "critical_steps": [
+      {
+        "name": "Fail closed before writes on full-history or frozen protocol mutation",
+        "conclusion": "success"
+      },
+      {
+        "name": "Fast-refresh confirmed 1H bars before prediction issuance",
+        "conclusion": "success"
+      },
+      {
+        "name": "Prepare isolated minimal market rules before existing issuance",
+        "conclusion": "success"
+      },
+      {
+        "name": "Bind only new originals to independent minimal market rules",
+        "conclusion": "success"
+      },
+      {
+        "name": "Read back minimal contexts from the same original publication",
+        "conclusion": "success"
+      },
+      {
+        "name": "Capture public paired decisions into independent P2 spot paper portfolios",
+        "conclusion": "success"
+      },
+      {
+        "name": "Test independent P2 chronology costs benchmarks and immutable evidence",
+        "conclusion": "success"
+      },
+      {
+        "name": "Capture independent repaired V3 P2 paper evidence",
+        "conclusion": "success"
+      },
+      {
+        "name": "Audit minimal future pairs and independent P2 acceptance",
+        "conclusion": "success"
+      },
+      {
+        "name": "Persist data and diagnostics",
+        "conclusion": "success"
+      },
+      {
+        "name": "Fail visibly on independent P2 execution or verification errors after evidence is saved",
+        "conclusion": "skipped"
+      },
+      {
+        "name": "Fail visibly on repaired V3 P2 errors after saving evidence",
+        "conclusion": "skipped"
+      },
+      {
+        "name": "Fail visibly on independent minimal market errors after saving evidence",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  "p0": {
+    "audited_at_utc": "2026-10-13T00:44:48.899925+00:00",
+    "issuance_expected": 22,
+    "issuance_verified": 17,
+    "historical_missing": 5,
+    "issuance_coverage_pct": 77.27272727272727,
+    "due_targets": 17,
+    "verified_targets": 17,
+    "raw_target_coverage_pct": 100,
+    "rolling_coverage_accepted": false
+  },
+  "market_data": {
+    "source": "OKX public history-candles, 1H, confirm=1",
+    "status": "partial_backfill",
+    "inserted": 0,
+    "quality": {
+      "symbols": {
+        "DOGE-USDT": {
+          "hours": 24146,
+          "earliest_utc": "2024-01-10T22:00:00+00:00",
+          "last_confirmed_start_utc": "2026-10-12T23:00:00+00:00",
+          "missing_hours_between_endpoints": 0
+        },
+        "BTC-USDT": {
+          "hours": 24146,
+          "earliest_utc": "2024-01-10T22:00:00+00:00",
+          "last_confirmed_start_utc": "2026-10-12T23:00:00+00:00",
+          "missing_hours_between_endpoints": 0
+        },
+        "ETH-USDT": {
+          "hours": 24146,
+          "earliest_utc": "2024-01-10T22:00:00+00:00",
+          "last_confirmed_start_utc": "2026-10-12T23:00:00+00:00",
+          "missing_hours_between_endpoints": 0
+        }
+      },
+      "duplicate_keys": 0
+    },
+    "archive_complete": false
+  },
+  "minimal_candidate": {
+    "status": "WAIT_ACTIVATION",
+    "activation_utc": "2026-10-13T03:00:00+00:00",
+    "registered_contexts": 0,
+    "new_contexts": 0,
+    "preregistration_server_witness_verified": true,
+    "witness": {
+      "created_at": "2026-10-13T00:44:19Z",
+      "head_sha": "d284b9101bd6a9e2c99a91520e3664f75b54f35d",
+      "id": 38328718004
+    },
+    "public_history_readback_does_not_mean_new_samples": true
+  },
+  "p2": {
+    "audited_at_utc": "2026-10-13T00:45:04.485232+00:00",
+    "status": "WAIT",
+    "books": 3,
+    "matured_intervals_1h": 0,
+    "matured_intervals_24h": 0,
+    "path_gap_count_each_horizon": 1,
+    "eligible_for_independent_paper_review_only": false,
+    "account_level_fills_and_fees_verified": false,
+    "continuous_drawdown_verified": false
+  },
+  "automation": {
+    "existing_cron_unchanged": "7,17,27,37,47,57 * * * *",
+    "new_triggers_created": false,
+    "first_post_upgrade_schedule_run_verified": false,
+    "last_prior_schedule_run_id": 38328223817,
+    "remaining": "Need observe an event=schedule run using merged code and read back its outputs; this push execution alone is not automatic-collection acceptance"
+  },
+  "real_orders_authorized": false,
+  "model_promotion_authorized": false,
+  "dca_changed": false,
+  "validated_70pct": false,
+  "profitability_validated": false
+}
