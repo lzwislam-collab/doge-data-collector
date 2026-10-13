@@ -1,0 +1,63 @@
+name: DOGE Phase1 reproducible factor research
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, 'research/phase1-*']
+    paths:
+      - 'phase1_research*.py'
+      - 'test_phase1_research.py'
+      - 'config/phase1_research_v1.json'
+      - 'research/phase1_v1/**'
+      - '.github/workflows/phase1_research.yml'
+  pull_request:
+    paths:
+      - 'phase1_research*.py'
+      - 'test_phase1_research.py'
+      - 'config/phase1_research_v1.json'
+      - 'research/phase1_v1/**'
+      - '.github/workflows/phase1_research.yml'
+permissions:
+  contents: read
+concurrency:
+  group: phase1-research-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  research:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONUTF8: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install fixed research runtime
+        run: python -m pip install numpy==2.3.5
+      - name: Full regression including frozen production guards
+        run: python -m unittest discover -q
+      - name: Check frozen production implementation
+        run: python forward_validation_v2.py --integrity-only
+      - name: Prepare protected source snapshot
+        # The permanent baseline records old code, protocol and ledger bytes.
+        # Scheduled data may advance on main; run on the frozen source commit
+        # plus this change, never silently replace the research input snapshot.
+        run: python phase1_research_snapshot.py --out "$RUNNER_TEMP/phase1-input"
+      - name: Run fixed-budget historical research
+        run: python phase1_research.py --source "$RUNNER_TEMP/phase1-input" --out phase1-output
+      - name: Preserve reproducible results and WAIT receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: doge-phase1-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            phase1-output/
+            config/phase1_research_v1.json
+            research/phase1_v1/
+          if-no-files-found: error
+          retention-days: 90

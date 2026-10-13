@@ -1,0 +1,63 @@
+name: Audit future learned DOGE shadow candidate registration
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, 'research/phase1-*']
+    paths:
+      - 'learned_shadow*.py'
+      - 'test_learned_shadow*.py'
+      - 'config/learned_shadow_v1.json'
+      - 'research/learned_shadow_v1/**'
+      - 'system/learned_shadow_v1_registry.json'
+      - '.github/workflows/learned_shadow_v1.yml'
+  pull_request:
+    paths:
+      - 'learned_shadow*.py'
+      - 'test_learned_shadow*.py'
+      - 'config/learned_shadow_v1.json'
+      - 'research/learned_shadow_v1/**'
+      - 'system/learned_shadow_v1_registry.json'
+      - '.github/workflows/learned_shadow_v1.yml'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: learned-shadow-audit-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONUTF8: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install numpy==2.3.5
+      - name: Full regression and frozen production history
+        run: |
+          python -m unittest discover -q
+          python forward_validation_v2.py --integrity-only
+      - name: Audit exact future bundle and probe raw public quote without predictions
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python learned_shadow_bundle.py probe --out stage2-output
+      - name: Preserve full audit and failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: doge-learned-shadow-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            stage2-output/
+            config/learned_shadow_v1.json
+            system/learned_shadow_v1_registry.json
+            research/learned_shadow_v1/
+          if-no-files-found: error
+          retention-days: 90
