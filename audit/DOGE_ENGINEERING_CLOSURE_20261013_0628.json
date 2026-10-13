@@ -1,0 +1,262 @@
+{
+  "schema_version": 1,
+  "audit_id": "DOGE_ENGINEERING_CLOSURE_20261013_0628",
+  "audited_at_utc": "2026-10-13T06:29:30Z",
+  "repository": "lzwislam-collab/doge-data-collector",
+  "version_id": "DOGE_ENGINEERING_CLOSURE_V1_20261013_0628",
+  "status": "CODE_AND_FAULT_TESTS_ACCEPTED_PRODUCTION_ACCEPTANCE_PENDING",
+  "accepted_scope": "Reviewed engineering code and isolated normal/failure-path tests; observed deployed zero-new publication/scoring/archive execution.",
+  "engineering_code_and_fault_tests_accepted": true,
+  "full_production_acceptance": false,
+  "all_project_acceptance": false,
+  "code_sha256_lf": {
+    ".github/workflows/okx_hourly_extreme_history.yml": "1393ffe10b8e95e177d07b9baff2f3b9825b834b2b805a9cd7bd69073deebab3",
+    ".github/workflows/doge_engineering_completion.yml": "7c26a9e1d899658f7c2c62086aec299f19d9dc8b1cced9cb282740a14eb0baa4",
+    ".github/workflows/test_forward_validation.yml": "18a350072d17065c61637cbe30360e2ffa8289064a7bd3ac51092d91a0fa4c2d",
+    "publication_recovery.py": "a63550a3674367ef418231fa1a54fd1257a3dc966617aa2676f9d7391f53ef61",
+    "engineering_run_receipt.py": "10bc9266b885afb12eb40fd6356e15913cd2a9dfd753bc2647162080e5b3a577",
+    "direction_lateness_gate.py": "d1134c3e1b584ac7e605cf8e79620899c12ac0cfb5114548b1224cafe0cd7d1d",
+    "pit_retention_preparation.py": "a580dc4a91128ce6cd7692a1dd1213be14aa8bdce42d7b4ae2bd14bdf896671e",
+    "feature_publication_gate.py": "11842c33803d900ee79951aaaf34a9921bf7e3134ee1ebc63ba0fc9d6aed395b"
+  },
+  "deployed_code_exact_readback_verified": [
+    "pit_retention_preparation.py",
+    ".github/workflows/test_forward_validation.yml",
+    "direction_lateness_gate.py",
+    ".github/workflows/okx_hourly_extreme_history.yml",
+    "publication_recovery.py",
+    ".github/workflows/doge_engineering_completion.yml",
+    "engineering_run_receipt.py",
+    "feature_publication_gate.py"
+  ],
+  "commits": {
+    "pr20": "12d4ba96c1705c398dffa6c5ba10a1247c487858",
+    "pr21": "9faae91061d52100c8a11eb5e815bbc5735c157b"
+  },
+  "pull_requests": [
+    "https://github.com/lzwislam-collab/doge-data-collector/pull/20",
+    "https://github.com/lzwislam-collab/doge-data-collector/pull/21"
+  ],
+  "fixed_findings": [
+    {
+      "id": "AUTHENTICATED_MINIMAL_AUDIT",
+      "status": "已修复",
+      "evidence": "Missing GITHUB_TOKEN regression failed before workflow environment fix; authenticated deployed minimal audit passed."
+    },
+    {
+      "id": "PUBLICATION_RECOVERY_WITNESS",
+      "status": "已修复",
+      "evidence": "Real local Git push exhaustion/recovery and push-success/readback-failure/retry tests pass. Read-only witness dispatch follows verified publication, including duplicate recovery."
+    },
+    {
+      "id": "TERMINAL_TIMEOUT_OBSERVABILITY",
+      "status": "已修复",
+      "evidence": "Independent workflow_run completion receipt; simulated timeout/cancellation loss remains explicit. Actual independent receipts and downloaded contents verified.",
+      "unpersisted_bytes_recovered": false
+    },
+    {
+      "id": "CURRENT_ATTEMPT_LATENESS_WAIVER",
+      "status": "已修复",
+      "evidence": "Ephemeral run anchor, genuine current issue receipt and recomputed feature clock required; stale receipts/transport/partial issuance/paired errors rejected. Real historical benign-late receipt rechecked without rewriting history."
+    }
+  ],
+  "review": {
+    "independent": true,
+    "remaining_identified_p0_p1_code_blockers": 0,
+    "scope": "Unified changes plus final current-attempt gate; cannot prove absence of every possible future defect."
+  },
+  "tests": {
+    "framework": "unittest discover",
+    "linux": {
+      "run_id": 38356158860,
+      "job_id": 115159427427,
+      "tests": 617,
+      "skipped": 0,
+      "status": "PASS",
+      "head_sha": "63aaee347587cae47883da18b10b91fc6e4d07ae",
+      "frozen_full_history_integrity": "PASS"
+    },
+    "production_fault_injection_performed": false
+  },
+  "scenario_matrix": [
+    {
+      "scenario": "normal new forecast",
+      "test": "test_minimal_market_forward.ForwardTests.test_real_new_original_receives_fixed_prepared_directions_only; PublishTests.test_new_prediction_is_published_and_remote_bytes_match",
+      "status": "PASS_ISOLATED_TESTS",
+      "production_new_forecast_on_final_version": false
+    },
+    {
+      "scenario": "zero new forecasts",
+      "test": "PublicationFaultTests duplicate and real deployed zero-new run",
+      "status": "PASS_TESTS_AND_PRODUCTION",
+      "new_prediction_claimed": false
+    },
+    {
+      "scenario": "timeout",
+      "test": "TransportFaultTests bounded timeout; DailyTests pending receipt/finalizer; CompletionReceiptTests terminal timeout",
+      "status": "PASS_ISOLATED_TESTS",
+      "lost_runner_bytes_reconstructed": false
+    },
+    {
+      "scenario": "offline",
+      "test": "TransportFaultTests bounded URLError; RetryTests exhaustion/partial-write guard",
+      "status": "PASS_ISOLATED_TESTS"
+    },
+    {
+      "scenario": "push failure",
+      "test": "PublicationFaultTests real bare Git remote push failure/exhaustion then recovery",
+      "status": "PASS_ISOLATED_GIT"
+    },
+    {
+      "scenario": "readback failure",
+      "test": "PublicationFaultTests push-success/readback-failure then retry requiring witness",
+      "status": "PASS_ISOLATED_GIT"
+    },
+    {
+      "scenario": "upload failure",
+      "test": "DailyTests failed_upload_does_not_suppress_same_day_recovery; marker only after upload success",
+      "status": "PASS_ISOLATED_TESTS"
+    },
+    {
+      "scenario": "duplicate rerun",
+      "test": "PublicationFaultTests no extra commit; DailyTests same-date completed package skips",
+      "status": "PASS_TESTS_AND_PRODUCTION"
+    },
+    {
+      "scenario": "stale report waiver",
+      "test": "TransportFaultTests old report/receipt, current transport/partial/pair failure, future clock and nonfinite lag rejection",
+      "status": "PASS_ISOLATED_TESTS"
+    }
+  ],
+  "production": {
+    "run_id": 38356264976,
+    "job_id": 115159766513,
+    "event": "push",
+    "head_sha": "9faae91061d52100c8a11eb5e815bbc5735c157b",
+    "status": "PASS",
+    "new_predictions": 0,
+    "publication_commit": "e6fa83ad03b1c15579bcfc76a4241df07ed81b97",
+    "publication_files_verified": 241,
+    "minimal_files_verified": 13,
+    "formal_raw_bound_records_verified": 50,
+    "minimal_contexts_verified": 8,
+    "score_rows_before": 68,
+    "score_rows_after": 69,
+    "independent_completion_run_id": 38356388229,
+    "independent_completion_job_id": 115160164861,
+    "independent_completion_status": "PASS",
+    "production_evidence_cutoff_utc": "2026-10-13T06:22:24.612764+00:00",
+    "code_exact_readback_files": 8
+  },
+  "archive_verification": {
+    "artifacts": {
+      "forward": {
+        "sha256": "7d60edd108d0a274781850ebac9e79613fa99c1f0bb201004cc93a637e47b159",
+        "entries": 499,
+        "zip_crc_verified": true
+      },
+      "sources": {
+        "sha256": "a801d78e6fb45cc45b1374877a1e01340e4917e4464c688614a33f3f689b9f56",
+        "entries": 1063,
+        "zip_crc_verified": true
+      },
+      "completion": {
+        "sha256": "d6948ae582a37bc4364f3d3c62a1e0902d2ff8e3292f5567630f0f39c8486515",
+        "entries": 1,
+        "zip_crc_verified": true
+      }
+    },
+    "source_chain": {
+      "version_keys": 871,
+      "tip": "data/plus_evidence_v1_0/sources/manifests/20261013T062245023117Z_2925b965e26a44fb8f0215838a571f26.json",
+      "tip_sha256": "54b2f1c1477c029aceb0457965d9be05e31c72fa56e35e518ad4858bc9cbac1e",
+      "supporting_paths": 270,
+      "all_manifest_and_blob_hashes_verified": true
+    },
+    "quote_binding": {
+      "registered_total": 98,
+      "formal_raw_bound_records_verified": 50,
+      "scores_total": 69,
+      "raw_bound_quote_checks_passed": true
+    },
+    "minimal_context_chain": {
+      "records": 8,
+      "hash_chain_and_records_equal": true
+    },
+    "completion_receipt": {
+      "run_id": 38356264976,
+      "status": "EXECUTION_METADATA_COMPLETE_NOT_CONTENT_VERIFIED",
+      "gaps": [],
+      "correctly_disclaims_content_acceptance": true
+    },
+    "independent_retention_verified": false
+  },
+  "data_quality": {
+    "source": "OKX confirmed UTC 1H",
+    "checked_commit": "e6fa83ad03b1c15579bcfc76a4241df07ed81b97",
+    "checked_cutoff_utc": "2026-10-13T06:22:24.612764+00:00",
+    "by_symbol": {
+      "BTC-USDT": {
+        "rows": 26652,
+        "duplicates": 0,
+        "misaligned": 0,
+        "missing_hours": 0,
+        "first_utc": "2023-09-28T18:00:00+00:00",
+        "last_utc": "2026-10-13T05:00:00+00:00"
+      },
+      "DOGE-USDT": {
+        "rows": 26652,
+        "duplicates": 0,
+        "misaligned": 0,
+        "missing_hours": 0,
+        "first_utc": "2023-09-28T18:00:00+00:00",
+        "last_utc": "2026-10-13T05:00:00+00:00"
+      },
+      "ETH-USDT": {
+        "rows": 26652,
+        "duplicates": 0,
+        "misaligned": 0,
+        "missing_hours": 0,
+        "first_utc": "2023-09-28T18:00:00+00:00",
+        "last_utc": "2026-10-13T05:00:00+00:00"
+      }
+    },
+    "full_older_history_complete": false
+  },
+  "pending_live_acceptance": [
+    {
+      "id": "POST_FINAL_VERSION_SCHEDULED_RUN",
+      "status": "待运行验收",
+      "last_observed_schedule_id": 38354643695,
+      "last_observed_schedule_head": "6a376779c3ae96dd2c418ce475c6eef01184695e",
+      "note": "Last schedule precedes both final engineering merges; push run is not schedule proof."
+    },
+    {
+      "id": "POST_FINAL_VERSION_NEW_FORECAST_CHAIN",
+      "status": "待运行验收",
+      "note": "Final deployed runs issued zero new forecasts. Isolated new-forecast tests do not create a formal prospective sample."
+    }
+  ],
+  "preserved_nonengineering_results": {
+    "p0_coverage_accepted": false,
+    "one_hour_issued": 23,
+    "one_hour_expected": 28,
+    "historical_missing_slots": 5,
+    "target_due": 22,
+    "target_scored": 22,
+    "independent_retention": "NOT_CONFIGURED",
+    "independent_retention_verified": false,
+    "complete_pit_accepted": false,
+    "prediction_edge_accepted": false,
+    "economic_edge_accepted": false
+  },
+  "real_orders_authorized": false,
+  "dca_changes": false,
+  "model_or_frozen_protocol_changes": false,
+  "limitations": [
+    "Fault injection occurred in isolated test environments; no deliberate production outage.",
+    "GitHub artifact hashes/chain verification do not constitute independent WORM or historical first-release proof.",
+    "GitHub cron is observed through actual executions; future stability is not guaranteed by a successful push.",
+    "Historical missed issuance and unavailable past target quotes remain missing; no backfill or denominator reduction."
+  ]
+}
