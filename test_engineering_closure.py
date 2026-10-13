@@ -123,6 +123,31 @@ class PublicationFaultTests(publication_tests.PublishTests):
             with self.assertRaisesRegex(ValueError,'readback mismatch'):publisher.publish(self.root)
 
 class TransportFaultTests(unittest.TestCase):
+    def test_old_late_report_cannot_waive_current_network_failure(self):
+        import direction_lateness_gate as gate
+        report={'status':'stale_hour_no_new_registration','generated_utc':'2026-10-13T05:45:01+00:00',
+                'feature_close_at_utc':'2026-10-13T05:00:00+00:00','feature_lag_min':45.02,'new_ids':[]}
+        issue={'status':'failed','production_new':0,'pair_error':None,'observed_at_utc':'2026-10-13T06:17:01+00:00',
+               'capture':{'status':'failed','attempts':1,'events':[{'started_at_utc':'2026-10-13T06:17:00+00:00','error':'URLError: offline'}]}}
+        with self.assertRaises(ValueError):gate.verify(report,issue,'2026-10-13T06:16:59+00:00')
+        issue['capture']['events'][0]={'started_at_utc':'2026-10-13T06:17:00+00:00','exit_code':1}
+        with self.assertRaisesRegex(ValueError,'current attempt'):gate.verify(report,issue,'2026-10-13T06:16:59+00:00')
+
+    def test_current_genuine_late_skip_is_safe_but_partial_or_pair_failure_is_not(self):
+        import direction_lateness_gate as gate
+        report={'status':'stale_hour_no_new_registration','generated_utc':'2026-10-13T06:46:00+00:00',
+                'feature_close_at_utc':'2026-10-13T06:00:00+00:00','feature_lag_min':46.0,'new_ids':[]}
+        issue={'status':'failed','production_new':0,'pair_error':None,'observed_at_utc':'2026-10-13T06:46:01+00:00',
+               'capture':{'status':'failed','attempts':1,'events':[{'started_at_utc':'2026-10-13T06:45:59+00:00','exit_code':1}]}}
+        start='2026-10-13T06:45:58+00:00'
+        self.assertEqual(gate.verify(report,issue,start)['status'],'CURRENT_LATE_BUT_SAFE')
+        with self.assertRaisesRegex(ValueError,'current attempt'):
+            gate.verify(report,issue,'2026-10-13T07:00:00+00:00')
+        for change in ({'production_new':1},{'pair_error':'failed challenger'}):
+            with self.assertRaises(ValueError):gate.verify(report,dict(issue,**change),start)
+        for change in ({'generated_utc':'2026-10-13T06:46:02+00:00'},{'feature_lag_min':99},{'feature_lag_min':float('nan')},{'new_ids':['injected']}):
+            with self.assertRaises(ValueError):gate.verify(dict(report,**change),issue,start)
+
     def test_timeout_and_offline_are_bounded_and_do_not_create_evidence(self):
         import tempfile
         with tempfile.TemporaryDirectory() as temp:
