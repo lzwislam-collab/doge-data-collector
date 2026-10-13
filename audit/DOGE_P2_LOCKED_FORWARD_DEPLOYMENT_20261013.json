@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "audit_id": "DOGE_P2_LOCKED_FORWARD_DEPLOYMENT_20261013",
+  "audited_at_utc": "2026-10-13T10:03:23.063504+00:00",
+  "verdict": "DEPLOYED_AND_PREACTIVATION_RUNTIME_VERIFIED_FUTURE_ECONOMIC_EVIDENCE_WAIT",
+  "status_details": {
+    "code_merged": true,
+    "full_CI_passed": true,
+    "test_count": 630,
+    "CI_run_id": 38380468665,
+    "merge_commit": "6799578291307b8b0563eae60dad989f07e04f2f",
+    "original_running_pipeline_modified": false,
+    "existing_schedule_reused": true,
+    "post_merge_push_run_id": 38380595167,
+    "post_merge_run_status": "success",
+    "fixed_cohort_step_completed": "success",
+    "raw_artifact_persisted": true,
+    "artifact_id": 11802778331,
+    "new_output_readback": true,
+    "new_output_status": "WAIT_ACTIVATION",
+    "code_sha_locked": true,
+    "frozen_code_git_blob_sha": "f3dcf0bdc6ee50630327ca3cf1e01482f51285ba",
+    "historical_p2_untouched": true,
+    "independently_verified_postactivation_schedule": false
+  },
+  "model_protocol": {
+    "id": "DOGE_P2_LOCKED_FORWARD_COHORT_20261014_0000",
+    "effective_from_utc": "2026-10-14T00:00:00+00:00",
+    "raw_source": "data/p2_paired_execution_v3_1/books.jsonl",
+    "time_horizons_hours": [
+      1,
+      24
+    ],
+    "original_frozen_p2_engine_reused": true,
+    "expiry_and_gap_policies": "No backfill, no auto-reset, 30 min path gap marker, all fixed hourly issuance denominators",
+    "required_days": 30,
+    "required_completed_nonoverlap_economic_intervals_per_horizon": 100,
+    "issuance_and_target_quote_coverage_min_pct": 90,
+    "nominal_spread_fee_slippage_and_double_cost_stress": true,
+    "independent_hold_and_cash_benchmarks": true,
+    "promotion_without_manual_audit": false,
+    "economic_edge_proven": false
+  },
+  "current_control": {
+    "p0_at_utc": "2026-10-13T10:03:02.804264+00:00",
+    "p0_1h_issued": 27,
+    "p0_1h_expected": 32,
+    "p0_1h_coverage_pct": 84.375,
+    "p0_1h_target_quote_coverage_pct": 100,
+    "official_1h_frozen_nonoverlap_n": 13,
+    "official_1h_frozen_nonoverlap_correct": 6,
+    "p2_legacy_economic_state": "WAIT",
+    "complete_pit_proven": false,
+    "external_immutable_retention_proven": false,
+    "no_claims_of_70pct_accuracy": true
+  },
+  "citations": {
+    "merge_pr": "https://github.com/lzwislam-collab/doge-data-collector/pull/23",
+    "CI": "https://github.com/lzwislam-collab/doge-data-collector/actions/runs/38380468665",
+    "deployed_workflow": "https://github.com/lzwislam-collab/doge-data-collector/actions/runs/38380595167",
+    "running_output": "data/p2_locked_forward_v1/latest.json",
+    "protocol": "data/stage5/p2_locked_forward_v1_protocol.json",
+    "report": "reports/DOGE_P2_LOCKED_FORWARD_V1_20261013.md"
+  },
+  "pending": {
+    "first_postactivation_scheduled_run_and_readback": true,
+    "sample_maturation": true,
+    "complete_pit": true,
+    "external_worm": true
+  }
+}
