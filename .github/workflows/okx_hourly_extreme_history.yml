@@ -32,6 +32,7 @@ on:
       - 'feature_publication_gate.py'
       - 'publication_recovery.py'
       - 'engineering_run_receipt.py'
+      - 'direction_lateness_gate.py'
       - 'forward_diagnostics.py'
       - 'p0_open_target_guard.py'
       - 'test_forward_diagnostics.py'
@@ -120,7 +121,9 @@ jobs:
       - name: Issue and score DOGE UP/DOWN shadow forecasts from live ticker quote
         id: direction
         continue-on-error: true
-        run: python paired_forward_cohort.py issue
+        run: |
+          python direction_lateness_gate.py begin "$RUNNER_TEMP/doge-direction-attempt.json"
+          python paired_forward_cohort.py issue
       - name: Bind only new originals to independent minimal market rules
         id: minimal_bind
         if: always() && steps.minimal_prepare.outcome == 'success'
@@ -138,17 +141,7 @@ jobs:
         id: direction_late_audit
         if: steps.direction.outcome != 'success'
         continue-on-error: true
-        shell: bash
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          report=json.loads(Path('data/direction_v42/forward_latest.json').read_text())
-          assert report.get('status')=='stale_hour_no_new_registration', 'direction error is not benign lateness'
-          assert report.get('feature_lag_min',0)>45, 'cannot waive timely forecast errors'
-          assert report.get('new_ids')==[], 'late forecast must never register new predictions'
-          print('LATE_BUT_SAFE: no forecast backdated; scoring proceeds independently')
-          PY
+        run: python direction_lateness_gate.py verify "$RUNNER_TEMP/doge-direction-attempt.json"
       - name: Publish time-sensitive evidence and verify remote readback before backfill
         id: early_publish
         if: always() && steps.quote_watch.outcome != 'skipped'

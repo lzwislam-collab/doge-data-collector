@@ -74,7 +74,7 @@ class TestOperationalOrder(unittest.TestCase):
   a=self.offset('Issue and score DOGE UP/DOWN shadow forecasts from live ticker quote')
   b=self.offset('Verify benign late-registration skip without changing frozen deadline')
   direction='\n'.join(self.lines[a:b])
-  self.assertIn('run: python paired_forward_cohort.py issue',direction)
+  self.assertIn('python paired_forward_cohort.py issue',direction)
   self.assertNotIn("if: steps.collect.outcome == 'success'",direction)
   late='\n'.join(self.lines[b:self.offset('Backfill confirmed UTC 1H data with source-ingestion timestamps')])
   self.assertIn("if: steps.direction.outcome != 'success'",late)
@@ -82,7 +82,7 @@ class TestOperationalOrder(unittest.TestCase):
 
  def test_v2_frozen_code_validation_preserved(self):
   self.assertIn('run: python forward_validation_v2.py --integrity-only',self.text)
-  self.assertIn('run: python paired_forward_cohort.py issue',self.text)
+  self.assertIn('python paired_forward_cohort.py issue',self.text)
   self.assertIn('run: python forward_validation_v2.py',self.text)
   self.assertIn('test_forward_validation_v2',self.text)
 
