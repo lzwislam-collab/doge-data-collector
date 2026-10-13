@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "audit_id": "DOGE_PIT_RETENTION_DEPLOYMENT_20261013",
+  "audited_at_utc": "2026-10-13 05:40:28 UTC",
+  "scope": "daily evidence inventory preparation, not formal model PIT adoption or independent cloud retention",
+  "overall_status": "PREPARATION_INTEGRATED_AND_RUNTIME_READBACK_VERIFIED_INDEPENDENT_RETENTION_NOT_CONFIGURED",
+  "merged_prs": [
+    {
+      "number": 17,
+      "sha": "8de9979fe316c33ae52282d54fd0d882829af67c"
+    },
+    {
+      "number": 18,
+      "sha": "acee9db874b82f1769e61bca4f6952cba0ab30b8"
+    },
+    {
+      "number": 19,
+      "sha": "910e8694724aea756707074ad9ec333c7a0fdd11"
+    }
+  ],
+  "ci": {
+    "run_id": 38351494657,
+    "head_sha": "0ccc432d19bc14ab8fd949021cc2e00c33e50cbb",
+    "tests": 600,
+    "failures": 0,
+    "symlink_tests_exercised": true,
+    "frozen_v2_integrity_passed": true
+  },
+  "first_runtime": {
+    "run_id": 38350841245,
+    "event": "push",
+    "conclusion": "success",
+    "generated_new_bundle": true
+  },
+  "scheduled_repetition": {
+    "run_id": 38350879929,
+    "event": "schedule",
+    "preparation_step": "success",
+    "status": "SKIP_ALREADY_PREPARED_TODAY",
+    "generated_new_bundle": false,
+    "overall_conclusion": "failure",
+    "failure": "legacy feature remote readback compared unstaged diagnostic bytes despite frozen bind new_contexts=0",
+    "fixed_by_pr": 19
+  },
+  "post_fix_runtime": {
+    "run_id": 38351563068,
+    "event": "push",
+    "conclusion": "success",
+    "new_feature_contexts": 0,
+    "feature_new_publication": "skipped",
+    "historical_feature_audit": "success",
+    "daily_preparation": "SKIP_ALREADY_PREPARED_TODAY",
+    "core_persistence": "success"
+  },
+  "post_fix_schedule_verification": {
+    "status": "WAIT_NEXT_RUN",
+    "run_id": null
+  },
+  "package": {
+    "artifact_id": 11790733318,
+    "artifact_archive_sha256": "3f773bd8ae76e2dd948e143964639b882f038b4f2e151afe10f33a3d4a25b755",
+    "bundle_sha256": "fd709828cef9747b7ab9b36fb1df63172934ae931b1dfcdaaa250c7219328306",
+    "bundle_byte_count": 19013043,
+    "objects_verified": 940,
+    "prepared_at_utc": "2026-10-13T05:21:01.782114+00:00",
+    "remote_archive_and_bundle_readback_verified": true,
+    "per_object_sha256_verified": true,
+    "repository_receipt_readback_verified": true,
+    "source_payload_rows_reparsed": 9688,
+    "raw_response_parser_groups": 8,
+    "source_url_and_payload_fields_matched": true
+  },
+  "invariants": {
+    "new_schedule_created": false,
+    "cron": "7,17,27,37,47,57 * * * *",
+    "frozen_v2_code_changed": false,
+    "frozen_feature_source_code_changed": false,
+    "historical_forecasts_or_scores_edited": false,
+    "new_model_activated": false,
+    "real_orders_authorized": false
+  },
+  "acceptance": {
+    "source_ledger_metadata_raw_hash_and_revision_guard_implemented": true,
+    "daily_inventory_preparation_deployed": true,
+    "independent_retention_status": "NOT_CONFIGURED",
+    "independent_retention_verified": false,
+    "historical_provider_first_publication_verified": false,
+    "complete_model_pit_verified": false,
+    "source_observation_age_and_parser_rules_adopted_in_model": false,
+    "p0_full_window_accepted": false,
+    "prediction_edge_validated": false,
+    "profitability_validated": false
+  },
+  "limits": [
+    "GitHub artifacts are not independent WORM and administrators can delete them.",
+    "Daily package covers bytes present at package time, not all later forecasts that day.",
+    "Receipt-age selection is not source-observation-age or semantic parser proof.",
+    "Post-fix overall schedule success has not yet been observed at this fixed audit cutoff.",
+    "256MiB uncompressed/2-minute limits reject oversized history rather than drop ancestors."
+  ],
+  "code_sha256_lf": {
+    "pit_retention_preparation.py": "a580dc4a91128ce6cd7692a1dd1213be14aa8bdce42d7b4ae2bd14bdf896671e",
+    "feature_publication_gate.py": "11842c33803d900ee79951aaaf34a9921bf7e3134ee1ebc63ba0fc9d6aed395b"
+  }
+}
