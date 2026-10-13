@@ -1,0 +1,61 @@
+{
+  "accuracy_margin": 0.01,
+  "automatic_issuance_configured": false,
+  "automatic_promotion": false,
+  "block_days": 3,
+  "bootstrap_replicates": 1000000,
+  "bootstrap_seed": 20261016,
+  "brier_margin": 0.002,
+  "deployment_conditions": "main integration, future public registration, exact source/forecast/target server witnesses and independent retention audit before any production recommendation",
+  "economic_scope": "indicative visible-depth book sweeps, round-trip nominal/double fee+slippage, same-interval hold and cash; no fills, queue/latency/impact evidence",
+  "effective_from_utc": "2026-10-16T00:00:00+00:00",
+  "family": "9 candidates x 2 horizons x (3 prediction + 6 ex-ante regime prediction + 6 economic comparisons) x 2 fixed looks x 2 directions = 1080",
+  "family_size": 1080,
+  "familywise_alpha": 0.05,
+  "fee_per_side": 0.001,
+  "frozen_rule_replay_is_original_production_issuance": false,
+  "groups": [
+    "full",
+    "drop_doge_momentum",
+    "drop_doge_volatility",
+    "drop_doge_volume",
+    "drop_btc_context",
+    "only_doge_momentum",
+    "only_doge_volatility",
+    "only_doge_volume",
+    "only_btc_context"
+  ],
+  "horizons_hours": [
+    1,
+    24
+  ],
+  "max_issue_delay_minutes": 45,
+  "minimum_blocks": 30,
+  "minimum_bootstrap_tail": 20,
+  "minimum_coverage": 0.9,
+  "minimum_days": 90,
+  "minimum_discordant": 30,
+  "minimum_regime_samples": 20,
+  "minimum_samples": 100,
+  "missing_rule": "retain all planned slots and every missing source/publication/target/cost; no reconstructed labels or zero-filled unknown costs",
+  "net_return_margin": 0.0002,
+  "notional_usdt": 100,
+  "numpy_version": "2.3.5",
+  "primary_comparators": "same-event frozen reversal rule replay and frozen training-majority probability; BTC and constant directions are descriptive only",
+  "production_model_changed": false,
+  "protocol_id": "DOGE_LEARNED_SHADOW_V1_20261016",
+  "real_orders_authorized": false,
+  "review_dates_utc": [
+    "2027-06-01T00:00:00+00:00",
+    "2027-12-01T00:00:00+00:00"
+  ],
+  "seventy_percent_claim_allowed": false,
+  "slippage_per_side": 0.0005,
+  "slot_steps_hours": {
+    "1": 2,
+    "24": 25
+  },
+  "stress_multiplier": 2,
+  "target_deadline": "strictly before min(issue+h+25m, next ex-ante planned slot); missing deadline evidence stays missing",
+  "target_window_minutes": 25
+}
