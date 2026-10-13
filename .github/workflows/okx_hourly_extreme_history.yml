@@ -30,6 +30,8 @@ on:
       - 'evidence_retention.py'
       - 'pit_retention_preparation.py'
       - 'feature_publication_gate.py'
+      - 'publication_recovery.py'
+      - 'engineering_run_receipt.py'
       - 'forward_diagnostics.py'
       - 'p0_open_target_guard.py'
       - 'test_forward_diagnostics.py'
@@ -153,7 +155,7 @@ jobs:
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: python paired_forward_cohort.py publish
+        run: python publication_recovery.py
       - name: Read back minimal contexts from the same original publication
         id: minimal_publication
         if: steps.early_publish.outcome == 'success' && steps.minimal_bind.outcome == 'success'
@@ -166,7 +168,9 @@ jobs:
         run: python feature_ablation.py publication
       - name: Create pre-target public server witness using existing read-only CI
         id: public_witness
-        if: steps.early_publish.outputs.new_predictions == 'true'
+        # Recovery after a successful push but failed readback still needs a server witness.
+        # Duplicate read-only witnesses never issue forecasts or backdate eligibility.
+        if: steps.early_publish.outcome == 'success'
         continue-on-error: true
         uses: actions/github-script@v7
         with:
@@ -272,6 +276,8 @@ jobs:
         id: minimal_audit
         if: always() && steps.operations.outcome == 'success'
         continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           python -m unittest -q test_minimal_market_candidate test_minimal_market_forward test_minimal_market_workflow test_p2_economic_acceptance
           python minimal_market_forward.py audit
