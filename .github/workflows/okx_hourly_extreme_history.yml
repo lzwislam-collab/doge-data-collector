@@ -28,6 +28,7 @@ on:
       - 'source_evidence_snapshot.py'
       - 'forward_execution_evidence.py'
       - 'evidence_retention.py'
+      - 'pit_retention_preparation.py'
       - 'forward_diagnostics.py'
       - 'p0_open_target_guard.py'
       - 'test_forward_diagnostics.py'
@@ -298,6 +299,24 @@ jobs:
               f.write('### DOGE forward diagnostics V1\n\nNO_TRADE; frozen scores unchanged.\n\n'+json.dumps(counts)+'\n')
           if counts['DUE_URGENT']: print('::warning::Genuine target quote window closes within 10 minutes; no backfill allowed')
           PY
+      - name: Prepare daily PIT retention inventory after original evidence capture
+        id: pit_preparation
+        if: always() && steps.supplemental_evidence.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 2
+        run: |
+          python pit_retention_preparation.py prepare --latest --daily
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          r=json.loads(Path('data/pit_retention_preparation_v1/run_latest.json').read_text())
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:
+              f.write('generated='+str(r['generated_new_bundle']).lower()+'\n')
+          PY
+      - name: Save current PIT failure receipt including preparation timeout
+        if: always() && steps.pit_preparation.outcome == 'failure'
+        continue-on-error: true
+        run: python pit_retention_preparation.py record-failure
       - name: Persist data and diagnostics
         id: persist
         if: always()
@@ -312,6 +331,9 @@ jobs:
             if [ -f "$f" ]; then git add -f "$f"; fi
           done
           git add -f data/quote_evidence_v2
+          for f in data/pit_retention_preparation_v1/latest.json data/pit_retention_preparation_v1/run_latest.json; do
+            if [ -f "$f" ]; then git add -f "$f"; fi
+          done
           if [ -d data/forward_diagnostics_v1 ]; then git add -f data/forward_diagnostics_v1; fi
           if [ -f reports/DOGE_FORWARD_DIAGNOSTICS_V1.md ]; then git add -f reports/DOGE_FORWARD_DIAGNOSTICS_V1.md; fi
             if [ -d data/paired_forward_v1 ]; then git add -f data/paired_forward_v1; fi
@@ -401,6 +423,38 @@ jobs:
             system/versions/DOGE_PLUS_EVIDENCE_V1_0_20261012.json
             system/current_plus_evidence.json
             reports/DOGE_PLUS_EVIDENCE_V1_0.md
+      - name: Preserve newly prepared daily PIT package without claiming WORM
+        id: pit_artifact
+        if: always() && steps.pit_preparation.outputs.generated == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: doge-pit-preparation-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 90
+          if-no-files-found: error
+          path: |
+            data/pit_retention_preparation_v1/
+      - name: Record successful daily package upload only after artifact success
+        id: pit_publication
+        if: always() && steps.pit_artifact.outcome == 'success' && steps.pit_preparation.outputs.generated == 'true'
+        continue-on-error: true
+        env:
+          PIT_ARTIFACT_ID: ${{ steps.pit_artifact.outputs.artifact-id }}
+          PIT_ARTIFACT_DIGEST: ${{ steps.pit_artifact.outputs.artifact-digest }}
+        run: |
+          python pit_retention_preparation.py record-artifact --artifact-id "$PIT_ARTIFACT_ID" --artifact-digest "$PIT_ARTIFACT_DIGEST" --run-id "$GITHUB_RUN_ID"
+          git add -f data/pit_retention_preparation_v1/artifact_publication.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'audit: record completed daily PIT package artifact'
+            for attempt in 1 2 3 4 5; do
+              if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
+              git rebase --abort || true
+              [ "$attempt" -lt 5 ] || exit 1
+              sleep 4
+            done
+          fi
+      - name: Fail visibly on PIT preparation or package artifact error after saving core evidence
+        if: always() && (steps.pit_preparation.outcome == 'failure' || steps.pit_artifact.outcome == 'failure' || steps.pit_publication.outcome == 'failure')
+        run: exit 1
       - name: Fail visibly on supplemental capture failure after preserving core evidence
         if: always() && steps.supplemental_evidence.outcome != 'success'
         run: exit 1
