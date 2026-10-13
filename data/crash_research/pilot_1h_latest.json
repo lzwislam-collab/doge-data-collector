@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "status": "research_fail_70pct",
-  "evaluated_utc": "2026-10-13T02:50:43.306124+00:00",
+  "evaluated_utc": "2026-10-13T03:11:07.778741+00:00",
   "source": "OKX historic 1H candles, first_ingested_utc in data/hourly_research/ohlc.csv",
-  "history_start_utc": "2024-01-10T22:00:00+00:00",
-  "history_last_start_utc": "2026-10-13T01:00:00+00:00",
-  "hourly_rows_by_symbol": 24148,
+  "history_start_utc": "2023-10-02T22:00:00+00:00",
+  "history_last_start_utc": "2026-10-13T02:00:00+00:00",
+  "hourly_rows_by_symbol": 26549,
   "duplicate_keys": 0,
   "missing_hours": 0,
   "crash_label": "DOGE hour close / hour open - 1 <= -5%",
@@ -13,8 +13,11 @@
   "forecast_target": "at least one new >=5% down candle in next 12h after alert becomes available",
   "rule_post_hoc": true,
   "genuine_prior_warnings_preserved": false,
-  "crash_count_total": 37,
+  "crash_count_total": 40,
   "crash_hours_utc": [
+    "2023-11-09T16:00:00+00:00",
+    "2023-12-11T02:00:00+00:00",
+    "2024-01-03T12:00:00+00:00",
     "2024-02-28T17:00:00+00:00",
     "2024-03-05T04:00:00+00:00",
     "2024-03-05T15:00:00+00:00",
@@ -53,14 +56,14 @@
     "2026-08-22T05:00:00+00:00",
     "2026-10-08T15:00:00+00:00"
   ],
-  "eligible_crashes": 37,
+  "eligible_crashes": 40,
   "caught_crashes": 14,
-  "alert_count": 113,
+  "alert_count": 129,
   "true_alerts": 16,
-  "false_alerts": 97,
-  "recall_pct": 37.84,
-  "precision_pct": 14.16,
-  "false_alerts_per_week": 0.676,
+  "false_alerts": 113,
+  "recall_pct": 35.0,
+  "precision_pct": 12.4,
+  "false_alerts_per_week": 0.716,
   "warning_lead_hours_for_caught_events": [
     0.0,
     1.0,
@@ -82,16 +85,160 @@
     10.0
   ],
   "illustrative_wilson_interval_precision_pct": [
-    8.91,
-    21.77
+    7.78,
+    19.2
   ],
   "illustrative_wilson_interval_recall_pct": [
-    24.06,
-    53.9
+    22.13,
+    50.49
   ],
   "inference_warning": "Intervals are illustrative binomial bounds; temporal dependence and posthoc selection invalidate strict inferential coverage.",
   "always_no_crash_accuracy_pct": 99.85,
   "signals": [
+    {
+      "hour_start_utc": "2023-10-09T09:00:00+00:00",
+      "available_after_utc": "2023-10-09T10:00:00+00:00",
+      "volume_factor_vs_previous_24h_median": 78.192,
+      "low_vs_open_pct": -6.361,
+      "DOGE_minus_BTC_return_pp": -1.333,
+      "next_12h_crash_starts_utc": [],
+      "true_pre_crash_alert": false
+    },
+    {
+      "hour_start_utc": "2023-10-31T15:00:00+00:00",
+      "available_after_utc": "2023-10-31T16:00:00+00:00",
+      "volume_factor_vs_previous_24h_median": 8.678,
+      "low_vs_open_pct": -4.675,
+      "DOGE_minus_BTC_return_pp": -1.967,
+      "next_12h_crash_starts_utc": [],
+      "true_pre_crash_alert": false
+    },
+    {
+      "hour_start_utc": "2023-11-05T13:00:00+00:00",
+      "available_after_utc": "2023-11-05T14:00:00+00:00",
+      "volume_factor_vs_previous_24h_median": 5.496,
+      "low_vs_open_pct": -3.19,
+      "DOGE_minus_BTC_return_pp": -2.155,
+      "next_12h_crash_starts_utc": [],
+      "true_pre_crash_alert": false
+    },
+    {
+      "hour_start_utc": "2023-11-09T16:00:00+00:00",
+      "available_after_utc": "2023-11-09T17:00:00+00:00",
+      "volume_factor_vs_previous_24h_median": 21.745,
+      "low_vs_open_pct": -15.702,
+      "DOGE_minus_BTC_return_pp": -3.615,
+      "next_12h_crash_starts_utc": [],
+      "true_pre_crash_alert": false
+    },
+    {
+      "hour_start_utc": "2023-11-16T08:00:00+00:00",
+      "available_after_utc": "2023-11-16T09:00:00+00:00",
+      "volume_factor_vs_previous_24h_median": 5.141,
+      "low_vs_open_pct": -3.527,
+      "DOGE_minus_BTC_return_pp": -1.114,
+      "next_12h_crash_starts_utc": [],
+      "true_pre_crash_alert": false
+    },
+    {
+      "hour_start_utc": "2023-11-18T13:00:00+00:00",
+      "available_after_utc": "2023-11-18T14:00:00+00:00",
+      "volume_factor_vs_previous_24h_median": 6.336,
+      "low_vs_open_pct": -5.169,
+      "DOGE_minus_BTC_return_pp": -3.322,
+      "next_12h_crash_starts_utc": [],
+      "true_pre_crash_alert": false
+    },
+    {
+      "hour_start_utc": "2023-11-21T17:00:00+00:00",
+      "available_after_utc": "2023-11-21T18:00:00+00:00",
+      "volume_factor_vs_previous_24h_median": 5.944,
+      "low_vs_open_pct": -3.618,
+      "DOGE_minus_BTC_return_pp": -1.049,
+      "next_12h_crash_starts_utc": [],
+      "true_pre_crash_alert": false
+    },
+    {
+      "hour_start_utc": "2023-12-04T11:00:00+00:00",
+      "available_after_utc": "2023-12-04T12:00:00+00:00",
+      "volume_factor_vs_previous_24h_median": 9.133,
+      "low_vs_open_pct": -5.513,
+      "DOGE_minus_BTC_return_pp": -1.423,
+      "next_12h_crash_starts_utc": [],
+      "true_pre_crash_alert": false
+    },
+    {
+      "hour_start_utc": "2023-12-06T07:00:00+00:00",
+      "available_after_utc": "2023-12-06T08:00:00+00:00",
+      "volume_factor_vs_previous_24h_median": 6.014,
+      "low_vs_open_pct": -3.101,
+      "DOGE_minus_BTC_return_pp": -1.449,
+      "next_12h_crash_starts_utc": [],
+      "true_pre_crash_alert": false
+    },
+    {
+      "hour_start_utc": "2023-12-11T02:00:00+00:00",
+      "available_after_utc": "2023-12-11T03:00:00+00:00",
+      "volume_factor_vs_previous_24h_median": 24.671,
+      "low_vs_open_pct": -14.299,
+      "DOGE_minus_BTC_return_pp": -3.433,
+      "next_12h_crash_starts_utc": [],
+      "true_pre_crash_alert": false
+    },
+    {
+      "hour_start_utc": "2023-12-18T09:00:00+00:00",
+      "available_after_utc": "2023-12-18T10:00:00+00:00",
+      "volume_factor_vs_previous_24h_median": 5.862,
+      "low_vs_open_pct": -3.016,
+      "DOGE_minus_BTC_return_pp": -1.367,
+      "next_12h_crash_starts_utc": [],
+      "true_pre_crash_alert": false
+    },
+    {
+      "hour_start_utc": "2023-12-18T10:00:00+00:00",
+      "available_after_utc": "2023-12-18T11:00:00+00:00",
+      "volume_factor_vs_previous_24h_median": 7.811,
+      "low_vs_open_pct": -3.594,
+      "DOGE_minus_BTC_return_pp": -1.074,
+      "next_12h_crash_starts_utc": [],
+      "true_pre_crash_alert": false
+    },
+    {
+      "hour_start_utc": "2023-12-26T17:00:00+00:00",
+      "available_after_utc": "2023-12-26T18:00:00+00:00",
+      "volume_factor_vs_previous_24h_median": 16.215,
+      "low_vs_open_pct": -6.291,
+      "DOGE_minus_BTC_return_pp": -1.96,
+      "next_12h_crash_starts_utc": [],
+      "true_pre_crash_alert": false
+    },
+    {
+      "hour_start_utc": "2024-01-03T12:00:00+00:00",
+      "available_after_utc": "2024-01-03T13:00:00+00:00",
+      "volume_factor_vs_previous_24h_median": 73.394,
+      "low_vs_open_pct": -21.179,
+      "DOGE_minus_BTC_return_pp": -3.873,
+      "next_12h_crash_starts_utc": [],
+      "true_pre_crash_alert": false
+    },
+    {
+      "hour_start_utc": "2024-01-08T02:00:00+00:00",
+      "available_after_utc": "2024-01-08T03:00:00+00:00",
+      "volume_factor_vs_previous_24h_median": 11.138,
+      "low_vs_open_pct": -4.048,
+      "DOGE_minus_BTC_return_pp": -1.703,
+      "next_12h_crash_starts_utc": [],
+      "true_pre_crash_alert": false
+    },
+    {
+      "hour_start_utc": "2024-01-09T12:00:00+00:00",
+      "available_after_utc": "2024-01-09T13:00:00+00:00",
+      "volume_factor_vs_previous_24h_median": 9.249,
+      "low_vs_open_pct": -3.52,
+      "DOGE_minus_BTC_return_pp": -1.186,
+      "next_12h_crash_starts_utc": [],
+      "true_pre_crash_alert": false
+    },
     {
       "hour_start_utc": "2024-01-21T03:00:00+00:00",
       "available_after_utc": "2024-01-21T04:00:00+00:00",
