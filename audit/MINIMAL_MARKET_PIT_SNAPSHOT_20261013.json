@@ -1,0 +1,104 @@
+{
+  "base_sha": "a8a0088190bb26295e3fb4d36322fd8b15cbb546",
+  "checked_at_utc": "2026-10-13T00:12:53.487749+00:00",
+  "scope": "fixed downloaded snapshot, not live production verification",
+  "input_sha256": {
+    "data/p0_operations/latest.json": "67848230b3b71d761c5b1b0e324bc33eca060ee4986149064ba5f767e23c1422",
+    "data/enhancement_sources_v1/observations.jsonl": "d8d4c941cdbb52497358f87937e0e35e756a63cb4ec707ce1850d81bcb066de5",
+    "data/enhancement_sources_v1/raw/cf/cf325a0db26eb7f19e2e9dff29a6c7fe425ff10c08cb910592fac024eafb765c.txt": "cf325a0db26eb7f19e2e9dff29a6c7fe425ff10c08cb910592fac024eafb765c",
+    "data/enhancement_sources_v1/raw/75/75edd28ba1eceade938fa6621edfebc4d4e9cbcc846c6f07be27f8aef0ead321.txt": "75edd28ba1eceade938fa6621edfebc4d4e9cbcc846c6f07be27f8aef0ead321",
+    "data/enhancement_sources_v1/raw/bf/bf780e2be29eefecb959a41f8b4ce7a333fb65e618470d983ecd199dfab128e7.txt": "bf780e2be29eefecb959a41f8b4ce7a333fb65e618470d983ecd199dfab128e7",
+    "data/enhancement_sources_v1/raw/db/db193a8e9e5fc69cce0eb801cfa0f335d02814016489d565bbfe6ae98267da5b.txt": "db193a8e9e5fc69cce0eb801cfa0f335d02814016489d565bbfe6ae98267da5b",
+    "data/enhancement_sources_v1/raw/d1/d1cfc7aaa26e94d6088afc0dc65f0f223aaf825606d986a50f6322ebce471836.txt": "d1cfc7aaa26e94d6088afc0dc65f0f223aaf825606d986a50f6322ebce471836",
+    "data/enhancement_sources_v1/raw/76/76630c9ce84524afdac39434287959e670685bc11e68243139fc7a1b382253af.txt": "76630c9ce84524afdac39434287959e670685bc11e68243139fc7a1b382253af",
+    "data/hourly_research/ohlc.csv": "c88fae2ba05423aed048e4335d518dde1f732d4c9a45193529b0ec4534a1a0e9",
+    "data/stage5/p2_paired_execution_v3_1_protocol.json": "613c50d960c921610924d8862ae9e60fc08bd2756fdb2e6af0dcc3620a580d38",
+    "data/p2_paired_execution_v3_1/latest.json": "de6844940610d847ade674bfa6b5a8e77d2dc7137ddfba2b9ee8f2f47dbef55c"
+  },
+  "production_coverage_repaired": false,
+  "candidate_issued": false,
+  "validated_70pct": false,
+  "profitability_validated": false,
+  "real_orders_authorized": false,
+  "p0": {
+    "audited_at_utc": "2026-10-13T00:02:23.059330+00:00",
+    "report_age_seconds": 630.428419,
+    "frozen_implementation_claim_reverified": false,
+    "horizons": {
+      "1h": {
+        "expected": 22,
+        "issued": 17,
+        "missing": 5,
+        "coverage_pct": 77.27272727272727,
+        "target_due": 16,
+        "target_scored": 16,
+        "target_missing": 0,
+        "target_coverage_pct": 100.0
+      },
+      "24h": {
+        "expected": 0,
+        "issued": 0,
+        "missing": 0,
+        "coverage_pct": null,
+        "target_due": 0,
+        "target_scored": 0,
+        "target_missing": 0,
+        "target_coverage_pct": null
+      }
+    }
+  },
+  "source_ledger": {
+    "rows": 9686,
+    "unique_raw_snapshots": 6,
+    "hash_chain_and_revision_links_verified": true,
+    "metadata_errors": [],
+    "independent_first_publication_time_verified": false,
+    "freshness_24h_is_diagnostic_not_registered_model_limit": true
+  },
+  "candidate_preparation": {
+    "schema_version": 1,
+    "candidate_id": "MARKET_ONLY_PREPARATION_V1",
+    "prepared_at_utc": "2026-10-13T00:12:53.487749+00:00",
+    "status": "PREPARED_NOT_ISSUED",
+    "directions": {
+      "DOGE_MOMENTUM_1H": "DOWN",
+      "DOGE_REVERSAL_1H": "UP",
+      "BTC_MOMENTUM_1H": "DOWN"
+    },
+    "p_up": null,
+    "paper_action": "NO_TRADE",
+    "real_orders_authorized": false,
+    "prediction_issued": false,
+    "probability_calibration_validated": false,
+    "raw_response_and_public_witness_verified": false,
+    "features": {
+      "DOGE-USDT": {
+        "return_1h": -0.015085062499053947,
+        "return_24h": -0.05384960594929833,
+        "realized_volatility_24h": 0.006738998229697631,
+        "volume_ratio_1h_to_prior24h": 3.3000557191339905
+      },
+      "BTC-USDT": {
+        "return_1h": -0.0036790952181071646,
+        "return_24h": -0.02303416484008025,
+        "realized_volatility_24h": 0.003566109649979265,
+        "volume_ratio_1h_to_prior24h": 1.7135418512189153
+      }
+    },
+    "feature_input_sha256": "5dbf90a12935d4fbe538da947a9c792ed12cb48fcb540491f837410d3a9e8cb3"
+  },
+  "p2": {
+    "protocol_id": "DOGE_P2_PAIRED_EXECUTION_V3_1_20261013_0000",
+    "fee_each_side": 0.001,
+    "slippage_each_side": 0.0005,
+    "stress": "Double fee and extra slippage, plus one observed half-spread each side as additional stress. Separate stress hold benchmark.",
+    "hold_benchmark": "Same initial1000 and first entry book, bought once, quantity held continuously through interval/cash gaps, valued using current bid-depth liquidation proxy with fees/slippage. Never repeatedly rebought at interval boundaries.",
+    "cash_benchmark_return_pct": 0,
+    "books": 1,
+    "matured_due_intervals": {
+      "1h": 0,
+      "24h": 0
+    },
+    "actual_account_fee_and_fills_verified": false
+  }
+}
