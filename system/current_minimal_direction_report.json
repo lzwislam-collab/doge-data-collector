@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "version_id": "DOGE_MINIMAL_DIRECTION_REPORT_V1_20261013",
+  "implementation": "minimal_direction_report.py",
+  "audit_tests": "test_minimal_direction_report.py",
+  "automated_report": "reports/DOGE_MINIMAL_DIRECTION.md",
+  "machine_audit": "data/minimal_direction_report/latest.json",
+  "production_model": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1",
+  "primary_direction_field": "doge_reversal_direction",
+  "scoring_source": "data/stage5/forward_validation_v2/latest.json",
+  "required_fields": [
+    "1h和24h唯一方向",
+    "已到期上期对错（缺失显式保留）",
+    "冻结V2固定不重叠正确数与样本数",
+    "审计状态及阻断原因"
+  ],
+  "restrictions": [
+    "研究挑战模型不替代正式冻结模型",
+    "不事后修改方向或用行情评价对冲方向",
+    "无校准概率时不捏造可信百分比",
+    "时间戳、报价、分母及公开登记必须核验",
+    "过去缺失不得以成功替代",
+    "不改变任何预测模型和定时计划"
+  ],
+  "deployment": "existing hourly research workflow only; no new schedule"
+}
