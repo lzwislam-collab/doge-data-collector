@@ -108,10 +108,20 @@ jobs:
         run: |
           python derived_four_hour.py
           python feature_ablation.py prepare
+      - name: Prepare isolated minimal market rules before existing issuance
+        id: minimal_prepare
+        continue-on-error: true
+        timeout-minutes: 1
+        run: python minimal_market_forward.py prepare
       - name: Issue and score DOGE UP/DOWN shadow forecasts from live ticker quote
         id: direction
         continue-on-error: true
         run: python paired_forward_cohort.py issue
+      - name: Bind only new originals to independent minimal market rules
+        id: minimal_bind
+        if: always() && steps.minimal_prepare.outcome == 'success'
+        continue-on-error: true
+        run: python minimal_market_forward.py bind
       - name: Bind genuinely new original events to isolated feature ablations
         id: feature_bind
         if: always() && steps.feature_prepare.outcome == 'success'
@@ -139,6 +149,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python paired_forward_cohort.py publish
+      - name: Read back minimal contexts from the same original publication
+        id: minimal_publication
+        if: steps.early_publish.outcome == 'success' && steps.minimal_bind.outcome == 'success'
+        continue-on-error: true
+        run: python minimal_market_forward.py publication
       - name: Verify staged feature archive on actual remote publication
         id: feature_publication
         if: steps.early_publish.outcome == 'success' && steps.feature_bind.outcome == 'success'
@@ -248,6 +263,14 @@ jobs:
         if: always()
         continue-on-error: true
         run: python -m unittest -q test_p2_paired_execution_v3_1 test_p2_execution_records_v3_1 test_p2_paired_execution_v3_1_regressions test_p2_registration_deployed_bytes
+      - name: Audit minimal future pairs and independent P2 acceptance
+        id: minimal_audit
+        if: always() && steps.operations.outcome == 'success'
+        continue-on-error: true
+        run: |
+          python -m unittest -q test_minimal_market_candidate test_minimal_market_forward test_minimal_market_workflow test_p2_economic_acceptance
+          python minimal_market_forward.py audit
+          python p2_economic_acceptance.py
       - name: Audit isolated feature comparisons and net economics
         id: feature_audit
         if: always() && steps.operations.outcome == 'success'
@@ -291,7 +314,9 @@ jobs:
           git add -f data/quote_evidence_v2
           if [ -d data/forward_diagnostics_v1 ]; then git add -f data/forward_diagnostics_v1; fi
           if [ -f reports/DOGE_FORWARD_DIAGNOSTICS_V1.md ]; then git add -f reports/DOGE_FORWARD_DIAGNOSTICS_V1.md; fi
-          if [ -d data/paired_forward_v1 ]; then git add -f data/paired_forward_v1; fi
+            if [ -d data/paired_forward_v1 ]; then git add -f data/paired_forward_v1; fi
+            if [ -d data/minimal_market_forward_v1 ]; then git add -f data/minimal_market_forward_v1; fi
+            if [ -d data/p2_economic_acceptance_v1 ]; then git add -f data/p2_economic_acceptance_v1; fi
           if [ -f reports/DOGE_PAIRED_SELECTIVE_SHADOW_V1.md ]; then git add -f reports/DOGE_PAIRED_SELECTIVE_SHADOW_V1.md; fi
           if [ -d data/p2_paired_execution_v2 ]; then git add -f data/p2_paired_execution_v2; fi
           if [ -f reports/DOGE_P2_PAIRED_EXECUTION_V2.md ]; then git add -f reports/DOGE_P2_PAIRED_EXECUTION_V2.md; fi
@@ -351,6 +376,10 @@ jobs:
             system/current_p2_execution_shadow.json
             system/versions/DOGE_P2_PAIRED_EXECUTION_V2_20261013_0000.json
             data/p2_paired_execution_v3_1/
+            data/minimal_market_forward_v1/
+            data/p2_economic_acceptance_v1/
+            data/stage5/minimal_market_forward_v1_protocol.json
+            system/versions/DOGE_MINIMAL_MARKET_FORWARD_V1_20261013_0300.json
             data/derived_4h_v1/
             data/feature_ablation_v1/
             data/enhancement_sources_v1/
@@ -389,6 +418,9 @@ jobs:
         run: exit 1
       - name: Fail visibly on enhancement errors after preserving original evidence
         if: always() && (steps.feature_prepare.outcome == 'failure' || steps.feature_bind.outcome == 'failure' || steps.feature_publication.outcome == 'failure' || steps.feature_audit.outcome == 'failure')
+        run: exit 1
+      - name: Fail visibly on independent minimal market errors after saving evidence
+        if: always() && (steps.minimal_prepare.outcome == 'failure' || steps.minimal_bind.outcome == 'failure' || steps.minimal_publication.outcome == 'failure' || steps.minimal_audit.outcome == 'failure')
         run: exit 1
       - name: Fail on collector or quality error
         if: always() && (steps.validation.outcome != 'success' || steps.quote_watch.outcome != 'success' || steps.fast_hourly.outcome != 'success' || steps.collect.outcome != 'success' || steps.evaluate.outcome != 'success' || steps.forward.outcome != 'success' || steps.v42.outcome != 'success' || (steps.direction.outcome != 'success' && steps.direction_late_audit.outcome != 'success') || steps.minute_shadow.outcome != 'success' || steps.error_review.outcome != 'success' || steps.regression.outcome != 'success' || steps.early_publish.outcome != 'success' || steps.operations.outcome != 'success' || steps.persist.outcome != 'success' || steps.artifact.outcome != 'success' || steps.public_witness.outcome == 'failure')

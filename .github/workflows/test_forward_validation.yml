@@ -4,6 +4,14 @@ on:
   pull_request:
     paths:
       - 'forward_validation.py'
+      - 'minimal_market_candidate.py'
+      - 'minimal_market_forward.py'
+      - 'p2_economic_acceptance.py'
+      - 'test_minimal_market*.py'
+      - 'test_p2_economic_acceptance.py'
+      - 'test_audited_forward_refresh.py'
+      - 'data/stage5/minimal_market_forward_v1_protocol.json'
+      - 'system/versions/DOGE_MINIMAL_MARKET_FORWARD_V1_20261013_0300.json'
       - 'forward_validation_v2.py'
       - 'quote_evidence_v2.py'
       - 'test_forward_validation_v2.py'
@@ -34,4 +42,5 @@ jobs:
         with:
           python-version: '3.11'
       - run: python -m unittest discover -v
+      - run: python minimal_market_forward.py prepare
       - run: python forward_validation_v2.py --integrity-only

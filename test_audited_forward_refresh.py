@@ -4,6 +4,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 from datetime import datetime, timezone, timedelta
 
 import audited_forward_refresh as refresh
@@ -43,17 +44,47 @@ class RefreshTests(unittest.TestCase):
         return run
 
     def test_legacy_transient_retry_preserves_both_attempts(self):
-        out = refresh.refresh(self.root, runner=self.runner(['HTTP Error 502: Bad Gateway']), sleeper=lambda _: None)
+        raw_outputs = []
+        original_runner = self.runner(['HTTP Error 502: Bad Gateway'])
+
+        def run(*args, **kwargs):
+            result = original_runner(*args, **kwargs)
+            raw_outputs.append(tuple((self.root / path).read_text(encoding='utf-8')
+                                     for path in (refresh.V1, refresh.V2)))
+            return result
+
+        out = refresh.refresh(self.root, runner=run, sleeper=lambda _: None)
         self.assertEqual(out['status'], 'ok')
         self.assertEqual(self.calls, 2)
         archives = list((self.root / refresh.ARCHIVE).glob('*.json'))
         self.assertEqual(len(archives), 2)
-        self.assertEqual(json.loads(archives[0].read_text())['v1']['status'], 'blocked')
+        receipts = sorted((json.loads(path.read_text(encoding='utf-8')) for path in archives),
+                          key=lambda receipt: receipt['attempt'])
+        self.assertEqual([receipt['attempt'] for receipt in receipts], [1, 2])
+        self.assertEqual([receipt['status'] for receipt in receipts], ['blocked', 'ok'])
+        self.assertEqual([receipt['v1']['status'] for receipt in receipts], ['blocked', 'ok'])
+        self.assertEqual(receipts[0]['v1']['error'], 'HTTP Error 502: Bad Gateway')
+        for receipt, (raw_v1, raw_v2) in zip(receipts, raw_outputs):
+            self.assertEqual(receipt['original_v1_json'], raw_v1)
+            self.assertEqual(receipt['original_v2_json'], raw_v2)
+            self.assertEqual(json.loads(receipt['original_v1_json']), receipt['v1'])
+            self.assertEqual(json.loads(receipt['original_v2_json']), receipt['v2'])
+            self.assertEqual(receipt['v2']['status'], 'ok')
 
     def test_nontransient_never_retried(self):
         with self.assertRaises(ValueError):
             refresh.refresh(self.root, runner=self.runner(['frozen model modified']), sleeper=lambda _: None)
         self.assertEqual(self.calls, 1)
+
+    def test_legacy_transient_retry_evidence_with_reverse_glob_order(self):
+        original_glob = Path.glob
+
+        def reverse_glob(path, pattern):
+            return iter(sorted(original_glob(path, pattern), reverse=True))
+
+        # Filesystem enumeration order is unspecified, including on Linux CI.
+        with patch.object(Path, 'glob', reverse_glob):
+            self.test_legacy_transient_retry_preserves_both_attempts()
 
     def test_hash_mismatch_never_retried(self):
         with self.assertRaises(ValueError):
