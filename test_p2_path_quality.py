@@ -20,25 +20,23 @@ def event(minute, serial):
 
 
 class PathQualityTests(unittest.TestCase):
-    def test_actual_shape_three_gaps_not_erased(self):
-        observations = [
-            (2 + 36 / 60, 1), (38 + 58 / 60, 2),
-            (6 * 60 + 36 + 6 / 60, 3),
-            (7 * 60 + 7 + 49 / 60, 4),
-            (8 * 60 + 21 / 60, 5),
-            (8 * 60 + 30 + 47 / 60, 6),
-        ]
+    def test_three_realistic_intervals_are_retained(self):
+        # Fill intervening genuine observations so only the three stated gaps remain.
+        minutes = [2.6, 38.97]
+        minutes.extend(range(58, 398, 20))
+        minutes.extend([396.11, 427.83, 456.69, 480.36, 510.79, 536.85])
+        minutes = sorted(set(minutes))
         rows = []
-        for minutes, serial in observations:
-            qt = T + timedelta(minutes=minutes)
+        for serial, minute in enumerate(minutes, 1):
+            qt = T + timedelta(minutes=minute)
             rows.append({"quote_utc": qt.isoformat(),
                          "captured_at_utc": (qt + timedelta(milliseconds=100)).isoformat(),
                          "book_sha256": format(serial, "064x")})
-        result = audit.evaluate(rows, T + timedelta(hours=8, minutes=40))
-        self.assertEqual(result["historical_gap_count"], 4)
+        result = audit.evaluate(rows, T + timedelta(minutes=540))
+        self.assertEqual(result["historical_gap_count"], 3)
         self.assertFalse(result["p2_economic_acceptance"])
         self.assertTrue(result["no_historical_reconstruction"])
-        self.assertEqual(result["historical_gaps"][-1]["next_book_index"], 5)
+        self.assertEqual(result["historical_gaps"][-1]["next_book_index"], len(rows) - 2)
 
     def test_closed_clean_observations_do_not_rewrite_before_gap(self):
         rows = [event(1, 1), event(41, 2), event(51, 3), event(61, 4)]
