@@ -1,0 +1,33 @@
+name: Audit DOGE collector terminal execution
+on:
+  workflow_run:
+    workflows: [Backfill DOGE BTC ETH 1H extreme-event research history]
+    types: [completed]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  terminal-receipt:
+    if: github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Record terminal status and missing evidence without historical reconstruction
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python engineering_run_receipt.py
+      - name: Preserve independent completion receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: doge-completion-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}
+          retention-days: 90
+          if-no-files-found: error
+          path: engineering_completion_receipt.json
