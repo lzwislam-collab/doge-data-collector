@@ -166,6 +166,89 @@ def write_latest(root,result):
     output=safe(root,BASE+'/latest.json');output.parent.mkdir(parents=True,exist_ok=True)
     output.write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
 
+def implementation_hash():
+    return digest(Path(__file__).read_bytes().replace(b'\r\n',b'\n'))
+
+def latest_manifest(root,now):
+    import source_evidence_snapshot as snapshots
+    root=Path(root).resolve();now=clock(now)
+    _,tip,expected,_=snapshots.prior_versions(root,now,snapshots.PLUS_STORAGE_NAMESPACE)
+    if not tip:raise ValueError('no actual source inventory')
+    path=safe(root,tip);raw=path.read_bytes()
+    if digest(raw)!=expected:raise ValueError('latest inventory hash mismatch')
+    captured=clock(json.loads(raw)['captured_at_utc'])
+    if not 0<=(now-captured).total_seconds()<=900:raise ValueError('source inventory is stale or future')
+    return path
+
+def record_failure(root,now=None):
+    import os
+    result={'status':'BLOCKED','observed_at_utc':clock(now or datetime.now(timezone.utc)).isoformat(),
+        'run_id':os.environ.get('GITHUB_RUN_ID'),'generated_new_bundle':False,
+        'independent_retention_verified':False,'reason':'preparation step failed or timed out'}
+    path=safe(root,BASE+'/run_latest.json');path.parent.mkdir(parents=True,exist_ok=True)
+    path.write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
+    return result
+
+def record_artifact(root,artifact_id,artifact_digest,run_id,now=None):
+    root=Path(root).resolve();now=clock(now or datetime.now(timezone.utc))
+    prior=json.loads(safe(root,BASE+'/latest.json').read_bytes())
+    if (prior.get('status')!='NOT_CONFIGURED' or prior.get('generated_new_bundle') is not True
+        or prior.get('run_id')!=str(run_id) or not str(run_id).isdigit()
+        or prior.get('implementation_sha256')!=implementation_hash()):raise ValueError('artifact receipt does not match current preparation')
+    artifact_digest=str(artifact_digest).removeprefix('sha256:')
+    if not str(artifact_id).isdigit() or int(artifact_id)<=0 or not re.fullmatch('[a-f0-9]{64}',artifact_digest):raise ValueError('valid action artifact outputs required')
+    if clock(prior['prepared_at_utc'])>now:raise ValueError('future preparation')
+    bundle=safe(root,prior['bundle_path'])
+    if digest(bundle.read_bytes())!=prior['bundle_sha256']:raise ValueError('local bundle changed before artifact acknowledgement')
+    result={'status':'GITHUB_ARTIFACT_UPLOAD_RECORDED_NOT_WORM','recorded_at_utc':now.isoformat(),
+        'artifact_id':str(artifact_id),'artifact_archive_sha256':artifact_digest,'run_id':str(run_id),
+        'bundle_sha256':prior['bundle_sha256'],'implementation_sha256':prior['implementation_sha256'],
+        'independent_retention_verified':False,'remote_bundle_content_readback_verified':False,
+        'confirmation_source':'successful actions/upload-artifact@v4 outputs; not a WORM claim'}
+    safe(root,BASE+'/artifact_publication.json').write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
+    return result
+
+def prepare_daily(root,now=None):
+    """One inventory package per UTC day/code version; no all-day PIT claim."""
+    root=Path(root).resolve();now=clock(now or datetime.now(timezone.utc))
+    observed={'observed_at_utc':now.isoformat(),'generated_new_bundle':False,
+              'independent_retention_verified':False,'upload_performed':False}
+    report=safe(root,BASE+'/run_latest.json');report.parent.mkdir(parents=True,exist_ok=True)
+    report.write_text(json.dumps(dict(observed,status='PENDING'),indent=2)+'\n',encoding='utf-8')
+    try:
+        code_sha=implementation_hash();previous=safe(root,BASE+'/latest.json')
+        if previous.exists():
+            prior=json.loads(previous.read_bytes());prepared=clock(prior['prepared_at_utc'])
+            marker_path=safe(root,BASE+'/artifact_publication.json')
+            marker=json.loads(marker_path.read_bytes()) if marker_path.exists() else {}
+            complete=(marker.get('status')=='GITHUB_ARTIFACT_UPLOAD_RECORDED_NOT_WORM'
+                and marker.get('bundle_sha256')==prior.get('bundle_sha256')
+                and marker.get('run_id')==prior.get('run_id') and prior.get('run_id') is not None
+                and marker.get('implementation_sha256')==code_sha
+                and prepared<=clock(marker['recorded_at_utc'])<=now)
+            if (prior.get('status')=='NOT_CONFIGURED' and prepared<=now and prepared.date()==now.date()
+                and prior.get('implementation_sha256')==code_sha
+                and re.fullmatch('[a-f0-9]{64}',prior.get('bundle_sha256',''))
+                and prior.get('independent_retention_verified') is False and prior.get('upload_performed') is False and complete):
+                result=dict(observed,status='SKIP_ALREADY_PREPARED_TODAY',
+                    previous_prepared_at_utc=prior['prepared_at_utc'],previous_bundle_sha256=prior['bundle_sha256'],
+                    previous_run_id=prior.get('run_id'),previous_artifact_id=marker['artifact_id'],prior_artifact_readback_verified=False)
+                report.write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
+                return result
+        manifest=latest_manifest(root,now)
+        result=prepare_existing(root,manifest,now)
+        import os
+        result.update(observed,generated_new_bundle=True,implementation_sha256=code_sha,
+            source_manifest_path=manifest.relative_to(root).as_posix(),source_manifest_sha256=digest(manifest.read_bytes()),
+            run_id=os.environ.get('GITHUB_RUN_ID'),run_attempt=os.environ.get('GITHUB_RUN_ATTEMPT'),
+            scope='once-per-UTC-day inventory package, not every later forecast protected')
+        write_latest(root,result)
+        report.write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
+        return result
+    except Exception as exc:
+        report.write_text(json.dumps(dict(observed,status='BLOCKED',reason=type(exc).__name__+': preparation rejected'),indent=2)+'\n',encoding='utf-8')
+        raise
+
 def prepare_existing(root,manifest,now=None):
     """Reuse the registered inventory without editing its implementation."""
     root=Path(root).resolve();now=clock(now or datetime.now(timezone.utc))
@@ -203,11 +286,19 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--root',type=Path,default=Path(__file__).resolve().parent)
     sub=p.add_subparsers(dest='mode',required=True)
-    prepare=sub.add_parser('prepare');prepare.add_argument('--manifest',required=True,type=Path)
+    prepare=sub.add_parser('prepare');choice=prepare.add_mutually_exclusive_group(required=True)
+    choice.add_argument('--manifest',type=Path);choice.add_argument('--latest',action='store_true')
+    prepare.add_argument('--daily',action='store_true')
     verify=sub.add_parser('verify');verify.add_argument('--config',required=True,type=Path);verify.add_argument('--expected-sha256',required=True);verify.add_argument('--target-at')
+    sub.add_parser('record-failure')
+    recorded=sub.add_parser('record-artifact');recorded.add_argument('--artifact-id',required=True);recorded.add_argument('--artifact-digest',required=True);recorded.add_argument('--run-id',required=True)
     args=p.parse_args()
-    if args.mode=='prepare':result=prepare_existing(args.root,args.manifest)
-    else:result=verify_external(json.loads(args.config.read_text(encoding='utf-8')),args.expected_sha256,target_at=args.target_at)
+    if args.mode=='prepare':
+        if args.daily and not args.latest:p.error('--daily requires --latest')
+        result=prepare_daily(args.root) if args.daily else prepare_existing(args.root,latest_manifest(args.root,datetime.now(timezone.utc)) if args.latest else args.manifest)
+    elif args.mode=='verify':result=verify_external(json.loads(args.config.read_text(encoding='utf-8')),args.expected_sha256,target_at=args.target_at)
+    elif args.mode=='record-failure':result=record_failure(args.root)
+    else:result=record_artifact(args.root,args.artifact_id,args.artifact_digest,args.run_id)
     print(json.dumps(result,ensure_ascii=False))
     return 1 if result['status'] in ('NOT_VERIFIED','UNAVAILABLE') else 0
 if __name__=='__main__':raise SystemExit(main())
