@@ -116,3 +116,7 @@ class Runtime(unittest.TestCase):
         m=self.module();manifest=json.loads((m.ROOT/m.MANIFEST).read_bytes())
         m.verify_runtime_files(m.ROOT,manifest['sha256_lf'])
         self.assertEqual(manifest['model_package_sha256'],m.shadow.digest(json.loads((m.ROOT/m.shadow.PACKAGE).read_bytes())))
+
+    def test_registered_manifest_original_bytes_are_lf(self):
+        m=self.module();raw=(m.ROOT/m.MANIFEST).read_bytes()
+        self.assertNotIn(b'\r',raw)
