@@ -54,7 +54,8 @@ jobs:
           aws-region: ap-northeast-1
       - name: Full tests and unchanged frozen evidence
         run: |
-          python -m unittest discover -q
+          mkdir -p prediction-release-output
+          python -m unittest discover -q 2>&1 | tee prediction-release-output/test-results.log
           python forward_validation_v2.py --integrity-only
       - name: Real authority control with no legacy or order writes
         env:

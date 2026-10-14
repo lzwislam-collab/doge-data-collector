@@ -19,6 +19,7 @@ class Release(unittest.TestCase):
   a=self.engine()
   with tempfile.TemporaryDirectory() as d:
    root=Path(d);subprocess.run(['git','init',str(root)],check=True,capture_output=True)
+   subprocess.run(['git','-c','safe.directory=*','-c','user.name=test','-c','user.email=test@example.invalid','commit','--allow-empty','-m','test repository bootstrap'],cwd=root,check=True,capture_output=True)
    a.initialize(root)
    for args in (['add','.'],['-c','user.name=test','-c','user.email=test@example.invalid','commit','-m','baseline']):
     subprocess.run(['git','-c','safe.directory=*',*args],cwd=root,check=True,capture_output=True)
