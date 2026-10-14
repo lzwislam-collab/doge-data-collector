@@ -39,17 +39,19 @@ jobs:
         run: python derivatives_pit_v1.py
 
       - name: Commit updated data
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/latest.json data/hourly.csv
-          if [ -d data/derivatives_pit_v1 ]; then git add -f data/derivatives_pit_v1; fi
-          if ! git diff --cached --quiet; then
-            git commit -m "data: update OKX market snapshot"
-            git push
-          else
-            echo "No data changes"
-          fi
+        run: python collector_publication_v2.py
+
+      - name: Preserve first captured bytes even if main publication fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: collector-raw-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            data/derivatives_pit_v1/
+            data/latest.json
+            data/hourly.csv
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Report incomplete derivatives source separately
         if: steps.derivative_pit.outcome != 'success'
