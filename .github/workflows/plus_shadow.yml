@@ -1,0 +1,61 @@
+name: Render DOGE PLUS shadow predictions and audit
+on:
+  workflow_dispatch:
+    inputs:
+      assessment_run_id:
+        description: Optional successful main full independent assessment, reread from GitHub
+        required: false
+        default: ''
+  push:
+    branches: [main, 'feature/plus-shadow-*']
+    paths: ['plus_shadow.py', 'test_plus_shadow.py', 'docs/plus_shadow_v1.md', '.github/workflows/plus_shadow.yml']
+  pull_request:
+    paths: ['plus_shadow.py', 'test_plus_shadow.py', 'docs/plus_shadow_v1.md', '.github/workflows/plus_shadow.yml']
+  workflow_run:
+    workflows: ['Publish frozen learned DOGE shadow candidates', 'Publish DOGE V2 R2 frozen forward evidence', 'Backfill DOGE BTC ETH 1H extreme-event research history', 'Audit future learned DOGE shadow candidate registration', 'Audit DOGE V2 R2 frozen forward registration']
+    types: [completed]
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: plus-shadow-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: false
+jobs:
+  render:
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.event != 'pull_request' && github.event.workflow_run.repository.full_name == github.repository)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PYTHONUTF8: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install numpy==2.3.5 scipy==1.16.3 scikit-learn==1.7.2 joblib==1.5.2 threadpoolctl==3.6.0 botocore==1.43.112
+      - name: Full tests and frozen integrity
+        if: github.event_name != 'workflow_run'
+        run: |
+          python -m unittest discover -q
+          python forward_validation_v2.py --integrity-only
+      - name: Offline branch projection
+        if: github.ref != 'refs/heads/main' && github.event_name != 'workflow_run'
+        run: python plus_shadow.py --offline
+      - name: Actual main evidence projection
+        if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_run'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PLUS_ASSESSMENT_RUN_ID: ${{ inputs.assessment_run_id || '' }}
+        run: python plus_shadow.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doge-plus-shadow-${{ github.run_id }}
+          path: plus-shadow-output/
+          if-no-files-found: error
+          retention-days: 90
