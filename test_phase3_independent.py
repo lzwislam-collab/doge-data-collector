@@ -14,7 +14,8 @@ class Independent(unittest.TestCase):
     'issued_at_utc':at.isoformat(),'target_utc':(at+timedelta(hours=1)).isoformat(),'horizon_seconds':3600,
     'protocol_id':f.policy()['protocol_id'],'model_identity':p['model_identity'],'regime':a.STATES[i%4],
     'candidate_p':{'selected':.99 if y else .01,'frozen_full':.5,'constant_05':.5,'frozen_majority':.5},'frozen_rule_direction':1-y})
-   costs={k:{'net_return':.02 if k=='selected' else 0.,'stress_net_return':.01 if k=='selected' else 0.} for k in ('selected',*a.COST_BASELINES)}
+   positions={'selected':y,'frozen_full':1,'constant_05':1,'frozen_majority':1,'frozen_rule':1-y,'hold':1,'cash':0}
+   costs={k:{'net_return':position*(.02 if y else -.02),'stress_net_return':position*(.01 if y else -.03)} for k,position in positions.items()}
    scores.append({'event_id':key,'y':y,'included_in_formal_statistics':True,'economic_returns':costs,'cost_error':None})
    q.append({'event_id':key,'formal_eligible':True,'cohort':'formal','cost_available':True})
   return a,p,events,scores,q,f.utc(f.policy()['fixed_review_utc'][0])
@@ -63,5 +64,21 @@ class Independent(unittest.TestCase):
   self.assertEqual(len(v['calendar_blocks']),30);self.assertFalse(v['calendar_blocks_assumed_independent'])
  def test_late_run_identifies_missed_fixed_review(self):
   a,p,e,s,q,at=self.cohort();self.assertEqual(a.evaluate(p,e,s,q,at+timedelta(minutes=31),True,True)['status'],'MISSED_FIXED_REVIEW')
+ def test_realistic_long_cash_cost_gate_uses_issue_time_exposure_mask(self):
+  a,p,e,s,q,at=self.cohort();v=a.evaluate(p,e,s,q,at,True,True)
+  self.assertTrue(v['criteria']['raw_nominal_stress_cost'],'perfect long-on-up and cash-on-down can beat both raw hold and cash')
+  self.assertEqual(v['economic_decisions']['hold'],540);self.assertEqual(v['economic_decisions']['cash'],540)
+  self.assertEqual(v['comparisons']['costwin:net_return:hold']['scheduled_denominator'],1080)
+ def test_cost_exposure_selection_cannot_depend_on_target_return(self):
+  a,p,e,s,q,at=self.cohort();v=a.evaluate(p,e,s,q,at,True,True)
+  for row in s:
+   for returns in row['economic_returns'].values():
+    returns['net_return']*=-1;returns['stress_net_return']*=-1
+  bad=a.evaluate(p,e,s,q,at,True,True)
+  self.assertEqual(v['economic_decisions'],bad['economic_decisions']);self.assertFalse(bad['criteria']['raw_nominal_stress_cost'])
+ def test_stress_costs_cannot_improve_same_long_or_cash_payoff(self):
+  a,p,e,s,q,at=self.cohort()
+  for row in s:
+   for returns in row['economic_returns'].values():self.assertLessEqual(returns['stress_net_return'],returns['net_return'])
 
 if __name__=='__main__':unittest.main()

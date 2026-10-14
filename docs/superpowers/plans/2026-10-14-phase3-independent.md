@@ -46,3 +46,5 @@ Final: fixed Important full audit rate limit — test_1080_events_have_bounded_p
 Final: minor deferred paper self-sealed state authenticity — 文档明确仅simulation_only意外损坏检测，真实批准未实现，不能充当授权。
 Final: fixed Minor missed review status — test_late_run_identifies_missed_fixed_review RED→GREEN。
 Ruling: 初次本地基线遗漏PYTHONUTF8导致12项编码错误；显式UTF8后相关测试46项及完整874项通过（4个平台跳过），不修改旧系统代码。
+Post-delivery Ruling: 原全样本成本胜率同时胜cash/hold过半不可达，且旧fixture不现实。正式样本0时新建独立assessment/schema V2重注册；保留旧提交及工程记录、拒绝旧批次混用。test_realistic_long_cash_cost_gate_uses_issue_time_exposure_mask RED→GREEN，预测时不同敞口掩码条件检验，全分母/原始成本/其他准入门槛不变。
+Cost review: fixed Important stress fixture — test_stress_costs_cannot_improve_same_long_or_cash_payoff RED→GREEN；上涨压力.01<=名义.02，下跌压力-.03<=名义-.02，cash均0。
