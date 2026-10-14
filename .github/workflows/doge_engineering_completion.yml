@@ -1,33 +1,63 @@
 name: Audit DOGE collector terminal execution
 on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        type: choice
+        options: [audit, bridge]
+        default: audit
+  push:
+    branches: [main, 'audit/forward-readiness-*']
+    paths: ['forward_readiness.py', 'test_forward_readiness.py', '.github/workflows/doge_engineering_completion.yml']
+  pull_request:
+    paths: ['forward_readiness.py', 'test_forward_readiness.py', '.github/workflows/doge_engineering_completion.yml']
   workflow_run:
-    workflows: [Backfill DOGE BTC ETH 1H extreme-event research history]
+    workflows: ['Backfill DOGE BTC ETH 1H extreme-event research history', 'Sample free Bybit DOGE liquidation events', 'Sample free Binance DOGE liquidation snapshots', 'Audit DOGE V2 R2 frozen forward registration', 'Audit future learned DOGE shadow candidate registration']
     types: [completed]
 permissions:
   contents: read
-  actions: read
+  actions: write
+concurrency:
+  group: doge-readiness-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   terminal-receipt:
-    if: github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.head_branch == 'main'
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.event != 'pull_request')
     runs-on: ubuntu-24.04
-    timeout-minutes: 3
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - run: python -m pip install numpy==2.3.5
+      - name: Test readiness monitoring and bounded trusted dispatch
+        run: python -m unittest test_forward_readiness -q
       - name: Record terminal status and missing evidence without historical reconstruction
+        if: github.event_name == 'workflow_run' && github.event.workflow_run.name == 'Backfill DOGE BTC ETH 1H extreme-event research history'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python engineering_run_receipt.py
+      - name: Actual-clock readiness and explicit original publisher bridge
+        id: readiness
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          READINESS_MODE: ${{ github.event_name == 'workflow_run' && 'bridge' || inputs.mode || 'audit' }}
+        run: python forward_readiness.py "$READINESS_MODE"
       - name: Preserve independent completion receipt
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: doge-completion-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}
+          name: doge-readiness-${{ github.run_id }}
           retention-days: 90
-          if-no-files-found: error
-          path: engineering_completion_receipt.json
+          if-no-files-found: warn
+          path: |
+            engineering_completion_receipt.json
+            forward-readiness-output/
+      - name: Fail visibly only after preserving operational gaps
+        if: steps.readiness.outputs.has_errors == 'true'
+        run: exit 1
