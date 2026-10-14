@@ -1,0 +1,54 @@
+name: Audit DOGE V2 frozen forward registration
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, 'research/phase2-protocol-*']
+    paths: ['phase2_forward*.py', 'test_phase2_forward*.py', 'config/phase2_forward*.json', 'research/phase2_forward_v1/**', '.github/workflows/phase2_forward*.yml']
+  pull_request:
+    paths: ['phase2_forward*.py', 'test_phase2_forward*.py', 'config/phase2_forward*.json', 'research/phase2_forward_v1/**', '.github/workflows/phase2_forward*.yml']
+  workflow_run:
+    workflows: ['Backfill DOGE BTC ETH 1H extreme-event research history', 'Publish DOGE V2 frozen forward evidence']
+    types: [completed]
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: phase2-forward-audit-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  audit:
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.event != 'pull_request')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONUTF8: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install numpy==2.3.5 scipy==1.16.3 scikit-learn==1.7.2 joblib==1.5.2 threadpoolctl==3.6.0 botocore==1.43.112
+      - name: All tests and original frozen history
+        run: |
+          python -m unittest discover -q
+          python forward_validation_v2.py --integrity-only
+      - name: Exact new registration and real publication replay
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python phase2_forward_runtime.py audit
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase2-forward-audit-${{ github.run_id }}
+          path: |
+            phase2-forward-output/
+            config/phase2_forward_v1.json
+            config/phase2_forward_registration_v1.json
+            research/phase2_forward_v1/model.json
+          if-no-files-found: error
+          retention-days: 90
