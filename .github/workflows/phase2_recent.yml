@@ -34,8 +34,8 @@ jobs:
           python forward_validation_v2.py --integrity-only
       - name: Replay registered recent weights twice from exact Git source
         run: |
-          python phase2_recent.py --source-commit 14e1b27d23190bb241d3b738619c352d58d76c54 --trained-at 2026-10-14T09:06:33Z --out recent-output/replayed-model.json
-          python phase2_recent.py --source-commit 14e1b27d23190bb241d3b738619c352d58d76c54 --trained-at 2026-10-14T09:06:33Z --out research/phase2_recent_v1/model.json --verify
+          python phase2_recent.py --source-commit 14e1b27d23190bb241d3b738619c352d58d76c54 --trained-at 2026-10-14T09:15:22Z --out recent-output/replayed-model.json
+          python phase2_recent.py --source-commit 14e1b27d23190bb241d3b738619c352d58d76c54 --trained-at 2026-10-14T09:15:22Z --out research/phase2_recent_v1/model.json --verify
           cmp research/phase2_recent_v1/model.json recent-output/replayed-model.json
       - uses: actions/upload-artifact@v4
         if: always()

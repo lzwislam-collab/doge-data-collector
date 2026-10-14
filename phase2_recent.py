@@ -41,11 +41,14 @@ def train(frame,now):
     if len(rows)!=4096:raise ValueError('4096 usable matured training labels required')
     available=max(frame['DOGE-USDT']['seen'][r['index']+1] for r in rows)
     if available>now:raise ValueError('future training label')
-    x=[[r['x'][j] for j in COLS] for r in rows];y=[r['y'] for r in rows]
+    # Explicit input quantization also applies to this version's future inference.
+    # Avoid claiming bit-identical transcendental results across CPU libraries.
+    x=[[round(r['x'][j],9) for j in COLS] for r in rows];y=[r['y'] for r in rows]
     model={'base':models.fit_base(SETTING,x,y,{}),'calibration':'raw',
            'probability_calibration_validated':False}
     return {'schema':'DOGE_PHASE2_RECENT_RETRAIN_V1','hypothesis':'1_raw__drop_doge_momentum',
-        'setting':SETTING.copy(),'columns':COLS.copy(),'training_n':len(rows),'trained_at_ms':now,
+        'setting':SETTING.copy(),'columns':COLS.copy(),'feature_decimal_places':9,
+        'training_n':len(rows),'trained_at_ms':now,
         'first_training_anchor_ms':rows[0]['anchor_ms'],'last_training_anchor_ms':rows[-1]['anchor_ms'],
         'latest_label_end_ms':max(r['label_end_ms'] for r in rows),'latest_label_available_ms':available,
         'max_training_data_age_days':14,'model':model,

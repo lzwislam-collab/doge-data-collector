@@ -43,4 +43,8 @@ class RecentTests(unittest.TestCase):
         self.assertEqual(a['columns'],list(range(5,17)))
         self.assertEqual(a['setting'],{'model':'shrinkage_lda','regularization':.3})
 
+    def test_explicit_feature_numeric_contract(self):
+        a=recent.train(frame(),4300*H+2000)
+        self.assertEqual(a['feature_decimal_places'],9)
+
 if __name__=='__main__':unittest.main()
