@@ -1,0 +1,68 @@
+name: DOGE Phase2 V2 probability and future protocol research
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, 'research/phase2-v2-*']
+    paths: ['phase2_*_v2.py','phase2_research_v2.py','test_phase2_v2.py','config/phase2_research_v2.json','.github/workflows/phase2_research_v2.yml']
+  pull_request:
+    paths: ['phase2_*_v2.py','phase2_research_v2.py','test_phase2_v2.py','config/phase2_research_v2.json','.github/workflows/phase2_research_v2.yml']
+permissions:
+  contents: read
+concurrency:
+  group: phase2-v2-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  research:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PYTHONUTF8: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Pin official training and numerical dependencies
+        run: python -m pip install numpy==2.3.5 scipy==1.16.3 scikit-learn==1.7.2 joblib==1.5.2 threadpoolctl==3.6.0 botocore==1.43.112
+      - name: Full regression and frozen original integrity
+        run: |
+          python -m unittest discover -q
+          python forward_validation_v2.py --integrity-only
+      - name: Exact registered source snapshot
+        run: python phase1_research_snapshot.py --out "$RUNNER_TEMP/phase2-v2-input"
+      - name: Sequential models, calibration, stability and future eligibility
+        run: python phase2_research_v2.py --source "$RUNNER_TEMP/phase2-v2-input" --out phase2-v2-output
+      - name: Repeat independent execution and verify artifacts
+        run: |
+          python phase2_research_v2.py --source "$RUNNER_TEMP/phase2-v2-input" --out "$RUNNER_TEMP/phase2-v2-repeat"
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          import phase2_research_v2 as e
+          a=Path('phase2-v2-output');b=Path(os.environ['RUNNER_TEMP'])/'phase2-v2-repeat'
+          e.verify_output(a);e.verify_output(b)
+          names=['research.json','registry.json','future_protocol_draft.json']+[p.relative_to(a).as_posix() for folder in ('models','candidates') for p in (a/folder).glob('*.json')]
+          assert all((a/n).read_bytes()==(b/n).read_bytes() for n in names)
+          result=json.loads((a/'research.json').read_bytes());draft=json.loads((a/'future_protocol_draft.json').read_bytes())
+          assert result['actual_fits']==1056 and not draft['auto_issuance_authorized']
+          report={'status':'EXACT_BYTES_REPRODUCED','compared_artifacts':len(names),'experiment_id':result['experiment_id'],
+                  'research_sha256':e.sha((a/'research.json').read_bytes()),'draft_status':draft['status'],
+                  'eligible_candidates':len(draft['candidates']),'production_model_changed':False}
+          (a/'reproducibility.json').write_bytes(e.encode(report));print(json.dumps(report))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doge-phase2-v2-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            phase2-v2-output/
+            config/phase2_research_v2.json
+            docs/superpowers/plans/2026-10-14-phase2-v2.md
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 90
