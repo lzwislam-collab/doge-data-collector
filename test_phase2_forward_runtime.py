@@ -7,11 +7,15 @@ import test_phase2_forward as fixtures
 import test_learned_shadow_v1 as quotes
 
 class Runtime(unittest.TestCase):
+ def repo(self,root):
+  def git(*args):subprocess.run(['git','-c','safe.directory=*',*args],cwd=root,check=True,capture_output=True)
+  git('init');git('config','user.email','fixture@example.invalid');git('config','user.name','fixture');git('commit','--allow-empty','-m','initial fixture')
+  return git
  def test_registration_uses_exact_fixed_file_set(self):
   with self.assertRaises(ValueError):r.verify_files(Path('.'),{'sha256_lf':{}})
  def test_append_cannot_overwrite_or_escape(self):
   with tempfile.TemporaryDirectory() as d:
-   root=Path(d);row={'event_id':'1_canary'}
+   root=Path(d);self.repo(root);row={'event_id':'1_canary'}
    r.append(root,'events','1_canary',row)
    with self.assertRaises(FileExistsError):r.append(root,'events','1_canary',row)
    with self.assertRaises(ValueError):r.append(root,'events','../x',row)
@@ -35,8 +39,7 @@ class Runtime(unittest.TestCase):
  def test_deleted_published_record_is_rejected(self):
   with tempfile.TemporaryDirectory() as d:
    root=Path(d)
-   def git(*args):subprocess.run(['git','-c','safe.directory=*',*args],cwd=root,check=True,capture_output=True)
-   git('init');git('config','user.email','fixture@example.invalid');git('config','user.name','fixture')
+   git=self.repo(root)
    r.append(root,'events','1_canary',{'event_id':'1_canary'})
    git('add','.');git('commit','-m','fixture')
    (root/f.BASE/'events/1_canary.json').unlink()
