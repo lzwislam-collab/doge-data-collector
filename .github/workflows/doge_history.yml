@@ -27,7 +27,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Test registry and scoring integrity
-        run: python -m unittest -v test_prospective_score test_prospective_integrity test_forecast_v41 test_calibration_v41 test_ops_v41
+        run: python -m unittest -v test_daily_history_quality test_prospective_score test_prospective_integrity test_forecast_v41 test_calibration_v41 test_ops_v41
       # Exclusive automatic writer for prospective registry and scoring.
       - name: Backfill historical UTC close data and audit
         id: collect

@@ -119,9 +119,10 @@ def main():
             except Exception as e:raise RuntimeError(symbol+': '+str(e)) from e
         values=sorted(old.values(),key=lambda r:(r['symbol'],int(r['open_utc_ms'])))
         quality=audit(values)
-        if quality['duplicate_keys']:raise ValueError('Duplicated keys after merge')
-        write(path,dump(values))
         out['quality']=quality
+        if quality['duplicate_keys']:raise ValueError('Duplicated keys after merge')
+        if any(v['missing_days_between_endpoints'] for v in quality['symbols'].values()):raise ValueError('Daily history has internal missing UTC days; existing history preserved')
+        write(path,dump(values))
         result=backtest(values)
         write(BASE/'backtest_latest.json',json.dumps(result,ensure_ascii=False,indent=2)+'\n')
         out['backtest_status']=result['status']

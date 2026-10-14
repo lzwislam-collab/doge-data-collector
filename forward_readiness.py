@@ -62,7 +62,7 @@ def health(events,scores,now,last_closed,qualified):
  if missing_targets:errors.append('MISSING_TARGET')
  if near:errors.append('TARGET_DEADLINE_NEAR')
  expected=now.replace(minute=0,second=0,microsecond=0)
- if last_closed<expected and now-expected>=timedelta(minutes=15):errors.append('LATEST_CLOSED_BAR_MISSING')
+ if last_closed<expected and (now-expected>=timedelta(minutes=15) or last_closed<expected-timedelta(hours=1)):errors.append('LATEST_CLOSED_BAR_MISSING')
  qids={q['event_id'] for q in qualified};missing_witness=[e['event_id'] for e in events if e['event_id'] in scored and f.deadline(e,p)<=now and e['event_id'] not in qids]
  if missing_witness:errors.append('PUBLIC_DEADLINE_EVIDENCE_MISSING')
  return {'at_utc':now.isoformat(),'before_r2_activation':now<start,'missing_issuance':len(missing),'missing_issuance_ids':missing,
