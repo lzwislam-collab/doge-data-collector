@@ -329,7 +329,7 @@ jobs:
         id: pit_preparation
         if: always() && steps.supplemental_evidence.outcome == 'success'
         continue-on-error: true
-        timeout-minutes: 2
+        timeout-minutes: 6
         run: |
           python pit_retention_preparation.py prepare --latest --daily
           python - <<'PY'

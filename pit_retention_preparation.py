@@ -138,13 +138,20 @@ def verify_external(config,expected_sha256,now=None,client=None,identity_client=
         params=dict(bucket,Key=config['key'],VersionId=config['version_id'])
         retention=client.get_object_retention(**params)['Retention'];until=clock(retention['RetainUntilDate'])
         if retention['Mode']!='COMPLIANCE' or until<now+timedelta(days=days):raise ValueError('COMPLIANCE or minimum remaining duration missing')
+        import tempfile
         response=client.get_object(**params);body=response['Body'];sha=hashlib.sha256();size=0
+        buffered=tempfile.SpooledTemporaryFile(max_size=1024*1024)
         try:
             for chunk in iter(lambda:body.read(1024*1024),b''):
                 size+=len(chunk)
                 if size>LIMIT_BYTES:raise ValueError('external object exceeds cap')
                 sha.update(chunk)
-        finally:body.close()
+                buffered.write(chunk)
+            buffered.seek(0)
+            try:descriptor=json.load(buffered)
+            except (ValueError,UnicodeError):descriptor=None
+        finally:body.close();buffered.close()
+        if isinstance(descriptor,dict) and descriptor.get('bundle_kind')=='SHARDED_INVENTORY_INDEX':raise ValueError('every shard requires pinned version and COMPLIANCE readback; index alone insufficient')
         modified=clock(response['LastModified'])
         completed=now if supplied_clock else datetime.now(timezone.utc)
         target=clock(target_at) if target_at is not None else None
@@ -161,6 +168,63 @@ def verify_external(config,expected_sha256,now=None,client=None,identity_client=
     except ImportError:result.update(status='UNAVAILABLE',reason='Optional botocore unavailable; nothing installed')
     except Exception as exc:result.update(reason=type(exc).__name__+': verification rejected')
     return result
+
+def prepare_inventory_bundle(root,objects,now=None):
+    """Keep the per-part cap; cover every object in an exact-byte shard index."""
+    root=Path(root).resolve();now=clock(now or datetime.now(timezone.utc))
+    if not objects:raise ValueError('empty inventory')
+    groups=[];group={};size=0
+    for name,sha in sorted(objects.items()):
+        count=safe(root,name).stat().st_size
+        if count>LIMIT_BYTES:raise ValueError('single evidence object exceeds cap')
+        if group and size+count>LIMIT_BYTES:groups.append(group);group={};size=0
+        group[name]=sha;size+=count
+    if group:groups.append(group)
+    if len(groups)>64:raise ValueError('inventory shard count exceeds cap')
+    if len(groups)==1:return prepare_bundle(root,objects,now)
+    parts=[]
+    for group in groups:
+        _,part=prepare_bundle(root,group,now)
+        parts.append({k:part[k] for k in ('bundle_path','bundle_sha256','byte_count','objects')})
+    manifest={'schema_version':2,'bundle_kind':'SHARDED_INVENTORY_INDEX','prepared_at_utc':now.isoformat(),
+        'objects':dict(sorted(objects.items())),'parts':parts,'per_part_uncompressed_cap':LIMIT_BYTES,
+        'independent_retention_verified':False,'all_part_versions_and_retention_required':True}
+    raw=canonical(manifest);sha=digest(raw);path=safe(root,BASE+'/bundles/'+sha+'.index.json')
+    if path.exists():
+        if path.read_bytes()!=raw:raise ValueError('existing index changed')
+    else:
+        with path.open('xb') as stream:stream.write(raw)
+    result={'status':'NOT_CONFIGURED','independent_retention_verified':False,'bundle_path':path.relative_to(root).as_posix(),
+        'bundle_sha256':sha,'byte_count':len(raw),'objects':len(objects),'prepared_at_utc':now.isoformat(),
+        'upload_performed':False,'storage_provisioned':False,'credentials_required_in_chat':False,
+        'bundle_kind':'SHARDED_INVENTORY_INDEX','part_count':len(parts),
+        'all_part_versions_and_retention_required':True}
+    verify_inventory_bundle(root,result)
+    return path,result
+
+def verify_inventory_bundle(root,receipt):
+    root=Path(root).resolve();path=safe(root,receipt['bundle_path']);raw=path.read_bytes()
+    if digest(raw)!=receipt['bundle_sha256']:raise ValueError('inventory package changed')
+    if receipt.get('bundle_kind')!='SHARDED_INVENTORY_INDEX':return
+    manifest=json.loads(raw)
+    if manifest.get('bundle_kind')!='SHARDED_INVENTORY_INDEX' or not 2<=len(manifest['parts'])<=64 or manifest['per_part_uncompressed_cap']!=LIMIT_BYTES:raise ValueError('invalid shard index')
+    combined={}
+    for part in manifest['parts']:
+        part_path=safe(root,part['bundle_path']);payload=part_path.read_bytes()
+        if digest(payload)!=part['bundle_sha256'] or len(payload)!=part['byte_count']:raise ValueError('inventory shard changed')
+        with zipfile.ZipFile(io_bytes(payload)) as archive:
+            detail=json.loads(archive.read('bundle_manifest.json'));names=archive.namelist()
+            if len(set(names))!=len(names) or set(names)!={'bundle_manifest.json',*detail['objects']}:raise ValueError('incomplete/duplicate shard entries')
+            total=0
+            for name,expected in detail['objects'].items():
+                safe(root,name);total+=archive.getinfo(name).file_size
+                if total>LIMIT_BYTES or name in combined or digest(archive.read(name))!=expected:raise ValueError('shard size/coverage/hash mismatch')
+                combined[name]=expected
+    if combined!=manifest['objects'] or len(combined)!=receipt['objects']:raise ValueError('shard inventory omission')
+
+def io_bytes(raw):
+    import io
+    return io.BytesIO(raw)
 
 def write_latest(root,result):
     output=safe(root,BASE+'/latest.json');output.parent.mkdir(parents=True,exist_ok=True)
@@ -199,7 +263,7 @@ def record_artifact(root,artifact_id,artifact_digest,run_id,now=None):
     if not str(artifact_id).isdigit() or int(artifact_id)<=0 or not re.fullmatch('[a-f0-9]{64}',artifact_digest):raise ValueError('valid action artifact outputs required')
     if clock(prior['prepared_at_utc'])>now:raise ValueError('future preparation')
     bundle=safe(root,prior['bundle_path'])
-    if digest(bundle.read_bytes())!=prior['bundle_sha256']:raise ValueError('local bundle changed before artifact acknowledgement')
+    verify_inventory_bundle(root,prior)
     result={'status':'GITHUB_ARTIFACT_UPLOAD_RECORDED_NOT_WORM','recorded_at_utc':now.isoformat(),
         'artifact_id':str(artifact_id),'artifact_archive_sha256':artifact_digest,'run_id':str(run_id),
         'bundle_sha256':prior['bundle_sha256'],'implementation_sha256':prior['implementation_sha256'],
@@ -275,7 +339,7 @@ def prepare_existing(root,manifest,now=None):
     ledger=root/'data/enhancement_sources_v1/observations.jsonl'
     rows=[json.loads(line) for line in ledger.read_text(encoding='utf-8').splitlines()] if ledger.exists() else []
     selected=select_asof(root,rows,now,48*3600)
-    bundle,result=prepare_bundle(root,objects,now)
+    bundle,result=prepare_inventory_bundle(root,objects,now)
     result.update(source_ledger_rows=len(rows),receipt_fresh_asof_rows=len(selected),receipt_freshness_hours=48,
         source_observation_age_limits_verified=False,model_use_authorized=False,historical_first_publication_verified=False,
         retention_export_path=export_path.relative_to(root).as_posix())

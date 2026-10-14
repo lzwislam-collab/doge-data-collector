@@ -1,0 +1,30 @@
+name: Audit bounded PIT inventory shards
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, 'fix/pit-package-shards-*']
+    paths: ['pit_retention_preparation.py','test_pit_retention_preparation.py','.github/workflows/pit_shard_audit.yml']
+  pull_request:
+    paths: ['pit_retention_preparation.py','test_pit_retention_preparation.py','.github/workflows/pit_shard_audit.yml']
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONUTF8: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install numpy==2.3.5 scipy==1.16.3 scikit-learn==1.7.2 joblib==1.5.2 threadpoolctl==3.6.0 botocore==1.43.112
+      - run: |
+          python -m unittest discover -q
+          python forward_validation_v2.py --integrity-only
