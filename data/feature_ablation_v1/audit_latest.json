@@ -1,18 +1,18 @@
 {
   "schema_version": 1,
   "version_id": "DOGE_FEATURE_ABLATION_V1_20261013_0200",
-  "audited_at_utc": "2026-10-14T07:28:19.649828+00:00",
+  "audited_at_utc": "2026-10-14T08:09:16.487524+00:00",
   "status": "ACTIVE_RESEARCH_SHADOW",
-  "registered_contexts": 60,
+  "registered_contexts": 62,
   "tracks": {
     "FOUR_HOUR_1h": {
-      "due_reserved": 14,
-      "qualified": 14,
+      "due_reserved": 15,
+      "qualified": 15,
       "missing": 0,
-      "accuracy_pct": 28.571428571428573,
-      "accuracy_missing_as_wrong_pct": 28.571428571428573,
-      "brier": 0.2557213189158006,
-      "no_trade_in_accuracy": 14,
+      "accuracy_pct": 33.333333333333336,
+      "accuracy_missing_as_wrong_pct": 33.333333333333336,
+      "brier": 0.25450743664175135,
+      "no_trade_in_accuracy": 15,
       "comparators": {
         "frozen_production": {
           "wins": 1,
@@ -27,7 +27,7 @@
           "promotion_authorized": false
         },
         "btc_momentum": {
-          "wins": 3,
+          "wins": 4,
           "losses": 3,
           "p_descriptive": 1.0,
           "promotion_authorized": false
@@ -39,9 +39,9 @@
           "promotion_authorized": false
         },
         "always_down": {
-          "wins": 4,
+          "wins": 5,
           "losses": 7,
-          "p_descriptive": 0.5488281250000008,
+          "p_descriptive": 0.7744140624999997,
           "promotion_authorized": false
         },
         "base_paired": {
@@ -53,9 +53,9 @@
       },
       "paper": {
         "selected_intervals": 15,
-        "matured_due_intervals": 14,
-        "completed_prefix_intervals": 14,
-        "completed_due_intervals": 14,
+        "matured_due_intervals": 15,
+        "completed_prefix_intervals": 15,
+        "completed_due_intervals": 15,
         "blocked_forecast_id": null,
         "blocked_reason": null,
         "waiting_reason": null,
@@ -81,9 +81,9 @@
           "started": true,
           "buy_legs": 1,
           "sell_legs": 0,
-          "prefix_liquidation_equity_usdt": 1020.5766155000946,
-          "prefix_net_return_pct": 2.0576615500094597,
-          "latest_available_liquidation_proxy_usdt": 1019.3739562784381,
+          "prefix_liquidation_equity_usdt": 1027.431773063537,
+          "prefix_net_return_pct": 2.743177306353717,
+          "latest_available_liquidation_proxy_usdt": 1027.431773063537,
           "sampled_drawdown_pct": 2.461917759589429,
           "recorded_trade_cost_components_usdt": {
             "buy_fee_usdt": 0.9990009989986623,
@@ -115,9 +115,9 @@
           "started": true,
           "buy_legs": 1,
           "sell_legs": 0,
-          "prefix_liquidation_equity_usdt": 1017.398152338212,
-          "prefix_net_return_pct": 1.7398152338211847,
-          "latest_available_liquidation_proxy_usdt": 1016.1991680176652,
+          "prefix_liquidation_equity_usdt": 1024.2323629655145,
+          "prefix_net_return_pct": 2.4232362965514564,
+          "latest_available_liquidation_proxy_usdt": 1024.2323629655145,
           "sampled_drawdown_pct": 2.4620732901126225,
           "recorded_trade_cost_components_usdt": {
             "buy_fee_usdt": 1.996007983891274,
@@ -128,15 +128,15 @@
           "actual_fill": false
         },
         "cash_net_return_pct": 0,
-        "excess_over_hold_pct_points": -2.0576615500094597,
+        "excess_over_hold_pct_points": -2.743177306353717,
         "excess_over_cash_pct_points": 0.0,
-        "double_cost_excess_over_hold_pct_points": -1.7398152338211847,
-        "no_trade_completed": 14,
+        "double_cost_excess_over_hold_pct_points": -2.4232362965514564,
+        "no_trade_completed": 15,
         "paper_long_completed": 0,
-        "path_gap_count": 26,
+        "path_gap_count": 27,
         "tail_gap_seconds": 0,
-        "last_valid_mark_utc": "2026-10-14T07:28:16.501000+00:00",
-        "latest_mark_age_seconds": 3.148828,
+        "last_valid_mark_utc": "2026-10-14T08:09:12.554000+00:00",
+        "latest_mark_age_seconds": 3.933524,
         "latest_mark_fresh": true,
         "tail_path_gap": false,
         "missing_mark_count": 0,
@@ -436,22 +436,36 @@
               "double_cost_hold": 1017.398152338212
             },
             "actual_fill": false
+          },
+          {
+            "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1791954000000_1h",
+            "entry_book_sha256": "d7adddce0ef08d8269fb099f43a909f050bbccf8539fda706c7a390d522c6a22",
+            "entry_quote_utc": "2026-10-14T06:45:13.152000+00:00",
+            "paper_action": "NO_TRADE",
+            "pair_sha256": "6eb2e0b36c59478e9468a54f69242513c04cb9dae5bff405af563d5a7877078c",
+            "entry_legs": {},
+            "exit_book_sha256": "9320afcd7a08e11e0656ae3fa8412d7a9ab2cf8de62041990dd912142c9ad77b",
+            "exit_quote_utc": "2026-10-14T08:09:12.554000+00:00",
+            "exit_legs": {
+              "strategy": null,
+              "double_cost": null
+            },
+            "equity_usdt": {
+              "strategy": 1000.0,
+              "double_cost": 1000.0,
+              "hold": 1027.431773063537,
+              "double_cost_hold": 1024.2323629655145
+            },
+            "actual_fill": false
           }
         ],
-        "open_interval": {
-          "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1791954000000_1h",
-          "entry_book_sha256": "d7adddce0ef08d8269fb099f43a909f050bbccf8539fda706c7a390d522c6a22",
-          "entry_quote_utc": "2026-10-14T06:45:13.152000+00:00",
-          "paper_action": "NO_TRADE",
-          "pair_sha256": "6eb2e0b36c59478e9468a54f69242513c04cb9dae5bff405af563d5a7877078c",
-          "entry_legs": {}
-        }
+        "open_interval": null
       },
       "paired_control_same_qualified_sources_paper": {
         "selected_intervals": 15,
-        "matured_due_intervals": 14,
-        "completed_prefix_intervals": 14,
-        "completed_due_intervals": 14,
+        "matured_due_intervals": 15,
+        "completed_prefix_intervals": 15,
+        "completed_due_intervals": 15,
         "blocked_forecast_id": null,
         "blocked_reason": null,
         "waiting_reason": null,
@@ -477,9 +491,9 @@
           "started": true,
           "buy_legs": 1,
           "sell_legs": 0,
-          "prefix_liquidation_equity_usdt": 1020.5766155000946,
-          "prefix_net_return_pct": 2.0576615500094597,
-          "latest_available_liquidation_proxy_usdt": 1019.3739562784381,
+          "prefix_liquidation_equity_usdt": 1027.431773063537,
+          "prefix_net_return_pct": 2.743177306353717,
+          "latest_available_liquidation_proxy_usdt": 1027.431773063537,
           "sampled_drawdown_pct": 2.461917759589429,
           "recorded_trade_cost_components_usdt": {
             "buy_fee_usdt": 0.9990009989986623,
@@ -511,9 +525,9 @@
           "started": true,
           "buy_legs": 1,
           "sell_legs": 0,
-          "prefix_liquidation_equity_usdt": 1017.398152338212,
-          "prefix_net_return_pct": 1.7398152338211847,
-          "latest_available_liquidation_proxy_usdt": 1016.1991680176652,
+          "prefix_liquidation_equity_usdt": 1024.2323629655145,
+          "prefix_net_return_pct": 2.4232362965514564,
+          "latest_available_liquidation_proxy_usdt": 1024.2323629655145,
           "sampled_drawdown_pct": 2.4620732901126225,
           "recorded_trade_cost_components_usdt": {
             "buy_fee_usdt": 1.996007983891274,
@@ -524,15 +538,15 @@
           "actual_fill": false
         },
         "cash_net_return_pct": 0,
-        "excess_over_hold_pct_points": -2.0576615500094597,
+        "excess_over_hold_pct_points": -2.743177306353717,
         "excess_over_cash_pct_points": 0.0,
-        "double_cost_excess_over_hold_pct_points": -1.7398152338211847,
-        "no_trade_completed": 14,
+        "double_cost_excess_over_hold_pct_points": -2.4232362965514564,
+        "no_trade_completed": 15,
         "paper_long_completed": 0,
-        "path_gap_count": 26,
+        "path_gap_count": 27,
         "tail_gap_seconds": 0,
-        "last_valid_mark_utc": "2026-10-14T07:28:16.501000+00:00",
-        "latest_mark_age_seconds": 3.148828,
+        "last_valid_mark_utc": "2026-10-14T08:09:12.554000+00:00",
+        "latest_mark_age_seconds": 3.933524,
         "latest_mark_fresh": true,
         "tail_path_gap": false,
         "missing_mark_count": 0,
@@ -832,21 +846,35 @@
               "double_cost_hold": 1017.398152338212
             },
             "actual_fill": false
+          },
+          {
+            "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1791954000000_1h",
+            "entry_book_sha256": "d7adddce0ef08d8269fb099f43a909f050bbccf8539fda706c7a390d522c6a22",
+            "entry_quote_utc": "2026-10-14T06:45:13.152000+00:00",
+            "paper_action": "NO_TRADE",
+            "pair_sha256": "6eb2e0b36c59478e9468a54f69242513c04cb9dae5bff405af563d5a7877078c",
+            "entry_legs": {},
+            "exit_book_sha256": "9320afcd7a08e11e0656ae3fa8412d7a9ab2cf8de62041990dd912142c9ad77b",
+            "exit_quote_utc": "2026-10-14T08:09:12.554000+00:00",
+            "exit_legs": {
+              "strategy": null,
+              "double_cost": null
+            },
+            "equity_usdt": {
+              "strategy": 1000.0,
+              "double_cost": 1000.0,
+              "hold": 1027.431773063537,
+              "double_cost_hold": 1024.2323629655145
+            },
+            "actual_fill": false
           }
         ],
-        "open_interval": {
-          "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1791954000000_1h",
-          "entry_book_sha256": "d7adddce0ef08d8269fb099f43a909f050bbccf8539fda706c7a390d522c6a22",
-          "entry_quote_utc": "2026-10-14T06:45:13.152000+00:00",
-          "paper_action": "NO_TRADE",
-          "pair_sha256": "6eb2e0b36c59478e9468a54f69242513c04cb9dae5bff405af563d5a7877078c",
-          "entry_legs": {}
-        }
+        "open_interval": null
       },
-      "full_source_forecast_count": 30,
-      "registered_context_count": 30,
-      "original_closed_hour_slots": 28,
-      "context_closed_hour_slots": 28,
+      "full_source_forecast_count": 31,
+      "registered_context_count": 31,
+      "original_closed_hour_slots": 29,
+      "context_closed_hour_slots": 29,
       "probability_calibration_validated": false,
       "economic_gain_verified": false
     },
@@ -1068,21 +1096,21 @@
         "ledger": [],
         "open_interval": null
       },
-      "full_source_forecast_count": 30,
-      "registered_context_count": 30,
-      "original_closed_hour_slots": 28,
-      "context_closed_hour_slots": 28,
+      "full_source_forecast_count": 31,
+      "registered_context_count": 31,
+      "original_closed_hour_slots": 29,
+      "context_closed_hour_slots": 29,
       "probability_calibration_validated": false,
       "economic_gain_verified": false
     },
     "DXY_1h": {
-      "due_reserved": 14,
-      "qualified": 14,
+      "due_reserved": 15,
+      "qualified": 15,
       "missing": 0,
-      "accuracy_pct": 50.0,
-      "accuracy_missing_as_wrong_pct": 50.0,
-      "brier": 0.25029312582775576,
-      "no_trade_in_accuracy": 14,
+      "accuracy_pct": 53.333333333333336,
+      "accuracy_missing_as_wrong_pct": 53.333333333333336,
+      "brier": 0.24956180585457616,
+      "no_trade_in_accuracy": 15,
       "comparators": {
         "frozen_production": {
           "wins": 2,
@@ -1097,9 +1125,9 @@
           "promotion_authorized": false
         },
         "btc_momentum": {
-          "wins": 4,
+          "wins": 5,
           "losses": 1,
-          "p_descriptive": 0.37500000000000044,
+          "p_descriptive": 0.21875000000000014,
           "promotion_authorized": false
         },
         "always_up": {
@@ -1109,7 +1137,7 @@
           "promotion_authorized": false
         },
         "always_down": {
-          "wins": 7,
+          "wins": 8,
           "losses": 7,
           "p_descriptive": 1.0,
           "promotion_authorized": false
@@ -1123,9 +1151,9 @@
       },
       "paper": {
         "selected_intervals": 15,
-        "matured_due_intervals": 14,
-        "completed_prefix_intervals": 14,
-        "completed_due_intervals": 14,
+        "matured_due_intervals": 15,
+        "completed_prefix_intervals": 15,
+        "completed_due_intervals": 15,
         "blocked_forecast_id": null,
         "blocked_reason": null,
         "waiting_reason": null,
@@ -1151,9 +1179,9 @@
           "started": true,
           "buy_legs": 1,
           "sell_legs": 0,
-          "prefix_liquidation_equity_usdt": 1020.5766155000946,
-          "prefix_net_return_pct": 2.0576615500094597,
-          "latest_available_liquidation_proxy_usdt": 1019.3739562784381,
+          "prefix_liquidation_equity_usdt": 1027.431773063537,
+          "prefix_net_return_pct": 2.743177306353717,
+          "latest_available_liquidation_proxy_usdt": 1027.431773063537,
           "sampled_drawdown_pct": 2.461917759589429,
           "recorded_trade_cost_components_usdt": {
             "buy_fee_usdt": 0.9990009989986623,
@@ -1185,9 +1213,9 @@
           "started": true,
           "buy_legs": 1,
           "sell_legs": 0,
-          "prefix_liquidation_equity_usdt": 1017.398152338212,
-          "prefix_net_return_pct": 1.7398152338211847,
-          "latest_available_liquidation_proxy_usdt": 1016.1991680176652,
+          "prefix_liquidation_equity_usdt": 1024.2323629655145,
+          "prefix_net_return_pct": 2.4232362965514564,
+          "latest_available_liquidation_proxy_usdt": 1024.2323629655145,
           "sampled_drawdown_pct": 2.4620732901126225,
           "recorded_trade_cost_components_usdt": {
             "buy_fee_usdt": 1.996007983891274,
@@ -1198,15 +1226,15 @@
           "actual_fill": false
         },
         "cash_net_return_pct": 0,
-        "excess_over_hold_pct_points": -2.0576615500094597,
+        "excess_over_hold_pct_points": -2.743177306353717,
         "excess_over_cash_pct_points": 0.0,
-        "double_cost_excess_over_hold_pct_points": -1.7398152338211847,
-        "no_trade_completed": 14,
+        "double_cost_excess_over_hold_pct_points": -2.4232362965514564,
+        "no_trade_completed": 15,
         "paper_long_completed": 0,
-        "path_gap_count": 26,
+        "path_gap_count": 27,
         "tail_gap_seconds": 0,
-        "last_valid_mark_utc": "2026-10-14T07:28:16.501000+00:00",
-        "latest_mark_age_seconds": 3.148828,
+        "last_valid_mark_utc": "2026-10-14T08:09:12.554000+00:00",
+        "latest_mark_age_seconds": 3.933524,
         "latest_mark_fresh": true,
         "tail_path_gap": false,
         "missing_mark_count": 0,
@@ -1506,22 +1534,36 @@
               "double_cost_hold": 1017.398152338212
             },
             "actual_fill": false
+          },
+          {
+            "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1791954000000_1h",
+            "entry_book_sha256": "d7adddce0ef08d8269fb099f43a909f050bbccf8539fda706c7a390d522c6a22",
+            "entry_quote_utc": "2026-10-14T06:45:13.152000+00:00",
+            "paper_action": "NO_TRADE",
+            "pair_sha256": "6eb2e0b36c59478e9468a54f69242513c04cb9dae5bff405af563d5a7877078c",
+            "entry_legs": {},
+            "exit_book_sha256": "9320afcd7a08e11e0656ae3fa8412d7a9ab2cf8de62041990dd912142c9ad77b",
+            "exit_quote_utc": "2026-10-14T08:09:12.554000+00:00",
+            "exit_legs": {
+              "strategy": null,
+              "double_cost": null
+            },
+            "equity_usdt": {
+              "strategy": 1000.0,
+              "double_cost": 1000.0,
+              "hold": 1027.431773063537,
+              "double_cost_hold": 1024.2323629655145
+            },
+            "actual_fill": false
           }
         ],
-        "open_interval": {
-          "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1791954000000_1h",
-          "entry_book_sha256": "d7adddce0ef08d8269fb099f43a909f050bbccf8539fda706c7a390d522c6a22",
-          "entry_quote_utc": "2026-10-14T06:45:13.152000+00:00",
-          "paper_action": "NO_TRADE",
-          "pair_sha256": "6eb2e0b36c59478e9468a54f69242513c04cb9dae5bff405af563d5a7877078c",
-          "entry_legs": {}
-        }
+        "open_interval": null
       },
       "paired_control_same_qualified_sources_paper": {
         "selected_intervals": 15,
-        "matured_due_intervals": 14,
-        "completed_prefix_intervals": 14,
-        "completed_due_intervals": 14,
+        "matured_due_intervals": 15,
+        "completed_prefix_intervals": 15,
+        "completed_due_intervals": 15,
         "blocked_forecast_id": null,
         "blocked_reason": null,
         "waiting_reason": null,
@@ -1547,9 +1589,9 @@
           "started": true,
           "buy_legs": 1,
           "sell_legs": 0,
-          "prefix_liquidation_equity_usdt": 1020.5766155000946,
-          "prefix_net_return_pct": 2.0576615500094597,
-          "latest_available_liquidation_proxy_usdt": 1019.3739562784381,
+          "prefix_liquidation_equity_usdt": 1027.431773063537,
+          "prefix_net_return_pct": 2.743177306353717,
+          "latest_available_liquidation_proxy_usdt": 1027.431773063537,
           "sampled_drawdown_pct": 2.461917759589429,
           "recorded_trade_cost_components_usdt": {
             "buy_fee_usdt": 0.9990009989986623,
@@ -1581,9 +1623,9 @@
           "started": true,
           "buy_legs": 1,
           "sell_legs": 0,
-          "prefix_liquidation_equity_usdt": 1017.398152338212,
-          "prefix_net_return_pct": 1.7398152338211847,
-          "latest_available_liquidation_proxy_usdt": 1016.1991680176652,
+          "prefix_liquidation_equity_usdt": 1024.2323629655145,
+          "prefix_net_return_pct": 2.4232362965514564,
+          "latest_available_liquidation_proxy_usdt": 1024.2323629655145,
           "sampled_drawdown_pct": 2.4620732901126225,
           "recorded_trade_cost_components_usdt": {
             "buy_fee_usdt": 1.996007983891274,
@@ -1594,15 +1636,15 @@
           "actual_fill": false
         },
         "cash_net_return_pct": 0,
-        "excess_over_hold_pct_points": -2.0576615500094597,
+        "excess_over_hold_pct_points": -2.743177306353717,
         "excess_over_cash_pct_points": 0.0,
-        "double_cost_excess_over_hold_pct_points": -1.7398152338211847,
-        "no_trade_completed": 14,
+        "double_cost_excess_over_hold_pct_points": -2.4232362965514564,
+        "no_trade_completed": 15,
         "paper_long_completed": 0,
-        "path_gap_count": 26,
+        "path_gap_count": 27,
         "tail_gap_seconds": 0,
-        "last_valid_mark_utc": "2026-10-14T07:28:16.501000+00:00",
-        "latest_mark_age_seconds": 3.148828,
+        "last_valid_mark_utc": "2026-10-14T08:09:12.554000+00:00",
+        "latest_mark_age_seconds": 3.933524,
         "latest_mark_fresh": true,
         "tail_path_gap": false,
         "missing_mark_count": 0,
@@ -1902,21 +1944,35 @@
               "double_cost_hold": 1017.398152338212
             },
             "actual_fill": false
+          },
+          {
+            "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1791954000000_1h",
+            "entry_book_sha256": "d7adddce0ef08d8269fb099f43a909f050bbccf8539fda706c7a390d522c6a22",
+            "entry_quote_utc": "2026-10-14T06:45:13.152000+00:00",
+            "paper_action": "NO_TRADE",
+            "pair_sha256": "6eb2e0b36c59478e9468a54f69242513c04cb9dae5bff405af563d5a7877078c",
+            "entry_legs": {},
+            "exit_book_sha256": "9320afcd7a08e11e0656ae3fa8412d7a9ab2cf8de62041990dd912142c9ad77b",
+            "exit_quote_utc": "2026-10-14T08:09:12.554000+00:00",
+            "exit_legs": {
+              "strategy": null,
+              "double_cost": null
+            },
+            "equity_usdt": {
+              "strategy": 1000.0,
+              "double_cost": 1000.0,
+              "hold": 1027.431773063537,
+              "double_cost_hold": 1024.2323629655145
+            },
+            "actual_fill": false
           }
         ],
-        "open_interval": {
-          "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1791954000000_1h",
-          "entry_book_sha256": "d7adddce0ef08d8269fb099f43a909f050bbccf8539fda706c7a390d522c6a22",
-          "entry_quote_utc": "2026-10-14T06:45:13.152000+00:00",
-          "paper_action": "NO_TRADE",
-          "pair_sha256": "6eb2e0b36c59478e9468a54f69242513c04cb9dae5bff405af563d5a7877078c",
-          "entry_legs": {}
-        }
+        "open_interval": null
       },
-      "full_source_forecast_count": 30,
-      "registered_context_count": 30,
-      "original_closed_hour_slots": 28,
-      "context_closed_hour_slots": 28,
+      "full_source_forecast_count": 31,
+      "registered_context_count": 31,
+      "original_closed_hour_slots": 29,
+      "context_closed_hour_slots": 29,
       "probability_calibration_validated": false,
       "economic_gain_verified": false
     },
@@ -2138,21 +2194,21 @@
         "ledger": [],
         "open_interval": null
       },
-      "full_source_forecast_count": 30,
-      "registered_context_count": 30,
-      "original_closed_hour_slots": 28,
-      "context_closed_hour_slots": 28,
+      "full_source_forecast_count": 31,
+      "registered_context_count": 31,
+      "original_closed_hour_slots": 29,
+      "context_closed_hour_slots": 29,
       "probability_calibration_validated": false,
       "economic_gain_verified": false
     },
     "NEWS_TONE_1h": {
-      "due_reserved": 14,
-      "qualified": 14,
+      "due_reserved": 15,
+      "qualified": 15,
       "missing": 0,
-      "accuracy_pct": 50.0,
-      "accuracy_missing_as_wrong_pct": 50.0,
-      "brier": 0.25076152210759506,
-      "no_trade_in_accuracy": 14,
+      "accuracy_pct": 53.333333333333336,
+      "accuracy_missing_as_wrong_pct": 53.333333333333336,
+      "brier": 0.24988462436816722,
+      "no_trade_in_accuracy": 15,
       "comparators": {
         "frozen_production": {
           "wins": 2,
@@ -2167,9 +2223,9 @@
           "promotion_authorized": false
         },
         "btc_momentum": {
-          "wins": 4,
+          "wins": 5,
           "losses": 1,
-          "p_descriptive": 0.37500000000000044,
+          "p_descriptive": 0.21875000000000014,
           "promotion_authorized": false
         },
         "always_up": {
@@ -2179,7 +2235,7 @@
           "promotion_authorized": false
         },
         "always_down": {
-          "wins": 7,
+          "wins": 8,
           "losses": 7,
           "p_descriptive": 1.0,
           "promotion_authorized": false
@@ -2193,9 +2249,9 @@
       },
       "paper": {
         "selected_intervals": 15,
-        "matured_due_intervals": 14,
-        "completed_prefix_intervals": 14,
-        "completed_due_intervals": 14,
+        "matured_due_intervals": 15,
+        "completed_prefix_intervals": 15,
+        "completed_due_intervals": 15,
         "blocked_forecast_id": null,
         "blocked_reason": null,
         "waiting_reason": null,
@@ -2221,9 +2277,9 @@
           "started": true,
           "buy_legs": 1,
           "sell_legs": 0,
-          "prefix_liquidation_equity_usdt": 1020.5766155000946,
-          "prefix_net_return_pct": 2.0576615500094597,
-          "latest_available_liquidation_proxy_usdt": 1019.3739562784381,
+          "prefix_liquidation_equity_usdt": 1027.431773063537,
+          "prefix_net_return_pct": 2.743177306353717,
+          "latest_available_liquidation_proxy_usdt": 1027.431773063537,
           "sampled_drawdown_pct": 2.461917759589429,
           "recorded_trade_cost_components_usdt": {
             "buy_fee_usdt": 0.9990009989986623,
@@ -2255,9 +2311,9 @@
           "started": true,
           "buy_legs": 1,
           "sell_legs": 0,
-          "prefix_liquidation_equity_usdt": 1017.398152338212,
-          "prefix_net_return_pct": 1.7398152338211847,
-          "latest_available_liquidation_proxy_usdt": 1016.1991680176652,
+          "prefix_liquidation_equity_usdt": 1024.2323629655145,
+          "prefix_net_return_pct": 2.4232362965514564,
+          "latest_available_liquidation_proxy_usdt": 1024.2323629655145,
           "sampled_drawdown_pct": 2.4620732901126225,
           "recorded_trade_cost_components_usdt": {
             "buy_fee_usdt": 1.996007983891274,
@@ -2268,15 +2324,15 @@
           "actual_fill": false
         },
         "cash_net_return_pct": 0,
-        "excess_over_hold_pct_points": -2.0576615500094597,
+        "excess_over_hold_pct_points": -2.743177306353717,
         "excess_over_cash_pct_points": 0.0,
-        "double_cost_excess_over_hold_pct_points": -1.7398152338211847,
-        "no_trade_completed": 14,
+        "double_cost_excess_over_hold_pct_points": -2.4232362965514564,
+        "no_trade_completed": 15,
         "paper_long_completed": 0,
-        "path_gap_count": 26,
+        "path_gap_count": 27,
         "tail_gap_seconds": 0,
-        "last_valid_mark_utc": "2026-10-14T07:28:16.501000+00:00",
-        "latest_mark_age_seconds": 3.148828,
+        "last_valid_mark_utc": "2026-10-14T08:09:12.554000+00:00",
+        "latest_mark_age_seconds": 3.933524,
         "latest_mark_fresh": true,
         "tail_path_gap": false,
         "missing_mark_count": 0,
@@ -2576,22 +2632,36 @@
               "double_cost_hold": 1017.398152338212
             },
             "actual_fill": false
+          },
+          {
+            "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1791954000000_1h",
+            "entry_book_sha256": "d7adddce0ef08d8269fb099f43a909f050bbccf8539fda706c7a390d522c6a22",
+            "entry_quote_utc": "2026-10-14T06:45:13.152000+00:00",
+            "paper_action": "NO_TRADE",
+            "pair_sha256": "6eb2e0b36c59478e9468a54f69242513c04cb9dae5bff405af563d5a7877078c",
+            "entry_legs": {},
+            "exit_book_sha256": "9320afcd7a08e11e0656ae3fa8412d7a9ab2cf8de62041990dd912142c9ad77b",
+            "exit_quote_utc": "2026-10-14T08:09:12.554000+00:00",
+            "exit_legs": {
+              "strategy": null,
+              "double_cost": null
+            },
+            "equity_usdt": {
+              "strategy": 1000.0,
+              "double_cost": 1000.0,
+              "hold": 1027.431773063537,
+              "double_cost_hold": 1024.2323629655145
+            },
+            "actual_fill": false
           }
         ],
-        "open_interval": {
-          "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1791954000000_1h",
-          "entry_book_sha256": "d7adddce0ef08d8269fb099f43a909f050bbccf8539fda706c7a390d522c6a22",
-          "entry_quote_utc": "2026-10-14T06:45:13.152000+00:00",
-          "paper_action": "NO_TRADE",
-          "pair_sha256": "6eb2e0b36c59478e9468a54f69242513c04cb9dae5bff405af563d5a7877078c",
-          "entry_legs": {}
-        }
+        "open_interval": null
       },
       "paired_control_same_qualified_sources_paper": {
         "selected_intervals": 15,
-        "matured_due_intervals": 14,
-        "completed_prefix_intervals": 14,
-        "completed_due_intervals": 14,
+        "matured_due_intervals": 15,
+        "completed_prefix_intervals": 15,
+        "completed_due_intervals": 15,
         "blocked_forecast_id": null,
         "blocked_reason": null,
         "waiting_reason": null,
@@ -2617,9 +2687,9 @@
           "started": true,
           "buy_legs": 1,
           "sell_legs": 0,
-          "prefix_liquidation_equity_usdt": 1020.5766155000946,
-          "prefix_net_return_pct": 2.0576615500094597,
-          "latest_available_liquidation_proxy_usdt": 1019.3739562784381,
+          "prefix_liquidation_equity_usdt": 1027.431773063537,
+          "prefix_net_return_pct": 2.743177306353717,
+          "latest_available_liquidation_proxy_usdt": 1027.431773063537,
           "sampled_drawdown_pct": 2.461917759589429,
           "recorded_trade_cost_components_usdt": {
             "buy_fee_usdt": 0.9990009989986623,
@@ -2651,9 +2721,9 @@
           "started": true,
           "buy_legs": 1,
           "sell_legs": 0,
-          "prefix_liquidation_equity_usdt": 1017.398152338212,
-          "prefix_net_return_pct": 1.7398152338211847,
-          "latest_available_liquidation_proxy_usdt": 1016.1991680176652,
+          "prefix_liquidation_equity_usdt": 1024.2323629655145,
+          "prefix_net_return_pct": 2.4232362965514564,
+          "latest_available_liquidation_proxy_usdt": 1024.2323629655145,
           "sampled_drawdown_pct": 2.4620732901126225,
           "recorded_trade_cost_components_usdt": {
             "buy_fee_usdt": 1.996007983891274,
@@ -2664,15 +2734,15 @@
           "actual_fill": false
         },
         "cash_net_return_pct": 0,
-        "excess_over_hold_pct_points": -2.0576615500094597,
+        "excess_over_hold_pct_points": -2.743177306353717,
         "excess_over_cash_pct_points": 0.0,
-        "double_cost_excess_over_hold_pct_points": -1.7398152338211847,
-        "no_trade_completed": 14,
+        "double_cost_excess_over_hold_pct_points": -2.4232362965514564,
+        "no_trade_completed": 15,
         "paper_long_completed": 0,
-        "path_gap_count": 26,
+        "path_gap_count": 27,
         "tail_gap_seconds": 0,
-        "last_valid_mark_utc": "2026-10-14T07:28:16.501000+00:00",
-        "latest_mark_age_seconds": 3.148828,
+        "last_valid_mark_utc": "2026-10-14T08:09:12.554000+00:00",
+        "latest_mark_age_seconds": 3.933524,
         "latest_mark_fresh": true,
         "tail_path_gap": false,
         "missing_mark_count": 0,
@@ -2972,21 +3042,35 @@
               "double_cost_hold": 1017.398152338212
             },
             "actual_fill": false
+          },
+          {
+            "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1791954000000_1h",
+            "entry_book_sha256": "d7adddce0ef08d8269fb099f43a909f050bbccf8539fda706c7a390d522c6a22",
+            "entry_quote_utc": "2026-10-14T06:45:13.152000+00:00",
+            "paper_action": "NO_TRADE",
+            "pair_sha256": "6eb2e0b36c59478e9468a54f69242513c04cb9dae5bff405af563d5a7877078c",
+            "entry_legs": {},
+            "exit_book_sha256": "9320afcd7a08e11e0656ae3fa8412d7a9ab2cf8de62041990dd912142c9ad77b",
+            "exit_quote_utc": "2026-10-14T08:09:12.554000+00:00",
+            "exit_legs": {
+              "strategy": null,
+              "double_cost": null
+            },
+            "equity_usdt": {
+              "strategy": 1000.0,
+              "double_cost": 1000.0,
+              "hold": 1027.431773063537,
+              "double_cost_hold": 1024.2323629655145
+            },
+            "actual_fill": false
           }
         ],
-        "open_interval": {
-          "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1791954000000_1h",
-          "entry_book_sha256": "d7adddce0ef08d8269fb099f43a909f050bbccf8539fda706c7a390d522c6a22",
-          "entry_quote_utc": "2026-10-14T06:45:13.152000+00:00",
-          "paper_action": "NO_TRADE",
-          "pair_sha256": "6eb2e0b36c59478e9468a54f69242513c04cb9dae5bff405af563d5a7877078c",
-          "entry_legs": {}
-        }
+        "open_interval": null
       },
-      "full_source_forecast_count": 30,
-      "registered_context_count": 30,
-      "original_closed_hour_slots": 28,
-      "context_closed_hour_slots": 28,
+      "full_source_forecast_count": 31,
+      "registered_context_count": 31,
+      "original_closed_hour_slots": 29,
+      "context_closed_hour_slots": 29,
       "probability_calibration_validated": false,
       "economic_gain_verified": false
     },
@@ -3208,21 +3292,21 @@
         "ledger": [],
         "open_interval": null
       },
-      "full_source_forecast_count": 30,
-      "registered_context_count": 30,
-      "original_closed_hour_slots": 28,
-      "context_closed_hour_slots": 28,
+      "full_source_forecast_count": 31,
+      "registered_context_count": 31,
+      "original_closed_hour_slots": 29,
+      "context_closed_hour_slots": 29,
       "probability_calibration_validated": false,
       "economic_gain_verified": false
     },
     "BTC_SENTIMENT_1h": {
-      "due_reserved": 14,
-      "qualified": 14,
+      "due_reserved": 15,
+      "qualified": 15,
       "missing": 0,
-      "accuracy_pct": 50.0,
-      "accuracy_missing_as_wrong_pct": 50.0,
-      "brier": 0.24972741725457676,
-      "no_trade_in_accuracy": 14,
+      "accuracy_pct": 53.333333333333336,
+      "accuracy_missing_as_wrong_pct": 53.333333333333336,
+      "brier": 0.24806734020957,
+      "no_trade_in_accuracy": 15,
       "comparators": {
         "frozen_production": {
           "wins": 2,
@@ -3237,9 +3321,9 @@
           "promotion_authorized": false
         },
         "btc_momentum": {
-          "wins": 4,
+          "wins": 5,
           "losses": 1,
-          "p_descriptive": 0.37500000000000044,
+          "p_descriptive": 0.21875000000000014,
           "promotion_authorized": false
         },
         "always_up": {
@@ -3249,7 +3333,7 @@
           "promotion_authorized": false
         },
         "always_down": {
-          "wins": 7,
+          "wins": 8,
           "losses": 7,
           "p_descriptive": 1.0,
           "promotion_authorized": false
@@ -3263,9 +3347,9 @@
       },
       "paper": {
         "selected_intervals": 15,
-        "matured_due_intervals": 14,
-        "completed_prefix_intervals": 14,
-        "completed_due_intervals": 14,
+        "matured_due_intervals": 15,
+        "completed_prefix_intervals": 15,
+        "completed_due_intervals": 15,
         "blocked_forecast_id": null,
         "blocked_reason": null,
         "waiting_reason": null,
@@ -3291,9 +3375,9 @@
           "started": true,
           "buy_legs": 1,
           "sell_legs": 0,
-          "prefix_liquidation_equity_usdt": 1020.5766155000946,
-          "prefix_net_return_pct": 2.0576615500094597,
-          "latest_available_liquidation_proxy_usdt": 1019.3739562784381,
+          "prefix_liquidation_equity_usdt": 1027.431773063537,
+          "prefix_net_return_pct": 2.743177306353717,
+          "latest_available_liquidation_proxy_usdt": 1027.431773063537,
           "sampled_drawdown_pct": 2.461917759589429,
           "recorded_trade_cost_components_usdt": {
             "buy_fee_usdt": 0.9990009989986623,
@@ -3325,9 +3409,9 @@
           "started": true,
           "buy_legs": 1,
           "sell_legs": 0,
-          "prefix_liquidation_equity_usdt": 1017.398152338212,
-          "prefix_net_return_pct": 1.7398152338211847,
-          "latest_available_liquidation_proxy_usdt": 1016.1991680176652,
+          "prefix_liquidation_equity_usdt": 1024.2323629655145,
+          "prefix_net_return_pct": 2.4232362965514564,
+          "latest_available_liquidation_proxy_usdt": 1024.2323629655145,
           "sampled_drawdown_pct": 2.4620732901126225,
           "recorded_trade_cost_components_usdt": {
             "buy_fee_usdt": 1.996007983891274,
@@ -3338,15 +3422,15 @@
           "actual_fill": false
         },
         "cash_net_return_pct": 0,
-        "excess_over_hold_pct_points": -2.0576615500094597,
+        "excess_over_hold_pct_points": -2.743177306353717,
         "excess_over_cash_pct_points": 0.0,
-        "double_cost_excess_over_hold_pct_points": -1.7398152338211847,
-        "no_trade_completed": 14,
+        "double_cost_excess_over_hold_pct_points": -2.4232362965514564,
+        "no_trade_completed": 15,
         "paper_long_completed": 0,
-        "path_gap_count": 26,
+        "path_gap_count": 27,
         "tail_gap_seconds": 0,
-        "last_valid_mark_utc": "2026-10-14T07:28:16.501000+00:00",
-        "latest_mark_age_seconds": 3.148828,
+        "last_valid_mark_utc": "2026-10-14T08:09:12.554000+00:00",
+        "latest_mark_age_seconds": 3.933524,
         "latest_mark_fresh": true,
         "tail_path_gap": false,
         "missing_mark_count": 0,
@@ -3646,22 +3730,36 @@
               "double_cost_hold": 1017.398152338212
             },
             "actual_fill": false
+          },
+          {
+            "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1791954000000_1h",
+            "entry_book_sha256": "d7adddce0ef08d8269fb099f43a909f050bbccf8539fda706c7a390d522c6a22",
+            "entry_quote_utc": "2026-10-14T06:45:13.152000+00:00",
+            "paper_action": "NO_TRADE",
+            "pair_sha256": "6eb2e0b36c59478e9468a54f69242513c04cb9dae5bff405af563d5a7877078c",
+            "entry_legs": {},
+            "exit_book_sha256": "9320afcd7a08e11e0656ae3fa8412d7a9ab2cf8de62041990dd912142c9ad77b",
+            "exit_quote_utc": "2026-10-14T08:09:12.554000+00:00",
+            "exit_legs": {
+              "strategy": null,
+              "double_cost": null
+            },
+            "equity_usdt": {
+              "strategy": 1000.0,
+              "double_cost": 1000.0,
+              "hold": 1027.431773063537,
+              "double_cost_hold": 1024.2323629655145
+            },
+            "actual_fill": false
           }
         ],
-        "open_interval": {
-          "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1791954000000_1h",
-          "entry_book_sha256": "d7adddce0ef08d8269fb099f43a909f050bbccf8539fda706c7a390d522c6a22",
-          "entry_quote_utc": "2026-10-14T06:45:13.152000+00:00",
-          "paper_action": "NO_TRADE",
-          "pair_sha256": "6eb2e0b36c59478e9468a54f69242513c04cb9dae5bff405af563d5a7877078c",
-          "entry_legs": {}
-        }
+        "open_interval": null
       },
       "paired_control_same_qualified_sources_paper": {
         "selected_intervals": 15,
-        "matured_due_intervals": 14,
-        "completed_prefix_intervals": 14,
-        "completed_due_intervals": 14,
+        "matured_due_intervals": 15,
+        "completed_prefix_intervals": 15,
+        "completed_due_intervals": 15,
         "blocked_forecast_id": null,
         "blocked_reason": null,
         "waiting_reason": null,
@@ -3687,9 +3785,9 @@
           "started": true,
           "buy_legs": 1,
           "sell_legs": 0,
-          "prefix_liquidation_equity_usdt": 1020.5766155000946,
-          "prefix_net_return_pct": 2.0576615500094597,
-          "latest_available_liquidation_proxy_usdt": 1019.3739562784381,
+          "prefix_liquidation_equity_usdt": 1027.431773063537,
+          "prefix_net_return_pct": 2.743177306353717,
+          "latest_available_liquidation_proxy_usdt": 1027.431773063537,
           "sampled_drawdown_pct": 2.461917759589429,
           "recorded_trade_cost_components_usdt": {
             "buy_fee_usdt": 0.9990009989986623,
@@ -3721,9 +3819,9 @@
           "started": true,
           "buy_legs": 1,
           "sell_legs": 0,
-          "prefix_liquidation_equity_usdt": 1017.398152338212,
-          "prefix_net_return_pct": 1.7398152338211847,
-          "latest_available_liquidation_proxy_usdt": 1016.1991680176652,
+          "prefix_liquidation_equity_usdt": 1024.2323629655145,
+          "prefix_net_return_pct": 2.4232362965514564,
+          "latest_available_liquidation_proxy_usdt": 1024.2323629655145,
           "sampled_drawdown_pct": 2.4620732901126225,
           "recorded_trade_cost_components_usdt": {
             "buy_fee_usdt": 1.996007983891274,
@@ -3734,15 +3832,15 @@
           "actual_fill": false
         },
         "cash_net_return_pct": 0,
-        "excess_over_hold_pct_points": -2.0576615500094597,
+        "excess_over_hold_pct_points": -2.743177306353717,
         "excess_over_cash_pct_points": 0.0,
-        "double_cost_excess_over_hold_pct_points": -1.7398152338211847,
-        "no_trade_completed": 14,
+        "double_cost_excess_over_hold_pct_points": -2.4232362965514564,
+        "no_trade_completed": 15,
         "paper_long_completed": 0,
-        "path_gap_count": 26,
+        "path_gap_count": 27,
         "tail_gap_seconds": 0,
-        "last_valid_mark_utc": "2026-10-14T07:28:16.501000+00:00",
-        "latest_mark_age_seconds": 3.148828,
+        "last_valid_mark_utc": "2026-10-14T08:09:12.554000+00:00",
+        "latest_mark_age_seconds": 3.933524,
         "latest_mark_fresh": true,
         "tail_path_gap": false,
         "missing_mark_count": 0,
@@ -4042,21 +4140,35 @@
               "double_cost_hold": 1017.398152338212
             },
             "actual_fill": false
+          },
+          {
+            "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1791954000000_1h",
+            "entry_book_sha256": "d7adddce0ef08d8269fb099f43a909f050bbccf8539fda706c7a390d522c6a22",
+            "entry_quote_utc": "2026-10-14T06:45:13.152000+00:00",
+            "paper_action": "NO_TRADE",
+            "pair_sha256": "6eb2e0b36c59478e9468a54f69242513c04cb9dae5bff405af563d5a7877078c",
+            "entry_legs": {},
+            "exit_book_sha256": "9320afcd7a08e11e0656ae3fa8412d7a9ab2cf8de62041990dd912142c9ad77b",
+            "exit_quote_utc": "2026-10-14T08:09:12.554000+00:00",
+            "exit_legs": {
+              "strategy": null,
+              "double_cost": null
+            },
+            "equity_usdt": {
+              "strategy": 1000.0,
+              "double_cost": 1000.0,
+              "hold": 1027.431773063537,
+              "double_cost_hold": 1024.2323629655145
+            },
+            "actual_fill": false
           }
         ],
-        "open_interval": {
-          "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1791954000000_1h",
-          "entry_book_sha256": "d7adddce0ef08d8269fb099f43a909f050bbccf8539fda706c7a390d522c6a22",
-          "entry_quote_utc": "2026-10-14T06:45:13.152000+00:00",
-          "paper_action": "NO_TRADE",
-          "pair_sha256": "6eb2e0b36c59478e9468a54f69242513c04cb9dae5bff405af563d5a7877078c",
-          "entry_legs": {}
-        }
+        "open_interval": null
       },
-      "full_source_forecast_count": 30,
-      "registered_context_count": 30,
-      "original_closed_hour_slots": 28,
-      "context_closed_hour_slots": 28,
+      "full_source_forecast_count": 31,
+      "registered_context_count": 31,
+      "original_closed_hour_slots": 29,
+      "context_closed_hour_slots": 29,
       "probability_calibration_validated": false,
       "economic_gain_verified": false
     },
@@ -4278,10 +4390,10 @@
         "ledger": [],
         "open_interval": null
       },
-      "full_source_forecast_count": 30,
-      "registered_context_count": 30,
-      "original_closed_hour_slots": 28,
-      "context_closed_hour_slots": 28,
+      "full_source_forecast_count": 31,
+      "registered_context_count": 31,
+      "original_closed_hour_slots": 29,
+      "context_closed_hour_slots": 29,
       "probability_calibration_validated": false,
       "economic_gain_verified": false
     }
@@ -4290,9 +4402,9 @@
   "real_orders_authorized": false,
   "validated_70pct": false,
   "profitability_validated": false,
-  "expected_closed_hourly_source_slots_each_horizon": 29,
+  "expected_closed_hourly_source_slots_each_horizon": 30,
   "no_contexts_is_not_zero_missing": true,
-  "missing_context_closed_slots_if_no_records_each_horizon": 29,
+  "missing_context_closed_slots_if_no_records_each_horizon": 30,
   "accuracy_denominator": "Issued original due nonoverlap events; absent issuer hours are separate coverage failures, never fabricated predictions or outcome labels",
   "missing_issuer_hours_can_never_be_hidden_by_feature_conditional_accuracy": true,
   "inference": "Descriptive only; fixed future review dates; no automatic sequential p-value stopping, no dependency-robust proof yet"
