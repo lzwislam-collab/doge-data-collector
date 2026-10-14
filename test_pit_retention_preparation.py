@@ -1,4 +1,5 @@
 import copy, hashlib, io, json, tempfile, unittest, zipfile
+from unittest.mock import patch
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 try:
@@ -10,6 +11,22 @@ NOW=datetime(2026,10,13,2,tzinfo=timezone.utc)
 def digest(row):return hashlib.sha256(json.dumps(row,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()).hexdigest()
 
 class PreparationTests(unittest.TestCase):
+    def test_large_inventory_shards_preserve_exact_objects_and_caps(self):
+        objects={}
+        for i in range(3):
+            path=self.root/('data/part'+str(i));path.parent.mkdir(exist_ok=True);raw=bytes([i])*4;path.write_bytes(raw);objects[path.relative_to(self.root).as_posix()]=hashlib.sha256(raw).hexdigest()
+        with patch.object(module,'LIMIT_BYTES',6):
+            index,result=module.prepare_inventory_bundle(self.root,objects,NOW)
+            self.assertEqual(result['part_count'],3)
+            self.assertFalse(result['independent_retention_verified'])
+            module.verify_inventory_bundle(self.root,result)
+            manifest=json.loads(index.read_bytes());self.assertEqual(manifest['objects'],objects)
+            (self.root/manifest['parts'][0]['bundle_path']).write_bytes(b'tampered')
+            with self.assertRaises(ValueError):module.verify_inventory_bundle(self.root,result)
+    def test_single_object_over_cap_is_not_silently_admitted(self):
+        path=self.root/'data/large';path.parent.mkdir();path.write_bytes(b'1234567')
+        with patch.object(module,'LIMIT_BYTES',6):
+            with self.assertRaises(ValueError):module.prepare_inventory_bundle(self.root,{'data/large':hashlib.sha256(path.read_bytes()).hexdigest()},NOW)
     def setUp(self):
         self.assertIsNotNone(module,'PIT/retention preparation module missing')
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup);self.root=Path(self.temp.name)
@@ -101,6 +118,16 @@ class S3Client:
         return {'Body':io.BytesIO(self.body),'VersionId':self.version,'LastModified':NOW-timedelta(seconds=1)}
 
 class ExternalTests(unittest.TestCase):
+    def test_locked_index_alone_cannot_certify_unread_shards(self):
+        raw=module.canonical({'all_part_versions_and_retention_required':True,'bundle_kind':'SHARDED_INVENTORY_INDEX','parts':[]})
+        client=S3Client(body=raw)
+        result=module.verify_external(self.config,hashlib.sha256(raw).hexdigest(),NOW,client=client,identity_client=client)
+        self.assertFalse(result['independent_retention_verified'])
+    def test_formatted_and_padded_locked_index_cannot_certify_shards(self):
+        descriptor={'bundle_kind':'SHARDED_INVENTORY_INDEX','parts':[]}
+        for raw in (json.dumps(descriptor,indent=2).encode(),b' '*5000+json.dumps(descriptor).encode()):
+            client=S3Client(body=raw);result=module.verify_external(self.config,hashlib.sha256(raw).hexdigest(),NOW,client=client,identity_client=client)
+            self.assertFalse(result['independent_retention_verified'])
     def setUp(self):
         self.assertIsNotNone(module,'PIT/retention preparation module missing')
         self.config={'provider':'aws_s3_object_lock','bucket':'evidence','key':'bundles/a.zip','version_id':'v1','bucket_owner_account_id':'222222222222','collector_account_id':'111111111111','minimum_retention_days':90}
