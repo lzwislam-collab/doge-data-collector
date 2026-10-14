@@ -1,0 +1,31 @@
+{
+  "protocol_id": "DOGE_PHASE2_RETROSPECTIVE_RESEARCH_V1_20261014",
+  "train_bars": 4096,
+  "validation_bars": 512,
+  "test_bars": 512,
+  "step_bars": 512,
+  "embargo_bars": 24,
+  "max_folds": 6,
+  "iterations": 120,
+  "learning_rate": 0.1,
+  "l2": 0.1,
+  "horizons": [1, 24],
+  "availability_mode": "candle_close_research",
+  "seed": 20261014,
+  "numpy_version": "2.3.5",
+  "max_fits": 600,
+  "hypothesis_settings": [
+    {"model": "logistic", "regularization": 0.03},
+    {"model": "logistic", "regularization": 0.3},
+    {"model": "shrinkage_lda", "regularization": 0.3},
+    {"model": "shrinkage_lda", "regularization": 1.0}
+  ],
+  "selection": "PER_FOLD_VALIDATION_BRIER_THEN_LEXICAL_ID",
+  "historical_holdout_pristine": false,
+  "production_promotion_authorized": false,
+  "real_orders_authorized": false,
+  "new_factor_prospective_registration_required": true,
+  "cost_validation_interface": "p2_economic_acceptance.py",
+  "error_review_interface": "stage5_error_review.py",
+  "prospective_interface": "NEW_PUBLIC_MODEL_SPECIFIC_REGISTRATION_REQUIRED"
+}
