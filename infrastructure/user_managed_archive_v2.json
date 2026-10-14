@@ -1,0 +1,43 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Review-only USER_MANAGED DOGE evidence archive. Creates billable locked storage and an upload role only after explicit deployment. No independent custodian required.",
+  "Parameters": {
+    "ExistingOidcProviderArn": {"Type": "String", "Default": "", "Description": "If GitHub OIDC already exists in this account, use its ARN; otherwise leave empty to create it"}
+  },
+  "Conditions": {"CreateOidc": {"Fn::Equals": [{"Ref": "ExistingOidcProviderArn"}, ""]}},
+  "Resources": {
+    "ArchiveBucket": {
+      "Type": "AWS::S3::Bucket", "DeletionPolicy": "Retain", "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "ObjectLockEnabled": true,
+        "VersioningConfiguration": {"Status": "Enabled"},
+        "ObjectLockConfiguration": {"ObjectLockEnabled": "Enabled", "Rule": {"DefaultRetention": {"Mode": "COMPLIANCE", "Days": 730}}},
+        "BucketEncryption": {"ServerSideEncryptionConfiguration": [{"ServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}}]},
+        "PublicAccessBlockConfiguration": {"BlockPublicAcls": true, "BlockPublicPolicy": true, "IgnorePublicAcls": true, "RestrictPublicBuckets": true}
+      }
+    },
+    "GithubOidc": {
+      "Type": "AWS::IAM::OIDCProvider", "Condition": "CreateOidc",
+      "Properties": {"Url": "https://token.actions.githubusercontent.com", "ClientIdList": ["sts.amazonaws.com"]}
+    },
+    "ArchiveUploadRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Principal": {"Federated": {"Fn::If": ["CreateOidc", {"Ref": "GithubOidc"}, {"Ref": "ExistingOidcProviderArn"}]}}, "Action": "sts:AssumeRoleWithWebIdentity", "Condition": {"StringEquals": {"token.actions.githubusercontent.com:aud": "sts.amazonaws.com", "token.actions.githubusercontent.com:sub": "repo:lzwislam-collab/doge-data-collector:ref:refs/heads/main"}}}]},
+        "Policies": [{"PolicyName": "DogecoinEvidenceOnly", "PolicyDocument": {"Version": "2012-10-17", "Statement": [
+          {"Effect": "Allow", "Action": ["s3:GetBucketObjectLockConfiguration", "s3:GetBucketVersioning"], "Resource": {"Fn::GetAtt": ["ArchiveBucket", "Arn"]}},
+          {"Effect": "Allow", "Action": ["s3:PutObject", "s3:PutObjectRetention", "s3:GetObject", "s3:GetObjectVersion", "s3:GetObjectRetention"], "Resource": {"Fn::Sub": "${ArchiveBucket.Arn}/doge/evidence/*"}}
+        ]}}]
+      }
+    },
+    "TlsPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {"Bucket": {"Ref": "ArchiveBucket"}, "PolicyDocument": {"Version": "2012-10-17", "Statement": [{"Effect": "Deny", "Principal": "*", "Action": "s3:*", "Resource": [{"Fn::GetAtt": ["ArchiveBucket", "Arn"]}, {"Fn::Sub": "${ArchiveBucket.Arn}/*"}], "Condition": {"Bool": {"aws:SecureTransport": "false"}}}]}}
+    }
+  },
+  "Outputs": {
+    "DOGEWORMBUCKET": {"Value": {"Ref": "ArchiveBucket"}},
+    "DOGEWORMACCOUNT": {"Value": {"Ref": "AWS::AccountId"}},
+    "DOGEWORMROLEARN": {"Value": {"Fn::GetAtt": ["ArchiveUploadRole", "Arn"]}}
+  }
+}

@@ -1,0 +1,119 @@
+name: Audit user-managed archive and nonprice PIT readiness
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ['Collect OKX public market data', 'Audit factor eligibility and official derivatives PIT', 'Publish frozen learned DOGE shadow candidates', 'Audit future learned DOGE shadow candidate registration']
+    types: [completed]
+  push:
+    branches: [main, 'research/evidence-*']
+    paths: ['evidence_readiness_v2.py', 'user_managed_retention_v2.py', 'test_evidence_readiness_v2.py', 'config/evidence_custody_v2.json', '.github/workflows/evidence_readiness_v2.yml', 'infrastructure/user_managed_archive_v2.json']
+  pull_request:
+    paths: ['evidence_readiness_v2.py', 'user_managed_retention_v2.py', 'test_evidence_readiness_v2.py', 'config/evidence_custody_v2.json', '.github/workflows/evidence_readiness_v2.yml', 'infrastructure/user_managed_archive_v2.json']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: evidence-readiness-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  source-publication:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PYTHONUTF8: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install numpy==2.3.5 botocore==1.43.112
+      - name: Validate actual raw receipts, full regressions and frozen history
+        run: |
+          python -m unittest discover -q
+          python forward_validation_v2.py --integrity-only
+          python -c 'import derivatives_pit_v1 as d; print("actual_raw_replay_rows", len(d.read()))'
+      - name: Preserve pinned public source manifest
+        run: |
+          mkdir -p source-evidence-v2
+          python - <<'PY'
+          import hashlib,json,subprocess
+          from pathlib import Path
+          names=['data/derivatives_pit_v1/observations.jsonl','config/evidence_custody_v2.json','evidence_readiness_v2.py','user_managed_retention_v2.py']
+          result={'source_commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'sha256':{n:hashlib.sha256(Path(n).read_bytes()).hexdigest() for n in names}}
+          Path('source-evidence-v2/manifest.json').write_text(json.dumps(result,sort_keys=True)+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nonprice-source-${{ github.run_id }}-${{ github.run_attempt }}
+          path: source-evidence-v2/
+          retention-days: 90
+  readiness:
+    needs: source-publication
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      PYTHONUTF8: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install numpy==2.3.5
+      - name: Independently read completed source job clocks and original bytes
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python evidence_readiness_v2.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evidence-readiness-${{ github.run_id }}-${{ github.run_attempt }}
+          path: evidence-v2-output/
+          if-no-files-found: error
+          retention-days: 90
+  optional-existing-archive:
+    needs: readiness
+    if: github.ref == 'refs/heads/main' && vars.DOGE_WORM_UPLOAD_ENABLED == 'true' && vars.DOGE_WORM_ROLE_ARN != '' && vars.DOGE_WORM_BUCKET != '' && vars.DOGE_WORM_ACCOUNT != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install numpy==2.3.5 botocore==1.43.112
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.DOGE_WORM_ROLE_ARN }}
+          aws-region: ap-northeast-1
+      - name: Explicit opt-in upload and pinned COMPLIANCE version readback
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          DOGE_WORM_UPLOAD_ENABLED: ${{ vars.DOGE_WORM_UPLOAD_ENABLED }}
+          DOGE_WORM_BUCKET: ${{ vars.DOGE_WORM_BUCKET }}
+          DOGE_WORM_ACCOUNT: ${{ vars.DOGE_WORM_ACCOUNT }}
+        run: python evidence_readiness_v2.py --upload
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: locked-receipt-${{ github.run_id }}-${{ github.run_attempt }}
+          path: evidence-v2-output/
+          if-no-files-found: error
+          retention-days: 90
