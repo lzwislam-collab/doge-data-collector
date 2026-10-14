@@ -1,0 +1,90 @@
+name: Audit and control reviewed DOGE prediction releases
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        type: choice
+        options: [audit, initialize, prepare, activate, rollback]
+        default: audit
+      review_run_id:
+        required: false
+        default: ''
+      approval_comment_id:
+        required: false
+        default: ''
+      manifest_path:
+        required: false
+        default: ''
+  push:
+    branches: [main, 'audit/forward-readiness-*']
+    paths: ['prediction_release_control.py', 'test_prediction_release_control.py', 'test_phase3_remote_certificate_audit.py', '.github/workflows/prediction_release_control.yml']
+  pull_request:
+    paths: ['prediction_release_control.py', 'test_prediction_release_control.py', 'test_phase3_remote_certificate_audit.py', '.github/workflows/prediction_release_control.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: doge-reviewed-release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+      id-token: write
+    env:
+      PYTHONUTF8: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install numpy==2.3.5 scipy==1.16.3 scikit-learn==1.7.2 joblib==1.5.2 threadpoolctl==3.6.0 botocore==1.43.112
+      - name: Read existing user-managed retention through configured identity
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.DOGE_WORM_ROLE_ARN != '' && hashFiles('config/user_managed_prediction_retention.json') != ''
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.DOGE_WORM_ROLE_ARN }}
+          aws-region: ap-northeast-1
+      - name: Full tests and unchanged frozen evidence
+        run: |
+          python -m unittest discover -q
+          python forward_validation_v2.py --integrity-only
+      - name: Real authority control with no legacy or order writes
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          CONTROL_MODE: ${{ inputs.mode || 'audit' }}
+          REVIEW_RUN_ID: ${{ inputs.review_run_id || '' }}
+          APPROVAL_COMMENT_ID: ${{ inputs.approval_comment_id || '' }}
+          RELEASE_MANIFEST_PATH: ${{ inputs.manifest_path || '' }}
+        run: python prediction_release_control.py "$CONTROL_MODE"
+      - name: Persist isolated release journal only
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.mode == 'initialize' || inputs.mode == 'activate' || inputs.mode == 'rollback')
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add system/prediction_releases_v1/events
+          if ! git diff --cached --quiet; then
+            git commit -m 'data: append reviewed prediction release control'
+            for attempt in 1 2 3; do
+              if git push origin HEAD:main; then exit 0; fi
+              if [ "$attempt" = 3 ]; then exit 1; fi
+              git fetch origin main
+              git rebase origin/main
+              python prediction_release_control.py audit
+            done
+          fi
+      - name: Preserve actual control receipt and review packet
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prediction-release-${{ github.run_id }}
+          path: prediction-release-output/
+          if-no-files-found: error
+          retention-days: 90
