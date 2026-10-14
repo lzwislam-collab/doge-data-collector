@@ -3,6 +3,12 @@ from datetime import datetime,timedelta,timezone
 import phase2_forward_v2 as f
 
 class Readiness(unittest.TestCase):
+ def test_grace_never_hides_an_older_hour_missing(self):
+  a=self.engine();now=datetime(2026,10,15,0,5,tzinfo=timezone.utc)
+  v=a.health([],[],now,now.replace(minute=0)-timedelta(hours=2),[])
+  self.assertIn('LATEST_CLOSED_BAR_MISSING',v['errors'])
+  v=a.health([],[],now,now.replace(minute=0)-timedelta(hours=1),[])
+  self.assertNotIn('LATEST_CLOSED_BAR_MISSING',v['errors'])
  def test_history_receipt_before_close_and_nonfinite_volume_rejected(self):
   a=self.engine()
   raw=(a.ROOT/a.r.SOURCE).read_bytes();rows=list(csv.DictReader(io.StringIO(raw.decode('utf-8-sig'))))
