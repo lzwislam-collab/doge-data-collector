@@ -194,8 +194,16 @@ def infer(root,frame,at):
   return {**selection,'status':'PREDICTION_CHANNEL_ONLY_NOT_LEGACY_ISSUANCE','probability':prob,'at_utc':at.isoformat()}
  except Exception as exc:return {**selection,'status':'NO_PREDICTION_INVALID_REFERENCE_OR_SOURCE','probability':None,'error':type(exc).__name__+': '+str(exc)}
 
+def verify_pending(root,event,at,verify_authority=None):
+ state=load_state(root)
+ if state!=event:raise ValueError('pending operation is no longer the exact journal head')
+ selected=select(root,at,verify_authority)
+ if event['action']=='ACTIVATE' and (selected['selection']!='CANDIDATE' or selected.get('manifest')!=event['manifest']):raise ValueError('pending activation authority expired or revoked')
+ if event['action'] in ('INITIALIZE','ROLLBACK') and selected['selection']!='FROZEN_REFERENCE':raise ValueError('pending fallback operation changed')
+ return selected
+
 def main():
- parser=argparse.ArgumentParser();parser.add_argument('mode',choices=['audit','initialize','rollback','activate','prepare']);a=parser.parse_args();out=ROOT/'prediction-release-output';out.mkdir(exist_ok=True);now=datetime.now(timezone.utc)
+ parser=argparse.ArgumentParser();parser.add_argument('mode',choices=['audit','initialize','rollback','activate','prepare','verify-pending']);a=parser.parse_args();out=ROOT/'prediction-release-output';out.mkdir(exist_ok=True);now=datetime.now(timezone.utc)
  result={'mode':a.mode,'at_utc':now.isoformat(),'real_orders_authorized':False,'legacy_production_pointer_changed':False}
  if a.mode in ('initialize','activate','rollback') and os.environ.get('GITHUB_ACTIONS')=='true' and (os.environ.get('GITHUB_REF')!='refs/heads/main' or os.environ.get('GITHUB_EVENT_NAME')!='workflow_dispatch'):raise ValueError('release mutation requires explicit main dispatch')
  if a.mode=='initialize':result['event']=initialize(ROOT)
@@ -208,6 +216,7 @@ def main():
  elif a.mode=='prepare':
   rid=int(os.environ['REVIEW_RUN_ID']);assessment,raw,sha,finished=review_source(rid);packet=packet_bytes(assessment,raw);m=manifest(rid,sha,hashlib.sha256(packet).hexdigest())
   (out/'evidence.zip').write_bytes(packet);(out/'manifest.json').write_bytes(encode(m));result.update(manifest_sha256=digest(m),evidence_sha256=m['evidence_sha256'],statistical_gate_passed=assessment['statistical_gate_passed'],cloud_upload_performed=False)
+ elif a.mode=='verify-pending':result['selection']=verify_pending(ROOT,json.loads((out/'operation.json').read_bytes())['event'],now)
  else:
   result['selection']=select(ROOT,now);result['actual_release_selected']=result['selection']['selection']=='CANDIDATE';result['raw_pointer_authority_is_rechecked']=True
  (out/'control.json').write_bytes(encode(result));print(json.dumps(result,sort_keys=True))

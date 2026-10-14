@@ -3,6 +3,14 @@ from pathlib import Path
 from datetime import datetime,timezone,timedelta
 
 class Release(unittest.TestCase):
+ def test_activation_push_retry_refuses_revoked_authority(self):
+  a=self.engine()
+  with tempfile.TemporaryDirectory() as d:
+   root=Path(d);a.initialize(root);m=a.manifest(1,'a'*64,'b'*64);now=datetime(2027,1,18,tzinfo=timezone.utc);auth={'schema':'VERIFIED_RELEASE_AUTHORITY_V1','manifest_sha256':a.digest(m)}
+   event=a.apply(root,'activate',m,now,lambda m:auth)
+   def revoked(m):raise ValueError('withdrawn')
+   with self.assertRaises(ValueError):a.verify_pending(root,event,now,revoked)
+   a.verify_pending(root,event,now,lambda m:auth)
  def test_replay_matches_frozen_json_precision_but_not_changed_gate(self):
   a=self.engine();actual={'single_claim_alpha':.05/1280000,'statistical_gate_passed':False};stored=json.loads(a.encode(actual));a.compare_replay(stored,actual)
   stored['statistical_gate_passed']=True
