@@ -1,0 +1,48 @@
+name: DOGE recent V2 candidate reproducibility audit
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, 'research/phase2-forward-*']
+    paths: ['phase2_recent.py', 'test_phase2_recent.py', 'research/phase2_recent_v1/**', '.github/workflows/phase2_recent.yml']
+  pull_request:
+    paths: ['phase2_recent.py', 'test_phase2_recent.py', 'research/phase2_recent_v1/**', '.github/workflows/phase2_recent.yml']
+permissions:
+  contents: read
+concurrency:
+  group: phase2-recent-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Pinned numerical and existing regression dependencies
+        run: python -m pip install numpy==2.3.5 scipy==1.16.3 scikit-learn==1.7.2 joblib==1.5.2 threadpoolctl==3.6.0 botocore==1.43.112
+      - name: Complete regression and frozen model integrity
+        run: |
+          python -m unittest discover -q
+          python forward_validation_v2.py --integrity-only
+      - name: Replay registered recent weights twice from exact Git source
+        run: |
+          python phase2_recent.py --source-commit 14e1b27d23190bb241d3b738619c352d58d76c54 --trained-at 2026-10-14T09:06:33Z --out research/phase2_recent_v1/model.json --verify
+          python phase2_recent.py --source-commit 14e1b27d23190bb241d3b738619c352d58d76c54 --trained-at 2026-10-14T09:06:33Z --out recent-output/replayed-model.json
+          cmp research/phase2_recent_v1/model.json recent-output/replayed-model.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doge-recent-model-${{ github.run_id }}
+          path: |
+            recent-output/
+            research/phase2_recent_v1/model.json
+          if-no-files-found: error
+          retention-days: 90
