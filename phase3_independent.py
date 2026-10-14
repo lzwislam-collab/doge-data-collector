@@ -9,14 +9,15 @@ DIR_BASELINES=(*PROB_BASELINES,'frozen_rule')
 COST_BASELINES=(*DIR_BASELINES,'hold','cash')
 
 def policy():
- return {'schema':'DOGE_PHASE3_INDEPENDENT_V1','assessment_id':'DOGE_R2_INDEPENDENT_FIXED_LOOK_20261014',
+ return {'schema':'DOGE_PHASE3_INDEPENDENT_V2','assessment_id':'DOGE_R2_INDEPENDENT_FIXED_LOOK_R2_20261014',
   'protocol_id':f.policy()['protocol_id'],'model_identity':'0843d2e836f0d94cd46e66644460f1a543aef460e51ad884394a5880dadf3baf',
   'family_size_upper_bound':10000,'fixed_looks':2,'maximum_claims_per_look':64,'familywise_alpha':.05,
   'method':'FIXED_LAMBDA_CONDITIONAL_HOEFFDING_SUPERMARTINGALE',
   'estimand':'average conditional expected score over this fixed observed window, not future stationary performance',
   'minimum_accuracy_lower_bound':.70,'accuracy_margin':.01,'brier_margin':.002,
   'regime_min_events':20,'regime_max_brier_harm':.01,'minimum_nonoverlap_events':100,
-  'block_days':3,'fixed_review_window_seconds':1800,'cost_win_lower_bound':.5,
+  'block_days':3,'fixed_review_window_seconds':1800,'cost_win_lower_bound':.5,'cost_min_exposure_disagreements':20,
+  'cost_win_estimand':'conditional win frequency on issuance-time different long/cash exposure; full schedule mask, no outcome-selected subset',
   'missing_events':'worst score, no deletion','raw_return_mean_confidence_interval_proved':False,
   'real_orders_authorized':False,'automatic_production_promotion':False}
 
@@ -82,6 +83,7 @@ def evaluate(p,events,scores,qualified,now,full_audit,registered):
  for b in DIR_BASELINES:metrics['accuracy:'+b]={'values':[],'ranges':[],'width':2}
  for b in PROB_BASELINES:metrics['brier:'+b]={'values':[],'ranges':[],'width':2}
  economic={b:{mode:[] for mode in ('net_return','stress_net_return')} for b in ('selected',*COST_BASELINES)}
+ economic_decisions={b:0 for b in COST_BASELINES}
  for b in COST_BASELINES:
   for mode in ('net_return','stress_net_return'):metrics['costwin:'+mode+':'+b]={'values':[],'ranges':[],'width':1}
  for slot in slots:
@@ -130,10 +132,19 @@ def evaluate(p,events,scores,qualified,now,full_audit,registered):
   for b in economic:
    for mode in economic[b]:economic[b][mode].append(float(returns[b][mode]) if cost_ok else None)
   for b in COST_BASELINES:
+   if e is not None:
+    position=1 if b=='hold' else 0 if b=='cash' else e['frozen_rule_direction'] if b=='frozen_rule' else int(e['candidate_p'][b]>=.5)
+    mask=int(e['candidate_p']['selected']>=.5)!=position
+    economic_decisions[b]+=int(mask)
+   else:mask=True
    for mode in ('net_return','stress_net_return'):
-    metric=metrics['costwin:'+mode+':'+b];metric['values'].append(float(returns['selected'][mode]>returns[b][mode]) if cost_ok else 0.)
-    metric['ranges'].append((0.,1.))
+    metric=metrics['costwin:'+mode+':'+b];metric['values'].append(float(returns['selected'][mode]>returns[b][mode]) if cost_ok and mask else 0.)
+    metric['ranges'].append((0.,1.) if mask else (0.,0.))
  comparisons={k:{'mean':_mean(v['values']),'lower':bound(v['values'],v['ranges'],alpha,planned,v['width'])} for k,v in metrics.items()}
+ for b in COST_BASELINES:
+  for mode in ('net_return','stress_net_return'):
+   comparisons['costwin:'+mode+':'+b].update(scheduled_denominator=len(slots),issuance_time_disagreements=economic_decisions[b],
+    threshold=p['cost_win_lower_bound']*economic_decisions[b]/len(slots) if slots else None)
  rresult={}
  for state,r in regimes.items():
   coverage=r['n']/len(slots) if slots else 0.
@@ -144,7 +155,7 @@ def evaluate(p,events,scores,qualified,now,full_audit,registered):
  for mode in ('net_return','stress_net_return'):
   if cost_missing==0 and slots:
    raw[mode]={'candidate_mean':_mean(economic['selected'][mode]),'mean_excess':{b:_mean([a-z for a,z in zip(economic['selected'][mode],economic[b][mode])]) for b in COST_BASELINES}}
-   cost_pass=cost_pass and raw[mode]['candidate_mean']>0 and all(x>0 for x in raw[mode]['mean_excess'].values()) and all(comparisons['costwin:'+mode+':'+b]['lower']>p['cost_win_lower_bound'] for b in COST_BASELINES)
+   cost_pass=cost_pass and raw[mode]['candidate_mean']>0 and all(x>0 for x in raw[mode]['mean_excess'].values()) and all(economic_decisions[b]>=p['cost_min_exposure_disagreements'] and comparisons['costwin:'+mode+':'+b]['lower']>comparisons['costwin:'+mode+':'+b]['threshold'] for b in COST_BASELINES)
   else:raw[mode]=None
  lower=bound(hits,hit_ranges,alpha,planned,1)
  active_looks=[i for i,t in enumerate(fp['fixed_review_utc']) if f.utc(t)<=now<f.utc(t)+timedelta(seconds=p['fixed_review_window_seconds'])]
@@ -161,7 +172,7 @@ def evaluate(p,events,scores,qualified,now,full_audit,registered):
   'status':'READY_FOR_INDEPENDENT_REVIEW' if passed else 'WAIT_ACTIVATION' if now<start else 'MISSED_FIXED_REVIEW' if late else 'BLOCKED_OR_DIAGNOSTIC_ONLY',
   'fixed_look_index':active_looks[0] if active_looks else None,'criteria':criteria,'statistical_gate_passed':passed,
   'scheduled_events':len(slots),'planned_events':planned,'qualified_events':valid,'missing':missing,'cost_missing':cost_missing,
-  'accuracy':_mean(hits),'accuracy_lower':lower,'comparisons':comparisons,'regimes':rresult,'raw_economic_results':raw,
+  'accuracy':_mean(hits),'accuracy_lower':lower,'comparisons':comparisons,'regimes':rresult,'raw_economic_results':raw,'economic_decisions':economic_decisions,
   'calendar_blocks':[{'block':i,'events':len(v),'accuracy':_mean(v)} for i,v in sorted(blocks.items())],
   'calendar_blocks_assumed_independent':False,'error_review':error_review,'claims_computed':1+len(comparisons)+12,
   'single_claim_alpha':alpha,'estimand':p['estimand'],'raw_return_mean_confidence_interval_proved':False,
