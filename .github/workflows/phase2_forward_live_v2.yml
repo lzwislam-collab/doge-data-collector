@@ -1,0 +1,75 @@
+name: Publish DOGE V2 R2 frozen forward evidence
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Formal paper runtime or one excluded ten-minute engineering canary
+        type: choice
+        options: [publish, canary]
+        default: publish
+  workflow_run:
+    workflows: ['Backfill DOGE BTC ETH 1H extreme-event research history']
+    types: [completed]
+permissions:
+  contents: write
+  actions: write
+concurrency:
+  group: phase2-forward-publish
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.event != 'pull_request')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      PYTHONUTF8: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install numpy==2.3.5
+      - name: Original frozen integrity
+        run: python forward_validation_v2.py --integrity-only
+      - name: Actual-clock paper capture and due score
+        id: runtime
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RUNTIME_MODE: ${{ inputs.mode || 'publish' }}
+        run: python phase2_forward_runtime_v2.py "$RUNTIME_MODE"
+      - name: Publish only isolated append journal with bounded conflict retry
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if [ -d data/phase2_forward_v2 ]; then git add -f data/phase2_forward_v2; fi
+          if ! git diff --cached --quiet; then
+            git commit -m 'data: append real V2 forward paper evidence'
+            for attempt in 1 2 3; do
+              if git push origin HEAD:main; then exit 0; fi
+              if [ "$attempt" = 3 ]; then exit 1; fi
+              git fetch origin main
+              git rebase origin/main
+              python phase2_forward_runtime_v2.py local
+            done
+          fi
+      - name: Request exact public server witness after successful push
+        if: steps.runtime.outputs.request_witness == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python phase2_forward_runtime_v2.py dispatch
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase2-forward-live-${{ github.run_id }}
+          path: |
+            phase2-forward-output/
+          if-no-files-found: warn
+          retention-days: 90
+      - name: Report errors after preserving original captures
+        if: steps.runtime.outputs.has_errors == 'true'
+        run: exit 1
