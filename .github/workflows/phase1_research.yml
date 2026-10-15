@@ -4,6 +4,8 @@ on:
   push:
     branches: [main, 'research/phase1-*']
     paths:
+      - 'research_artifact_audit.py'
+      - 'test_research_artifact_audit.py'
       - 'phase1_research*.py'
       - 'test_phase1_research.py'
       - 'config/phase1_research_v1.json'
@@ -11,6 +13,8 @@ on:
       - '.github/workflows/phase1_research.yml'
   pull_request:
     paths:
+      - 'research_artifact_audit.py'
+      - 'test_research_artifact_audit.py'
       - 'phase1_research*.py'
       - 'test_phase1_research.py'
       - 'config/phase1_research_v1.json'
@@ -49,7 +53,7 @@ jobs:
         # plus this change, never silently replace the research input snapshot.
         run: python phase1_research_snapshot.py --out "$RUNNER_TEMP/phase1-input"
       - name: Run fixed-budget historical research
-        run: python phase1_research.py --source "$RUNNER_TEMP/phase1-input" --out phase1-output
+        run: python research_artifact_audit.py phase1 --source "$RUNNER_TEMP/phase1-input" --out phase1-output
       - name: Preserve reproducible results and WAIT receipts
         if: always()
         uses: actions/upload-artifact@v4

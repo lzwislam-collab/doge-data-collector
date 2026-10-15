@@ -66,4 +66,26 @@ class Adapters(unittest.TestCase):
    title=(m.ROOT/'.github/workflows'/name).read_text(encoding='utf-8').splitlines()[0].split(': ',1)[1]
    self.assertIn("'"+title+"'",workflow)
 
+class AuditBoundaries(unittest.TestCase):
+ def test_inapplicable_old_review_does_not_suppress_current_forecasts(self):
+  import plus_shadow as m
+  with patch.object(m.releases,'review_source',side_effect=ValueError('future/overlapping forecast')):
+   report=m.assessment_panel(123,True,2)
+  self.assertEqual(report['status'],'REQUESTED_REVIEW_UNAVAILABLE');self.assertIsNone(report['accuracy']);self.assertFalse(report['validated_70pct'])
+ def test_incomplete_requested_review_is_isolated(self):
+  import plus_shadow as m
+  for payload in ({'mode':'routine'},{'mode':'full','forward_runtime':{'network_audit_covers_all_events':False}}):
+   with patch.object(m.releases,'review_source',return_value=(payload,b'','x',None)):
+    result=m.assessment_panel(123,True,2)
+   self.assertEqual(result['status'],'REQUESTED_REVIEW_UNAVAILABLE');self.assertIsNone(result['accuracy'])
+ def test_offline_selection_never_rechecks_remote_authority(self):
+  import plus_shadow as m
+  with patch.object(m.releases,'select',side_effect=AssertionError('remote selection attempted')):
+   result=m.selection_state(False,datetime.now(timezone.utc))
+  self.assertIsNone(result['selection']);self.assertEqual(result['reason'],'OFFLINE_AUTHORITY_NOT_RECHECKED')
+ def test_online_selection_uses_actual_authority_path(self):
+  import plus_shadow as m
+  with patch.object(m.releases,'select',return_value={'selection':'FROZEN_REFERENCE'}) as check:
+   self.assertEqual(m.selection_state(True,datetime.now(timezone.utc))['selection'],'FROZEN_REFERENCE');check.assert_called_once()
+
 if __name__=='__main__':unittest.main()
