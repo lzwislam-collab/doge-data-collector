@@ -66,6 +66,7 @@ class Evidence(unittest.TestCase):
   with patch('plus_shadow.snapshot',side_effect=ValueError('evidence invalid')):
    r=m.current_plus(False)
   self.assertEqual(r['status'],'UNAVAILABLE');self.assertEqual(r['forecasts'],[])
+  self.assertIs(r.get('issuance_performed'),False);self.assertIs(r.get('production_model_changed'),False)
  def test_unverified_and_canary_rows_cannot_render_probabilities(self):
   m=self.module()
   for track,verified in (('canary',True),('r2',False)):

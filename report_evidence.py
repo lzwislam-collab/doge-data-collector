@@ -29,7 +29,7 @@ def current_plus(online=False):
   return plus_shadow.snapshot(online=online)
  except Exception as exc:
   return {'status':'UNAVAILABLE','forecasts':[],'error':type(exc).__name__+': '+str(exc),
-   'validated_70pct':False,'promotion_authorized':False,'real_orders_authorized':False}
+   'issuance_performed':False,'production_model_changed':False,'validated_70pct':False,'promotion_authorized':False,'real_orders_authorized':False}
 
 def cell(value):
  if value is None:return '未知'

@@ -19,6 +19,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -31,6 +34,7 @@ jobs:
           python -m unittest test_report_evidence test_report_cohort_regressions test_plus_shadow test_phase3_independent test_learned_shadow_v1 -q
           python -m py_compile report_v41.py report_evidence.py
           python report_v41.py
+          python -c "import json; r=json.load(open('reports/DOGE_V41_EVIDENCE.json')); assert r['plus']['status']=='SHADOW_REPORT_READY', r['plus']"
       - name: Verify 11 chapters, no unsupported model advantage
         run: |
           for n in $(seq -w 1 11); do
