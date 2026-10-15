@@ -6,8 +6,7 @@ on:
     paths:
       - 'regulatory_events_collector.py'
       - '.github/workflows/regulatory_events.yml'
-  schedule:
-    - cron: '52 3,15 * * *'
+  # Lean-v1.0: pause legacy/low-PIT-value automatic feed; historical and manual paths remain.
 permissions:
   contents: write
 concurrency:

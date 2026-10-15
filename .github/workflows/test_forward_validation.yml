@@ -53,7 +53,7 @@ jobs:
           python-version: '3.11'
       - name: Full regression suite including frozen factor review
         run: |
-          python -m pip install numpy==2.3.5
+          python -m pip install numpy==2.3.5 oss2==2.19.1 aliyun-python-sdk-core==2.16.1
           python -m unittest discover -v
       - run: python minimal_market_forward.py prepare
       - run: python forward_validation_v2.py --integrity-only
