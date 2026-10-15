@@ -1,0 +1,900 @@
+{
+  "audited_at_utc": "2026-10-15T03:30:41.506409+00:00",
+  "coverage_unknown_is_not_complete": true,
+  "inputs_sha256": {
+    "data/derivatives_pit_v1/observations.jsonl": "2ba36829f851be5e360563ce7dbc45f4a380ff9be55e9003cedfcfd46e07c2fc",
+    "data/enhancement_sources_v1/observations.jsonl": "104239501905f84ef00f9fe906f3b32834011df3e611f58cbb83bc442b4ea347",
+    "data/liquidations/events.csv": "57c0e66a4c632b407629b2cb01d6f47a4bd39fc924eb9c525ffce4a4adc32a90",
+    "data/liquidations/latest.json": "82e6e423db67b7ce260fdb716031bc5b018599a06c487eab3ea71a595e217679",
+    "data/liquidity/hourly_snapshots.csv": "746e5c70257180d3849a292f573de51103f27ce193cfbe614fd216ea23698a4b",
+    "data/macro/observations.csv": "eef36f78115bb870c6f42e55594a153f23144c3df7d470530a3e70691d5e294f",
+    "data/okx_address_balances/checkpoint.json": "b8bc7e31aaa2a954db371158ea443f5ff9ba093e2bcc480b8eb20f9d941d1705",
+    "data/okx_address_balances/observations.csv": "b4de68602fa3539bedc054c71bce3968804c32e2659acb46101d361d7ab85141",
+    "data/onchain/daily.csv": "b2d056096ea6ddcdbcb51eec31a7d9d886ef69a87f7c3a81e04e7893a30ff8b8",
+    "data/onchain/daily_activity.csv": "35f32cef151b3d55c9b7e2045ab0cb871241f1ea5350a67d9a7953e802ad1349",
+    "data/onchain/metrics_latest.json": "a5a1ffb6db86058584e027d4df03abac8cd959019beb807228b84ae85faab62a",
+    "data/whales/events.csv": "4ccdf8c916dcbadd7ea3005e80ca2b6b885316ead47f026caa52961e83f1286b",
+    "data/whales_blocks/events.csv": "39526f4023c8da6de2a88926f6e25b1a9b935debd3231b8003dd6cbb2d2ebf1c",
+    "data/whales_blocks/latest.json": "87abd1335dc5b5d926d3dea80110b8c4e108d67b6df8d27233fa716d15dcddc5"
+  },
+  "mode": "CURRENT_LOCAL_BYTES_READ_ONLY_NO_COLLECTION",
+  "production_changed": false,
+  "public_witness_replayed": false,
+  "sources": {
+    "address_balance_observations": {
+      "availability_before_event_count": 0,
+      "cadence_limit": "unknown; no cadence inferred for event streams/business calendars/snapshots",
+      "coverage_denominator": null,
+      "coverage_numerator": null,
+      "duplicate_keys": 0,
+      "first_seen_field": "observed_at_utc",
+      "first_seen_max": "2026-10-15T02:43:26.934084+00:00",
+      "first_seen_min": "2026-10-10T11:12:43.573091+00:00",
+      "invalid_or_future_timestamp_count": 0,
+      "key_fields": [
+        "cycle",
+        "address"
+      ],
+      "max_timestamp": "2026-10-15T02:43:26.934084+00:00",
+      "min_timestamp": "2026-10-10T11:12:43.573091+00:00",
+      "missing_daily_dates": null,
+      "missing_value_counts": {
+        "provider_block_height": 16875
+      },
+      "production_admission": "BLOCKED",
+      "public_pre_target_witness_replayed": false,
+      "rows": 16875,
+      "timestamp_field": "observed_at_utc"
+    },
+    "address_scan_reported_scope": {
+      "independently_recollected": false,
+      "snapshot": {
+        "cycle": 1,
+        "last_committed_utc": "2026-10-15T02:43:27.692499+00:00",
+        "next_index": 16875,
+        "previous_batch_completed": 75,
+        "schema_version": 1,
+        "source_sha256": "1a34b350c5c631022a276ca2588e0c94ff66f8fc9b7af5b4922676d53a3b8435"
+      }
+    },
+    "derivatives_FUNDING": {
+      "availability_before_event_count": 0,
+      "cadence_limit": "existing derivatives.coverage: preceding24 closed UTC receipt-hour buckets",
+      "chain_and_raw_digest_verified": true,
+      "coverage_denominator": 24,
+      "coverage_numerator": 24,
+      "duplicate_keys": 0,
+      "first_seen_field": "first_seen_utc",
+      "first_seen_max": "2026-10-15T02:33:08.422132+00:00",
+      "first_seen_min": "2026-10-13T11:56:04.113683+00:00",
+      "guard_error": null,
+      "independent_local_chain_raw_formula_replay_verified": true,
+      "independent_replay_errors": [],
+      "invalid_or_future_timestamp_count": 0,
+      "key_fields": [
+        "capture_id"
+      ],
+      "max_timestamp": "2026-10-15T02:32:30.725000+00:00",
+      "min_timestamp": "2026-10-13T11:55:03.140000+00:00",
+      "missing_closed_hour_slots": 0,
+      "missing_daily_dates": null,
+      "missing_value_counts": {},
+      "production_admission": "BLOCKED",
+      "public_pre_target_witness_replayed": false,
+      "rows": 42,
+      "timestamp_field": "provider_ts_utc",
+      "usable_from_max": "2026-10-15T02:33:08.422132+00:00",
+      "usable_from_min": "2026-10-13T11:56:04.113683+00:00"
+    },
+    "derivatives_OI": {
+      "availability_before_event_count": 0,
+      "cadence_limit": "existing derivatives.coverage: preceding24 closed UTC receipt-hour buckets",
+      "chain_and_raw_digest_verified": true,
+      "coverage_denominator": 24,
+      "coverage_numerator": 24,
+      "duplicate_keys": 0,
+      "first_seen_field": "first_seen_utc",
+      "first_seen_max": "2026-10-15T02:33:08.079657+00:00",
+      "first_seen_min": "2026-10-13T11:56:03.921457+00:00",
+      "guard_error": null,
+      "independent_local_chain_raw_formula_replay_verified": true,
+      "independent_replay_errors": [],
+      "invalid_or_future_timestamp_count": 0,
+      "key_fields": [
+        "capture_id"
+      ],
+      "max_timestamp": "2026-10-15T02:33:07.997000+00:00",
+      "min_timestamp": "2026-10-13T11:56:03.862000+00:00",
+      "missing_closed_hour_slots": 0,
+      "missing_daily_dates": null,
+      "missing_value_counts": {
+        "previous_sha256": 1
+      },
+      "production_admission": "BLOCKED",
+      "public_pre_target_witness_replayed": false,
+      "rows": 42,
+      "timestamp_field": "provider_ts_utc",
+      "usable_from_max": "2026-10-15T02:33:08.079657+00:00",
+      "usable_from_min": "2026-10-13T11:56:03.921457+00:00"
+    },
+    "enhancement_BTC_FEAR_GREED_PROXY": {
+      "availability_before_event_count": 0,
+      "cadence_limit": "unknown; no cadence inferred for event streams/business calendars/snapshots",
+      "chain_and_raw_digest_verified": true,
+      "coverage_denominator": null,
+      "coverage_numerator": null,
+      "distinct_observation_keys": 3175,
+      "duplicate_keys": 0,
+      "first_seen_field": "first_seen_utc",
+      "first_seen_max": "2026-10-15T02:42:08.004242+00:00",
+      "first_seen_min": "2026-10-12T23:42:12.201460+00:00",
+      "guard_error": null,
+      "historical_release_time_independently_verified": false,
+      "invalid_or_future_timestamp_count": 0,
+      "key_fields": [
+        "record_sha256"
+      ],
+      "max_timestamp": "2026-10-15T02:42:08.004242+00:00",
+      "min_timestamp": "2026-10-12T23:42:12.201460+00:00",
+      "missing_daily_dates": null,
+      "missing_value_counts": {
+        "revision_of_sha256": 3175
+      },
+      "observation_key_max": "2026-10-15",
+      "observation_key_min": "2018-02-01",
+      "production_admission": "BLOCKED",
+      "public_pre_target_witness_replayed": false,
+      "revision_records": 0,
+      "rows": 3175,
+      "timestamp_field": "first_seen_utc"
+    },
+    "enhancement_CRYPTO_NEWS": {
+      "availability_before_event_count": 0,
+      "cadence_limit": "unknown; no cadence inferred for event streams/business calendars/snapshots",
+      "chain_and_raw_digest_verified": true,
+      "coverage_denominator": null,
+      "coverage_numerator": null,
+      "distinct_observation_keys": 63,
+      "duplicate_keys": 0,
+      "first_seen_field": "first_seen_utc",
+      "first_seen_max": "2026-10-15T02:42:07.961785+00:00",
+      "first_seen_min": "2026-10-12T23:42:12.227477+00:00",
+      "guard_error": null,
+      "historical_release_time_independently_verified": false,
+      "invalid_or_future_timestamp_count": 0,
+      "key_fields": [
+        "record_sha256"
+      ],
+      "max_timestamp": "2026-10-15T02:42:07.961785+00:00",
+      "min_timestamp": "2026-10-12T23:42:12.227477+00:00",
+      "missing_daily_dates": null,
+      "missing_value_counts": {
+        "revision_of_sha256": 63
+      },
+      "observation_key_max": "fd678dca-ed62-4ea2-9e11-6d9e3b15607d",
+      "observation_key_min": "041f3da9-9496-420b-8a3a-081ece7aff50",
+      "production_admission": "BLOCKED",
+      "public_pre_target_witness_replayed": false,
+      "revision_records": 2,
+      "rows": 65,
+      "timestamp_field": "first_seen_utc"
+    },
+    "enhancement_DXY_YAHOO_UNOFFICIAL": {
+      "availability_before_event_count": 0,
+      "cadence_limit": "unknown; no cadence inferred for event streams/business calendars/snapshots",
+      "chain_and_raw_digest_verified": true,
+      "coverage_denominator": null,
+      "coverage_numerator": null,
+      "distinct_observation_keys": 1259,
+      "duplicate_keys": 0,
+      "first_seen_field": "first_seen_utc",
+      "first_seen_max": "2026-10-15T02:42:07.880419+00:00",
+      "first_seen_min": "2026-10-12T23:24:30.221899+00:00",
+      "guard_error": null,
+      "historical_release_time_independently_verified": false,
+      "invalid_or_future_timestamp_count": 0,
+      "key_fields": [
+        "record_sha256"
+      ],
+      "max_timestamp": "2026-10-15T02:42:07.880419+00:00",
+      "min_timestamp": "2026-10-12T23:24:30.221899+00:00",
+      "missing_daily_dates": null,
+      "missing_value_counts": {
+        "previous_sha256": 1,
+        "published_at_utc": 1259,
+        "revision_of_sha256": 1259
+      },
+      "observation_key_max": "2026-10-14",
+      "observation_key_min": "2021-10-12",
+      "production_admission": "BLOCKED",
+      "public_pre_target_witness_replayed": false,
+      "revision_records": 0,
+      "rows": 1259,
+      "timestamp_field": "first_seen_utc"
+    },
+    "enhancement_ECB_NEWS": {
+      "availability_before_event_count": 0,
+      "cadence_limit": "unknown; no cadence inferred for event streams/business calendars/snapshots",
+      "chain_and_raw_digest_verified": true,
+      "coverage_denominator": null,
+      "coverage_numerator": null,
+      "distinct_observation_keys": 17,
+      "duplicate_keys": 0,
+      "first_seen_field": "first_seen_utc",
+      "first_seen_max": "2026-10-14T14:42:42.431081+00:00",
+      "first_seen_min": "2026-10-12T23:42:12.497705+00:00",
+      "guard_error": null,
+      "historical_release_time_independently_verified": false,
+      "invalid_or_future_timestamp_count": 0,
+      "key_fields": [
+        "record_sha256"
+      ],
+      "max_timestamp": "2026-10-14T14:42:42.431081+00:00",
+      "min_timestamp": "2026-10-12T23:42:12.497705+00:00",
+      "missing_daily_dates": null,
+      "missing_value_counts": {
+        "revision_of_sha256": 17
+      },
+      "observation_key_max": "https://www.ecb.europa.eu//press/pr/date/2026/html/ecb.pr261007~6447350434.en.html",
+      "observation_key_min": "https://www.ecb.europa.eu//press/accounts/2026/html/ecb.mg261008~a10153d090.en.html",
+      "production_admission": "BLOCKED",
+      "public_pre_target_witness_replayed": false,
+      "revision_records": 0,
+      "rows": 17,
+      "timestamp_field": "first_seen_utc"
+    },
+    "enhancement_FED_NEWS": {
+      "availability_before_event_count": 0,
+      "cadence_limit": "unknown; no cadence inferred for event streams/business calendars/snapshots",
+      "chain_and_raw_digest_verified": true,
+      "coverage_denominator": null,
+      "coverage_numerator": null,
+      "distinct_observation_keys": 16,
+      "duplicate_keys": 0,
+      "first_seen_field": "first_seen_utc",
+      "first_seen_max": "2026-10-14T02:41:23.277656+00:00",
+      "first_seen_min": "2026-10-12T23:42:11.845374+00:00",
+      "guard_error": null,
+      "historical_release_time_independently_verified": false,
+      "invalid_or_future_timestamp_count": 0,
+      "key_fields": [
+        "record_sha256"
+      ],
+      "max_timestamp": "2026-10-14T02:41:23.277656+00:00",
+      "min_timestamp": "2026-10-12T23:42:11.845374+00:00",
+      "missing_daily_dates": null,
+      "missing_value_counts": {
+        "revision_of_sha256": 16
+      },
+      "observation_key_max": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20261013a.htm",
+      "observation_key_min": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20260414a.htm",
+      "production_admission": "BLOCKED",
+      "public_pre_target_witness_replayed": false,
+      "revision_records": 0,
+      "rows": 16,
+      "timestamp_field": "first_seen_utc"
+    },
+    "enhancement_USD_BROAD_FRED_PROXY": {
+      "availability_before_event_count": 0,
+      "cadence_limit": "unknown; no cadence inferred for event streams/business calendars/snapshots",
+      "chain_and_raw_digest_verified": true,
+      "coverage_denominator": null,
+      "coverage_numerator": null,
+      "distinct_observation_keys": 5208,
+      "duplicate_keys": 0,
+      "first_seen_field": "first_seen_utc",
+      "first_seen_max": "2026-10-14T02:41:23.401465+00:00",
+      "first_seen_min": "2026-10-12T23:42:12.027805+00:00",
+      "guard_error": null,
+      "historical_release_time_independently_verified": false,
+      "invalid_or_future_timestamp_count": 0,
+      "key_fields": [
+        "record_sha256"
+      ],
+      "max_timestamp": "2026-10-14T02:41:23.401465+00:00",
+      "min_timestamp": "2026-10-12T23:42:12.027805+00:00",
+      "missing_daily_dates": null,
+      "missing_value_counts": {
+        "published_at_utc": 5208,
+        "revision_of_sha256": 5208
+      },
+      "observation_key_max": "2026-10-09",
+      "observation_key_min": "2006-01-02",
+      "production_admission": "BLOCKED",
+      "public_pre_target_witness_replayed": false,
+      "revision_records": 0,
+      "rows": 5208,
+      "timestamp_field": "first_seen_utc"
+    },
+    "liquidation_events": {
+      "availability_before_event_count": 0,
+      "cadence_limit": "unknown; no cadence inferred for event streams/business calendars/snapshots",
+      "coverage_denominator": null,
+      "coverage_numerator": null,
+      "duplicate_keys": 0,
+      "first_seen_field": "received_at_utc",
+      "first_seen_max": "2026-10-15T02:57:41.809663+00:00",
+      "first_seen_min": "2026-10-10T10:23:53.229055+00:00",
+      "invalid_or_future_timestamp_count": 0,
+      "key_fields": [
+        "event_key"
+      ],
+      "max_timestamp": "2026-10-15T02:55:35.163000+00:00",
+      "min_timestamp": "2026-10-10T10:23:52.428000+00:00",
+      "missing_daily_dates": null,
+      "missing_value_counts": {},
+      "production_admission": "BLOCKED",
+      "public_pre_target_witness_replayed": false,
+      "rows": 160,
+      "timestamp_field": "event_ts_ms"
+    },
+    "liquidation_window_reported_scope": {
+      "independently_recollected": false,
+      "snapshot": {
+        "connections_attempted": 1,
+        "contract_doge_per_contract": "1000",
+        "coverage": "Partial public notification feed; only subscribed windows; NOT market-wide totals",
+        "coverage_is_per_listening_window_only": true,
+        "data_quality": {
+          "connections": [
+            {
+              "close_code": null,
+              "close_reason": "",
+              "connected_at_utc": "2026-10-15T02:52:17.163428+00:00",
+              "disconnected_at_utc": "2026-10-15T03:00:16.607617+00:00",
+              "subscribed_at_utc": "2026-10-15T02:52:17.289160+00:00",
+              "subscribed_seconds": 479.182
+            }
+          ],
+          "disconnects": 1,
+          "duplicate_events": 0,
+          "errors": [],
+          "messages": 134,
+          "new_events": 5,
+          "observed_doge_messages": 5,
+          "parse_errors": 0,
+          "reconnects": 0,
+          "subscribed": true,
+          "subscription_ack_count": 1
+        },
+        "ended_at_utc": "2026-10-15T03:00:16.609418+00:00",
+        "event_key_caveat": "Potential collision when timestamp, direction, size and price match; not globally unique",
+        "event_rows_total": 160,
+        "historical_backfill": false,
+        "instrument": "DOGE-USDT-SWAP",
+        "listen_seconds": 480.14,
+        "not_market_wide": true,
+        "notional_definition": "sz * contract_doge_per_contract * bkPx; bankruptcy-price estimate, NOT market-wide",
+        "planned_coverage_ceiling_pct": 53.33,
+        "scheduled_interval_minutes": 15,
+        "schema_version": 3,
+        "source": "OKX public WS liquidation-orders",
+        "started_at_utc": "2026-10-15T02:52:16.470780+00:00",
+        "status": "ok",
+        "subscribed_seconds": 479.18,
+        "subscription_coverage_pct": 99.8
+      }
+    },
+    "liquidity_snapshots": {
+      "availability_before_event_count": 0,
+      "cadence_limit": "unknown; no cadence inferred for event streams/business calendars/snapshots",
+      "coverage_denominator": null,
+      "coverage_numerator": null,
+      "duplicate_keys": 0,
+      "first_seen_field": "collected_at_ms",
+      "first_seen_max": "2026-10-15T02:38:19.592000+00:00",
+      "first_seen_min": "2026-10-10T09:54:49.059000+00:00",
+      "invalid_or_future_timestamp_count": 0,
+      "key_fields": [
+        "collected_at_ms",
+        "instrument"
+      ],
+      "max_timestamp": "2026-10-15T02:38:19.592000+00:00",
+      "min_timestamp": "2026-10-10T09:54:49.059000+00:00",
+      "missing_daily_dates": null,
+      "missing_value_counts": {
+        "liquidation_usd": 114
+      },
+      "production_admission": "BLOCKED",
+      "public_pre_target_witness_replayed": false,
+      "rows": 114,
+      "timestamp_field": "collected_at_ms"
+    },
+    "macro_CPIAUCSL": {
+      "availability_before_event_count": 0,
+      "cadence_limit": "unknown; no cadence inferred for event streams/business calendars/snapshots",
+      "coverage_denominator": null,
+      "coverage_numerator": null,
+      "duplicate_keys": 0,
+      "first_seen_field": "first_seen_utc",
+      "first_seen_max": "2026-10-14T16:04:22.533689+00:00",
+      "first_seen_min": "2026-10-10T11:33:53.095420+00:00",
+      "frequency": "monthly",
+      "invalid_or_future_timestamp_count": 0,
+      "key_fields": [
+        "series_id",
+        "observation_date"
+      ],
+      "max_timestamp": "2026-09-01T00:00:00+00:00",
+      "min_timestamp": "1947-01-01T00:00:00+00:00",
+      "missing_daily_dates": null,
+      "missing_value_counts": {},
+      "production_admission": "BLOCKED",
+      "public_pre_target_witness_replayed": false,
+      "release_vintages_before_first_seen_verified": false,
+      "rows": 956,
+      "timestamp_field": "observation_date"
+    },
+    "macro_CPILFESL": {
+      "availability_before_event_count": 0,
+      "cadence_limit": "unknown; no cadence inferred for event streams/business calendars/snapshots",
+      "coverage_denominator": null,
+      "coverage_numerator": null,
+      "duplicate_keys": 0,
+      "first_seen_field": "first_seen_utc",
+      "first_seen_max": "2026-10-14T16:04:22.533689+00:00",
+      "first_seen_min": "2026-10-10T11:33:53.095420+00:00",
+      "frequency": "monthly",
+      "invalid_or_future_timestamp_count": 0,
+      "key_fields": [
+        "series_id",
+        "observation_date"
+      ],
+      "max_timestamp": "2026-09-01T00:00:00+00:00",
+      "min_timestamp": "1957-01-01T00:00:00+00:00",
+      "missing_daily_dates": null,
+      "missing_value_counts": {},
+      "production_admission": "BLOCKED",
+      "public_pre_target_witness_replayed": false,
+      "release_vintages_before_first_seen_verified": false,
+      "rows": 836,
+      "timestamp_field": "observation_date"
+    },
+    "macro_DFEDTARL": {
+      "availability_before_event_count": 0,
+      "cadence_limit": "unknown; no cadence inferred for event streams/business calendars/snapshots",
+      "coverage_denominator": null,
+      "coverage_numerator": null,
+      "duplicate_keys": 0,
+      "first_seen_field": "first_seen_utc",
+      "first_seen_max": "2026-10-14T16:04:22.533689+00:00",
+      "first_seen_min": "2026-10-10T11:33:53.095420+00:00",
+      "frequency": "daily",
+      "invalid_or_future_timestamp_count": 0,
+      "key_fields": [
+        "series_id",
+        "observation_date"
+      ],
+      "max_timestamp": "2026-10-14T00:00:00+00:00",
+      "min_timestamp": "2008-12-16T00:00:00+00:00",
+      "missing_daily_dates": null,
+      "missing_value_counts": {},
+      "production_admission": "BLOCKED",
+      "public_pre_target_witness_replayed": false,
+      "release_vintages_before_first_seen_verified": false,
+      "rows": 6512,
+      "timestamp_field": "observation_date"
+    },
+    "macro_DFEDTARU": {
+      "availability_before_event_count": 0,
+      "cadence_limit": "unknown; no cadence inferred for event streams/business calendars/snapshots",
+      "coverage_denominator": null,
+      "coverage_numerator": null,
+      "duplicate_keys": 0,
+      "first_seen_field": "first_seen_utc",
+      "first_seen_max": "2026-10-14T16:04:22.533689+00:00",
+      "first_seen_min": "2026-10-10T11:33:53.095420+00:00",
+      "frequency": "daily",
+      "invalid_or_future_timestamp_count": 0,
+      "key_fields": [
+        "series_id",
+        "observation_date"
+      ],
+      "max_timestamp": "2026-10-14T00:00:00+00:00",
+      "min_timestamp": "2008-12-16T00:00:00+00:00",
+      "missing_daily_dates": null,
+      "missing_value_counts": {},
+      "production_admission": "BLOCKED",
+      "public_pre_target_witness_replayed": false,
+      "release_vintages_before_first_seen_verified": false,
+      "rows": 6512,
+      "timestamp_field": "observation_date"
+    },
+    "macro_DGS10": {
+      "availability_before_event_count": 0,
+      "cadence_limit": "unknown; no cadence inferred for event streams/business calendars/snapshots",
+      "coverage_denominator": null,
+      "coverage_numerator": null,
+      "duplicate_keys": 0,
+      "first_seen_field": "first_seen_utc",
+      "first_seen_max": "2026-10-14T03:59:39.162054+00:00",
+      "first_seen_min": "2026-10-10T11:33:53.095420+00:00",
+      "frequency": "daily",
+      "invalid_or_future_timestamp_count": 0,
+      "key_fields": [
+        "series_id",
+        "observation_date"
+      ],
+      "max_timestamp": "2026-10-09T00:00:00+00:00",
+      "min_timestamp": "1962-01-02T00:00:00+00:00",
+      "missing_daily_dates": null,
+      "missing_value_counts": {},
+      "production_admission": "BLOCKED",
+      "public_pre_target_witness_replayed": false,
+      "release_vintages_before_first_seen_verified": false,
+      "rows": 16179,
+      "timestamp_field": "observation_date"
+    },
+    "macro_PAYEMS": {
+      "availability_before_event_count": 0,
+      "cadence_limit": "unknown; no cadence inferred for event streams/business calendars/snapshots",
+      "coverage_denominator": null,
+      "coverage_numerator": null,
+      "duplicate_keys": 0,
+      "first_seen_field": "first_seen_utc",
+      "first_seen_max": "2026-10-10T11:33:53.095420+00:00",
+      "first_seen_min": "2026-10-10T11:33:53.095420+00:00",
+      "frequency": "monthly",
+      "invalid_or_future_timestamp_count": 0,
+      "key_fields": [
+        "series_id",
+        "observation_date"
+      ],
+      "max_timestamp": "2026-09-01T00:00:00+00:00",
+      "min_timestamp": "1939-01-01T00:00:00+00:00",
+      "missing_daily_dates": null,
+      "missing_value_counts": {},
+      "production_admission": "BLOCKED",
+      "public_pre_target_witness_replayed": false,
+      "release_vintages_before_first_seen_verified": false,
+      "rows": 1053,
+      "timestamp_field": "observation_date"
+    },
+    "macro_PPIACO": {
+      "availability_before_event_count": 0,
+      "cadence_limit": "unknown; no cadence inferred for event streams/business calendars/snapshots",
+      "coverage_denominator": null,
+      "coverage_numerator": null,
+      "duplicate_keys": 0,
+      "first_seen_field": "first_seen_utc",
+      "first_seen_max": "2026-10-10T11:33:53.095420+00:00",
+      "first_seen_min": "2026-10-10T11:33:53.095420+00:00",
+      "frequency": "monthly",
+      "invalid_or_future_timestamp_count": 0,
+      "key_fields": [
+        "series_id",
+        "observation_date"
+      ],
+      "max_timestamp": "2026-08-01T00:00:00+00:00",
+      "min_timestamp": "1913-01-01T00:00:00+00:00",
+      "missing_daily_dates": null,
+      "missing_value_counts": {},
+      "production_admission": "BLOCKED",
+      "public_pre_target_witness_replayed": false,
+      "release_vintages_before_first_seen_verified": false,
+      "rows": 1364,
+      "timestamp_field": "observation_date"
+    },
+    "macro_UNRATE": {
+      "availability_before_event_count": 0,
+      "cadence_limit": "unknown; no cadence inferred for event streams/business calendars/snapshots",
+      "coverage_denominator": null,
+      "coverage_numerator": null,
+      "duplicate_keys": 0,
+      "first_seen_field": "first_seen_utc",
+      "first_seen_max": "2026-10-10T11:33:53.095420+00:00",
+      "first_seen_min": "2026-10-10T11:33:53.095420+00:00",
+      "frequency": "monthly",
+      "invalid_or_future_timestamp_count": 0,
+      "key_fields": [
+        "series_id",
+        "observation_date"
+      ],
+      "max_timestamp": "2026-09-01T00:00:00+00:00",
+      "min_timestamp": "1948-01-01T00:00:00+00:00",
+      "missing_daily_dates": null,
+      "missing_value_counts": {},
+      "production_admission": "BLOCKED",
+      "public_pre_target_witness_replayed": false,
+      "release_vintages_before_first_seen_verified": false,
+      "rows": 944,
+      "timestamp_field": "observation_date"
+    },
+    "onchain_daily_activity": {
+      "availability_before_event_count": 0,
+      "cadence_limit": "daily calendar dates within observed span",
+      "coverage_denominator": 4696,
+      "coverage_numerator": 4695,
+      "duplicate_keys": 0,
+      "first_seen_field": null,
+      "first_seen_max": null,
+      "first_seen_min": null,
+      "invalid_or_future_timestamp_count": 0,
+      "key_fields": [
+        "date_utc"
+      ],
+      "max_timestamp": "2026-10-14T00:00:00+00:00",
+      "min_timestamp": "2013-12-06T00:00:00+00:00",
+      "missing_daily_dates": 1,
+      "missing_dates": [
+        "2013-12-07"
+      ],
+      "missing_value_counts": {
+        "transfers": 4695,
+        "transfers_sent": 4695
+      },
+      "production_admission": "BLOCKED",
+      "public_pre_target_witness_replayed": false,
+      "rows": 4695,
+      "timestamp_field": "date_utc"
+    },
+    "onchain_daily_snapshots": {
+      "availability_before_event_count": 0,
+      "cadence_limit": "unknown; no cadence inferred for event streams/business calendars/snapshots",
+      "coverage_denominator": null,
+      "coverage_numerator": null,
+      "duplicate_keys": 0,
+      "first_seen_field": "observed_at_utc",
+      "first_seen_max": "2026-10-15T01:52:16.006000+00:00",
+      "first_seen_min": "2026-10-10T08:53:20.625000+00:00",
+      "invalid_or_future_timestamp_count": 0,
+      "key_fields": [
+        "observed_at_utc"
+      ],
+      "max_timestamp": "2026-10-15T01:52:16.006000+00:00",
+      "min_timestamp": "2026-10-10T08:53:20.625000+00:00",
+      "missing_daily_dates": null,
+      "missing_value_counts": {},
+      "production_admission": "BLOCKED",
+      "public_pre_target_witness_replayed": false,
+      "rows": 6,
+      "timestamp_field": "observed_at_utc"
+    },
+    "onchain_reported_scope": {
+      "independently_recollected": false,
+      "snapshot": {
+        "caveats": [
+          "Current Top100 addresses are not entities",
+          "Full exchange netflow requires validated address labels",
+          "Historical transfer bucket names and amounts must be interpreted using provider schema"
+        ],
+        "collected_at_utc": "2026-10-15T02:04:05.871698+00:00",
+        "core_collection_success": true,
+        "daily_activity_latest": {
+          "active_addresses": "34958.0",
+          "new_addresses": "9827.0",
+          "transfers": null,
+          "transfers_sent": null,
+          "tx_count": "22450.0"
+        },
+        "daily_observations": 4695,
+        "errors": {},
+        "latest_complete_core_day_utc": "2026-10-14",
+        "not_available": [
+          "verified_exchange_netflow",
+          "entity_level_whale_trades",
+          "continuous_full_network_large_transfer_feed"
+        ],
+        "richlist_balance_deltas": {
+          "note": "Balance delta of the CURRENT largest addresses; not investor trades or exchange flow.",
+          "observed_addresses": 100,
+          "top10": [
+            {
+              "address": "DEgDVFa2DoW1533dxeDVdTxQFhMzs1pMke",
+              "balance_doge": "27164003624.09990992",
+              "delta_24h_doge": "0E-8",
+              "delta_7d_doge": "0E-8",
+              "provider_label": null,
+              "rank": 1
+            },
+            {
+              "address": "D8ZEVbgf4yPs3MK8dMJJ7PpSyBKsbd66TX",
+              "balance_doge": "11627686773.75917082",
+              "delta_24h_doge": "0E-8",
+              "delta_7d_doge": "64181653.21819440",
+              "provider_label": null,
+              "rank": 2
+            },
+            {
+              "address": "DE5opaXjFgDhFBqL6tBDxTAQ56zkX6EToX",
+              "balance_doge": "10934742143.45428246",
+              "delta_24h_doge": "0E-8",
+              "delta_7d_doge": "0E-8",
+              "provider_label": null,
+              "rank": 3
+            },
+            {
+              "address": "DDTtqnuZ5kfRT5qh2c7sNtqrJmV3iXYdGG",
+              "balance_doge": "5031001968.53961639",
+              "delta_24h_doge": "0E-8",
+              "delta_7d_doge": "0E-8",
+              "provider_label": null,
+              "rank": 4
+            },
+            {
+              "address": "AC8azEyeWHk1L7XKvyeBjJtVwRwXgmP5hQ",
+              "balance_doge": "3732143439.34578646",
+              "delta_24h_doge": "16705342.64000000",
+              "delta_7d_doge": "70586474.90000000",
+              "provider_label": null,
+              "rank": 5
+            },
+            {
+              "address": "DU8gPC5mh4KxWJARQRxoESFark2jAguBr5",
+              "balance_doge": "2960684314.43998155",
+              "delta_24h_doge": "0E-8",
+              "delta_7d_doge": "-39315686.11488924",
+              "provider_label": null,
+              "rank": 6
+            },
+            {
+              "address": "DCdaxPdM33N2ViG8XyWxLKifri7xGRzKCq",
+              "balance_doge": "2590165346.57228911",
+              "delta_24h_doge": "0E-8",
+              "delta_7d_doge": "5516048.80047912",
+              "provider_label": null,
+              "rank": 7
+            },
+            {
+              "address": "DGmzv39riELTuigZCUD6sWoHEHPdSbxdUB",
+              "balance_doge": "2121500238.07711010",
+              "delta_24h_doge": "0E-8",
+              "delta_7d_doge": "0E-8",
+              "provider_label": null,
+              "rank": 8
+            },
+            {
+              "address": "DDogepartyxxxxxxxxxxxxxxxxxxw1dfzr",
+              "balance_doge": "1854588274.61331509",
+              "delta_24h_doge": "0E-8",
+              "delta_7d_doge": "0.00600000",
+              "provider_label": null,
+              "rank": 9
+            },
+            {
+              "address": "DQhgaRJp9hW9NkCVH1XUgTgKpNErtL4sfK",
+              "balance_doge": "1500741497.72620587",
+              "delta_24h_doge": "0E-8",
+              "delta_7d_doge": "0E-8",
+              "provider_label": null,
+              "rank": 10
+            }
+          ],
+          "top100_negative_balance_delta_24h_doge": "-102466916.40926494",
+          "top100_positive_balance_delta_24h_doge": "74507816.85959359"
+        },
+        "schema_version": 3,
+        "skipped_malformed_points": {
+          "active_addresses": 0,
+          "new_addresses": 0,
+          "transfers": 0,
+          "transfers_sent": 0,
+          "tx_count": 0
+        },
+        "source": "Dogechain public API v3",
+        "status": "ok",
+        "transfer_bucket_history_days": 4695,
+        "transfer_bucket_latest": {
+          "transfers": {
+            "1_1k": {
+              "count": 8865,
+              "sent": "2045199.76531211"
+            },
+            "1k_1m": {
+              "count": 5712,
+              "sent": "307933064.75338925"
+            },
+            "ge_1m": {
+              "count": 247,
+              "sent": "982557400.01721728"
+            },
+            "lt_1": {
+              "count": 6272,
+              "sent": "176.00357430"
+            }
+          },
+          "transfers_sent": {
+            "1_1k": {
+              "count": 8865,
+              "sent": "2045199.76531211"
+            },
+            "1k_1m": {
+              "count": 5712,
+              "sent": "307933064.75338925"
+            },
+            "ge_1m": {
+              "count": 247,
+              "sent": "982557400.01721728"
+            },
+            "lt_1": {
+              "count": 6272,
+              "sent": "176.00357430"
+            }
+          }
+        },
+        "transfer_bucket_latest_day_utc": "2026-10-14",
+        "transfer_scalar_fields": "not applicable: values are structured buckets; see transfer_buckets.json"
+      }
+    },
+    "whale_confirmed_events": {
+      "availability_before_event_count": 0,
+      "cadence_limit": "unknown; no cadence inferred for event streams/business calendars/snapshots",
+      "coverage_denominator": null,
+      "coverage_numerator": null,
+      "duplicate_keys": 0,
+      "first_seen_field": "observed_at_utc",
+      "first_seen_max": "2026-10-13T18:33:22.562210+00:00",
+      "first_seen_min": "2026-10-10T10:00:08.813276+00:00",
+      "invalid_or_future_timestamp_count": 0,
+      "key_fields": [
+        "txid"
+      ],
+      "max_timestamp": "2026-10-13T18:33:22.562210+00:00",
+      "min_timestamp": "2026-10-10T10:00:08.813276+00:00",
+      "missing_daily_dates": null,
+      "missing_value_counts": {},
+      "production_admission": "BLOCKED",
+      "public_pre_target_witness_replayed": false,
+      "rows": 643,
+      "timestamp_field": "observed_at_utc"
+    },
+    "whale_live_events": {
+      "availability_before_event_count": 0,
+      "cadence_limit": "unknown; no cadence inferred for event streams/business calendars/snapshots",
+      "coverage_denominator": null,
+      "coverage_numerator": null,
+      "duplicate_keys": 0,
+      "first_seen_field": "first_observed_utc",
+      "first_seen_max": "2026-10-14T20:45:22.816394+00:00",
+      "first_seen_min": "2026-10-10T09:14:21.001905+00:00",
+      "invalid_or_future_timestamp_count": 0,
+      "key_fields": [
+        "txid"
+      ],
+      "max_timestamp": "2026-10-14T20:45:21+00:00",
+      "min_timestamp": "2026-10-10T09:14:20+00:00",
+      "missing_daily_dates": null,
+      "missing_value_counts": {},
+      "production_admission": "BLOCKED",
+      "public_pre_target_witness_replayed": false,
+      "rows": 33,
+      "timestamp_field": "time_seen_utc"
+    },
+    "whale_scan_reported_scope": {
+      "independently_recollected": false,
+      "snapshot": {
+        "backlog_as_of": "confirmed_tip_at_run (not refreshed at run end)",
+        "backlog_blocks_at_run_end": 1853,
+        "blocks_completed_this_run": 0,
+        "confirmation_depth": 6,
+        "confirmed_tip_at_run": 6415636,
+        "coverage": "Only contiguous heights after checkpoint; earlier heights are NOT covered unless explicitly backfilled",
+        "cumulative_unique_whale_transactions": 643,
+        "elapsed_seconds": 480.08,
+        "ended_at_utc": "2026-10-15T03:00:57.367357+00:00",
+        "errors": [],
+        "incomplete_block_not_committed": 6413784,
+        "last_completed_height": 6413783,
+        "limits": [
+          "exchange netflow is unverified",
+          "single-provider explain.sent may not represent a unique economic entity",
+          "six confirmations reduce but do not eliminate reorganizations",
+          "source availability and API rate limits can delay catch-up"
+        ],
+        "max_blocks_per_run": 100,
+        "new_whale_transactions": 0,
+        "request_min_interval_s": 0.65,
+        "run_time_budget_s": 600,
+        "scan_stop_reason": "time_budget_in_block",
+        "schema_version": 3,
+        "source": "Dogechain /network /block/{height} /tx/{txid}",
+        "start_height": 6413784,
+        "started_at_utc": "2026-10-15T02:52:57.282703+00:00",
+        "status": "idle",
+        "threshold_doge": "1000000",
+        "tip_height": 6415642,
+        "transactions_verified_this_run": 734
+      }
+    }
+  }
+}
