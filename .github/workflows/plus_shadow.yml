@@ -64,7 +64,7 @@ jobs:
           ALIBABA_CLOUD_ACCESS_KEY_ID: ${{ steps.custody.outputs.aliyun-access-key-id }}
           ALIBABA_CLOUD_ACCESS_KEY_SECRET: ${{ steps.custody.outputs.aliyun-access-key-secret }}
           ALIBABA_CLOUD_SECURITY_TOKEN: ${{ steps.custody.outputs.aliyun-security-token }}
-          PLUS_ASSESSMENT_RUN_ID: ${{ inputs.assessment_run_id || '' }}
+          PLUS_ASSESSMENT_RUN_ID: ${{ inputs.assessment_run_id || (github.event.workflow_run.name == 'Independently review DOGE R2 competition and paper rollback' && github.event.workflow_run.id) || '' }}
         run: python plus_shadow.py
       - uses: actions/upload-artifact@v4
         if: always()
