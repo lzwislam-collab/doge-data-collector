@@ -127,13 +127,12 @@ class VersionBoundary(unittest.TestCase):
                 gate.verify_installed()
 
     def test_unknown_or_extra_lean_output_directory_is_not_accepted(self):
-        with patch.object(Path, "exists", autospec=True) as exists:
-            original_exists = Path.exists
-            def path_exists(p):
-                if str(p).endswith("/data/lean_v1"):
-                    return True
-                return original_exists(p)
-            exists.side_effect = path_exists
+        original_exists = Path.exists
+        def path_exists(p):
+            if str(p).endswith("/data/lean_v1"):
+                return True
+            return original_exists(p)
+        with patch.object(Path, "exists", path_exists):
             with self.assertRaises(gate.VersionIsolationError):
                 gate.verify_installed()
 
