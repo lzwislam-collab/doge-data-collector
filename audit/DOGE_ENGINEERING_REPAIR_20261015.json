@@ -1,0 +1,362 @@
+{
+  "audit_id": "DOGE_ENGINEERING_REPAIR_20261015",
+  "at_utc": "2026-10-15T12:03:43.966507+00:00",
+  "status": "DEPLOYED_AND_READBACK_VERIFIED_FORMAL_EVENTS_AND_HOSTED_DAILY_WAIT",
+  "code_sha": "c3ed6bfe15d6c6fecae462c8e8932a5f36724ea8",
+  "primary_merge_sha": "f437c012b459f493f40ddec3ad399383d505c6dd",
+  "pr": "https://github.com/lzwislam-collab/doge-data-collector/pull/52",
+  "followup_commits": [
+    "e3c5caa8c43316572ea8121954d8a9165b781a31",
+    "ea93c82f3a7e908a96fdf2228c9a2eb802e86445",
+    "c3ed6bfe15d6c6fecae462c8e8932a5f36724ea8"
+  ],
+  "summary_zh": [
+    "逐次存证适配层已部署到现有OSS工作流；正式事件仅在目标前接受存证，错过窗口永久BLOCKED，不追认。legacy不上传，original18/R2/canary路径隔离。",
+    "同一Locked策略从730日依法延长为732日；四个旧对象按原VersionId完整回读、SHA256一致，原2028-10-16固定期限已满足，旧对象和旧回执不改写。",
+    "真实隔离canary存储探针通过，仅证明存储链路，不计正式成绩。original18/R2尚未激活，每次正式预测存证仍WAIT真实事件。",
+    "完整full评审到自动PLUS回调已绑定并独立回读；正式样本0，统计准入未通过，不能宣称准确率或收益优势。",
+    "原09:00日本时间日报任务修正文案后保存重开核对一致；Sheet配置独立回读通过；新版本定时执行仍CONFIGURED_NOT_REVERIFIED。"
+  ],
+  "storage_run": {
+    "run_id": 38730011589,
+    "head_sha": "f437c012b459f493f40ddec3ad399383d505c6dd",
+    "event": "workflow_dispatch",
+    "status": "completed",
+    "conclusion": "success",
+    "artifact_id": 11969118966,
+    "artifact_sha256": "4677510201b70087c6f07b8c4f0f914df3425e61998d7d310997e90769d75f90",
+    "artifact_names": [
+      "result.json"
+    ]
+  },
+  "storage_result": {
+    "status": "PRE_TARGET_WORM_READBACK_PASS",
+    "at_utc": "2026-10-15T11:49:31.733205+00:00",
+    "bucket_worm": {
+      "worm_id": "9DFBE5FB72654409B8F16D34CFE30EAB",
+      "state": "Locked",
+      "retention_days": 732,
+      "policy_created_at_utc": "2026-10-15T04:53:26.000Z",
+      "owner": "1379992038848464"
+    },
+    "fixed_horizon_utc": "2028-10-16T00:00:00+00:00",
+    "fixed_horizon_for_new_objects_satisfied": true,
+    "receipts": [
+      {
+        "schema": "DOGE_PER_FORECAST_WORM_V1",
+        "status": "PRE_TARGET_WORM_VERIFIED",
+        "track": "canary",
+        "event_id": "1792064978_canary",
+        "issued_at_utc": "2026-10-15T11:49:38.050729+00:00",
+        "target_utc": "2026-10-15T11:59:38.050729+00:00",
+        "sha256": "08556dbb5e411fb6534abd2c807acf6051b50608e0e0d9f1b2f080e9ed420cce",
+        "byte_count": 304,
+        "bucket": "doge-evidence-1379992038848464-cn",
+        "endpoint": "https://oss-cn-hangzhou.aliyuncs.com",
+        "key": "doge/evidence/per-forecast/v1/canary/1792064978_canary/08556dbb5e411fb6534abd2c807acf6051b50608e0e0d9f1b2f080e9ed420cce.json",
+        "version_id": "CAEQswIYgYCA8_zK_YkaIiAzNWQyNDllOWViYzg0YjVjYWU4YmUxN2JmMmM3Y2ExMQ--",
+        "upload_request_id": "6AD0BDD279504D3630B3C5CE",
+        "recovery_head_request_id": null,
+        "readback_request_id": "6AD0BDD279504D363084C6CE",
+        "server_last_modified_utc": "2026-10-15T11:49:38+00:00",
+        "server_response_date_utc": "2026-10-15T11:49:38+00:00",
+        "calculated_retain_until_utc": "2028-10-16T11:49:38+00:00",
+        "bucket_worm": {
+          "worm_id": "9DFBE5FB72654409B8F16D34CFE30EAB",
+          "state": "Locked",
+          "retention_days": 732,
+          "policy_created_at_utc": "2026-10-15T04:53:26.000Z",
+          "owner": "1379992038848464"
+        },
+        "verified_at_utc": "2026-10-15T11:49:38.547006+00:00",
+        "historical_backfill": false,
+        "formal_statistics_eligible": false,
+        "independent_custodian_verified": false,
+        "run_id": "38730011589",
+        "source_commit": "f437c012b459f493f40ddec3ad399383d505c6dd"
+      }
+    ],
+    "expired_unproven": [
+      "canary/1791973142_canary"
+    ],
+    "errors": [],
+    "extension": {
+      "before": {
+        "worm_id": "9DFBE5FB72654409B8F16D34CFE30EAB",
+        "state": "Locked",
+        "retention_days": 732,
+        "policy_created_at_utc": "2026-10-15T04:53:26.000Z",
+        "owner": "1379992038848464"
+      },
+      "requested_days": 732,
+      "status": "NO_CHANGE_ALREADY_SUFFICIENT"
+    },
+    "old_pinned_objects_readback": [
+      {
+        "key": "doge/evidence/3796928dad806741b887df9c0dfcb60d06f3b20262c03e3e167eeed7ecb8c134.zip",
+        "version_id": "CAEQswIYgYCA8tuK.IkaIiBmYmE3ZmQxY2FiYjU0ODRmYTYwODRmN2Q3MDI3OGU5YQ--",
+        "sha256": "3796928dad806741b887df9c0dfcb60d06f3b20262c03e3e167eeed7ecb8c134",
+        "byte_count": 58442563,
+        "readback_request_id": "6AD0BDCB79504D363023AFCE",
+        "calculated_retain_until_utc": "2028-10-16T05:25:01+00:00",
+        "fixed_horizon_satisfied": true,
+        "server_last_modified_utc": "2026-10-15T05:25:01+00:00",
+        "historical_pre_target_retention_verified": false,
+        "object_rewritten": false
+      },
+      {
+        "key": "doge/evidence/cc254281a0628e6feb3b02c40ee9134b3ae7b76dea6f1b59daa754f63fc6ce3d.zip",
+        "version_id": "CAEQswIYgYCA9ouL.IkaIiA2YzM5YzlkNzY3NWY0NWY4YTM4OWMwZTBkNTllYzdmMA--",
+        "sha256": "cc254281a0628e6feb3b02c40ee9134b3ae7b76dea6f1b59daa754f63fc6ce3d",
+        "byte_count": 60851390,
+        "readback_request_id": "6AD0BDCF79504D3630F0BDCE",
+        "calculated_retain_until_utc": "2028-10-16T05:25:13+00:00",
+        "fixed_horizon_satisfied": true,
+        "server_last_modified_utc": "2026-10-15T05:25:13+00:00",
+        "historical_pre_target_retention_verified": false,
+        "object_rewritten": false
+      },
+      {
+        "key": "doge/evidence/900639b1df61c45a8dfb9ce50c32781269d3db2a0061ff66f2bc6c4b81eaea92.zip",
+        "version_id": "CAEQswIYgYDAv7CL.IkaIiA1MmU3YzMxNWVlODg0ZmNmYmVhOTRhMTllYTJhMzcwNQ--",
+        "sha256": "900639b1df61c45a8dfb9ce50c32781269d3db2a0061ff66f2bc6c4b81eaea92",
+        "byte_count": 17586048,
+        "readback_request_id": "6AD0BDD179504D363068C2CE",
+        "calculated_retain_until_utc": "2028-10-16T05:25:22+00:00",
+        "fixed_horizon_satisfied": true,
+        "server_last_modified_utc": "2026-10-15T05:25:22+00:00",
+        "historical_pre_target_retention_verified": false,
+        "object_rewritten": false
+      },
+      {
+        "key": "doge/evidence/64e48b747acc664a22463a22ba6c6297ddbf5cdcbe706e8b5d4f15f9280e1ec7.json",
+        "version_id": "CAEQswIYgYCA9LuL.IkaIiAyM2RkYWU1ZDJiZmE0MjhkODU0OGJhMzU3NDhlMTQxOA--",
+        "sha256": "64e48b747acc664a22463a22ba6c6297ddbf5cdcbe706e8b5d4f15f9280e1ec7",
+        "byte_count": 454047,
+        "readback_request_id": "6AD0BDD179504D3630A2C4CE",
+        "calculated_retain_until_utc": "2028-10-16T05:25:25+00:00",
+        "fixed_horizon_satisfied": true,
+        "server_last_modified_utc": "2026-10-15T05:25:25+00:00",
+        "historical_pre_target_retention_verified": false,
+        "object_rewritten": false
+      }
+    ],
+    "old_fixed_horizon_satisfied": true
+  },
+  "full_review_run": {
+    "run_id": 38730988947,
+    "head_sha": "c3ed6bfe15d6c6fecae462c8e8932a5f36724ea8",
+    "event": "workflow_dispatch",
+    "status": "completed",
+    "conclusion": "success",
+    "artifact_id": 11971330131,
+    "artifact_sha256": "9af7b3ee25a3fd0d52efce71b16b79adaf755d594505a68177feea71b8295795",
+    "artifact_names": [
+      "phase3-independent-output/assessment.json",
+      "config/phase3_independent_v1.json",
+      "phase3-independent-output/batch_certificate.json",
+      "config/phase3_registration_v1.json",
+      "system/phase3_candidates_v1.json"
+    ]
+  },
+  "full_review_scope": {
+    "mode": "full",
+    "status": "WAIT_ACTIVATION",
+    "at_utc": "2026-10-15T11:58:07.249150+00:00",
+    "network_audit_covers_all_events": true,
+    "formal_qualified": 0,
+    "formal_scheduled": 0,
+    "canary_excluded": true
+  },
+  "automatic_plus_report": {
+    "artifact_verification": {
+      "run_id": 38731169486,
+      "head_sha": "c3ed6bfe15d6c6fecae462c8e8932a5f36724ea8",
+      "event": "workflow_run",
+      "status": "completed",
+      "conclusion": "success",
+      "artifact_id": 11970750494,
+      "artifact_sha256": "a1452d733d35e42eda9dadbe592fbcc4d7dcf329178eb932e60e0c090839e0fc",
+      "artifact_names": [
+        "index.html",
+        "report.json"
+      ]
+    },
+    "report_json_sha256": "f155d64d7021acb52c212a1c7d0c4db2220b9f54eee123e2692a11064c1ea063",
+    "execution_binding": {
+      "artifact_readback_status": "WAIT_EXTERNAL_ARTIFACT_READBACK",
+      "report_run_attempt": "1",
+      "report_run_id": "38731169486",
+      "scheduled_daily_execution_verified": false,
+      "source_commit": "c3ed6bfe15d6c6fecae462c8e8932a5f36724ea8"
+    },
+    "external_artifact_readback_status": "PASS_INDEPENDENT_DIGEST_AND_PAYLOAD_BINDING",
+    "full_review_payload_binding": {
+      "accuracy": null,
+      "accuracy_lower": null,
+      "as_of_utc": "2026-10-15T11:58:07.249150+00:00",
+      "criteria": {
+        "accuracy_70_lower": false,
+        "brier_excess": false,
+        "complete_fixed_window": false,
+        "cross_regime_no_harm": false,
+        "direction_excess": false,
+        "fixed_review": false,
+        "independent_full_audit": true,
+        "no_missing_events": false,
+        "preregistered_assessment": true,
+        "raw_nominal_stress_cost": false,
+        "sample_count": false
+      },
+      "current_event_count": 1,
+      "current_full_statistics_claimed": false,
+      "economic_evidence": {
+        "net_return": null,
+        "stress_net_return": null
+      },
+      "net_return_mean": null,
+      "qualified_formal_events": 0,
+      "review_artifact_sha256": "9af7b3ee25a3fd0d52efce71b16b79adaf755d594505a68177feea71b8295795",
+      "review_event_count": 1,
+      "review_run_id": 38730988947,
+      "same_recorded_event_count": true,
+      "scheduled_denominator": 0,
+      "statistical_gate_passed": false,
+      "status": "INDEPENDENT_FIXED_PROTOCOL_AS_OF_REVIEW",
+      "stress_net_return_mean": null,
+      "validated_70pct": false
+    },
+    "current_per_forecast_custody": {
+      "current_bucket_worm": {
+        "owner": "1379992038848464",
+        "policy_created_at_utc": "2026-10-15T04:53:26.000Z",
+        "retention_days": 732,
+        "state": "Locked",
+        "worm_id": "9DFBE5FB72654409B8F16D34CFE30EAB"
+      },
+      "daily_inventory_run_url": "https://github.com/lzwislam-collab/doge-data-collector/actions/runs/38724780313",
+      "daily_inventory_scope": "Recorded daily inventory only; not per-forecast proof",
+      "daily_inventory_status": "LOCKED_DAILY_INVENTORY_VERIFIED",
+      "daily_inventory_verified_at_utc": "2026-10-15T11:05:48.103257+00:00",
+      "events": [],
+      "external_immutable_retention_verified": false,
+      "fixed_horizon_utc": "2028-10-16T00:00:00+00:00",
+      "live_oss_readback_this_report": false,
+      "per_forecast_status": "WAIT_NO_FORMAL_EVENTS"
+    },
+    "current_report_quality": {
+      "current_full_statistics_claimed": false,
+      "independent_full_run_id": 38730988947,
+      "review_artifact_sha256": "9af7b3ee25a3fd0d52efce71b16b79adaf755d594505a68177feea71b8295795",
+      "source_latest73_ready": true,
+      "status": "AS_OF_FULL_REPLAY_ONLY"
+    },
+    "hosted_0900_daily_run": false
+  },
+  "hosted_schedule_and_sheet": {
+    "observed_by_utc": "2026-10-15 11:58:12 UTC",
+    "ui": {
+      "conversation_url": "https://chatgpt.com/c/6ac300fa-9dd4-83e8-b809-3a14ed69fc55",
+      "title": "DOGE PLUS每日核验报告",
+      "enabled": true,
+      "repeat": "DAILY",
+      "time": "09:00",
+      "timezone_label": "日本标准时间",
+      "prompt_patch": "WORM-FIX-20261015",
+      "saved_and_reopened": true,
+      "normalized_prompt_matches": true,
+      "backend_schedule_and_activation_timestamp_exposed": false,
+      "new_timers": 0
+    },
+    "sheet": {
+      "spreadsheet_id": "1rp8KzBZffaKbGkTlH231p7WIp8iuengvZPu_W2MIPpU",
+      "range": "Task Status!A3:O3",
+      "task_id": "6abde43cf2fc81919db884b999211ed0",
+      "config_version": "Lean-v1.0-20261015 + PLUS-INTEGRATION-v1.0 + ReviewSplit-v1.0-DAILY + NEXT-STAGE-ACCEPTANCE-20261015 + WORM-FIX-20261015",
+      "last_automatic_run_unchanged": "2026-10-15T00:43:17Z",
+      "overall_status": "REVISE / PARTIAL / REPORT_QUALITY_FAIL / CONFIGURED_NOT_REVERIFIED",
+      "config_activation_observation": "2026-10-15T07:31:00Z; NEXT-STAGE UI_SAVE_READBACK_BY 2026-10-15 11:16:29 UTC (backend activation timestamp not exposed); WORM-FIX UI_SAVE_REOPEN_READBACK_BY 2026-10-15 11:58:12 UTC (backend activation timestamp not exposed)",
+      "verification_gate": "Next scheduled run must follow NEXT-STAGE prompt save; same Run_ID + READ_ONLY_NO_ISSUANCE + original Learning keys add/amend/noop + Report/Task independent readback. Earlier manual PASS is separate. Checkpoints Oct16/17/20 09:00 JST; no new timer. WORM-FIX post-save scheduled run + same Run_ID + full review/custody evidence + Learning key write/amend/noop + independent Report/Task readback required; never use manual or GitHub callback as hosted daily AUTO_VERIFIED.",
+      "readback_pass": true
+    },
+    "hosted_daily_automatic_verified": false
+  },
+  "tests": {
+    "run_id": 38730988947,
+    "job_id": 116408426811,
+    "test_count": 1001,
+    "result": "OK",
+    "frozen_protocol_and_committed_history_integrity": "PASS"
+  },
+  "main_byte_readback": {
+    "at_utc": "2026-10-15T12:00:18.252272+00:00",
+    "main_sha": "c3ed6bfe15d6c6fecae462c8e8932a5f36724ea8",
+    "deployed_code_sha": "f437c012b459f493f40ddec3ad399383d505c6dd",
+    "frozen_files_checked": 49,
+    "frozen_changed": [],
+    "repair_paths_readback": [
+      "forecast_worm.py",
+      "test_forecast_worm.py",
+      "test_report_custody.py",
+      "report_evidence.py",
+      "plus_shadow.py",
+      ".github/workflows/oss_inventory_retention.yml",
+      ".github/workflows/plus_shadow.yml",
+      ".github/workflows/test_report_v41.yml"
+    ],
+    "repair_mismatches": [],
+    "new_workflow_files": 0,
+    "new_timers": 0,
+    "trading_logic_added": false,
+    "historical_predictions_rewritten": false
+  },
+  "checkpoints_jst": [
+    "2026-10-16T09:00:00+09:00",
+    "2026-10-17T09:00:00+09:00",
+    "2026-10-20T09:00:00+09:00"
+  ],
+  "remaining": [
+    {
+      "item": "original18 real 1H/24H issuance and per-event pre-target WORM",
+      "status": "WAIT",
+      "earliest_jst": "2026-10-16T09:00:00+09:00"
+    },
+    {
+      "item": "P0 continuous real issuance/target quotes/scores and full denominator QA",
+      "status": "WAIT",
+      "earliest_jst": "2026-10-17T09:00:00+09:00"
+    },
+    {
+      "item": "R2 formal prospective events and applicable full review",
+      "status": "WAIT",
+      "earliest_jst": "2026-10-20T09:00:00+09:00"
+    },
+    {
+      "item": "hosted09:00 daily post-WORM-FIX real scheduled run and same-run Report/Learning/Task independent readback",
+      "status": "CONFIGURED_NOT_REVERIFIED"
+    },
+    {
+      "item": "active overwrite/delete rejection probe",
+      "status": "NOT_PERFORMED"
+    },
+    {
+      "item": "historical missing pre-target proof",
+      "status": "PERMANENTLY_NOT_RETROACTIVELY_APPROVED"
+    },
+    {
+      "item": "predictive edge/70pct/profitability",
+      "status": "NOT_VALIDATED"
+    }
+  ],
+  "protection": {
+    "frozen_registered_files_verified": 49,
+    "changed_frozen_files": [],
+    "historical_forecast_rewritten": false,
+    "historical_receipts_rewritten": false,
+    "new_workflow_files": 0,
+    "new_timers": 0,
+    "new_trading_or_dca_logic": false,
+    "apps_script_changes": false
+  },
+  "official_retention_extension_reference": "https://www.alibabacloud.com/help/en/oss/developer-reference/extendbucketworm"
+}
