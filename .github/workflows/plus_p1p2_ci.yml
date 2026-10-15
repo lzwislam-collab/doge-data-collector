@@ -6,8 +6,10 @@ on:
     paths:
       - 'plus_p1_audit.py'
       - 'p2_plus_review.py'
+      - 'plus_shadow_preparation.py'
       - 'test_plus_p1_market_audit.py'
       - 'test_p2_plus_review.py'
+      - 'test_plus_shadow_preparation.py'
       - 'docs/*plus*20261015.md'
       - '.github/workflows/plus_p1p2_ci.yml'
 permissions:
@@ -49,6 +51,7 @@ jobs:
           from pathlib import Path
           from datetime import datetime, timezone
           import plus_p1_audit as p1, p2_plus_review as p2, phase3_runtime as frozen
+          import plus_shadow_preparation as preparation
           root=Path('.'); now=datetime.now(timezone.utc)
           frozen.guard()
           _,hourly=p1.market(root/'data/hourly_research/ohlc.csv',3600000,now)
@@ -58,6 +61,12 @@ jobs:
             'p2_local_only':p2.local_audit(root,now),'frozen_guard_passed':True,
             'production_changed':False,'promotion_authorized':False,'p0_pass_claimed':False}
           Path('plus-p1p2-ci-output/review.json').write_text(json.dumps(result,sort_keys=True,allow_nan=False)+'\n',encoding='utf-8')
+          package=preparation.prepare(root)
+          assert not package['preparation_validation']['eligible_for_prospective_registration']
+          assert package['bound_review_draft']['observation_start_utc'] is None
+          assert not any(package[k] for k in ('new_candidate_created','new_registration_performed','runtime_activation_authorized','production_promotion_authorized','p0_pass_claimed'))
+          preparation.verify(root,package)
+          Path('plus-p1p2-ci-output/candidate-preparation.json').write_bytes(preparation.encode(package))
           PY
       - uses: actions/upload-artifact@v4
         if: always()
