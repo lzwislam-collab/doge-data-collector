@@ -1,6 +1,6 @@
 {
   "anchor": "2026-10-14",
-  "generated_at_utc": "2026-10-15T01:46:07.018689+00:00",
+  "generated_at_utc": "2026-10-15T09:05:42.734975+00:00",
   "plus": {
     "external_immutable_retention_verified": false,
     "forecasts": [
@@ -77,8 +77,8 @@
         "track": "r2"
       }
     ],
-    "generated_at_japan": "2026-10-15T10:46:07.489702+09:00",
-    "generated_at_utc": "2026-10-15T01:46:07.489702+00:00",
+    "generated_at_japan": "2026-10-15T18:05:43.192275+09:00",
+    "generated_at_utc": "2026-10-15T09:05:43.192275+00:00",
     "issuance_performed": false,
     "journal_counts": {
       "original18_events": 0,
@@ -119,7 +119,8 @@
       "概率校准尚未通过真实前瞻验证。",
       "工程canary不计入正式成绩；缺成本数据不按零收益处理。",
       "近期事件结果不等于完整队列准确率；全样本成绩须读取独立完整评审。",
-      "GitHub调度可能错过评分窗口；公开归档不等于锁定留存。"
+      "GitHub调度可能错过评分窗口；公开归档不等于锁定留存。",
+      "最新73根输入尚未齐全，当前来源存在时效风险。"
     ],
     "runtime_gaps": {
       "original18": {
@@ -144,23 +145,37 @@
     "schema": "DOGE_PLUS_SHADOW_V1",
     "source": {
       "asset_rows": {
-        "BTC-USDT": 26695,
-        "DOGE-USDT": 26695,
-        "ETH-USDT": 26695
+        "BTC-USDT": 26702,
+        "DOGE-USDT": 26702,
+        "ETH-USDT": 26702
       },
-      "frame_errors": [],
-      "latest73_ready": true,
-      "latest_closed_utc": "2026-10-15T01:00:00+00:00",
-      "rows": 80085
+      "frame_errors": [
+        "missing latest73 source bars"
+      ],
+      "latest73_ready": false,
+      "latest_closed_utc": "2026-10-15T08:00:00+00:00",
+      "rows": 80106
     },
-    "source_commit": "c008dd39d67b917ee9bde7650c22b99bb7dfa494",
+    "source_commit": "966e7429628ad96698f5225c3289d9c808e5ffeb",
     "source_path": "data/hourly_research/ohlc.csv",
-    "source_sha256": "edf747ccaf0003055e4eceecbd15073ac2a742e5091c21497b703dff75e87473",
+    "source_sha256": "37492f6a596f5cfa26235f3bf920b826269d93e8e651584542cded6516c04a37",
     "status": "SHADOW_REPORT_READY",
-    "validated_70pct": false
+    "validated_70pct": false,
+    "version_isolation": {
+      "governance_version": "DOGE_PREDICT_PLUS_LEAN_V1_20261015",
+      "independent_retention_verified": false,
+      "model_issuance_performed": false,
+      "runtime_stability_verified": false,
+      "status": "STATIC_NAMESPACE_GATE_PASS_ONLY",
+      "tracks": [
+        "original18:1h",
+        "original18:24h",
+        "r2:1h"
+      ]
+    }
   },
   "previous_quality": {
-    "audited_at_utc": "2026-10-15T01:12:16.269205+00:00",
+    "audited_at_utc": "2026-10-15T07:56:25.451388+00:00",
     "critical_failures": [
       "whale_confirmed_blocks"
     ],
@@ -176,7 +191,7 @@
     "schema_version": 4,
     "sources": {
       "binance_liquidations_optional": {
-        "age_hours": 0.783,
+        "age_hours": 0.572,
         "age_limit_hours": 8,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
         "required": false,
@@ -185,7 +200,7 @@
         "state": "ok_coverage_limited"
       },
       "bybit_liquidations_optional": {
-        "age_hours": 0.382,
+        "age_hours": 0.088,
         "age_limit_hours": 8,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
         "required": false,
@@ -194,7 +209,7 @@
         "state": "ok_coverage_limited"
       },
       "etf": {
-        "age_hours": 3.121,
+        "age_hours": 1.855,
         "age_limit_hours": 96,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
         "required": true,
@@ -203,14 +218,14 @@
         "state": "ok"
       },
       "hourly_research": {
-        "candle_start_age_hours": 2.205,
+        "candle_start_age_hours": 1.94,
         "historical_backfill_complete": true,
-        "last_candle_utc": "2026-10-14T23:00:00+00:00",
+        "last_candle_utc": "2026-10-15T06:00:00+00:00",
         "required": false,
         "state": "ok_coverage_limited"
       },
       "liquidations_okx": {
-        "age_hours": 0.062,
+        "age_hours": 0.367,
         "age_limit_hours": 3,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
         "required": true,
@@ -219,7 +234,7 @@
         "state": "ok_coverage_limited"
       },
       "liquidity": {
-        "age_hours": 0.417,
+        "age_hours": 0.177,
         "age_limit_hours": 3,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
         "required": true,
@@ -228,7 +243,7 @@
         "state": "ok"
       },
       "macro": {
-        "age_hours": 9.131,
+        "age_hours": 3.951,
         "age_limit_hours": 48,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
         "required": true,
@@ -237,7 +252,7 @@
         "state": "ok"
       },
       "market": {
-        "age_hours": 0.507,
+        "age_hours": 0.223,
         "age_limit_hours": 3,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
         "required": true,
@@ -246,7 +261,7 @@
         "state": "ok"
       },
       "okx_por_balances_optional": {
-        "age_hours": 0.336,
+        "age_hours": 0.315,
         "age_limit_hours": 4,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
         "required": false,
@@ -255,7 +270,7 @@
         "state": "ok_coverage_limited"
       },
       "onchain": {
-        "age_hours": 23.368,
+        "age_hours": 6.069,
         "age_limit_hours": 36,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
         "required": true,
@@ -264,7 +279,7 @@
         "state": "ok"
       },
       "onchain_daily_activity": {
-        "age_hours": 23.167,
+        "age_hours": 5.872,
         "age_limit_hours": 36,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
         "required": false,
@@ -282,7 +297,7 @@
             "issues": [],
             "late_events": [],
             "raw_legacy_packet_verified": false,
-            "rows": 235,
+            "rows": 266,
             "status": "ok",
             "timestamp_policy": "Event time and first reception are different clocks; use reception or later for prediction, never backdate delayed messages",
             "unsorted_timestamps": 0
@@ -295,13 +310,13 @@
             "issues": [],
             "late_events": [],
             "raw_legacy_packet_verified": false,
-            "rows": 130,
+            "rows": 184,
             "status": "ok",
             "timestamp_policy": "Event time and first reception are different clocks; use reception or later for prediction, never backdate delayed messages",
             "unsorted_timestamps": 0
           },
           "liquidations_okx": {
-            "delayed_notifications": 7,
+            "delayed_notifications": 9,
             "duplicates": 0,
             "file": "data/liquidations/events.csv",
             "invalid_timestamps": 0,
@@ -376,10 +391,30 @@
                 "provider_event_clock_independently_verified": false,
                 "received_at_utc": "2026-10-13T01:13:56.302612+00:00",
                 "usable_from_utc": "2026-10-13T01:13:56.302612+00:00"
+              },
+              {
+                "delay_seconds": 904.113,
+                "disposition": "late_notification_quarantine_for_event_time_features",
+                "event_key": "1792031867168|buy|short|0.11|0.07991",
+                "event_ts_ms": 1792031867168,
+                "historical_event_time_feature_allowed": false,
+                "provider_event_clock_independently_verified": false,
+                "received_at_utc": "2026-10-15T02:52:51.280968+00:00",
+                "usable_from_utc": "2026-10-15T02:52:51.280968+00:00"
+              },
+              {
+                "delay_seconds": 798.909,
+                "disposition": "late_notification_quarantine_for_event_time_features",
+                "event_key": "1792032262901|buy|short|2.03|0.08011",
+                "event_ts_ms": 1792032262901,
+                "historical_event_time_feature_allowed": false,
+                "provider_event_clock_independently_verified": false,
+                "received_at_utc": "2026-10-15T02:57:41.809663+00:00",
+                "usable_from_utc": "2026-10-15T02:57:41.809663+00:00"
               }
             ],
             "raw_legacy_packet_verified": false,
-            "rows": 150,
+            "rows": 164,
             "status": "ok",
             "timestamp_policy": "Event time and first reception are different clocks; use reception or later for prediction, never backdate delayed messages",
             "unsorted_timestamps": 0
@@ -392,7 +427,7 @@
             "issues": [],
             "late_events": [],
             "raw_legacy_packet_verified": false,
-            "rows": 112,
+            "rows": 119,
             "status": "ok",
             "timestamp_policy": "Event time and first reception are different clocks; use reception or later for prediction, never backdate delayed messages",
             "unsorted_timestamps": 0
@@ -415,23 +450,23 @@
           "BTC": {
             "first_collection_time_utc": "2026-10-10T11:29:04.819937+00:00",
             "first_trade_date": "2026-09-21",
-            "last_trade_date": "2026-10-13",
+            "last_trade_date": "2026-10-14",
             "missing_constituent_fund_values": 0,
-            "rows": 17
+            "rows": 18
           },
           "ETH": {
             "first_collection_time_utc": "2026-10-10T11:29:04.819937+00:00",
             "first_trade_date": "2026-09-21",
-            "last_trade_date": "2026-10-13",
+            "last_trade_date": "2026-10-14",
             "missing_constituent_fund_values": 0,
-            "rows": 17
+            "rows": 18
           }
         },
         "point_in_time_historical_backfill_verified": false,
         "required": true,
         "revision_history_before_first_seen_available": false,
         "revisions": 1,
-        "rows": 34,
+        "rows": 36,
         "state": "ok",
         "timestamp_errors": 0,
         "trade_date_as_available_timestamp_allowed": false
@@ -460,17 +495,17 @@
           },
           "fred_macro": {
             "duplicates": 0,
-            "historic_observations_first_seen_after_observation": 34346,
+            "historic_observations_first_seen_after_observation": 34347,
             "historical_release_vintages_verified": false,
             "observation_dates_as_publication_dates_allowed": false,
             "revisions": 0,
-            "rows": 34356,
+            "rows": 34357,
             "series": {
               "CPIAUCSL": 956,
               "CPILFESL": 836,
               "DFEDTARL": 6512,
               "DFEDTARU": 6512,
-              "DGS10": 16179,
+              "DGS10": 16180,
               "PAYEMS": 1053,
               "PPIACO": 1364,
               "UNRATE": 944
@@ -500,7 +535,7 @@
         "state": "stale_or_failed"
       },
       "whale_sse_optional": {
-        "age_hours": 0.253,
+        "age_hours": 3.15,
         "age_limit_hours": 8,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
         "required": false,
@@ -518,7 +553,7 @@
     "verified_global_liquidations": false
   },
   "quality": {
-    "audited_at_utc": "2026-10-15T01:46:07.018689+00:00",
+    "audited_at_utc": "2026-10-15T09:05:42.734975+00:00",
     "critical_failures": [
       "whale_confirmed_blocks"
     ],
@@ -534,7 +569,7 @@
     "schema_version": 4,
     "sources": {
       "binance_liquidations_optional": {
-        "age_hours": 0.537,
+        "age_hours": 1.022,
         "age_limit_hours": 8,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
         "required": false,
@@ -543,7 +578,7 @@
         "state": "ok_coverage_limited"
       },
       "bybit_liquidations_optional": {
-        "age_hours": 0.314,
+        "age_hours": 1.022,
         "age_limit_hours": 8,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
         "required": false,
@@ -552,7 +587,7 @@
         "state": "ok_coverage_limited"
       },
       "etf": {
-        "age_hours": 3.685,
+        "age_hours": 3.01,
         "age_limit_hours": 96,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
         "required": true,
@@ -561,14 +596,14 @@
         "state": "ok"
       },
       "hourly_research": {
-        "candle_start_age_hours": 1.769,
+        "candle_start_age_hours": 2.095,
         "historical_backfill_complete": true,
-        "last_candle_utc": "2026-10-15T00:00:00+00:00",
+        "last_candle_utc": "2026-10-15T07:00:00+00:00",
         "required": false,
         "state": "ok_coverage_limited"
       },
       "liquidations_okx": {
-        "age_hours": 0.078,
+        "age_hours": 1.021,
         "age_limit_hours": 3,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
         "required": true,
@@ -577,7 +612,7 @@
         "state": "ok_coverage_limited"
       },
       "liquidity": {
-        "age_hours": 0.143,
+        "age_hours": 1.332,
         "age_limit_hours": 3,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
         "required": true,
@@ -586,7 +621,7 @@
         "state": "ok"
       },
       "macro": {
-        "age_hours": 9.695,
+        "age_hours": 5.106,
         "age_limit_hours": 48,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
         "required": true,
@@ -595,7 +630,7 @@
         "state": "ok"
       },
       "market": {
-        "age_hours": 0.203,
+        "age_hours": 0.481,
         "age_limit_hours": 3,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
         "required": true,
@@ -604,7 +639,7 @@
         "state": "ok"
       },
       "okx_por_balances_optional": {
-        "age_hours": 0.314,
+        "age_hours": 1.47,
         "age_limit_hours": 4,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
         "required": false,
@@ -613,7 +648,7 @@
         "state": "ok_coverage_limited"
       },
       "onchain": {
-        "age_hours": 23.932,
+        "age_hours": 7.224,
         "age_limit_hours": 36,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
         "required": true,
@@ -622,7 +657,7 @@
         "state": "ok"
       },
       "onchain_daily_activity": {
-        "age_hours": 23.731,
+        "age_hours": 7.027,
         "age_limit_hours": 36,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
         "required": false,
@@ -640,7 +675,7 @@
             "issues": [],
             "late_events": [],
             "raw_legacy_packet_verified": false,
-            "rows": 235,
+            "rows": 267,
             "status": "ok",
             "timestamp_policy": "Event time and first reception are different clocks; use reception or later for prediction, never backdate delayed messages",
             "unsorted_timestamps": 0
@@ -653,13 +688,13 @@
             "issues": [],
             "late_events": [],
             "raw_legacy_packet_verified": false,
-            "rows": 134,
+            "rows": 185,
             "status": "ok",
             "timestamp_policy": "Event time and first reception are different clocks; use reception or later for prediction, never backdate delayed messages",
             "unsorted_timestamps": 0
           },
           "liquidations_okx": {
-            "delayed_notifications": 7,
+            "delayed_notifications": 10,
             "duplicates": 0,
             "file": "data/liquidations/events.csv",
             "invalid_timestamps": 0,
@@ -734,10 +769,40 @@
                 "provider_event_clock_independently_verified": false,
                 "received_at_utc": "2026-10-13T01:13:56.302612+00:00",
                 "usable_from_utc": "2026-10-13T01:13:56.302612+00:00"
+              },
+              {
+                "delay_seconds": 904.113,
+                "disposition": "late_notification_quarantine_for_event_time_features",
+                "event_key": "1792031867168|buy|short|0.11|0.07991",
+                "event_ts_ms": 1792031867168,
+                "historical_event_time_feature_allowed": false,
+                "provider_event_clock_independently_verified": false,
+                "received_at_utc": "2026-10-15T02:52:51.280968+00:00",
+                "usable_from_utc": "2026-10-15T02:52:51.280968+00:00"
+              },
+              {
+                "delay_seconds": 798.909,
+                "disposition": "late_notification_quarantine_for_event_time_features",
+                "event_key": "1792032262901|buy|short|2.03|0.08011",
+                "event_ts_ms": 1792032262901,
+                "historical_event_time_feature_allowed": false,
+                "provider_event_clock_independently_verified": false,
+                "received_at_utc": "2026-10-15T02:57:41.809663+00:00",
+                "usable_from_utc": "2026-10-15T02:57:41.809663+00:00"
+              },
+              {
+                "delay_seconds": 9987.142,
+                "disposition": "late_notification_quarantine_for_event_time_features",
+                "event_key": "1792041427450|sell|long|0.11|0.07991",
+                "event_ts_ms": 1792041427450,
+                "historical_event_time_feature_allowed": false,
+                "provider_event_clock_independently_verified": false,
+                "received_at_utc": "2026-10-15T08:03:34.592334+00:00",
+                "usable_from_utc": "2026-10-15T08:03:34.592334+00:00"
               }
             ],
             "raw_legacy_packet_verified": false,
-            "rows": 150,
+            "rows": 168,
             "status": "ok",
             "timestamp_policy": "Event time and first reception are different clocks; use reception or later for prediction, never backdate delayed messages",
             "unsorted_timestamps": 0
@@ -750,7 +815,7 @@
             "issues": [],
             "late_events": [],
             "raw_legacy_packet_verified": false,
-            "rows": 113,
+            "rows": 119,
             "status": "ok",
             "timestamp_policy": "Event time and first reception are different clocks; use reception or later for prediction, never backdate delayed messages",
             "unsorted_timestamps": 0
@@ -773,23 +838,23 @@
           "BTC": {
             "first_collection_time_utc": "2026-10-10T11:29:04.819937+00:00",
             "first_trade_date": "2026-09-21",
-            "last_trade_date": "2026-10-13",
+            "last_trade_date": "2026-10-14",
             "missing_constituent_fund_values": 0,
-            "rows": 17
+            "rows": 18
           },
           "ETH": {
             "first_collection_time_utc": "2026-10-10T11:29:04.819937+00:00",
             "first_trade_date": "2026-09-21",
-            "last_trade_date": "2026-10-13",
+            "last_trade_date": "2026-10-14",
             "missing_constituent_fund_values": 0,
-            "rows": 17
+            "rows": 18
           }
         },
         "point_in_time_historical_backfill_verified": false,
         "required": true,
         "revision_history_before_first_seen_available": false,
         "revisions": 1,
-        "rows": 34,
+        "rows": 36,
         "state": "ok",
         "timestamp_errors": 0,
         "trade_date_as_available_timestamp_allowed": false
@@ -818,17 +883,17 @@
           },
           "fred_macro": {
             "duplicates": 0,
-            "historic_observations_first_seen_after_observation": 34346,
+            "historic_observations_first_seen_after_observation": 34347,
             "historical_release_vintages_verified": false,
             "observation_dates_as_publication_dates_allowed": false,
             "revisions": 0,
-            "rows": 34356,
+            "rows": 34357,
             "series": {
               "CPIAUCSL": 956,
               "CPILFESL": 836,
               "DFEDTARL": 6512,
               "DFEDTARU": 6512,
-              "DGS10": 16179,
+              "DGS10": 16180,
               "PAYEMS": 1053,
               "PPIACO": 1364,
               "UNRATE": 944
@@ -858,7 +923,7 @@
         "state": "stale_or_failed"
       },
       "whale_sse_optional": {
-        "age_hours": 0.817,
+        "age_hours": 1.022,
         "age_limit_hours": 8,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
         "required": false,
@@ -876,13 +941,17 @@
     "verified_global_liquidations": false
   },
   "state": {
+    "auxiliary_blockers_preserved": [
+      "whale_confirmed_blocks"
+    ],
     "critical_failures": [
       "whale_confirmed_blocks"
     ],
-    "direction_available": false,
+    "direction_available": true,
+    "market_quality_scope": "MARKET_RESEARCH_ONLY_AUX_WHALE_BLOCKED",
     "overall": "DEGRADED_NO_VALIDATED_EDGE",
     "prediction_edge_validated": false,
-    "quality_audited_at_utc": "2026-10-15T01:46:07.018689+00:00",
+    "quality_audited_at_utc": "2026-10-15T09:05:42.734975+00:00",
     "quality_current_status": "blocked",
     "quality_max_age_hours": 2
   }
