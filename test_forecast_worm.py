@@ -19,6 +19,10 @@ class Tests(unittest.TestCase):
  def test_pre_target_pinned_readback(self):
   b=Bucket();r=w.retain(b,RAW,'original18',{'state':'Locked','retention_days':732,'worm_id':'worm'},NOW)
   self.assertEqual(r['status'],'PRE_TARGET_WORM_VERIFIED');self.assertEqual(r['sha256'],hashlib.sha256(RAW).hexdigest());self.assertIn('/original18/',r['key']);self.assertEqual(r['version_id'],'version1')
+ def test_subsecond_issuance_accepts_oss_second_precision(self):
+  e=json.loads(RAW);issued=NOW+timedelta(microseconds=123456);e['issued_at_utc']=issued.isoformat();e['target_utc']=(issued+timedelta(hours=1)).isoformat()
+  r=w.retain(Bucket(),json.dumps(e).encode(),'original18',{'state':'Locked','retention_days':732,'worm_id':'worm'},issued)
+  self.assertEqual(r['status'],'PRE_TARGET_WORM_VERIFIED')
  def test_history_never_retroactively_approved(self):
   with self.assertRaises(ValueError):w.retain(Bucket(),RAW,'original18',{'retention_days':732},NOW+timedelta(hours=1))
  def test_corrupt_full_readback_rejected(self):

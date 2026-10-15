@@ -109,6 +109,11 @@ def assessment_panel(assessment_run_id,online,current_event_count):
 
 
 def snapshot(online=True,assessment_run_id=None):
+ if assessment_run_id is None and online:
+  locator=ROOT/'system/plus_full_review_locator.json'
+  if locator.exists():
+   assessment_run_id=json.loads(locator.read_bytes())['review_run_id']
+   if type(assessment_run_id) is not int or assessment_run_id<=0:raise ValueError('invalid full review locator')
  now=datetime.now(timezone.utc);p,package,files=legacy.bundle.guard();rp,model,_,rfiles=r2.guard()
  le=legacy.read_records(ROOT,'events');ls=legacy.read_records(ROOT,'scores');legacy.shadow.audit_records(p,le,ls,now)
  r2.run('local');re=r2.records('events');rs=r2.records('scores')
