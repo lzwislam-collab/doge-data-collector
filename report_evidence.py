@@ -90,5 +90,6 @@ def plus_sections(report):
  f11=['PLUS 本次核实生成 '+cell(report.get('generated_at_utc'))+'；小时闭合截止 '+cell(report.get('source',{}).get('latest_closed_utc'))+'；来源提交 '+cell(report.get('source_commit'))+'；来源哈希 '+cell(report.get('source_sha256')),
   '冻结身份：'+cell(json.dumps(report.get('models',{}),sort_keys=True)),'发布证据错误：'+cell(json.dumps(report.get('publication_errors',{}),ensure_ascii=False,sort_keys=True)),
   '晋升关闭；预测优势、校准、长期成本净收益尚未证明。已有外部OSS每日清单锁定存证；逐次预测的目标前存证与固定期限须分别核验，GitHub归档不能替代；不以独立管理方为必备门槛。']
+ f11+=['逐次外部存证：'+cell(json.dumps(report.get('per_forecast_custody',{'status':'WAIT_CUSTODY_NOT_READ'}),ensure_ascii=False,sort_keys=True)), '报告质量：'+cell(json.dumps(report.get('report_quality',{}),ensure_ascii=False,sort_keys=True)), '独立full及执行回读绑定：'+cell(json.dumps({'review_run_id':perf.get('review_run_id'),'review_artifact_sha256':perf.get('review_artifact_sha256'),'execution':report.get('execution_binding',{})},ensure_ascii=False,sort_keys=True))]
  f11+=['- '+cell(risk) for risk in report.get('risks',[])]
  return {'F01':'\n'.join(f1),'F10':'\n'.join(f10),'F11':'\n'.join(f11)}

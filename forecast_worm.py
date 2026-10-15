@@ -6,7 +6,7 @@ from pathlib import Path
 import oss_inventory_retention as inventory
 FLOOR=datetime(2028,10,16,tzinfo=timezone.utc)
 ROOT=Path(__file__).resolve().parent
-PREFIX='doge/forecasts/v1/'
+PREFIX='doge/evidence/per-forecast/v1/'
 def utc(s):
  d=datetime.fromisoformat(s.replace('Z','+00:00'))
  if d.tzinfo is None:raise ValueError('timezone required')
@@ -77,6 +77,15 @@ def run():
     report['extension'].update(status='BLOCKED_EXTENSION',type=type(exc).__name__,provider_code=str(getattr(exc,'code','')),request_id=str(getattr(exc,'request_id','')))
     report['errors'].append(report['extension'])
   report['fixed_horizon_for_new_objects_satisfied']=now+timedelta(days=lock['retention_days'])>=FLOOR
+ if os.environ.get('ENGINEERING_PROBE','false')=='true':
+  issued=datetime.now(timezone.utc)
+  probe={'schema':'ENGINEERING_CANARY_NOT_MODEL_FORECAST','event_id':str(int(issued.timestamp()))+'_canary','cohort':'canary','included_in_formal_statistics':False,'issued_at_utc':issued.isoformat(),'target_utc':(issued+timedelta(minutes=10)).isoformat(),'horizon_seconds':600,'real_orders_authorized':False}
+  try:
+   receipt=retain(bucket,json.dumps(probe,sort_keys=True).encode(),'canary',lock)
+   dest=ROOT/'audit/forecast_worm/canary'/(probe['event_id']+'.json');dest.parent.mkdir(parents=True,exist_ok=True)
+   with dest.open('x',encoding='utf-8') as stream:json.dump(receipt,stream,indent=2)
+   report['receipts'].append(receipt)
+  except Exception as exc:report['errors'].append({'track':'canary','type':type(exc).__name__,'provider_code':str(getattr(exc,'code','')),'request_id':str(getattr(exc,'request_id',''))})
  for base,track in [('data/learned_shadow_v1/events','original18'),('data/phase2_forward_v2/events','r2')]:
   for path in sorted((ROOT/base).glob('*.json')):
    raw=path.read_bytes();e=json.loads(raw);actual='canary' if e.get('cohort')=='canary' else track

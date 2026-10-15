@@ -2,6 +2,10 @@ name: Lock existing daily DOGE inventory in OSS
 on:
   workflow_dispatch:
     inputs:
+      engineering_probe:
+        description: One excluded ten-minute storage probe; no frozen forecast journal write
+        type: boolean
+        default: false
       extend_retention_days:
         description: Explicit monotonic Locked policy extension to 732 days; never edits object bytes
         type: choice
@@ -138,6 +142,7 @@ jobs:
           ALIBABA_CLOUD_ACCESS_KEY_ID: ${{ steps.aliyun.outputs.aliyun-access-key-id }}
           ALIBABA_CLOUD_ACCESS_KEY_SECRET: ${{ steps.aliyun.outputs.aliyun-access-key-secret }}
           ALIBABA_CLOUD_SECURITY_TOKEN: ${{ steps.aliyun.outputs.aliyun-security-token }}
+          ENGINEERING_PROBE: ${{ inputs.engineering_probe || false }}
           EXTEND_RETENTION_DAYS: ${{ inputs.extend_retention_days || '0' }}
         run: |
           export SOURCE_COMMIT=$(git rev-parse HEAD)
