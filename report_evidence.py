@@ -83,6 +83,8 @@ def plus_sections(report):
   f1.append('|'+ '|'.join(map(cell,[name,r.get('event_id'),str(r.get('status'))+' / '+str(r.get('effective_utc','未知')),str(r.get('reference_quote_utc','未知'))+' / '+str(r.get('reference_price','未知')),r.get('issued_at_utc'),r.get('target_utc'),r.get('reference_to_issue_seconds'),direction,probability]))+'|')
   s=r.get('latest_same_event',{}) if verified and r.get('score_verified') is True else {}
   f10.append('|'+ '|'.join(map(cell,[name,r.get('event_id'),s.get('sample_count',0),s.get('accuracy'),s.get('brier'),pct(s.get('net_return')),pct(s.get('stress_net_return')),json.dumps(s.get('baselines',{}),ensure_ascii=False,sort_keys=True)]))+'|')
+ import plus_scorecard
+ f10+=plus_scorecard.summary_lines(report.get('scorecard',{}))
  perf=report.get('performance',{})
  f10+=['完整独立评审：'+cell(perf.get('status'))+'；评审截止 '+cell(perf.get('as_of_utc'))+'；正式合格样本 '+cell(perf.get('qualified_formal_events'))+'；准确率 '+pct(perf.get('accuracy'))+'。未提供适用评审时保持未知；70%及经济优势尚未证明。',
   '分轨账本记录数（不是合格评分数）：'+cell(json.dumps(report.get('journal_counts',{}),ensure_ascii=False,sort_keys=True)),
