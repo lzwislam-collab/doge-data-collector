@@ -20,8 +20,8 @@ def check_bucket(bucket):
     if str(info.owner.id)!=OWNER or info.location!='oss-cn-hangzhou':raise ValueError('bucket owner or location mismatch')
     if bucket.get_bucket_versioning().status!='Enabled':raise ValueError('versioning not enabled')
     days=int(lock.retention_period_days)
-    if lock.worm_state!='Locked' or days<730 or not lock.worm_id:raise ValueError('locked 730-day WORM required')
-    return {'worm_id':lock.worm_id,'state':lock.worm_state,'retention_days':days,
+    if lock.state!='Locked' or days<730 or not lock.worm_id:raise ValueError('locked 730-day WORM required')
+    return {'worm_id':lock.worm_id,'state':lock.state,'retention_days':days,
             'policy_created_at_utc':lock.creation_date,'owner':OWNER}
 
 def upload_one(bucket,raw,extension,lock,now=None):

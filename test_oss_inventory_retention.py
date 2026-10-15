@@ -15,7 +15,7 @@ class Bucket:
     def get_bucket_info(self):
         return NS(owner=NS(id=self.owner),location='oss-cn-hangzhou',acl=NS(grant='private'))
     def get_bucket_versioning(self):return NS(status=self.versioning)
-    def get_bucket_worm(self):return NS(worm_state=self.state,worm_id='lock1',retention_period_days=self.days,creation_date='2026-10-15T05:00:00Z')
+    def get_bucket_worm(self):return NS(state=self.state,worm_state=None,worm_id='lock1',retention_period_days=self.days,creation_date='2026-10-15T05:00:00Z')
     def head_object(self,key,**kw):
         if key not in self.data:raise Missing()
         return NS(headers={'x-oss-version-id':'v1'})
