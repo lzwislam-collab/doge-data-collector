@@ -5,21 +5,31 @@ on:
     branches: [main]
     paths:
       - 'report_v41.py'
+      - 'report_evidence.py'
+      - 'test_report_evidence.py'
+      - 'test_report_cohort_regressions.py'
       - '.github/workflows/test_report_v41.yml'
+  pull_request:
+    paths: ['report_v41.py', 'report_evidence.py', 'test_report_evidence.py', 'test_report_cohort_regressions.py', '.github/workflows/test_report_v41.yml']
 permissions:
   contents: read
 jobs:
   test:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - run: python -m pip install numpy==2.3.5 scipy==1.16.3 scikit-learn==1.7.2 joblib==1.5.2 threadpoolctl==3.6.0 botocore==1.43.112
       - name: Syntax and report generation
+        env:
+          OPENBLAS_NUM_THREADS: '1'
+          OMP_NUM_THREADS: '1'
         run: |
-          python -m py_compile report_v41.py
+          python -m unittest test_report_evidence test_report_cohort_regressions test_plus_shadow test_phase3_independent test_learned_shadow_v1 -q
+          python -m py_compile report_v41.py report_evidence.py
           python report_v41.py
       - name: Verify 11 chapters, no unsupported model advantage
         run: |
@@ -28,3 +38,11 @@ jobs:
           done
           grep -q 'NO_VALIDATED_EDGE' reports/DOGE_V41_LATEST.md
           grep -q '实验\|历史经验\|历史频率\|尚未' reports/DOGE_V41_LATEST.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: doge-report-test-${{ github.run_id }}
+          path: |
+            reports/DOGE_V41_LATEST.md
+            reports/DOGE_V41_EVIDENCE.json
+          if-no-files-found: error
+          retention-days: 90

@@ -23,6 +23,9 @@ def forecast_row(track,h,e,s,prediction_verified,score_verified,now):
  issued=f.utc(e['issued_at_utc']);target=f.utc(e['target_utc'])
  if issued>now or target!=issued+timedelta(hours=h) or (e.get('horizon_hours')!=h if track=='original18' else e.get('horizon_seconds')!=h*3600):raise ValueError('future or mismatched-horizon event')
  row.update(event_id=e['event_id'],issued_at_utc=e['issued_at_utc'],target_utc=e['target_utc'],event_sha256=f.digest(e),historical_record=now>=target)
+ if e.get('entry_packet') is not None:
+  quote=legacy.shadow.quote(e['entry_packet'])
+  row.update(reference_price=quote['price'],reference_quote_utc=quote['at'].isoformat(),reference_to_issue_seconds=(issued-quote['at']).total_seconds())
  if not prediction_verified:row['status']='UNVERIFIED_PUBLICATION';return row
  prob=e['candidate_p']['selected' if track=='r2' else 'full']
  if isinstance(prob,bool) or not math.isfinite(prob) or not 0<=prob<=1:raise ValueError('invalid frozen probability')
@@ -137,7 +140,7 @@ def render(report):
  cards=[]
  for row in report.get('forecasts',[]):
   title=('历史记录 · ' if row.get('historical_record') else '')+('冻结参考' if row['track']=='original18' else 'R2研究挑战者')+' · '+str(row['horizon_hours'])+'小时'
-  direction={'UP':'上涨','DOWN':'下跌'}.get(row['direction'],'暂无方向')
+  direction={'UP':'上涨','DOWN':'跌／平'}.get(row['direction'],'暂无方向')
   prob='尚未发行或验证' if row['probability_up'] is None else f"上涨模型概率 {row['probability_up']:.1%}（校准未验证）"
   s=row['latest_same_event'];cost='成本净收益未知' if s['net_return'] is None else f"最新同事件名义净收益 {s['net_return']:.2%}"
   stress=esc('未知' if s['stress_net_return'] is None else format(s['stress_net_return'],'.2%'));target=esc(row.get('target_utc','尚未发行'))
