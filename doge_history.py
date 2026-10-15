@@ -6,6 +6,7 @@ import csv, io, json, os, sys, time, urllib.parse, urllib.request
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+import stored_history_integrity as stored
 
 BASE=Path(__file__).resolve().parent/'data'/'history'
 BASE.mkdir(parents=True,exist_ok=True)
@@ -22,7 +23,9 @@ def loadcsv(path):
     with path.open(newline='',encoding='utf-8') as f:
         rdr=csv.DictReader(f)
         if tuple(rdr.fieldnames or ())!=FIELDS:raise ValueError('Existing history header mismatch')
-        return list(rdr)
+        rows=list(rdr)
+        for row in rows:stored.validate(row,DAY,'OKX history-candles 1Dutc confirmed',int(time.time()*1000))
+        return rows
 def dump(rows):
     b=io.StringIO();w=csv.DictWriter(b,fieldnames=FIELDS);w.writeheader();w.writerows(rows);return b.getvalue()
 def finite_nonnegative(val):
@@ -109,7 +112,8 @@ def main():
                     if row is None:continue
                     key=symbol,row['open_utc_ms']
                     if c in recent:recent_dates.append(int(row['open_utc_ms']))
-                    if key not in old:old[key]=row;new+=1
+                    if key in old:stored.same_candle(old[key],row)
+                    else:old[key]=row;new+=1
                 expected_last=(now_ms//DAY-1)*DAY
                 if not recent_dates or max(recent_dates)<expected_last:
                     raise ValueError('Recent UTC daily feed stale: expected >= '+str(expected_last)+', got '+str(max(recent_dates) if recent_dates else None))

@@ -3,6 +3,7 @@
 import csv,io,json,math,os,time,urllib.parse,urllib.request
 from datetime import datetime,timezone,timedelta
 from pathlib import Path
+import stored_history_integrity as stored
 ROOT=Path(__file__).resolve().parent
 BASE=ROOT/'data/hourly_research'
 BASE.mkdir(parents=True,exist_ok=True)
@@ -49,6 +50,7 @@ def read_old():
   if tuple(d.fieldnames or ())!=COLUMNS:raise ValueError('1H research registry schema changed')
   old={}
   for r in d:
+   stored.validate(r,HOUR,'OKX history-candles 1H confirmed',int(time.time()*1000),receipt=True)
    k=(r['symbol'],int(r['open_utc_ms']))
    if k in old:raise ValueError('duplicate prior hourly key: '+str(k))
    old[k]=r
@@ -67,12 +69,13 @@ def assess(rows):
  return per
 def run():
  now=int(time.time()*1000);start=datetime.now(timezone.utc).isoformat()
- old=read_old();status={'schema_version':1,'status':'error','started_utc':start,
+ status={'schema_version':1,'status':'error','started_utc':start,
   'source':'OKX public history-candles, 1H, confirm=1',
   'intended_oldest_utc':iso(OLDEST_TARGET),'page_budget_per_symbol':PAGE_BUDGET,
   'research_only':True,'no_pre_event_real_time_alert_claim':True,'errors':[],
   'per_symbol':{},'inserted':0,'archive_complete':False}
  try:
+  old=read_old()
   latest_expected=(now//HOUR-1)*HOUR
   for sym in SYMBOLS:
    recent=request(sym);nowcapt=datetime.now(timezone.utc).isoformat()
@@ -83,7 +86,8 @@ def run():
    inserted=0
    for row in recent_valid:
     k=(sym,int(row['open_utc_ms']))
-    if k not in old:old[k]=row;inserted+=1
+    if k in old:stored.same_candle(old[k],row)
+    else:old[k]=row;inserted+=1
    cursor=min(ts for (s,ts) in old if s==sym)
    pages=0
    for _ in range(PAGE_BUDGET):
@@ -95,7 +99,8 @@ def run():
     if not older:break
     for row in older:
      k=(sym,int(row['open_utc_ms']))
-     if k not in old:old[k]=row;inserted+=1
+     if k in old:stored.same_candle(old[k],row)
+     else:old[k]=row;inserted+=1
     nxt=min(int(x['open_utc_ms']) for x in older)
     if nxt>=cursor:break
     cursor=nxt;pages+=1

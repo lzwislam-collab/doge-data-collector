@@ -81,6 +81,28 @@ def r2_proofs(p,files,events,scores,now,online):
   except ValueError as exc:rejected[e['event_id']]=str(exc)
  return proofs,rejected
 
+def selection_state(online,now):
+ if online:return releases.select(ROOT,now)
+ return {'selection':None,'reason':'OFFLINE_AUTHORITY_NOT_RECHECKED','real_orders_authorized':False}
+
+def assessment_panel(assessment_run_id,online,current_event_count):
+ performance={'status':'NO_CURRENT_INDEPENDENT_FULL_ASSESSMENT','accuracy':None,'accuracy_lower':None,'net_return_mean':None,'stress_net_return_mean':None,'qualified_formal_events':None,'validated_70pct':False}
+ if assessment_run_id is not None:
+  if not online:raise ValueError('independent assessment requires actual remote readback')
+  try:
+   a,raw,sha,_=releases.review_source(assessment_run_id)
+   if a.get('mode')!='full' or not a['forward_runtime']['network_audit_covers_all_events']:raise ValueError('complete assessment required')
+   # A verified old assessment is an as-of result, never claimed current.
+   performance.update(status='INDEPENDENT_FIXED_PROTOCOL_AS_OF_REVIEW',review_run_id=assessment_run_id,review_artifact_sha256=sha,as_of_utc=a['at_utc'],
+    current_event_count=current_event_count,review_event_count=a['forward_runtime']['network_audit_events'],same_recorded_event_count=a['forward_runtime']['network_audit_events']==current_event_count,current_full_statistics_claimed=False,
+    accuracy=a.get('accuracy'),accuracy_lower=a.get('accuracy_lower'),qualified_formal_events=a['qualified_events'],scheduled_denominator=a['scheduled_events'],
+    statistical_gate_passed=a['statistical_gate_passed'],economic_evidence=a.get('raw_economic_results'),criteria=a['criteria'])
+  except Exception as exc:
+   performance.update(status='REQUESTED_REVIEW_UNAVAILABLE',review_run_id=assessment_run_id,error=type(exc).__name__+': '+str(exc),current_full_statistics_claimed=False)
+   return performance
+ return performance
+
+
 def snapshot(online=True,assessment_run_id=None):
  now=datetime.now(timezone.utc);p,package,files=legacy.bundle.guard();rp,model,_,rfiles=r2.guard()
  le=legacy.read_records(ROOT,'events');ls=legacy.read_records(ROOT,'scores');legacy.shadow.audit_records(p,le,ls,now)
@@ -97,23 +119,14 @@ def snapshot(online=True,assessment_run_id=None):
  source=operations.source_state((ROOT/r2.SOURCE).read_bytes(),now)
  risks=['影子预测，不授权交易或替换生产模型。','概率校准尚未通过真实前瞻验证。','工程canary不计入正式成绩；缺成本数据不按零收益处理。','近期事件结果不等于完整队列准确率；全样本成绩须读取独立完整评审。','GitHub调度可能错过评分窗口；公开归档不等于锁定留存。']
  if not source['latest73_ready']:risks.append('最新73根输入尚未齐全，当前来源存在时效风险。')
- performance={'status':'NO_CURRENT_INDEPENDENT_FULL_ASSESSMENT','accuracy':None,'accuracy_lower':None,'net_return_mean':None,'stress_net_return_mean':None,'qualified_formal_events':None,'validated_70pct':False}
- if assessment_run_id is not None:
-  if not online:raise ValueError('independent assessment requires actual remote readback')
-  a,raw,sha,_=releases.review_source(assessment_run_id)
-  if a.get('mode')!='full' or not a['forward_runtime']['network_audit_covers_all_events']:raise ValueError('complete assessment required')
-  # A verified old assessment is an as-of result, never claimed current.
-  performance.update(status='INDEPENDENT_FIXED_PROTOCOL_AS_OF_REVIEW',review_run_id=assessment_run_id,review_artifact_sha256=sha,as_of_utc=a['at_utc'],
-   current_event_count=len(re),review_event_count=a['forward_runtime']['network_audit_events'],same_recorded_event_count=a['forward_runtime']['network_audit_events']==len(re),current_full_statistics_claimed=False,
-   accuracy=a.get('accuracy'),accuracy_lower=a.get('accuracy_lower'),qualified_formal_events=a['qualified_events'],scheduled_denominator=a['scheduled_events'],
-   statistical_gate_passed=a['statistical_gate_passed'],economic_evidence=a.get('raw_economic_results'),criteria=a['criteria'])
-  risks.append('独立评审仅覆盖其原评审时点；事件数相同也不能证明评分与证据未变化，不能视作当前完整队列成绩。')
+ performance=assessment_panel(assessment_run_id,online,len(re))
+ if assessment_run_id is not None:risks.append('独立评审仅代表通过重放的原评审时点；旧评审不适用于当前账本或远端不可达时，隔离该成绩，不影响独立核实的最新预测。')
  result={'schema':'DOGE_PLUS_SHADOW_V1','status':'SHADOW_REPORT_READY','generated_at_utc':now.isoformat(),'generated_at_japan':now.astimezone(JAPAN).isoformat(),
   'source':source,'forecasts':rows,'performance':performance,'risks':risks,'publication_errors':{'original18':rejected,'r2':rrejected},
   'journal_counts':{'original18_events':len(le),'original18_local_scores':len(ls),'r2_formal_events':len(formal),'r2_local_formal_scores':sum(s['event_id'] in {e['event_id'] for e in formal} for s in rs),'r2_engineering_canaries':sum(e['cohort']=='canary' for e in re)},
   'runtime_gaps':{'original18':legacy.plan(p,le,smap,now),'r2':r2.plan(rp,re,rs,now)},
   'models':{'original18_package_sha256':legacy.shadow.digest(package),'r2_identity':model['trial_model_identity']},
-  'release_selection':releases.select(ROOT,now),'online_publication_scope':'latest original18 event per horizon and latest R2 formal event; not all history',
+  'release_selection':selection_state(online,now),'online_publication_scope':'latest original18 event per horizon and latest R2 formal event; not all history',
   'source_path':r2.SOURCE,'source_sha256':f.old.sha((ROOT/r2.SOURCE).read_bytes()),'source_commit':subprocess.check_output(['git','-c','safe.directory=*','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
   'issuance_performed':False,'production_model_changed':False,'promotion_authorized':False,'real_orders_authorized':False,'external_immutable_retention_verified':False,'validated_70pct':False}
  return result
@@ -130,6 +143,7 @@ def render(report):
   stress=esc('未知' if s['stress_net_return'] is None else format(s['stress_net_return'],'.2%'));target=esc(row.get('target_utc','尚未发行'))
   cards.append(f'<section><h2>{esc(title)}</h2><h3>{esc(direction)}</h3><p>{esc(prob)}</p><p class="status">{esc(labels.get(row["status"],row["status"]))}</p><p>{esc(cost)}</p><p>压力净收益：{stress}</p><p>目标（UTC）：{target}</p><small>仅最新事件；不代表全样本准确率。历史记录不会作为新的预测发行。</small></section>')
  perf=report.get('performance',{}); summary='<h2>完整独立成绩</h2><p>未提供当前独立完整评审；准确率与收益未知。</p>'
+ if perf.get('status')=='REQUESTED_REVIEW_UNAVAILABLE':summary='<h2>完整独立成绩</h2><p>指定评审当前无法通过完整重放；成绩未知。最新预测仍须独立核实。</p>'
  if perf.get('as_of_utc'):
   summary='<h2>完整独立成绩（原评审时点）</h2><p>评审截止：'+esc(perf['as_of_utc'])+'；正式合格样本：'+esc(perf.get('qualified_formal_events'))+'；准确率：'+esc('未知' if perf.get('accuracy') is None else format(perf['accuracy'],'.2%'))+'。仅代表该时点评审，70%尚未证明。</p>'
  raw=esc(json.dumps(report,ensure_ascii=False,indent=2))

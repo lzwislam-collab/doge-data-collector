@@ -3,9 +3,9 @@ on:
   workflow_dispatch:
   push:
     branches: [main, 'research/phase2-v2-*']
-    paths: ['phase2_*_v2.py','phase2_research_v2.py','test_phase2_v2.py','config/phase2_research_v2.json','.github/workflows/phase2_research_v2.yml']
+    paths: ['research_artifact_audit.py', 'test_research_artifact_audit.py', 'phase2_*_v2.py','phase2_research_v2.py','test_phase2_v2.py','config/phase2_research_v2.json','.github/workflows/phase2_research_v2.yml']
   pull_request:
-    paths: ['phase2_*_v2.py','phase2_research_v2.py','test_phase2_v2.py','config/phase2_research_v2.json','.github/workflows/phase2_research_v2.yml']
+    paths: ['research_artifact_audit.py', 'test_research_artifact_audit.py', 'phase2_*_v2.py','phase2_research_v2.py','test_phase2_v2.py','config/phase2_research_v2.json','.github/workflows/phase2_research_v2.yml']
 permissions:
   contents: read
 concurrency:
@@ -55,6 +55,8 @@ jobs:
                   'eligible_candidates':len(draft['candidates']),'production_model_changed':False}
           (a/'reproducibility.json').write_bytes(e.encode(report));print(json.dumps(report))
           PY
+      - name: Independently audit research authorization and saved metric semantics
+        run: python research_artifact_audit.py verify --out phase2-v2-output
       - uses: actions/upload-artifact@v4
         if: always()
         with:
