@@ -15,6 +15,12 @@ def digest(raw):return hashlib.sha256(raw).hexdigest()
 def utc(value):
     return datetime.fromisoformat(value.replace('Z','+00:00')).astimezone(timezone.utc)
 
+def identity_client(ak,secret,token):
+    from aliyunsdkcore.client import AcsClient
+    from aliyunsdkcore.auth.credentials import StsTokenCredential
+    return AcsClient(region_id='cn-hangzhou',credential=StsTokenCredential(ak,secret,token),
+                     connect_timeout=10,timeout=30)
+
 def check_bucket(bucket):
     info=bucket.get_bucket_info();lock=bucket.get_bucket_worm()
     if str(info.owner.id)!=OWNER or info.location!='oss-cn-hangzhou':raise ValueError('bucket owner or location mismatch')
@@ -136,13 +142,11 @@ def upload_inventory(root):
     import oss2
     token=os.environ['ALIBABA_CLOUD_SECURITY_TOKEN']
     if not token:raise ValueError('short-lived STS token required')
-    from aliyunsdkcore.client import AcsClient
     from aliyunsdkcore.request import CommonRequest
     identity_request=CommonRequest();identity_request.set_domain('sts.aliyuncs.com')
     identity_request.set_version('2015-04-01');identity_request.set_action_name('GetCallerIdentity')
     identity_request.set_accept_format('json');identity_request.set_protocol_type('https')
-    client=AcsClient(os.environ['ALIBABA_CLOUD_ACCESS_KEY_ID'],os.environ['ALIBABA_CLOUD_ACCESS_KEY_SECRET'],
-                     'cn-hangzhou',security_token=token)
+    client=identity_client(os.environ['ALIBABA_CLOUD_ACCESS_KEY_ID'],os.environ['ALIBABA_CLOUD_ACCESS_KEY_SECRET'],token)
     identity=json.loads(client.do_action_with_exception(identity_request))
     if str(identity.get('AccountId'))!=OWNER or 'doge-evidence-github-main' not in identity.get('Arn',''):
         raise ValueError('unexpected actual caller identity')
