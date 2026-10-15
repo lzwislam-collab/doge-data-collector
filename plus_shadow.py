@@ -9,6 +9,7 @@ import forward_readiness as operations
 import prediction_release_control as releases
 import lean_version_gate as version_isolation
 import forecast_worm
+import plus_scorecard
 
 ROOT=Path(__file__).resolve().parent
 JAPAN=timezone(timedelta(hours=9))
@@ -119,10 +120,10 @@ def snapshot(online=True,assessment_run_id=None):
  r2.run('local');re=r2.records('events');rs=r2.records('scores')
  selected=[max((e for e in le if e['horizon_hours']==h),key=lambda e:f.utc(e['issued_at_utc']),default=None) for h in (1,24)]
  original=[e for e in selected if e];oscores=[s for s in ls if s['event_id'] in {e['event_id'] for e in original}]
- proof,rejected=original_proofs(p,package,files,original,oscores,now,online)
+ proof,rejected=original_proofs(p,package,files,le,ls,now,online)
  formal=[e for e in re if e['cohort']=='formal'];latest=max(formal,key=lambda e:f.utc(e['issued_at_utc']),default=None);recent=[latest] if latest else []
  recent_scores=[s for s in rs if s['event_id'] in {e['event_id'] for e in recent}]
- rproof,rrejected=r2_proofs(rp,rfiles,recent,recent_scores,now,online)
+ rproof,rrejected=r2_proofs(rp,rfiles,formal,[s for s in rs if s['event_id'] in {e['event_id'] for e in formal}],now,online)
  smap={s['event_id']:s for s in ls};rmap={s['event_id']:s for s in rs}
  rows=[forecast_row('original18',h,e,smap.get(e['event_id']) if e else None,*(proof.get(e['event_id'],(False,False)) if e else (False,False)),now) for h,e in zip((1,24),selected)]
  rows.append(forecast_row('r2',1,latest,rmap.get(latest['event_id']) if latest else None,*(rproof.get(latest['event_id'],(False,False)) if latest else (False,False)),now))
@@ -136,11 +137,18 @@ def snapshot(online=True,assessment_run_id=None):
   'journal_counts':{'original18_events':len(le),'original18_local_scores':len(ls),'r2_formal_events':len(formal),'r2_local_formal_scores':sum(s['event_id'] in {e['event_id'] for e in formal} for s in rs),'r2_engineering_canaries':sum(e['cohort']=='canary' for e in re)},
   'runtime_gaps':{'original18':legacy.plan(p,le,smap,now),'r2':r2.plan(rp,re,rs,now)},
   'models':{'original18_package_sha256':legacy.shadow.digest(package),'r2_identity':model['trial_model_identity']},
-  'release_selection':selection_state(online,now),'online_publication_scope':'latest original18 event per horizon and latest R2 formal event; not all history',
+  'release_selection':selection_state(online,now),'online_publication_scope':'all recorded original18 and R2 formal events; latest cards and complete scorecard separate',
   'source_path':r2.SOURCE,'source_sha256':f.old.sha((ROOT/r2.SOURCE).read_bytes()),'source_commit':subprocess.check_output(['git','-c','safe.directory=*','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
   'issuance_performed':False,'production_model_changed':False,'promotion_authorized':False,'real_orders_authorized':False,'external_immutable_retention_verified':False,'validated_70pct':False}
  # Validate registered source tracks before showing any direction or result.
  result['per_forecast_custody']=forecast_worm.report_panel(ROOT,rows,online)
+ result['scorecard']={'schema':'DOGE_PLUS_COMPLETE_SCORECARD_V1','as_of_utc':now.isoformat(),'source_commit':result['source_commit'],
+  'network_audit_covers_all_recorded_formal_events':online,'cohorts':[
+   plus_scorecard.cohort('original18',h,p,[e for e in le if e['horizon_hours']==h],[s for s in ls if s['event_id'] in {e['event_id'] for e in le if e['horizon_hours']==h}],proof,now,forecast_row) for h in (1,24)]+
+   [plus_scorecard.cohort('r2',1,rp,formal,[s for s in rs if s['event_id'] in {e['event_id'] for e in formal}],rproof,now,forecast_row)],
+  'legacy_and_canary_excluded':True,'frozen_protocols_unchanged':True,'validated_70pct':False}
+ for c in result['scorecard']['cohorts']:
+  c.update(protocol_id=p['protocol_id'] if c['track']=='original18' else rp['protocol_id'],model_identity=result['models']['original18_package_sha256' if c['track']=='original18' else 'r2_identity'])
  result['report_quality']={'status':'WAIT_INDEPENDENT_FULL_AND_LIVE_CUSTODY' if performance['status']!='INDEPENDENT_FIXED_PROTOCOL_AS_OF_REVIEW' else 'AS_OF_FULL_REPLAY_ONLY','independent_full_run_id':performance.get('review_run_id'),'review_artifact_sha256':performance.get('review_artifact_sha256'),'source_latest73_ready':source['latest73_ready'],'current_full_statistics_claimed':False}
  result['execution_binding']={'report_run_id':os.environ.get('GITHUB_RUN_ID'),'report_run_attempt':os.environ.get('GITHUB_RUN_ATTEMPT'),'source_commit':result['source_commit'],'artifact_readback_status':'WAIT_EXTERNAL_ARTIFACT_READBACK','scheduled_daily_execution_verified':False}
  result['version_isolation']=version_isolation.assert_shadow_projection(result,version_isolation.verify_installed(ROOT))
@@ -161,6 +169,7 @@ def render(report):
  if perf.get('status')=='REQUESTED_REVIEW_UNAVAILABLE':summary='<h2>完整独立成绩</h2><p>指定评审当前无法通过完整重放；成绩未知。最新预测仍须独立核实。</p>'
  if perf.get('as_of_utc'):
   summary='<h2>完整独立成绩（原评审时点）</h2><p>评审截止：'+esc(perf['as_of_utc'])+'；正式合格样本：'+esc(perf.get('qualified_formal_events'))+'；准确率：'+esc('未知' if perf.get('accuracy') is None else format(perf['accuracy'],'.2%'))+'。仅代表该时点评审，70%尚未证明。</p>'
+ summary+='<h2>统一成绩表（完整固定分母）</h2><pre>'+esc('\n'.join(plus_scorecard.summary_lines(report.get('scorecard',{}))))+'</pre>'
  raw=esc(json.dumps(report,ensure_ascii=False,indent=2))
  return '<!doctype html><html lang="zh"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DOGE PLUS · 影子预测</title><style>body{font:16px/1.6 system-ui;background:#eef2f6;color:#172334;margin:0}main{max-width:1100px;margin:40px auto;padding:24px}h1{font-size:32px}h3{font-size:28px;margin:12px 0}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px}section{background:white;padding:24px;border-radius:16px}h2{font-size:18px}.status{color:#445b75}small{color:#637283}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:white;padding:20px;border-radius:12px}li{margin:8px 0}</style><main><h1>DOGE PLUS · 影子预测</h1><p>只读展示真实注册记录，不发行新预测、不下单。晋升关闭，70%尚未证明。</p><p>报告时间：'+esc(report.get('generated_at_japan',report.get('generated_at_utc')))+'<br>小时数据闭合截止（UTC）：'+esc(report.get('source',{}).get('latest_closed_utc','未确认'))+'</p><p>'+esc(report['status'])+'</p><div class="cards">'+''.join(cards)+'</div>'+summary+'<h2>风险与证据边界</h2><ul>'+''.join('<li>'+esc(x)+'</li>' for x in report.get('risks',[]))+'</ul><details><summary>完整模型、事件、基准与成绩审计数据</summary><pre>'+raw+'</pre></details></main></html>'
 
