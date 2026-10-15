@@ -7,19 +7,21 @@ on:
       - 'doge_history.py'
       - 'stored_history_integrity.py'
       - 'report_v41.py'
+      - 'report_evidence.py'
       - '.github/workflows/doge_history.yml'
   schedule:
     - cron: '37 0 * * *' # 00:37 UTC first attempt, if previous UTC candle confirmed
     - cron: '17 1,10,18 * * *' # 01:17 UTC fallback plus later data collection
 permissions:
   contents: write
+  actions: read
 concurrency:
   group: doge-history-collector
   cancel-in-progress: false
 jobs:
   backfill:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
@@ -59,7 +61,24 @@ jobs:
         id: v41_report
         if: steps.v41.outcome == 'success' && steps.v41_score.outcome == 'success'
         continue-on-error: true
-        run: python report_v41.py
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          DOGE_REPORT_PLUS_ONLINE: '1'
+          OPENBLAS_NUM_THREADS: '1'
+          OMP_NUM_THREADS: '1'
+        run: |
+          set -euo pipefail
+          python -m pip install numpy==2.3.5 scipy==1.16.3 scikit-learn==1.7.2 joblib==1.5.2 threadpoolctl==3.6.0 botocore==1.43.112
+          python report_v41.py
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.v41_report.outcome == 'success'
+        with:
+          name: doge-integrated-report-${{ github.run_id }}
+          path: |
+            reports/DOGE_V41_LATEST.md
+            reports/DOGE_V41_EVIDENCE.json
+          if-no-files-found: error
+          retention-days: 90
       - name: Audit daily V4.1 completeness and missing forecast registration
         id: v41_ops
         if: steps.v41_report.outcome == 'success'
@@ -70,7 +89,7 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          for file in data/history/latest.json data/history/daily.csv data/history/backtest_latest.json data/prospective/latest.json data/prospective/registry.csv data/prospective/scores.json data/forecast_v41/latest.json data/forecast_v41/backtest_latest.json data/forecast_v41/registry.csv data/forecast_v41/scores.json data/forecast_v41/calibration_research.json data/forecast_v41/operations.json reports/DOGE_V41_LATEST.md; do
+          for file in data/history/latest.json data/history/daily.csv data/history/backtest_latest.json data/prospective/latest.json data/prospective/registry.csv data/prospective/scores.json data/forecast_v41/latest.json data/forecast_v41/backtest_latest.json data/forecast_v41/registry.csv data/forecast_v41/scores.json data/forecast_v41/calibration_research.json data/forecast_v41/operations.json reports/DOGE_V41_LATEST.md reports/DOGE_V41_EVIDENCE.json; do
             if [ -f "$file" ]; then git add -f "$file"; fi
           done
           if ! git diff --cached --quiet; then

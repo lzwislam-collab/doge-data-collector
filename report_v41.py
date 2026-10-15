@@ -4,6 +4,7 @@ import csv,json,math,os
 from datetime import datetime,timezone,date,timedelta
 from pathlib import Path
 from forecast_v41 import ROOT,BASE,load_prices,atomic,iso
+import report_evidence as evidence
 OUT=ROOT/'reports/DOGE_V41_LATEST.md'
 def read(relative):
  try:
@@ -60,6 +61,17 @@ def main():
  crash_v42=read('data/crash_research/v42_scores.json')
  minute_probe=read('data/v42_microprobe/latest.json')
  quality=read('data/quality/latest.json')
+ # Re-evaluate actual local sources in this run, without changing a collector or its journal.
+ previous_quality=quality
+ try:
+  from feed_freshness_audit import evaluate
+  quality=evaluate(ROOT,now)
+ except Exception as exc:
+  quality={'status':'unavailable','error':type(exc).__name__+': '+str(exc)}
+ state=evidence.evidence_state(direction,quality,cutoff,now)
+ plus=evidence.current_plus(os.environ.get('DOGE_REPORT_PLUS_ONLINE')=='1')
+ panels=evidence.plus_sections(plus)
+ if plus.get('status')!='SHADOW_REPORT_READY' or not plus.get('source',{}).get('latest73_ready',False) or any(plus.get('publication_errors',{}).values()):state['overall']='DEGRADED_NO_VALIDATED_EDGE'
  old_baseline=read('data/prob_baseline/latest.json')
  old_gate=read('data/prediction_gate/latest.json')
  prices_by_symbol={}
@@ -76,11 +88,12 @@ def main():
  relative=100*((metrics['DOGE-USDT']['last']/metrics['BTC-USDT']['last'])/
   (prices_by_symbol['DOGE-USDT'][ix-7*86400000]/prices_by_symbol['BTC-USDT'][ix-7*86400000])-1)
  price30=prices[-30:]
- immutable_issue_times=[]
+ immutable_issue_times=[];issue_by_horizon={}
  with (ROOT/'data/forecast_v41/registry.csv').open(newline='',encoding='utf-8') as source:
   for entry in csv.DictReader(source):
    if entry.get('anchor_date_utc')==cutoff:
     immutable_issue_times.append(entry['registered_utc'])
+    hkey=int(entry['horizon_days']);issue_by_horizon[hkey]=min(issue_by_horizon.get(hkey,entry['registered_utc']),entry['registered_utc'])
  first_registered=min(immutable_issue_times) if immutable_issue_times else None
  prev_close_utc=datetime.combine(date.fromisoformat(cutoff)+timedelta(days=1),datetime.min.time(),timezone.utc)
  first_delay=round((datetime.fromisoformat(first_registered.replace('Z','+00:00'))-prev_close_utc).total_seconds()/60,2) if first_registered else None
@@ -92,7 +105,7 @@ def main():
     '## F01｜首要目标：DOGE四周期涨跌方向预测（70%待验证）',
     '|目标UTC日|周期|P10区间低点|P50中位值|P90区间高点|历史上涨频率|历史大跌频率|',
     '|---|---|---:|---:|---:|---:|---:|']
- if direction.get('status')=='ok' and direction.get('sources',{}).get('daily_last_closed_start_utc','').startswith(cutoff):
+ if state['direction_available']:
   direction_lines=['**方向主任务：每个周期分别验收 ≥70% 的上涨/下跌判断正确率；以下仅历史研究回测，不是实时方向预测。**',
    '|周期|历史测试数|历史多数类准确率|DOGE动量|反转|BTC动量|非重叠数|',
    '|---|---:|---:|---:|---:|---:|---:|']
@@ -117,14 +130,15 @@ def main():
      h=int(row['horizon_hours'])
      if h in (1,24,168,720) and (h not in recent or row['issued_at_utc']>recent[h]['issued_at_utc']):recent[h]=row
    direction_lines+=['**最近各周期实际封存的方向判断（非实时交易建议）**',
-    '|周期|实际发布时间UTC|参考价 USDT|历史多数类|反转|BTC动量|目标UTC|',
-    '|---|---|---:|---|---|---|---|']
+    '|周期|参考报价UTC|实际发布时间UTC|报价至发行延迟秒|参考价 USDT|历史多数类|反转|BTC动量|目标UTC|',
+    '|---|---|---|---:|---:|---|---|---|---|']
    for h,name in ((1,'1小时'),(24,'24小时'),(168,'7天'),(720,'30天')):
     if h not in recent:
-     direction_lines.append(f'|{name}|未登记|—|—|—|—|—|')
+     direction_lines.append(f'|{name}|—|未登记|—|—|—|—|—|—|')
     else:
      x=recent[h];as_dir=lambda k: '涨' if x[k]=='UP' else '跌/平'
-     direction_lines.append(f"|{name}|{x['issued_at_utc']}|{x['reference_price']}|{as_dir('majority_direction')}|{as_dir('doge_reversal_direction')}|{as_dir('btc_momentum_direction')}|{x['target_utc']}|")
+     lag=(datetime.fromisoformat(x['issued_at_utc'].replace('Z','+00:00'))-datetime.fromisoformat(x['source_quote_utc'].replace('Z','+00:00'))).total_seconds()
+     direction_lines.append(f"|{name}|{x['source_quote_utc']}|{x['issued_at_utc']}|{lag:.3f}|{x['reference_price']}|{as_dir('majority_direction')}|{as_dir('doge_reversal_direction')}|{as_dir('btc_momentum_direction')}|{x['target_utc']}|")
   else:
    direction_lines+=['真实前瞻方向登记暂不可用：仅展示历史探索性回测，不推断已有实时预测。']
 
@@ -133,7 +147,9 @@ def main():
  t[-2:-2]=direction_lines+['','### 辅助：收益分布和历史价格区间（非主要验收目标）','']
  for h in (1,7,30):
   x=forecast['price_intervals'][str(h)+'d'];b=x['p10_p50_p90_usdt']
-  t.append(f"|{x['target_utc']}|{h}天|{fmt(b['p10'],5)}|{fmt(b['p50'],5)}|{fmt(b['p90'],5)}|{fmt(x['historical_up_frequency_pct'],2)}%|跌幅≤{x['research_large_down_threshold_pct']}%: {fmt(x['historical_large_down_frequency_pct'],2)}%|")
+  issued=issue_by_horizon.get(h)
+  lag=round((datetime.fromisoformat(issued.replace('Z','+00:00'))-prev_close_utc).total_seconds()/60,2) if issued else None
+  t.append(f"|{x['target_utc']}（收盘 {evidence.daily_target_close(x['target_utc'])}；参考 {prev_close_utc.isoformat()}；首次登记 {issued or '未登记'}；延迟 {lag}分钟）|{h}天|{fmt(b['p10'],5)}|{fmt(b['p50'],5)}|{fmt(b['p90'],5)}|{fmt(x['historical_up_frequency_pct'],2)}%|跌幅≤{x['research_large_down_threshold_pct']}%: {fmt(x['historical_large_down_frequency_pct'],2)}%|")
  if not forecast.get('registration_window_ok',False):
   t+=['**本轮登记窗口已关闭：已有合格历史登记仍正常保留、等待到期评分；未登记的当日预测不能事后补登。**']
  t+=['','365天：仅提供宏观、网络结构及牛熊压力情景；长期独立样本不足，**不提供精确概率或已校准价格区间**。',
@@ -199,7 +215,7 @@ def main():
      '','## F11｜来源、缺失、时效及最终审计',
      f'- OKX日线截止：{cutoff} UTC；OKX市场快照：{stamp(spot)}；衍生品：{stamp(liquidity)}；旧巨鲸SSE：{stamp(whale)}；确认区块扫描：{stamp(confirmed_whales)}；PoR：{stamp(por_balances)}；链上日度活动：{stamp(chain_activity)}；原始链快照：{stamp(onchain)}。',
      f'- ETF：{stamp(etf)}；FRED：{stamp(macro)}；政策日历：{stamp(policy)}；样本外评分：{stamp(scoring)}。',
-     '- ①链上/巨鲸/交易所净流：PARTIAL；②强平/流动性：PARTIAL；③ETF：采集PASS；④宏观政策：采集PASS/因果效应未验证；⑤历史/预测：工程PASS/预测有效性未验证。',
+     '- 历史接通范围（不代表本次运行PASS，当前状态以本次质量重验为准）：①链上/巨鲸/交易所净流：PARTIAL；②强平/流动性：PARTIAL；③ETF、④宏观政策：有采集记录/因果效应未验证；⑤历史/预测：预测有效性未验证。',
      f'- **独立数据质量门禁**：状态 {quality.get("status","未运行")}，报告时记录 {stamp(quality)}；关键故障 {quality.get("critical_failures","未知")}，可选数据告警 {quality.get("optional_source_warnings","未知")}。对已过期文件不能凭历史PASS宣称实时。',
      f'- **旧模型审计时间一致性**：旧多因子/概率基线截止 {old_baseline.get("data_end_utc","不可用")}，当前DOGE日线截止 {cutoff}；'+('旧模型统计滞后：STALE_NOT_USED_FOR_V41。' if old_baseline.get('data_end_utc')!=cutoff else '旧基线时间匹配，但不代表预测优势。')+f' 旧预测门禁状态 {old_gate.get("status","未知")}，不决定V4.1有效性。',
      f'- V4.2实测窗口审计时间：{stamp(crash_v42)}；1m/5m可行性样本时间：{minute_probe.get("observed_utc","无")}。V4.2的70%资格门禁保持BLOCKED，历史回测不能替代前瞻评分。',
@@ -207,7 +223,17 @@ def main():
      '- 数据事实与情景判断严格区分；本报告不修改DOGE定投执行规则。',
      '**综合裁决：RESEARCH_ONLY / NO_VALIDATED_EDGE。**',
      '']
+ # Attach the same freshly evaluated evidence to the existing chapters, never re-read rendered PLUS files.
+ t.insert(3,'**本次证据总状态：'+state['overall']+'；方向审计可用='+str(state['direction_available'])+'；本次质量='+str(state['quality_current_status'])+'。工程测试通过不能覆盖数据失败。**')
+ for chapter,next_chapter in (('F01','F02'),('F10','F11')):
+  position=next(i for i,line in enumerate(t) if line.startswith('## '+next_chapter+'｜'))
+  t[position:position]=[panels[chapter],'']
+ t[-2:-2]=[panels['F11'],
+  '质量对照：旧快照 '+stamp(previous_quality)+' / '+str(previous_quality.get('status'))+'；本次重验 '+stamp(quality)+' / '+str(state['quality_current_status'])+'；关键故障 '+str(quality.get('critical_failures',[]))+'。',
+  '方向输入截止 '+str(direction.get('sources',{}).get('daily_last_closed_start_utc'))+'；要求日线起点 '+cutoff+'T00:00:00Z。',
+  '**本次综合证据状态：'+state['overall']+'；预测优势尚未证明，晋升关闭。**']
  atomic(OUT,'\n'.join(t))
+ atomic(ROOT/'reports/DOGE_V41_EVIDENCE.json',json.dumps({'generated_at_utc':now.isoformat(),'anchor':cutoff,'state':state,'quality':quality,'previous_quality':previous_quality,'plus':plus},ensure_ascii=False,sort_keys=True,indent=2)+'\n')
  print(json.dumps({'status':'ok','report':str(OUT),'anchor':cutoff,'sections':11}))
  return 0
 

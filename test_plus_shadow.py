@@ -4,6 +4,14 @@ from unittest.mock import patch
 from datetime import datetime,timezone,timedelta
 
 class Plus(unittest.TestCase):
+ def test_reference_clock_and_flat_direction_display(self):
+  m=self.module();at,e=self.event();e['entry_packet']={'fixture':True}
+  with patch.object(m.legacy.shadow,'quote',return_value={'price':100,'at':at-timedelta(seconds=2)}):
+   e['candidate_p']['full']=.4
+   r=m.forecast_row('original18',1,e,{'y':0,'economic_deltas':{'full':None}},True,True,at+timedelta(hours=2))
+  self.assertEqual(r.get('reference_price'),100);self.assertEqual(r.get('reference_to_issue_seconds'),2)
+  view=m.render({'forecasts':[r],'status':'SHADOW_REPORT_READY'})
+  self.assertIn('跌／平',view);self.assertEqual(r['latest_same_event']['accuracy'],1)
  def module(self):
   self.assertIsNotNone(importlib.util.find_spec('plus_shadow'),'PLUS read-only adapter missing')
   return importlib.import_module('plus_shadow')
