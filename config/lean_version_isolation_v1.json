@@ -1,0 +1,98 @@
+{
+  "schema": "DOGE_LEAN_VERSION_ISOLATION_V1",
+  "governance_version": "DOGE_PREDICT_PLUS_LEAN_V1_20261015",
+  "scope": "Additional version-isolation policy; NOT a replacement for canonical CURRENT or an approved model release",
+  "canonical_authority": "Google Sheet Authority Registry + canonical Library CURRENT libfile_a418bf13c4548191ad5765d68d0f3abe",
+  "authority_unchanged": true,
+  "legacy": {
+    "sheet_namespace": "sheet_legacy",
+    "sheet_id": "1rp8KzBZffaKbGkTlH231p7WIp8iuengvZPu_W2MIPpU",
+    "historical_read_only": true,
+    "excluded_from_plus_forward_accuracy": true,
+    "github_legacy_directories": [
+      "data/forecast_v41",
+      "data/prospective",
+      "data/phase2_forward_v1"
+    ],
+    "legacy_score_columns_read_only": true
+  },
+  "frozen_tracks": {
+    "v42": {
+      "namespace": "v42_original_frozen",
+      "policy_file": "data/stage5/pre_registration.json",
+      "protocol_id": "DOGE_V42_DIRECTION_SHADOW_LOCK_20261012",
+      "model_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1",
+      "effective_from_utc": "2026-10-12T00:00:00+00:00",
+      "evidence": "data/stage5/forward_validation_v2",
+      "allowed_horizons_hours": [
+        1,
+        24
+      ],
+      "model_changed": false
+    },
+    "original18": {
+      "namespace": "plus_original18_frozen",
+      "policy_file": "config/learned_shadow_v1.json",
+      "protocol_id": "DOGE_LEARNED_SHADOW_V1_20261016",
+      "effective_from_utc": "2026-10-16T00:00:00+00:00",
+      "evidence": "data/learned_shadow_v1",
+      "allowed_horizons_hours": [
+        1,
+        24
+      ],
+      "model_changed": false
+    },
+    "r2": {
+      "namespace": "plus_r2_frozen",
+      "policy_file": "config/phase2_forward_v2.json",
+      "protocol_id": "DOGE_V2_FROZEN120_20261020_R2",
+      "effective_from_utc": "2026-10-20T00:00:00Z",
+      "evidence": "data/phase2_forward_v2",
+      "allowed_horizons_hours": [
+        1
+      ],
+      "exclude_canary": true,
+      "model_changed": false
+    }
+  },
+  "lean_research": {
+    "namespace": "lean_v1_research_only",
+    "future_output_root": "data/lean_v1/",
+    "status": "NO_NEW_PREDICTIONS_REGISTERED",
+    "new_forecast_issuance_authorized": false,
+    "automatic_promotion": false,
+    "minimum_new_feature_proof": "Pre-target publication, full PIT, same-event ablation, independent outcomes and cost-aware gain",
+    "model_release_separate_manual_review_required": true
+  },
+  "projection": {
+    "schema": "DOGE_PLUS_SHADOW_V1",
+    "allowed_rows": [
+      {
+        "track": "original18",
+        "horizon_hours": 1
+      },
+      {
+        "track": "original18",
+        "horizon_hours": 24
+      },
+      {
+        "track": "r2",
+        "horizon_hours": 1
+      }
+    ],
+    "mixed_statistic_pools_prohibited": true,
+    "historical_backfill_of_new_forecasts_prohibited": true,
+    "no_score_without_target_publication": true,
+    "unverified_value": null
+  },
+  "scopes_separate": [
+    "sheet_legacy",
+    "v42_original_frozen",
+    "plus_original18_frozen",
+    "plus_r2_frozen",
+    "lean_v1_research_only"
+  ],
+  "no_order_execution": true,
+  "no_auto_release": true,
+  "gate_state": "STATIC_CONFIG_ONLY_RUNTIME_UNVERIFIED"
+}
