@@ -14,10 +14,31 @@ def evidence_state(direction,quality,cutoff,now):
   fresh=q.tzinfo is not None and 0<=(now-q).total_seconds()<=7200
  except (KeyError,ValueError,TypeError,AttributeError):pass
  state=quality.get('status','unavailable') if fresh else 'STALE_OR_INVALID'
- healthy=state in ('ok','ok_with_coverage_limits') and not quality.get('critical_failures')
- return {'overall':'RESEARCH_ONLY_NO_VALIDATED_EDGE' if direction_ok and healthy else 'DEGRADED_NO_VALIDATED_EDGE',
+ failures=quality.get('critical_failures',[])
+ if not isinstance(failures,list):failures=['INVALID_CRITICAL_FAILURES']
+ healthy=state in ('ok','ok_with_coverage_limits','ok_with_source_warnings') and not failures
+ # Lean-v1 paused the auxiliary confirmed-whale scanner. Its real failure must
+ # stay visible, but cannot by itself invalidate independently checked DOGE
+ # market inputs. Never rewrite the original quality audit or assert P0/P1 PASS.
+ sources=quality.get('sources',{})
+ if not isinstance(sources,dict):sources={}
+ market=sources.get('market',{})
+ market_ok=isinstance(market,dict) and market.get('state')=='ok'
+ supplementary_only=(fresh and state=='blocked' and
+  failures==['whale_confirmed_blocks'] and market_ok and
+  isinstance(sources.get('whale_confirmed_blocks'),dict) and
+  sources['whale_confirmed_blocks'].get('state')=='stale_or_failed' and
+  all(isinstance(item,dict) and
+      (not item.get('required') or item.get('state') in ('ok','ok_coverage_limited'))
+      for name,item in sources.items() if name!='whale_confirmed_blocks'))
+ overall=('RESEARCH_ONLY_NO_VALIDATED_EDGE' if direction_ok and healthy
+  else 'RESEARCH_ONLY_MARKET_SCOPE_AUX_BLOCKED_NO_VALIDATED_EDGE' if direction_ok and supplementary_only
+  else 'DEGRADED_NO_VALIDATED_EDGE')
+ return {'overall':overall,
   'direction_available':direction_ok,'quality_current_status':state,'quality_audited_at_utc':quality.get('audited_at_utc'),
-  'prediction_edge_validated':False,'quality_max_age_hours':2,'critical_failures':quality.get('critical_failures',[])}
+  'market_quality_scope':'MARKET_RESEARCH_ONLY_AUX_WHALE_BLOCKED' if supplementary_only else 'FULL_SOURCE_GATE' if healthy else 'DEGRADED',
+  'auxiliary_blockers_preserved':failures if supplementary_only else [],
+  'prediction_edge_validated':False,'quality_max_age_hours':2,'critical_failures':failures}
 
 def daily_target_close(day):
  return datetime.combine(date.fromisoformat(day)+timedelta(days=1),time(),timezone.utc).isoformat()
