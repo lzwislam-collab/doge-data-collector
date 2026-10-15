@@ -8,6 +8,7 @@ import phase2_forward_v2 as f
 import forward_readiness as operations
 import prediction_release_control as releases
 import lean_version_gate as version_isolation
+import forecast_worm
 
 ROOT=Path(__file__).resolve().parent
 JAPAN=timezone(timedelta(hours=9))
@@ -108,6 +109,11 @@ def assessment_panel(assessment_run_id,online,current_event_count):
 
 
 def snapshot(online=True,assessment_run_id=None):
+ if assessment_run_id is None and online:
+  locator=ROOT/'system/plus_full_review_locator.json'
+  if locator.exists():
+   assessment_run_id=json.loads(locator.read_bytes())['review_run_id']
+   if type(assessment_run_id) is not int or assessment_run_id<=0:raise ValueError('invalid full review locator')
  now=datetime.now(timezone.utc);p,package,files=legacy.bundle.guard();rp,model,_,rfiles=r2.guard()
  le=legacy.read_records(ROOT,'events');ls=legacy.read_records(ROOT,'scores');legacy.shadow.audit_records(p,le,ls,now)
  r2.run('local');re=r2.records('events');rs=r2.records('scores')
@@ -134,6 +140,9 @@ def snapshot(online=True,assessment_run_id=None):
   'source_path':r2.SOURCE,'source_sha256':f.old.sha((ROOT/r2.SOURCE).read_bytes()),'source_commit':subprocess.check_output(['git','-c','safe.directory=*','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
   'issuance_performed':False,'production_model_changed':False,'promotion_authorized':False,'real_orders_authorized':False,'external_immutable_retention_verified':False,'validated_70pct':False}
  # Validate registered source tracks before showing any direction or result.
+ result['per_forecast_custody']=forecast_worm.report_panel(ROOT,rows,online)
+ result['report_quality']={'status':'WAIT_INDEPENDENT_FULL_AND_LIVE_CUSTODY' if performance['status']!='INDEPENDENT_FIXED_PROTOCOL_AS_OF_REVIEW' else 'AS_OF_FULL_REPLAY_ONLY','independent_full_run_id':performance.get('review_run_id'),'review_artifact_sha256':performance.get('review_artifact_sha256'),'source_latest73_ready':source['latest73_ready'],'current_full_statistics_claimed':False}
+ result['execution_binding']={'report_run_id':os.environ.get('GITHUB_RUN_ID'),'report_run_attempt':os.environ.get('GITHUB_RUN_ATTEMPT'),'source_commit':result['source_commit'],'artifact_readback_status':'WAIT_EXTERNAL_ARTIFACT_READBACK','scheduled_daily_execution_verified':False}
  result['version_isolation']=version_isolation.assert_shadow_projection(result,version_isolation.verify_installed(ROOT))
  return result
 
