@@ -78,4 +78,47 @@ class Evidence(unittest.TestCase):
   panels=m.plus_sections(r)
   self.assertIn('60.00%',panels['F01']);self.assertNotIn('90.00%',panels['F10']);self.assertIn('未知',panels['F10'])
 
+ def test_paused_whale_failure_is_reported_without_falsely_blocking_market_only_research(self):
+  m=self.module();now=datetime(2026,10,15,9,tzinfo=timezone.utc)
+  direction={'status':'ok','sources':{'daily_last_closed_start_utc':'2026-10-14T00:00:00Z'}}
+  quality={'status':'blocked','audited_at_utc':now.isoformat(),
+   'critical_failures':['whale_confirmed_blocks'],
+   'sources':{'market':{'required':True,'state':'ok'},
+     'whale_confirmed_blocks':{'required':True,'state':'stale_or_failed'},
+     'stage2_csv_quality':{'required':True,'state':'ok'},
+     'stage3_etf_csv_quality':{'required':True,'state':'ok'}}}
+  result=m.evidence_state(direction,quality,'2026-10-14',now)
+  self.assertEqual(result['overall'],'RESEARCH_ONLY_MARKET_SCOPE_AUX_BLOCKED_NO_VALIDATED_EDGE')
+  self.assertEqual(result['quality_current_status'],'blocked')
+  self.assertEqual(result['critical_failures'],['whale_confirmed_blocks'])
+  self.assertEqual(result['auxiliary_blockers_preserved'],['whale_confirmed_blocks'])
+  self.assertFalse(result['prediction_edge_validated'])
+
+ def test_market_failure_or_additional_quality_fault_still_blocks(self):
+  m=self.module();now=datetime(2026,10,15,9,tzinfo=timezone.utc)
+  direction={'status':'ok','sources':{'daily_last_closed_start_utc':'2026-10-14T00:00:00Z'}}
+  quality={'status':'blocked','audited_at_utc':now.isoformat(),
+    'critical_failures':['whale_confirmed_blocks'],
+    'sources':{'market':{'required':True,'state':'stale_or_failed'},
+       'whale_confirmed_blocks':{'required':True,'state':'stale_or_failed'}}}
+  r=m.evidence_state(direction,quality,'2026-10-14',now)
+  self.assertEqual(r['overall'],'DEGRADED_NO_VALIDATED_EDGE')
+  quality['sources']['market']['state']='ok'
+  quality['critical_failures'].append('stage2_csv_quality')
+  r=m.evidence_state(direction,quality,'2026-10-14',now)
+  self.assertEqual(r['overall'],'DEGRADED_NO_VALIDATED_EDGE')
+  quality['critical_failures']=['whale_confirmed_blocks']
+  quality['audited_at_utc']=(now-timedelta(hours=3)).isoformat()
+  r=m.evidence_state(direction,quality,'2026-10-14',now)
+  self.assertEqual(r['overall'],'DEGRADED_NO_VALIDATED_EDGE')
+
+ def test_optional_warnings_are_not_critical_by_themselves(self):
+  m=self.module();now=datetime(2026,10,15,9,tzinfo=timezone.utc)
+  r=m.evidence_state({'status':'ok','sources':{'daily_last_closed_start_utc':'2026-10-14T00:00:00Z'}},
+    {'status':'ok_with_source_warnings','critical_failures':[],
+     'optional_source_warnings':['hourly_research'],'audited_at_utc':now.isoformat()},
+    '2026-10-14',now)
+  self.assertEqual(r['overall'],'RESEARCH_ONLY_NO_VALIDATED_EDGE')
+  self.assertFalse(r['prediction_edge_validated'])
+
 if __name__=='__main__':unittest.main()
