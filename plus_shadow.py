@@ -143,6 +143,7 @@ def render(report):
   stress=esc('未知' if s['stress_net_return'] is None else format(s['stress_net_return'],'.2%'));target=esc(row.get('target_utc','尚未发行'))
   cards.append(f'<section><h2>{esc(title)}</h2><h3>{esc(direction)}</h3><p>{esc(prob)}</p><p class="status">{esc(labels.get(row["status"],row["status"]))}</p><p>{esc(cost)}</p><p>压力净收益：{stress}</p><p>目标（UTC）：{target}</p><small>仅最新事件；不代表全样本准确率。历史记录不会作为新的预测发行。</small></section>')
  perf=report.get('performance',{}); summary='<h2>完整独立成绩</h2><p>未提供当前独立完整评审；准确率与收益未知。</p>'
+ if perf.get('status')=='REQUESTED_REVIEW_UNAVAILABLE':summary='<h2>完整独立成绩</h2><p>指定评审当前无法通过完整重放；成绩未知。最新预测仍须独立核实。</p>'
  if perf.get('as_of_utc'):
   summary='<h2>完整独立成绩（原评审时点）</h2><p>评审截止：'+esc(perf['as_of_utc'])+'；正式合格样本：'+esc(perf.get('qualified_formal_events'))+'；准确率：'+esc('未知' if perf.get('accuracy') is None else format(perf['accuracy'],'.2%'))+'。仅代表该时点评审，70%尚未证明。</p>'
  raw=esc(json.dumps(report,ensure_ascii=False,indent=2))

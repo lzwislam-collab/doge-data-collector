@@ -46,4 +46,3 @@ class HourlyPagination(unittest.TestCase):
    self.assertEqual(code,0);self.assertEqual(json.loads((base/'latest.json').read_bytes())['inserted'],12)
 
 if __name__=='__main__':unittest.main()
-
