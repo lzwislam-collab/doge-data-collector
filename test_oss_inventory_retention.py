@@ -31,6 +31,10 @@ class Bucket:
                   last_modified=1792040520,read=body.read,close=body.close,request_id='request1')
 
 class Tests(unittest.TestCase):
+    def test_real_sdk_constructs_short_lived_sts_client_without_network(self):
+        client=m.identity_client('unit-test-ak','unit-test-secret','unit-test-token')
+        self.assertEqual(client.get_region_id(),'cn-hangzhou')
+
     def test_locked_owner_and_versioning_required(self):
         for field,bad in [('state','InProgress'),('owner','other'),('versioning','Suspended'),('days',729)]:
             b=Bucket();setattr(b,field,bad)

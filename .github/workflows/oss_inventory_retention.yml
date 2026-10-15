@@ -27,6 +27,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - run: python -m pip install oss2==2.19.1
       - run: python -m unittest -q test_oss_inventory_retention
   retain:
     needs: tests
