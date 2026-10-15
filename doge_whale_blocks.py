@@ -43,8 +43,11 @@ def request(path):
                 raise ValueError('invalid API envelope: ' + path)
             return obj['data']
         except urllib.error.HTTPError as exc:
-            if exc.code != 429 or attempt == 3: raise
-            time.sleep(max(2, min(int(exc.headers.get('Retry-After', '4')), 30)))
+            if exc.code not in (429, 500, 502, 503, 504) or attempt == 3: raise
+            if exc.code == 429:
+                time.sleep(max(2, min(int(exc.headers.get('Retry-After', '4')), 30)))
+            else:
+                time.sleep(2 * (attempt + 1))
         except (urllib.error.URLError,TimeoutError) as exc:
             if attempt == 3: raise
             time.sleep(2 * (attempt + 1))
@@ -201,4 +204,3 @@ def main():
 
 if __name__=='__main__':
     raise SystemExit(main())
-
