@@ -6,6 +6,8 @@ on:
     paths:
       - 'report_v41.py'
       - 'report_evidence.py'
+      - 'forecast_worm.py'
+      - 'test_report_custody.py'
       - 'test_report_evidence.py'
       - 'test_report_cohort_regressions.py'
       - '.github/workflows/test_report_v41.yml'
@@ -31,7 +33,7 @@ jobs:
           OPENBLAS_NUM_THREADS: '1'
           OMP_NUM_THREADS: '1'
         run: |
-          python -m unittest test_report_evidence test_report_cohort_regressions test_plus_shadow test_phase3_independent test_learned_shadow_v1 -q
+          python -m unittest test_report_custody test_forecast_worm test_report_evidence test_report_cohort_regressions test_plus_shadow test_phase3_independent test_learned_shadow_v1 -q
           python -m py_compile report_v41.py report_evidence.py
           python report_v41.py
           python -c "import json; r=json.load(open('reports/DOGE_V41_EVIDENCE.json')); assert r['plus']['status']=='SHADOW_REPORT_READY', r['plus']"

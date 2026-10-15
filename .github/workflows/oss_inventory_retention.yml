@@ -2,15 +2,20 @@ name: Lock existing daily DOGE inventory in OSS
 on:
   workflow_dispatch:
     inputs:
+      extend_retention_days:
+        description: Explicit monotonic Locked policy extension to 732 days; never edits object bytes
+        type: choice
+        options: ['0', '732']
+        default: '0'
       force_readback:
         description: Reread an already verified inventory (download fees apply)
         type: boolean
         default: false
   workflow_run:
-    workflows: ['Backfill DOGE BTC ETH 1H extreme-event research history']
+    workflows: ['Backfill DOGE BTC ETH 1H extreme-event research history', 'Publish frozen learned DOGE shadow candidates', 'Publish DOGE V2 R2 frozen forward evidence']
     types: [completed]
   pull_request:
-    paths: ['oss_inventory_retention.py', 'test_oss_inventory_retention.py', 'integration_oss_sdk.py', '.github/workflows/oss_inventory_retention.yml']
+    paths: ['oss_inventory_retention.py', 'test_oss_inventory_retention.py', 'integration_oss_sdk.py', 'forecast_worm.py', 'test_forecast_worm.py', '.github/workflows/oss_inventory_retention.yml']
 permissions:
   contents: read
   actions: read
@@ -29,7 +34,7 @@ jobs:
           python-version: '3.11'
       - run: python -m pip install oss2==2.19.1 aliyun-python-sdk-core==2.16.1
       - name: Unit tests and mandatory real provider SDK compatibility
-        run: python -m unittest -q test_oss_inventory_retention integration_oss_sdk
+        run: python -m unittest -q test_oss_inventory_retention integration_oss_sdk test_forecast_worm
   retain:
     needs: tests
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && (github.event_name != 'workflow_run' || (github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.event != 'pull_request' && github.event.workflow_run.repository.full_name == github.repository))
@@ -99,3 +104,65 @@ jobs:
           path: oss-retention-output/
           if-no-files-found: warn
           retention-days: 90
+
+  forecast-retain:
+    needs: tests
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && (github.event_name != 'workflow_run' || (github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.event != 'pull_request' && github.event.workflow_run.repository.full_name == github.repository))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install oss2==2.19.1 aliyun-python-sdk-core==2.16.1
+      - name: Obtain short-lived main identity for per-event custody
+        id: aliyun
+        uses: aliyun/configure-aliyun-credentials-action@1e5248c8d5d93a8781ac344a68e19a43341e79e6
+        with:
+          role-to-assume: acs:ram::1379992038848464:role/doge-evidence-github-main
+          oidc-provider-arn: acs:ram::1379992038848464:oidc-provider/doge-github-actions
+          audience: sts.aliyuncs.com
+          role-session-name: doge-forecast-${{ github.run_id }}
+          role-session-expiration: 1800
+      - name: Explicit extension and pre-target exact-byte pinned readback
+        id: custody
+        continue-on-error: true
+        env:
+          ALIBABA_CLOUD_ACCESS_KEY_ID: ${{ steps.aliyun.outputs.aliyun-access-key-id }}
+          ALIBABA_CLOUD_ACCESS_KEY_SECRET: ${{ steps.aliyun.outputs.aliyun-access-key-secret }}
+          ALIBABA_CLOUD_SECURITY_TOKEN: ${{ steps.aliyun.outputs.aliyun-security-token }}
+          EXTEND_RETENTION_DAYS: ${{ inputs.extend_retention_days || '0' }}
+        run: |
+          export SOURCE_COMMIT=$(git rev-parse HEAD)
+          python forecast_worm.py
+      - name: Publish only new per-event receipt files
+        if: always()
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          if [ -d audit/forecast_worm ]; then git add -- audit/forecast_worm; fi
+          if ! git diff --cached --quiet; then
+            git commit -m 'audit: append pinned pre-target per-forecast OSS receipts'
+            for attempt in 1 2 3; do
+              if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
+              git rebase --abort || true
+            done
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: forecast-worm-${{ github.run_id }}-${{ github.run_attempt }}
+          path: forecast-worm-output/
+          if-no-files-found: error
+          retention-days: 90
+      - name: Preserve failed custody as a failed job
+        if: steps.custody.outcome != 'success'
+        run: exit 1
