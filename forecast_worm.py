@@ -126,7 +126,7 @@ def run():
  if report['errors']:report['status']='BLOCKED_PRE_TARGET_WORM'
  elif report['receipts']:report['status']='PRE_TARGET_WORM_READBACK_PASS'
  if extension=='732':
-  dest=ROOT/'audit/forecast_worm/retention'/(os.environ['GITHUB_RUN_ID']+'.json');dest.parent.mkdir(parents=True,exist_ok=True)
+  dest=ROOT/'audit/forecast_worm/retention'/(os.environ['GITHUB_RUN_ID']+'_'+os.environ.get('GITHUB_RUN_ATTEMPT','1')+'.json');dest.parent.mkdir(parents=True,exist_ok=True)
   with dest.open('x',encoding='utf-8') as stream:json.dump(report,stream,indent=2)
  (out/'result.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
  print(json.dumps(report))
