@@ -1,0 +1,38 @@
+name: Verify Lean namespace isolation (no forecast writes)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'config/lean_version_isolation_v1.json'
+      - 'lean_version_gate.py'
+      - 'test_lean_version_gate.py'
+      - 'plus_shadow.py'
+      - '.github/workflows/lean_version_isolation.yml'
+  pull_request:
+    paths:
+      - 'config/lean_version_isolation_v1.json'
+      - 'lean_version_gate.py'
+      - 'test_lean_version_gate.py'
+      - 'plus_shadow.py'
+      - '.github/workflows/lean_version_isolation.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify separate frozen registrations and no legacy promotion
+        run: |
+          python -m unittest -v test_lean_version_gate
+          python lean_version_gate.py
+      - name: Explicitly declare validation scope
+        run: |
+          echo 'STATIC CONFIG + namespace guard PASS means no live issuance/P0/P1/P2 performance claims'
