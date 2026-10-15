@@ -28,9 +28,9 @@ def evidence_state(direction,quality,cutoff,now):
   failures==['whale_confirmed_blocks'] and market_ok and
   isinstance(sources.get('whale_confirmed_blocks'),dict) and
   sources['whale_confirmed_blocks'].get('state')=='stale_or_failed' and
-  all(not item.get('required') or item.get('state') in ('ok','ok_coverage_limited')
-      for name,item in sources.items() if name!='whale_confirmed_blocks'
-      if isinstance(item,dict)))
+  all(isinstance(item,dict) and
+      (not item.get('required') or item.get('state') in ('ok','ok_coverage_limited'))
+      for name,item in sources.items() if name!='whale_confirmed_blocks'))
  overall=('RESEARCH_ONLY_NO_VALIDATED_EDGE' if direction_ok and healthy
   else 'RESEARCH_ONLY_MARKET_SCOPE_AUX_BLOCKED_NO_VALIDATED_EDGE' if direction_ok and supplementary_only
   else 'DEGRADED_NO_VALIDATED_EDGE')
