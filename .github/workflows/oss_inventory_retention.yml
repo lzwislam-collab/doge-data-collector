@@ -1,0 +1,99 @@
+name: Lock existing daily DOGE inventory in OSS
+on:
+  workflow_dispatch:
+    inputs:
+      force_readback:
+        description: Reread an already verified inventory (download fees apply)
+        type: boolean
+        default: false
+  workflow_run:
+    workflows: ['Backfill DOGE BTC ETH 1H extreme-event research history']
+    types: [completed]
+  pull_request:
+    paths: ['oss_inventory_retention.py', 'test_oss_inventory_retention.py', '.github/workflows/oss_inventory_retention.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: oss-daily-inventory-retention
+  cancel-in-progress: false
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest -q test_oss_inventory_retention
+  retain:
+    needs: tests
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && (github.event_name != 'workflow_run' || (github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.event != 'pull_request' && github.event.workflow_run.repository.full_name == github.repository))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Fetch and validate original completed daily package
+        id: inventory
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FORCE_READBACK: ${{ inputs.force_readback || false }}
+        run: |
+          if [ "$FORCE_READBACK" = true ]; then
+            python oss_inventory_retention.py stage --force
+          else
+            python oss_inventory_retention.py stage
+          fi
+      - name: Install provider SDK for actual upload
+        if: steps.inventory.outputs.ready == 'true'
+        run: python -m pip install oss2==2.19.1
+      - name: Obtain short-lived main-branch identity
+        if: steps.inventory.outputs.ready == 'true'
+        id: aliyun
+        uses: aliyun/configure-aliyun-credentials-action@1e5248c8d5d93a8781ac344a68e19a43341e79e6
+        with:
+          role-to-assume: acs:ram::1379992038848464:role/doge-evidence-github-main
+          oidc-provider-arn: acs:ram::1379992038848464:oidc-provider/doge-github-actions
+          audience: sts.aliyuncs.com
+          role-session-name: doge-evidence-${{ github.run_id }}
+          role-session-expiration: 1800
+      - name: Upload all shards and index; reread exact locked versions
+        if: steps.inventory.outputs.ready == 'true'
+        env:
+          ALIBABA_CLOUD_ACCESS_KEY_ID: ${{ steps.aliyun.outputs.aliyun-access-key-id }}
+          ALIBABA_CLOUD_ACCESS_KEY_SECRET: ${{ steps.aliyun.outputs.aliyun-access-key-secret }}
+          ALIBABA_CLOUD_SECURITY_TOKEN: ${{ steps.aliyun.outputs.aliyun-security-token }}
+        run: python oss_inventory_retention.py upload
+      - name: Publish actual receipts without altering models or forecasts
+        if: steps.inventory.outputs.ready == 'true'
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -- audit/oss_retention/
+          if ! git diff --cached --quiet; then
+            git commit -m 'audit: publish pinned OSS daily inventory readback receipt'
+            for attempt in 1 2 3 4 5; do
+              if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
+              git rebase --abort || true
+            done
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: oss-daily-retention-${{ github.run_id }}-${{ github.run_attempt }}
+          path: oss-retention-output/
+          if-no-files-found: warn
+          retention-days: 90
