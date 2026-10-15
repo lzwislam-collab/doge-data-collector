@@ -82,7 +82,8 @@ def verify_installed(root: Path = ROOT) -> dict:
         local = _object(root / source)
         if local.get("protocol_id") != protocol or _date(local.get("effective_from_utc")) != _date(effective):
             raise VersionIsolationError("actual frozen protocol binding mismatch: " + track)
-        if local.get("real_orders_authorized") is not False:
+        authority_flag = "automated_trading_authorized" if track == "v42" else "real_orders_authorized"
+        if local.get(authority_flag) is not False:
             raise VersionIsolationError("trading authorization unexpected: " + track)
         if track == "v42" and local.get("model_id") != "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1":
             raise VersionIsolationError("frozen V4.2 model identity drift")
