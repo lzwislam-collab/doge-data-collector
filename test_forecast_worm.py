@@ -44,6 +44,16 @@ class Tests(unittest.TestCase):
     self.assertTrue(panel['external_immutable_retention_verified'])
     bucket.bad=True
     self.assertFalse(w.report_panel(root,[{'track':'original18','event_id':'1792065600_1'}],True)['external_immutable_retention_verified'])
+ def test_missed_formal_deadline_stays_blocked_without_backfill(self):
+  import tempfile
+  from pathlib import Path
+  from unittest.mock import patch
+  with tempfile.TemporaryDirectory() as temp:
+   root=Path(temp);path=root/'data/learned_shadow_v1/events/1_1.json';path.parent.mkdir(parents=True)
+   path.write_text(json.dumps({'event_id':'1_1','issued_at_utc':'2000-01-01T00:00:00Z','target_utc':'2000-01-01T01:00:00Z','horizon_hours':1}))
+   with patch.object(w,'ROOT',root),patch.object(w,'verify_frozen'),patch.object(w,'connection',return_value=Bucket()),patch.object(w.inventory,'check_bucket',return_value={'state':'Locked','retention_days':732,'worm_id':'worm'}),patch.dict(w.os.environ,{'EXTEND_RETENTION_DAYS':'0','ENGINEERING_PROBE':'false'}):
+    self.assertTrue(w.run())
+   self.assertFalse((root/'audit/forecast_worm/original18/1_1.json').exists())
  def test_history_never_retroactively_approved(self):
   with self.assertRaises(ValueError):w.retain(Bucket(),RAW,'original18',{'retention_days':732},NOW+timedelta(hours=1))
  def test_corrupt_full_readback_rejected(self):

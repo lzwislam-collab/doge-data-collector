@@ -115,7 +115,9 @@ def run():
     if saved['sha256']!=sha(raw) or saved['track']!=actual:raise ValueError('existing receipt binding changed')
     continue
    if utc(e['target_utc'])<=now:
-    report['expired_unproven'].append(actual+'/'+e['event_id']);continue
+    report['expired_unproven'].append(actual+'/'+e['event_id'])
+    if actual!='canary':report['errors'].append({'status':'BLOCKED_MISSED_FORMAL_PRE_TARGET_DEADLINE','track':actual,'event_id':e['event_id']})
+    continue
    try:
     receipt=retain(bucket,raw,actual,lock)
     if inventory.check_bucket(bucket)!=lock:raise ValueError('WORM policy changed during readback')
