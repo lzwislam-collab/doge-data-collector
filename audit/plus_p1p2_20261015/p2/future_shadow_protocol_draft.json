@@ -1,0 +1,85 @@
+{
+  "protocol": {
+    "schema": "DOGE_PLUS_P2_FUTURE_DRAFT_20261015",
+    "status": "DRAFT_NOT_REGISTERED",
+    "automatic_promotion": false,
+    "runtime_activation": false,
+    "real_orders_authorized": false,
+    "observation_start_utc": null,
+    "observation_days": 90,
+    "slot_seconds": 7200,
+    "horizon_seconds": 3600,
+    "identity_bindings": {
+      "model_sha256": null,
+      "feature_schema_sha256": null,
+      "training_data_sha256": null,
+      "frozen_v42_sha256": null,
+      "baseline_definitions_sha256": null,
+      "code_sha256": null
+    },
+    "baselines": [
+      "frozen_v42_same_event",
+      "constant_05",
+      "frozen_majority",
+      "frozen_rule",
+      "cash",
+      "buy_hold"
+    ],
+    "promotion": {
+      "minimum_nonoverlap_events": 100,
+      "minimum_events_per_label": 50,
+      "minimum_up_recall_lower": 0.55,
+      "minimum_down_recall_lower": 0.55,
+      "maximum_fixed_bin_ece": 0.1,
+      "minimum_calibration_bin_events": 20,
+      "minimum_accuracy_lower": 0.7,
+      "accuracy_excess_lower": 0.01,
+      "brier_excess_lower": 0.002,
+      "familywise_alpha": 0.05,
+      "family_size_upper_bound": 10000,
+      "fixed_looks": 2,
+      "maximum_claims_per_look": 80,
+      "minimum_regime_events": 20,
+      "maximum_regime_brier_harm": 0.01,
+      "minimum_nominal_and_stress_excess_pct_points": 0,
+      "minimum_coverage_pct": 100
+    },
+    "rollback": {
+      "maximum_cumulative_paper_loss_pct": 5,
+      "maximum_paper_drawdown_pct": 10,
+      "maximum_consecutive_missing_books": 1,
+      "maximum_book_gap_seconds": 900,
+      "maximum_model_training_data_age_days": 120,
+      "integrity_failures_tolerated": 0
+    },
+    "costs": {
+      "fee_per_side": 0.001,
+      "slippage_per_side": 0.0005,
+      "stress_multiplier": 2
+    },
+    "public_registration_witness": null,
+    "semantics": {
+      "rollback_thresholds": "stop paper candidate when loss/drawdown >= threshold, gap/age > threshold, or missing count >= threshold; retain original frozen fallback",
+      "recall": "fixed-look multiplicity-adjusted lower bounds; each label minimum required",
+      "calibration": "10 fixed bins, ECE <= threshold; every occupied bin requires minimum count; descriptive cap plus Brier inferential gate",
+      "economics": "strictly positive excess over all baselines in nominal and double-cost same-period paper ledgers",
+      "witness": "exact draft digest publicly witnessed before first slot; remote byte replay and independent review required separately"
+    }
+  },
+  "validation": {
+    "eligible_for_prospective_registration": false,
+    "blockers": [
+      "model_sha256 missing",
+      "feature_schema_sha256 missing",
+      "training_data_sha256 missing",
+      "frozen_v42_sha256 missing",
+      "baseline_definitions_sha256 missing",
+      "code_sha256 missing",
+      "pre-window exact public witness missing/invalid"
+    ],
+    "public_witness_authenticity_verified": false,
+    "production_authorized": false,
+    "runtime_activation_authorized": false,
+    "status": "DRAFT_NOT_REGISTERED"
+  }
+}

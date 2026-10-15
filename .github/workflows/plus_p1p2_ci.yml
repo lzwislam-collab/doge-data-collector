@@ -1,0 +1,77 @@
+name: PLUS P1 P2 additive shadow review
+on:
+  push:
+    branches: ['upgrade/plus-p1p2-*']
+  pull_request:
+    paths:
+      - 'plus_p1_audit.py'
+      - 'p2_plus_review.py'
+      - 'plus_shadow_preparation.py'
+      - 'test_plus_p1_market_audit.py'
+      - 'test_p2_plus_review.py'
+      - 'test_plus_shadow_preparation.py'
+      - 'docs/*plus*20261015.md'
+      - '.github/workflows/plus_p1p2_ci.yml'
+permissions:
+  contents: read
+concurrency:
+  group: plus-p1p2-review-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONUTF8: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Reuse existing pinned research dependencies
+        run: python -m pip install numpy==2.3.5 scipy==1.16.3 scikit-learn==1.7.2 joblib==1.5.2 threadpoolctl==3.6.0 botocore==1.43.112
+      - name: Complete regressions and frozen identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p plus-p1p2-ci-output
+          python -m unittest discover -q 2>&1 | tee plus-p1p2-ci-output/tests.log
+          python forward_validation_v2.py --integrity-only 2>&1 | tee plus-p1p2-ci-output/frozen-integrity.log
+      - name: Read-only source and independent research checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+          from datetime import datetime, timezone
+          import plus_p1_audit as p1, p2_plus_review as p2, phase3_runtime as frozen
+          import plus_shadow_preparation as preparation
+          root=Path('.'); now=datetime.now(timezone.utc)
+          frozen.guard()
+          _,hourly=p1.market(root/'data/hourly_research/ohlc.csv',3600000,now)
+          _,daily=p1.market(root/'data/history/daily.csv',86400000,now)
+          result={'at_utc':now.isoformat(),'head_sha':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
+            'hourly':hourly,'daily':daily,'rolling_archive':frozen.rolling_audit(),
+            'p2_local_only':p2.local_audit(root,now),'frozen_guard_passed':True,
+            'production_changed':False,'promotion_authorized':False,'p0_pass_claimed':False}
+          Path('plus-p1p2-ci-output/review.json').write_text(json.dumps(result,sort_keys=True,allow_nan=False)+'\n',encoding='utf-8')
+          package=preparation.prepare(root)
+          assert not package['preparation_validation']['eligible_for_prospective_registration']
+          assert package['bound_review_draft']['observation_start_utc'] is None
+          assert not any(package[k] for k in ('new_candidate_created','new_registration_performed','runtime_activation_authorized','production_promotion_authorized','p0_pass_claimed'))
+          preparation.verify(root,package)
+          Path('plus-p1p2-ci-output/candidate-preparation.json').write_bytes(preparation.encode(package))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: plus-p1p2-review-${{ github.run_id }}
+          path: plus-p1p2-ci-output/
+          retention-days: 90
+          if-no-files-found: error
