@@ -31,6 +31,19 @@ class Tests(unittest.TestCase):
   self.assertTrue(extended['fixed_horizon_satisfied'])
   self.assertFalse(extended['historical_pre_target_retention_verified'])
   self.assertFalse(extended['object_rewritten'])
+ def test_report_live_rechecks_exact_original_version(self):
+  import tempfile
+  from pathlib import Path
+  from unittest.mock import patch
+  lock={'state':'Locked','retention_days':732,'worm_id':'worm'};bucket=Bucket();receipt=w.retain(bucket,RAW,'original18',lock,NOW)
+  with tempfile.TemporaryDirectory() as temp:
+   root=Path(temp);event=root/'data/learned_shadow_v1/events/1792065600_1.json';event.parent.mkdir(parents=True);event.write_bytes(RAW)
+   proof=root/'audit/forecast_worm/original18/1792065600_1.json';proof.parent.mkdir(parents=True);proof.write_text(json.dumps(receipt))
+   with patch.dict(w.os.environ,{'ALIBABA_CLOUD_SECURITY_TOKEN':'unit-token'}),patch.object(w,'connection',return_value=bucket),patch.object(w.inventory,'check_bucket',return_value=lock):
+    panel=w.report_panel(root,[{'track':'original18','event_id':'1792065600_1'}],True)
+    self.assertTrue(panel['external_immutable_retention_verified'])
+    bucket.bad=True
+    self.assertFalse(w.report_panel(root,[{'track':'original18','event_id':'1792065600_1'}],True)['external_immutable_retention_verified'])
  def test_history_never_retroactively_approved(self):
   with self.assertRaises(ValueError):w.retain(Bucket(),RAW,'original18',{'retention_days':732},NOW+timedelta(hours=1))
  def test_corrupt_full_readback_rejected(self):

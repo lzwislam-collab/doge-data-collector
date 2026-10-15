@@ -59,7 +59,7 @@ def read_old_version(bucket,prior,lock):
  modified=parsedate_to_datetime(result.headers['last-modified']).astimezone(timezone.utc)
  until=modified+timedelta(days=lock['retention_days'])
  if hasher.hexdigest()!=prior['readback_sha256'] or size!=prior['byte_count'] or result.headers.get('x-oss-version-id')!=prior['version_id'] or not result.request_id:raise ValueError('old pinned object changed')
- return {'key':prior['key'],'version_id':prior['version_id'],'sha256':hasher.hexdigest(),'byte_count':size,'readback_request_id':result.request_id,'calculated_retain_until_utc':until.isoformat(),'fixed_horizon_satisfied':until>=FLOOR,'historical_pre_target_retention_verified':False,'object_rewritten':False}
+ return {'key':prior['key'],'version_id':prior['version_id'],'sha256':hasher.hexdigest(),'byte_count':size,'readback_request_id':result.request_id,'calculated_retain_until_utc':until.isoformat(),'fixed_horizon_satisfied':until>=FLOOR,'server_last_modified_utc':modified.isoformat(),'historical_pre_target_retention_verified':False,'object_rewritten':False}
 def connection():
  import oss2
  token=os.environ['ALIBABA_CLOUD_SECURITY_TOKEN']
@@ -131,11 +131,14 @@ def run():
  (out/'result.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
  print(json.dumps(report))
  return bool(report['errors'])
-def report_panel(root,rows):
+def report_panel(root,rows,online=False):
  daily=Path(root)/'audit/oss_retention/latest.json'
  result={'daily_inventory_status':'NOT_READ','per_forecast_status':'WAIT_NO_FORMAL_EVENTS','external_immutable_retention_verified':False,'live_oss_readback_this_report':False,'events':[],'fixed_horizon_utc':FLOOR.isoformat()}
  if daily.exists():
   d=json.loads(daily.read_bytes());result['daily_inventory_status']=d.get('status','UNKNOWN');result['daily_inventory_run_url']=d.get('run_url');result['daily_inventory_verified_at_utc']=d.get('verified_at_utc');result['daily_inventory_scope']='Recorded daily inventory only; not per-forecast proof'
+ bucket=None;lock=None
+ if online and os.environ.get('ALIBABA_CLOUD_SECURITY_TOKEN'):
+  bucket=connection();lock=inventory.check_bucket(bucket);result['current_bucket_worm']=lock
  for row in rows:
   if not row.get('event_id'):continue
   track=row['track'];path=Path(root)/'audit/forecast_worm'/track/(row['event_id']+'.json')
@@ -143,8 +146,23 @@ def report_panel(root,rows):
   if path.exists():
    r=json.loads(path.read_bytes())
    item.update(status='RECORDED_RECEIPT_REQUIRES_LIVE_RECHECK',receipt=r)
+   if bucket is not None:
+    try:
+     base='data/learned_shadow_v1' if track=='original18' else 'data/phase2_forward_v2'
+     raw=(Path(root)/base/'events'/(row['event_id']+'.json')).read_bytes()
+     expected=PREFIX+track+'/'+row['event_id']+'/'+sha(raw)+'.json'
+     if r['key']!=expected or r['sha256']!=sha(raw) or r['track']!=track or r['event_id']!=row['event_id'] or r['bucket']!=inventory.BUCKET or r['endpoint']!=inventory.ENDPOINT or r['status']!='PRE_TARGET_WORM_VERIFIED':raise ValueError('receipt/journal binding mismatch')
+     event=json.loads(raw);target=utc(event['target_utc'])
+     if r['issued_at_utc']!=event['issued_at_utc'] or r['target_utc']!=event['target_utc'] or not utc(event['issued_at_utc']).replace(microsecond=0)<=utc(r['server_last_modified_utc'])<=utc(r['server_response_date_utc'])<target or utc(r['verified_at_utc'])>=target:raise ValueError('original pre-target clock invalid')
+     live=read_old_version(bucket,{'key':r['key'],'version_id':r['version_id'],'readback_sha256':r['sha256'],'byte_count':r['byte_count']},lock)
+     if not live['fixed_horizon_satisfied'] or live['server_last_modified_utc']!=r['server_last_modified_utc']:raise ValueError('live pinned retention/time mismatch')
+     item.update(status='LIVE_PRE_TARGET_VERSION_READBACK_PASS',live_readback=live)
+    except Exception as exc:item.update(status='BLOCKED_LIVE_RECEIPT_RECHECK',error_type=type(exc).__name__)
+
   result['events'].append(item)
- if result['events']:result['per_forecast_status']='BLOCKED_LIVE_RECEIPT_RECHECK_REQUIRED'
+ if result['events']:
+  passed=all(e['status']=='LIVE_PRE_TARGET_VERSION_READBACK_PASS' for e in result['events'])
+  result.update(per_forecast_status='LIVE_PRE_TARGET_VERSIONS_READBACK_PASS' if passed else 'BLOCKED_LIVE_RECEIPT_RECHECK_REQUIRED',external_immutable_retention_verified=passed,live_oss_readback_this_report=bucket is not None)
  return result
 if __name__=='__main__':sys.exit(run())
 
