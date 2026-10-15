@@ -24,8 +24,7 @@ on:
       - 'test_stage1_quality.py'
       - '.github/workflows/doge_rolling_utxo.yml'
       - '.github/workflows/doge_schedule_evidence.yml'
-  schedule:
-    - cron: '44 2,8,14,20 * * *'
+  # Lean-v1.0: redundant automatic research audit paused; dispatch and dependent triggers retained.
   workflow_run:
     workflows: ['DOGE rolling PoR UTXO candidate audit (not exchange netflow)']
     types: [completed]
