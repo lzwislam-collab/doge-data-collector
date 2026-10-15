@@ -7,6 +7,7 @@ import phase2_forward_runtime_v2 as r2
 import phase2_forward_v2 as f
 import forward_readiness as operations
 import prediction_release_control as releases
+import lean_version_gate as version_isolation
 
 ROOT=Path(__file__).resolve().parent
 JAPAN=timezone(timedelta(hours=9))
@@ -132,6 +133,8 @@ def snapshot(online=True,assessment_run_id=None):
   'release_selection':selection_state(online,now),'online_publication_scope':'latest original18 event per horizon and latest R2 formal event; not all history',
   'source_path':r2.SOURCE,'source_sha256':f.old.sha((ROOT/r2.SOURCE).read_bytes()),'source_commit':subprocess.check_output(['git','-c','safe.directory=*','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
   'issuance_performed':False,'production_model_changed':False,'promotion_authorized':False,'real_orders_authorized':False,'external_immutable_retention_verified':False,'validated_70pct':False}
+ # Validate registered source tracks before showing any direction or result.
+ result['version_isolation']=version_isolation.assert_shadow_projection(result,version_isolation.verify_installed(ROOT))
  return result
 
 def render(report):
