@@ -19,7 +19,7 @@ permissions:
   actions: read
   id-token: write
 concurrency:
-  group: plus-shadow-${{ github.ref }}-${{ github.event_name }}
+  group: plus-shadow-${{ github.ref }}-${{ github.event_name }}-${{ github.event.workflow_run.id || github.run_id }}
   cancel-in-progress: false
 jobs:
   render:
