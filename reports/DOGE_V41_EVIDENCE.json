@@ -1,13 +1,13 @@
 {
   "anchor": "2026-10-14",
-  "generated_at_utc": "2026-10-15T18:57:28.350026+00:00",
+  "generated_at_utc": "2026-10-15T23:02:15.863865+00:00",
   "plus": {
     "execution_binding": {
       "artifact_readback_status": "WAIT_EXTERNAL_ARTIFACT_READBACK",
       "report_run_attempt": "1",
-      "report_run_id": "38789833052",
+      "report_run_id": "38821007426",
       "scheduled_daily_execution_verified": false,
-      "source_commit": "d5f04baf42279411680f82544cd5c5dcc8bfa19d"
+      "source_commit": "a8003cb8f5c41b996ca1fbddfccdd65b1957a38a"
     },
     "external_immutable_retention_verified": false,
     "forecasts": [
@@ -84,8 +84,8 @@
         "track": "r2"
       }
     ],
-    "generated_at_japan": "2026-10-16T03:57:28.840805+09:00",
-    "generated_at_utc": "2026-10-15T18:57:28.840805+00:00",
+    "generated_at_japan": "2026-10-16T08:02:16.331496+09:00",
+    "generated_at_utc": "2026-10-15T23:02:16.331496+00:00",
     "issuance_performed": false,
     "journal_counts": {
       "original18_events": 0,
@@ -98,7 +98,7 @@
       "original18_package_sha256": "c93004aadc669c074f51a4cb6411769c3d84d388b31773d1251823b1d45ccad3",
       "r2_identity": "0843d2e836f0d94cd46e66644460f1a543aef460e51ad884394a5880dadf3baf"
     },
-    "online_publication_scope": "latest original18 event per horizon and latest R2 formal event; not all history",
+    "online_publication_scope": "all recorded original18 and R2 formal events; latest cards and complete scorecard separate",
     "per_forecast_custody": {
       "daily_inventory_run_url": "https://github.com/lzwislam-collab/doge-data-collector/actions/runs/38724780313",
       "daily_inventory_scope": "Recorded daily inventory only; not per-forecast proof",
@@ -162,7 +162,7 @@
       "current_full_statistics_claimed": false,
       "independent_full_run_id": 38730988947,
       "review_artifact_sha256": "9af7b3ee25a3fd0d52efce71b16b79adaf755d594505a68177feea71b8295795",
-      "source_latest73_ready": true,
+      "source_latest73_ready": false,
       "status": "AS_OF_FULL_REPLAY_ONLY"
     },
     "risks": [
@@ -171,6 +171,7 @@
       "工程canary不计入正式成绩；缺成本数据不按零收益处理。",
       "近期事件结果不等于完整队列准确率；全样本成绩须读取独立完整评审。",
       "GitHub调度可能错过评分窗口；公开归档不等于锁定留存。",
+      "最新73根输入尚未齐全，当前来源存在时效风险。",
       "独立评审仅代表通过重放的原评审时点；旧评审不适用于当前账本或远端不可达时，隔离该成绩，不影响独立核实的最新预测。"
     ],
     "runtime_gaps": {
@@ -194,20 +195,99 @@
       }
     },
     "schema": "DOGE_PLUS_SHADOW_V1",
+    "scorecard": {
+      "as_of_utc": "2026-10-15T23:02:16.331496+00:00",
+      "cohorts": [
+        {
+          "accuracy_fixed": null,
+          "calibration_verified": false,
+          "coverage": null,
+          "denominator_rule": "all planned slots after final possible target deadline; missing/unverified earns no hit; pending excluded",
+          "duplicate_count": 0,
+          "fixed_denominator": 0,
+          "hits": 0,
+          "horizon_hours": 1,
+          "missing_evaluation": 0,
+          "missing_issuance": 0,
+          "model_identity": "c93004aadc669c074f51a4cb6411769c3d84d388b31773d1251823b1d45ccad3",
+          "protocol_id": "DOGE_LEARNED_SHADOW_V1_20261016",
+          "qualified_scored": 0,
+          "rows": [],
+          "scope": "original18 full candidate only",
+          "score_label": "0/0",
+          "statistical_promotion_authorized": false,
+          "timestamp_errors": 0,
+          "track": "original18",
+          "unverified_issuance": 0
+        },
+        {
+          "accuracy_fixed": null,
+          "calibration_verified": false,
+          "coverage": null,
+          "denominator_rule": "all planned slots after final possible target deadline; missing/unverified earns no hit; pending excluded",
+          "duplicate_count": 0,
+          "fixed_denominator": 0,
+          "hits": 0,
+          "horizon_hours": 24,
+          "missing_evaluation": 0,
+          "missing_issuance": 0,
+          "model_identity": "c93004aadc669c074f51a4cb6411769c3d84d388b31773d1251823b1d45ccad3",
+          "protocol_id": "DOGE_LEARNED_SHADOW_V1_20261016",
+          "qualified_scored": 0,
+          "rows": [],
+          "scope": "original18 full candidate only",
+          "score_label": "0/0",
+          "statistical_promotion_authorized": false,
+          "timestamp_errors": 0,
+          "track": "original18",
+          "unverified_issuance": 0
+        },
+        {
+          "accuracy_fixed": null,
+          "calibration_verified": false,
+          "coverage": null,
+          "denominator_rule": "all planned slots after final possible target deadline; missing/unverified earns no hit; pending excluded",
+          "duplicate_count": 0,
+          "fixed_denominator": 0,
+          "hits": 0,
+          "horizon_hours": 1,
+          "missing_evaluation": 0,
+          "missing_issuance": 0,
+          "model_identity": "0843d2e836f0d94cd46e66644460f1a543aef460e51ad884394a5880dadf3baf",
+          "protocol_id": "DOGE_V2_FROZEN120_20261020_R2",
+          "qualified_scored": 0,
+          "rows": [],
+          "scope": "R2 selected candidate only",
+          "score_label": "0/0",
+          "statistical_promotion_authorized": false,
+          "timestamp_errors": 0,
+          "track": "r2",
+          "unverified_issuance": 0
+        }
+      ],
+      "frozen_protocols_unchanged": true,
+      "legacy_and_canary_excluded": true,
+      "network_audit_covers_all_recorded_formal_events": true,
+      "schema": "DOGE_PLUS_COMPLETE_SCORECARD_V1",
+      "source_commit": "a8003cb8f5c41b996ca1fbddfccdd65b1957a38a",
+      "validated_70pct": false
+    },
     "source": {
       "asset_rows": {
-        "BTC-USDT": 26712,
-        "DOGE-USDT": 26712,
-        "ETH-USDT": 26712
+        "BTC-USDT": 26716,
+        "DOGE-USDT": 26716,
+        "ETH-USDT": 26716
       },
-      "frame_errors": [],
-      "latest73_ready": true,
-      "latest_closed_utc": "2026-10-15T18:00:00+00:00",
-      "rows": 80136
+      "frame_errors": [
+        "missing latest73 source bars"
+      ],
+      "latest73_ready": false,
+      "latest_closed_utc": "2026-10-15T22:00:00+00:00",
+      "rows": 80148
     },
-    "source_commit": "d5f04baf42279411680f82544cd5c5dcc8bfa19d",
+    "source_commit": "a8003cb8f5c41b996ca1fbddfccdd65b1957a38a",
     "source_path": "data/hourly_research/ohlc.csv",
-    "source_sha256": "3f4de738ac9e2abc8580ab4514d153f556b0594fdfa8c15a388076a85494617d",
+    "source_sha256": "21b698f81d762db3bace95a5b8afaf05fc2b7b9fc706f86c905210e75afb38cf",
     "status": "SHADOW_REPORT_READY",
     "validated_70pct": false,
     "version_isolation": {
@@ -602,7 +682,7 @@
     "verified_global_liquidations": false
   },
   "quality": {
-    "audited_at_utc": "2026-10-15T18:57:28.350026+00:00",
+    "audited_at_utc": "2026-10-15T23:02:15.863865+00:00",
     "critical_failures": [
       "liquidations_okx",
       "liquidity",
@@ -625,27 +705,27 @@
     "schema_version": 4,
     "sources": {
       "binance_liquidations_optional": {
-        "age_hours": 10.884,
+        "age_hours": 14.964,
         "age_limit_hours": 8,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
-        "error": "stale/clock-skewed: 10.88 h",
+        "error": "stale/clock-skewed: 14.96 h",
         "required": false,
         "source_file": "data/binance_liquidations/latest.json",
         "source_status": "partial",
         "state": "stale_or_failed"
       },
       "bybit_liquidations_optional": {
-        "age_hours": 10.885,
+        "age_hours": 14.965,
         "age_limit_hours": 8,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
-        "error": "stale/clock-skewed: 10.88 h",
+        "error": "stale/clock-skewed: 14.96 h",
         "required": false,
         "source_file": "data/bybit_liquidations/latest.json",
         "source_status": "partial",
         "state": "stale_or_failed"
       },
       "etf": {
-        "age_hours": 12.873,
+        "age_hours": 16.953,
         "age_limit_hours": 96,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
         "required": true,
@@ -654,34 +734,34 @@
         "state": "ok"
       },
       "hourly_research": {
-        "candle_start_age_hours": 1.958,
+        "candle_start_age_hours": 2.038,
         "historical_backfill_complete": true,
-        "last_candle_utc": "2026-10-15T17:00:00+00:00",
+        "last_candle_utc": "2026-10-15T21:00:00+00:00",
         "required": false,
         "state": "ok_coverage_limited"
       },
       "liquidations_okx": {
-        "age_hours": 10.884,
+        "age_hours": 14.964,
         "age_limit_hours": 3,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
-        "error": "stale/clock-skewed: 10.88 h",
+        "error": "stale/clock-skewed: 14.96 h",
         "required": true,
         "source_file": "data/liquidations/latest.json",
         "source_status": "ok",
         "state": "stale_or_failed"
       },
       "liquidity": {
-        "age_hours": 11.195,
+        "age_hours": 15.274,
         "age_limit_hours": 3,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
-        "error": "stale/clock-skewed: 11.19 h",
+        "error": "stale/clock-skewed: 15.27 h",
         "required": true,
         "source_file": "data/liquidity/latest.json",
         "source_status": "ok",
         "state": "stale_or_failed"
       },
       "macro": {
-        "age_hours": 14.969,
+        "age_hours": 19.049,
         "age_limit_hours": 48,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
         "required": true,
@@ -690,7 +770,7 @@
         "state": "ok"
       },
       "market": {
-        "age_hours": 0.32,
+        "age_hours": 0.503,
         "age_limit_hours": 3,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
         "required": true,
@@ -699,17 +779,17 @@
         "state": "ok"
       },
       "okx_por_balances_optional": {
-        "age_hours": 11.333,
+        "age_hours": 15.413,
         "age_limit_hours": 4,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
-        "error": "stale/clock-skewed: 11.33 h",
+        "error": "stale/clock-skewed: 15.41 h",
         "required": false,
         "source_file": "data/okx_address_balances/latest.json",
         "source_status": "ok",
         "state": "stale_or_failed"
       },
       "onchain": {
-        "age_hours": 17.087,
+        "age_hours": 21.167,
         "age_limit_hours": 36,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
         "required": true,
@@ -718,7 +798,7 @@
         "state": "ok"
       },
       "onchain_daily_activity": {
-        "age_hours": 16.89,
+        "age_hours": 20.969,
         "age_limit_hours": 36,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
         "required": false,
@@ -975,20 +1055,20 @@
         "state": "ok"
       },
       "whale_confirmed_blocks": {
-        "age_hours": 8.423,
+        "age_hours": 12.503,
         "age_limit_hours": 2,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
-        "error": "stale/clock-skewed: 8.42 h",
+        "error": "stale/clock-skewed: 12.5 h",
         "required": true,
         "source_file": "data/whales_blocks/latest.json",
         "source_status": "ok",
         "state": "stale_or_failed"
       },
       "whale_sse_optional": {
-        "age_hours": 10.885,
+        "age_hours": 14.965,
         "age_limit_hours": 8,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
-        "error": "stale/clock-skewed: 10.88 h",
+        "error": "stale/clock-skewed: 14.96 h",
         "required": false,
         "source_file": "data/whales/latest.json",
         "source_status": "partial",
@@ -1014,7 +1094,7 @@
     "market_quality_scope": "DEGRADED",
     "overall": "DEGRADED_NO_VALIDATED_EDGE",
     "prediction_edge_validated": false,
-    "quality_audited_at_utc": "2026-10-15T18:57:28.350026+00:00",
+    "quality_audited_at_utc": "2026-10-15T23:02:15.863865+00:00",
     "quality_current_status": "blocked",
     "quality_max_age_hours": 2
   }
