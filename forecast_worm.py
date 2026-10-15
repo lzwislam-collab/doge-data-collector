@@ -47,6 +47,19 @@ def retain(bucket,raw,track,lock,now=None):
  until=modified+timedelta(days=lock['retention_days'])
  if finished>=target or not (issued.replace(microsecond=0)<=modified<=server<target) or sha(data)!=digest or bytes(data)!=raw or result.headers.get('x-oss-version-id')!=version or not result.request_id or result.headers.get('x-oss-server-side-encryption')!='AES256' or until<FLOOR:raise ValueError('pre-target full pinned readback or retention failed')
  return {'schema':'DOGE_PER_FORECAST_WORM_V1','status':'PRE_TARGET_WORM_VERIFIED','track':track,'event_id':keyid,'issued_at_utc':event['issued_at_utc'],'target_utc':event['target_utc'],'sha256':digest,'byte_count':len(raw),'bucket':inventory.BUCKET,'endpoint':inventory.ENDPOINT,'key':key,'version_id':version,'upload_request_id':None if recovered else put.request_id,'recovery_head_request_id':put.request_id if recovered else None,'readback_request_id':result.request_id,'server_last_modified_utc':modified.isoformat(),'server_response_date_utc':server.isoformat(),'calculated_retain_until_utc':until.isoformat(),'bucket_worm':lock,'verified_at_utc':finished.isoformat(),'historical_backfill':False,'formal_statistics_eligible':track!='canary','independent_custodian_verified':False,'run_id':os.environ.get('GITHUB_RUN_ID'),'source_commit':os.environ.get('SOURCE_COMMIT')}
+def read_old_version(bucket,prior,lock):
+ result=bucket.get_object(prior['key'],params={'versionId':prior['version_id']});hasher=hashlib.sha256();size=0
+ try:
+  while True:
+   chunk=result.read(1024*1024)
+   if not chunk:break
+   hasher.update(chunk);size+=len(chunk)
+   if size>inventory.LIMIT:raise ValueError('old readback exceeds cap')
+ finally:result.close()
+ modified=parsedate_to_datetime(result.headers['last-modified']).astimezone(timezone.utc)
+ until=modified+timedelta(days=lock['retention_days'])
+ if hasher.hexdigest()!=prior['readback_sha256'] or size!=prior['byte_count'] or result.headers.get('x-oss-version-id')!=prior['version_id'] or not result.request_id:raise ValueError('old pinned object changed')
+ return {'key':prior['key'],'version_id':prior['version_id'],'sha256':hasher.hexdigest(),'byte_count':size,'readback_request_id':result.request_id,'calculated_retain_until_utc':until.isoformat(),'fixed_horizon_satisfied':until>=FLOOR,'historical_pre_target_retention_verified':False,'object_rewritten':False}
 def connection():
  import oss2
  token=os.environ['ALIBABA_CLOUD_SECURITY_TOKEN']
@@ -77,7 +90,14 @@ def run():
     report['extension'].update(status='BLOCKED_EXTENSION',type=type(exc).__name__,provider_code=str(getattr(exc,'code','')),request_id=str(getattr(exc,'request_id','')))
     report['errors'].append(report['extension'])
   report['fixed_horizon_for_new_objects_satisfied']=now+timedelta(days=lock['retention_days'])>=FLOOR
- if os.environ.get('ENGINEERING_PROBE','false')=='true':
+ if extension=='732':
+  try:
+   prior=json.loads((ROOT/'audit/oss_retention/latest.json').read_bytes())
+   report['old_pinned_objects_readback']=[read_old_version(bucket,o,lock) for o in prior['objects']]
+   report['old_fixed_horizon_satisfied']=bool(prior['objects']) and all(o['fixed_horizon_satisfied'] for o in report['old_pinned_objects_readback'])
+   if not report['old_fixed_horizon_satisfied']:report['errors'].append({'status':'BLOCKED_OLD_FIXED_HORIZON'})
+  except Exception as exc:report['errors'].append({'status':'BLOCKED_OLD_PINNED_READBACK','type':type(exc).__name__,'provider_code':str(getattr(exc,'code',''))})
+ if os.environ.get('ENGINEERING_PROBE' ,'false')=='true':
   issued=datetime.now(timezone.utc)
   probe={'schema':'ENGINEERING_CANARY_NOT_MODEL_FORECAST','event_id':str(int(issued.timestamp()))+'_canary','cohort':'canary','included_in_formal_statistics':False,'issued_at_utc':issued.isoformat(),'target_utc':(issued+timedelta(minutes=10)).isoformat(),'horizon_seconds':600,'real_orders_authorized':False}
   try:
@@ -105,6 +125,9 @@ def run():
    except Exception as exc:report['errors'].append({'track':actual,'event_id':e['event_id'],'type':type(exc).__name__,'provider_code':str(getattr(exc,'code','')),'request_id':str(getattr(exc,'request_id',''))})
  if report['errors']:report['status']='BLOCKED_PRE_TARGET_WORM'
  elif report['receipts']:report['status']='PRE_TARGET_WORM_READBACK_PASS'
+ if extension=='732':
+  dest=ROOT/'audit/forecast_worm/retention'/(os.environ['GITHUB_RUN_ID']+'.json');dest.parent.mkdir(parents=True,exist_ok=True)
+  with dest.open('x',encoding='utf-8') as stream:json.dump(report,stream,indent=2)
  (out/'result.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
  print(json.dumps(report))
  return bool(report['errors'])

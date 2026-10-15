@@ -23,6 +23,14 @@ class Tests(unittest.TestCase):
   e=json.loads(RAW);issued=NOW+timedelta(microseconds=123456);e['issued_at_utc']=issued.isoformat();e['target_utc']=(issued+timedelta(hours=1)).isoformat()
   r=w.retain(Bucket(),json.dumps(e).encode(),'original18',{'state':'Locked','retention_days':732,'worm_id':'worm'},issued)
   self.assertEqual(r['status'],'PRE_TARGET_WORM_VERIFIED')
+ def test_old_object_extension_changes_horizon_not_historical_proof(self):
+  b=Bucket();b.objects['old']=RAW
+  prior={'key':'old','version_id':'version1','readback_sha256':hashlib.sha256(RAW).hexdigest(),'byte_count':len(RAW)}
+  self.assertFalse(w.read_old_version(b,prior,{'retention_days':730})['fixed_horizon_satisfied'])
+  extended=w.read_old_version(b,prior,{'retention_days':732})
+  self.assertTrue(extended['fixed_horizon_satisfied'])
+  self.assertFalse(extended['historical_pre_target_retention_verified'])
+  self.assertFalse(extended['object_rewritten'])
  def test_history_never_retroactively_approved(self):
   with self.assertRaises(ValueError):w.retain(Bucket(),RAW,'original18',{'retention_days':732},NOW+timedelta(hours=1))
  def test_corrupt_full_readback_rejected(self):
