@@ -8,8 +8,7 @@ on:
       - 'test_direction_baseline_v42.py'
       - 'data/stage5/pre_registration.json' # one-off baseline refresh when study is locked
       - '.github/workflows/v42_direction_baseline.yml'
-  schedule:
-    - cron: '41 2 * * *'
+  # Lean-v1.0: stop legacy/redundant periodic analysis; manual/review triggers remain.
 permissions:
   contents: write
 concurrency:
