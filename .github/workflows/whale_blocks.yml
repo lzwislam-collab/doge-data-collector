@@ -28,6 +28,8 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Verify incomplete block resume and coverage boundaries
+        run: python -m unittest -v test_whale_block_resume
       - name: Scan confirmed DOGE blocks with checkpoint
         id: scan
         continue-on-error: true
@@ -37,9 +39,11 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          for f in data/whales_blocks/latest.json data/whales_blocks/events.csv data/whales_blocks/checkpoint.json; do
+          for f in data/whales_blocks/latest.json data/whales_blocks/events.csv data/whales_blocks/checkpoint.json data/whales_blocks/pending_block.json; do
             if [ -f "$f" ]; then git add -f "$f"; fi
           done
+          # Persist deletion when a previously incomplete block finishes.
+          git add -u -- data/whales_blocks
           if ! git diff --cached --quiet; then
             git commit -m 'data: automatically scan confirmed DOGE blocks'
             for attempt in 1 2 3; do
@@ -51,3 +55,4 @@ jobs:
       - name: Fail workflow when scanner failed
         if: steps.scan.outcome != 'success'
         run: exit 1
+

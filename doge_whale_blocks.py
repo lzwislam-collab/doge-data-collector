@@ -119,7 +119,10 @@ def main():
         tip=get_tip(); target=tip-CONFIRMATIONS
         if last is None:
             initial=os.getenv('DOGE_BLOCK_START_HEIGHT')
-            current=int(initial) if initial else max(1,target-MAX_BLOCKS+1)
+            pending_path=OUT/'pending_block.json'
+            pending=json.loads(pending_path.read_text(encoding='utf-8')) if pending_path.exists() else {}
+            current=int(pending['height']) if pending else (int(initial) if initial else max(1,target-MAX_BLOCKS+1))
+            if current<1: raise ValueError('initial height must be positive')
             if current>target: raise ValueError('initial height beyond confirmed tip')
             last=current-1
         else: current=int(last)+1
@@ -128,6 +131,13 @@ def main():
             if time.monotonic() - begin_monotonic >= RUN_SECONDS - 120:
                 stop_reason='time_budget_before_block'; break
             txids=parse_block(height)
+            # Bind resumable observations to the complete provider transaction list.
+            # Pending rows are not coverage and never enter events until the block completes.
+            progress_path=OUT/'pending_block.json'
+            progress=json.loads(progress_path.read_text(encoding='utf-8')) if progress_path.exists() else {}
+            if progress.get('height') != height or progress.get('txids') != txids:
+                progress={'schema_version':1,'height':height,'txids':txids,'verified':{}}
+            verified=progress['verified']
             # Fail the block and do not advance checkpoint if any tx cannot be verified.
             new_rows={}
             block_complete=True
@@ -141,11 +151,20 @@ def main():
                     break
                 tx_count+=1
                 if txid in rows: continue
-                amount,headline=explain(txid)
+                if txid in verified:
+                    observation=verified[txid]
+                    amount=Decimal(observation['amount_doge'])
+                    if not amount.is_finite() or amount<0: raise ValueError('invalid pending amount')
+                    headline=observation['headline']
+                else:
+                    amount,headline=explain(txid)
+                    observation={'amount_doge':str(amount),'headline':headline,'observed_at_utc':timestamp()}
+                    verified[txid]=observation
+                    atomic(progress_path,json.dumps(progress,ensure_ascii=False,indent=2)+'\n')
                 if amount >= THRESHOLD:
                     candidates+=1
                     new_rows[txid]={'txid':txid,'block_height':height,'amount_doge':str(amount),
-                                     'headline':headline,'observed_at_utc':timestamp(),
+                                     'headline':headline,'observed_at_utc':observation['observed_at_utc'],
                                      'verification':'confirmed-depth>=6; provider explain.sent; entity unverified'}
             if not block_complete:
                 break
@@ -155,6 +174,7 @@ def main():
             atomic(state_path,json.dumps({'schema_version':1,'last_completed_height':last,
                                           'updated_at_utc':timestamp(), 'confirmed_tip_at_run':target},indent=2)+'\n')
             block_count+=1
+            progress_path.unlink(missing_ok=True)
     except Exception as exc:
         stop_reason='error'
         errors.append(type(exc).__name__+': '+str(exc)[:300])
@@ -181,3 +201,4 @@ def main():
 
 if __name__=='__main__':
     raise SystemExit(main())
+
