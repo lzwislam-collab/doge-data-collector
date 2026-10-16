@@ -145,3 +145,42 @@ Official references:
 * https://developers.google.com/apps-script/reference/mail/mail-app
 * https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event
 * https://docs.github.com/en/billing/concepts/product-billing/github-actions
+
+## Commit-pinned completion check and one-shot reviewed recovery
+
+The completion check resolves main through the branch API, then reads the score
+file through the contents API at that exact commit. It validates the file path,
+encoding, byte size and Git blob hash before applying the original scored-status
+and 25-minute timestamp checks. Only a completed-run check gains one GET; idle
+polls remain two GETs and pending-run checks remain one GET. Inflight admission
+reserves three GETs. Rolling limits and all server/frozen rules stay unchanged.
+Logs include caller_revision PINNED_SCORE_20261016, score_ref, score_blob_sha and
+bounded per-target failure reasons. They contain no credential or raw response.
+The historical stopped response was not captured: stale CDN data is a supported
+reproduction, not a proven historical cause.
+
+After tests and independent review, save only this independent source. Preserve
+all original STOPPED evidence and performance cohorts. Set the nonsecret
+QLT1_SCORE_FIX_READY marker to PINNED_SCORE_20261016 only after review.
+resumeQuoteRescueLongTermAfterScoreFix is an explicit, one-shot recovery, not a
+new starter: it requires the specific RESULT_NOT_SCORED stop, no owned timers,
+no failure latch and no prior recovery/archive. It requires at least 24 hours
+credential headroom, available mail quota and reserved stop-notice capacity.
+A callback encountering an incomplete recovery marker stops before HTTP. Before runtime changes it saves
+the exact old JSON in QLT1_STOP_ARCHIVE_20261016 and reserves the recovery in
+QLT1_SCORE_RECOVERY_20261016. It charges three reads and runtime to the original
+rolling counters, reconciles the existing successful run with commit-pinned
+scores, and only then creates the same two owned timers. It sends no collection
+POST and preserves original started_ms, target attempts, dispatch counts and
+all earlier samples. A partial/uncertain recovery stops and cannot be retried
+by clearing markers. Original stop mail remains in the archived state; future
+incidents can notify separately. Never delete an archive or reset a budget.
+
+Record a recovery/save boundary and a fixed two-hour deadline. Observe exactly
+the next 12 genuine main Time-Driven executions, plus real watchdog samples,
+without mixing in the manual recovery or prior cohorts. Retain every slow,
+failed, missing or unattributable sample; mean full platform main time must
+remain <=5 seconds, intervals <=600 seconds and projected 288 main plus 96
+watchdog full durations <=30 minutes/day. Do not restart or add samples to
+improve the result. The original interrupted 24-hour window remains interrupted;
+recovery does not retroactively establish 24-hour stability.
