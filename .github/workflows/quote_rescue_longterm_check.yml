@@ -1,0 +1,20 @@
+name: Check independent long-term DOGE quote caller
+on:
+  pull_request:
+    paths: ['apps_script/quote_rescue_longterm.gs', 'apps_script/test_quote_rescue_longterm.cjs', '.github/workflows/quote_rescue_longterm_check.yml']
+  push:
+    branches: [main]
+    paths: ['apps_script/quote_rescue_longterm.gs', 'apps_script/test_quote_rescue_longterm.cjs', '.github/workflows/quote_rescue_longterm_check.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node apps_script/test_quote_rescue_live.cjs
+      - run: node apps_script/test_quote_rescue_longterm.cjs
