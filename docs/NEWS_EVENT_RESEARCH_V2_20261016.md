@@ -36,3 +36,28 @@ python news_event_research_v2.py --asof 2026-10-16T05:00:00Z
 FinBERT and event-study / purged walk-forward methodology are available as community examples, but installing a large ML inference dependency or changing the old frozen news weight does not establish edge. This prototype deliberately retains stdlib-only deterministic triage. No paid providers or new monitoring task.
 
 **No automatic merge, model retraining, market claim or deployment is authorized by this PR.**
+
+## Finite real-source decision — 2026-10-16
+
+Read-only replay of the existing **main-branch** `data/enhancement_sources_v1/observations.jsonl` (9,744 JSONL records), through the last news first-seen timestamp **2026-10-15T07:56:25Z**. News sources were FED_NEWS, ECB_NEWS, CRYPTO_NEWS; deduplicate by `source_id,observation_key`, preserving the earliest first-seen timestamp. This is a latency census, not event-return attribution.
+
+| Measure | Evidence |
+|---|---:|
+| Raw news-source rows (including revisions) | 102 |
+| Unique publisher record keys | 100 |
+| First observed within 1h after publication | **3/100 = 3%** |
+| First observed within 6h | **30/100 = 30%** |
+| First observed within 24h | **59/100 = 59%** |
+| First observed more than 24h after publication | **41/100 = 41%** |
+| Distinct DOGE/Dogecoin/Elon-specific headlines captured | **0/100** |
+
+The three within-one-hour headlines were: BlackRock crypto ETF assets (+11 minutes); former FTX Europe chief regulatory-exemption story (+34 minutes); and digital-economy power-grid story (+52 minutes). None provided a DOGE-specific near-real-time sentiment signal. A breaking-news *coverage denominator* cannot be inferred from this collected-news-only census: missed events are unknown.
+
+**Decision: NO-GO for news as a 1H directional feature.** It is not responsible to change production weights or deploy paid/social/extra scheduled news collection based on this ledger. Research-only triage can flag what is actually observed on time, while BTC regime, DOGE relative price/volume, and liquidity/leverage remain the forecasting focus under the existing frozen model and same-event challenger rules.
+
+### Exactly one change set; no endless remediation loop
+1. **Now delivered:** read-only event classifier, first-visible-time protection, source identity, cross-source duplicates, revision handling; delayed imports explicitly `backfill_not_timely_for_1h`, and current risk-watch only for a classified event first seen ≤1h after publisher time and observed within the past hour. All market directions remain UNKNOWN. Tests have been expanded from 14 to **18 local synthetic checks**.
+2. **No-go until separate evidence exists:** Do not merge this draft into production or modify original18/R2, prior feature scores, collector cadences or task counts. No new data sources, model weights, retry loops, model competition projects or repetitive audits authorized by this finding.
+3. **Pre-defined reconsideration:** Reconsider a news-feature candidate only if an existing reliable first-seen source establishes sufficient contemporaneous coverage (including known missed items), then a preregistered non-overlap same-event BTC + liquidity control demonstrates incremental directional accuracy, extreme-event precision/recall and cost-adjusted return. Existing independent statistical admission gates and frozen dates remain binding; no backfilled legacy news counted as forward predictions.
+
+**Explicit limits:** The 3% number is capture delay among recorded headlines, not market-news recall. Source poll success cannot be inferred from last observed *new article*; old but accurate news is still valid historical content, simply not an immediate one-hour catalyst. No actual model-performance improvement has been shown or claimed.
