@@ -47,8 +47,18 @@ allowance before HTTP or an expiry-warning mail; interruption retains that
 reservation. Another full 6-minute allowance is held for one stop/emergency
 notice. Normal completion charges measured handler time, with floors of
 3 seconds per main poll and 1 second per watchdog. An idle 24-hour model is
-864 GETs and 16 minutes internal budget, excluding extra elapsed time.
+576 GETs and 16 minutes internal budget, excluding extra elapsed time.
 Admission can stop before a nominal cap because a full reservation must fit.
+
+Idle polls read and validate only the registry and scores. If the existing
+decision function finds an eligible candidate, the caller then reads the real
+bounded Actions run list and repeats the decision with a fresh clock before
+reserving any dispatch. An empty provisional run list is never permission to
+dispatch. In-flight monitoring is unchanged. This avoids an unused request on
+no-target polls; it does not cache target data or remove the run guard.
+Credential expiry metadata is still checked every invocation. An early token
+revocation or low GitHub API quota is detected when API work is needed rather
+than on every idle poll. No token permissions are expanded.
 
 These counters are not platform execution durations or the account's exact
 remaining Google quota. The earlier 12-sample mean full duration was 3.713333
@@ -104,6 +114,31 @@ Use `showQuoteRescueLongTerm` for nonsecret state. Use
 `stopQuoteRescueLongTerm` for a deliberate stop. Never run the timed handlers
 manually, reset old trial state to simulate success, or extend permission
 scope in response to an error.
+
+## Fixed performance retest after the idle-query optimization
+
+Deploy only after regression tests and independent review. Update only the
+independent saved long-term source while retaining the existing two timers,
+state, counters, attempts, notification markers and every prior failure.
+Do not run the starter again. Logs identify this version with
+`caller_revision: IDLE_GATE_20261016`.
+
+Before deployment record the save boundary and a two-hour deadline. Assess
+exactly the next 12 genuine Time-Driven main executions after that boundary,
+including any slow, failed or incomplete sample. Never manually supplement,
+exclude a slow sample, restart or extend the cohort to improve the mean. Require
+at least one genuine watchdog in the same observation period. A missing version
+marker or missing log is an attribution/verification failure, not a reason to
+silently select a later fast execution.
+
+The mean **full platform duration of the 12 main executions must be <=5 seconds**;
+main intervals must be <=600 seconds. Report watchdog durations separately so
+they cannot dilute the main mean. Estimate total daily runtime from 288 main
+executions plus 96 watchdog executions using their respective full platform
+means; the projection must be <=30 minutes. Account-wide precise remaining
+quota is unknown and the estimate is not a measurement of the entire account.
+The original 5.096-second failed cohort remains failed. Idle skips and a green
+workflow do not establish a new genuine quote capture.
 
 Official references:
 * https://developers.google.com/apps-script/guides/services/quotas
