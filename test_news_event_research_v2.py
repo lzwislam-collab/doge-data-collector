@@ -92,6 +92,30 @@ class EventResearchTests(unittest.TestCase):
         r=build_report([a],T)
         self.assertEqual(r['critical_watch_count'],0)
         self.assertEqual(r['news_timely_within_1h'],1)
+    def test_price_move_reporting_does_not_count_as_advance_alert(self):
+        x=event(title='Nearly $1 billion in crypto bets liquidated as bitcoin slides',
+                seen='2026-10-16T04:59:00Z',published='2026-10-16T04:58:00Z')
+        r=build_report([x],T)
+        self.assertEqual(r['events'][0]['primary_type'],'LEVERAGE_STRESS')
+        self.assertEqual(r['events'][0]['reporting_phase'],'AFTER_MOVE_HEADLINE')
+        self.assertFalse(r['events'][0]['watch_now_by_timeliness'])
+        self.assertFalse(r['events'][0]['pre_event_signal_verified'])
+        self.assertIsNone(r['prediction_direction'])
+    def test_fresh_poll_without_new_news_is_not_stale(self):
+        old=event(seen='2026-10-14T04:00:00Z',published='2026-10-14T03:55:00Z')
+        receipts={source:{'status':'ok','captured_at_utc':'2026-10-16T04:59:00Z'}
+            for source in ('FED_NEWS','ECB_NEWS','CRYPTO_NEWS')}
+        r=build_report([old],T,source_receipts=receipts)
+        self.assertEqual(r['missing_or_stale_sources'],[])
+        self.assertGreater(r['latest_new_event_age_hours']['CRYPTO_NEWS'],24)
+        self.assertFalse(r['coverage_sufficient_for_directional_claim'])
+    def test_future_poll_receipt_not_backdated(self):
+        x=event()
+        receipts={'CRYPTO_NEWS':{'status':'ok','captured_at_utc':'2026-10-16T06:00:00Z'}}
+        r=build_report([x],T,source_receipts=receipts)
+        self.assertEqual(len(r['missing_or_stale_sources']),3)
+        self.assertEqual(r['unverified_source_receipts']['CRYPTO_NEWS'],
+                         'FUTURE_RECEIPT_CANNOT_CERTIFY_PAST')
     def test_canonical_url(self):
         self.assertEqual(canonical_url('https://EXAMPLE.com/a/?utm_campaign=zz&x=1'),'https://example.com/a?x=1')
 
