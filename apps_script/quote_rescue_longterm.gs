@@ -83,6 +83,14 @@ function qltStop_(p,s,code,includedInExecution){
  if(cleanup)s.cleanup_error=true;
  qltSave_(p,s);qltNotify_(p,s,code,!!includedInExecution);
 }
+function qltLatchFailure_(p,s,code){
+ // A write can commit and then report failure. A separate durable latch is
+ // checked before any later HTTP, even if trigger deletion also fails.
+ try{p.setProperty('QLT1_FAILURE_LATCH',code);}catch(e){/* Best effort when the property service itself is unavailable. */}
+ if(s){s.phase='STOPPED';s.decision=code;try{qltSave_(p,s);}catch(e){/* Preserve the last server state. */}}
+ try{qltDelete_();}catch(e){/* A surviving callback will retry cleanup only. */}
+ qltEmergency_(p,code);
+}
 function qltCredentials_(p,s,starting){
  if(p.getProperty('QLT1_DEPLOYMENT_READY')!==QLT1.approved||QRV1.approved!=='PR54:16a7eeef4b284f5ba62e4742f73f0be6e50792e3')throw new Error('QLT1_NOT_REVIEWED');
  if(p.getProperty('QLT1_MAIL_ENABLED')!=='true')throw new Error('QLT1_MAIL_NOT_ENABLED');
@@ -180,6 +188,7 @@ function qltExecute_(event,isWatch){
  const p=PropertiesService.getScriptProperties(),started=Date.now();let s=null,admitted=false,reserveHour=null;
  const r={kind:'LONGTERM',watchdog:isWatch,started_at_utc:new Date(started).toISOString(),fetch_calls:0,dispatch_calls:0,request_ms:[],reserved_fetch:0,deadline_ms:started+QLT1.reserveBody};
  try{
+  if(p.getProperty('QLT1_FAILURE_LATCH')){try{qltDelete_();}catch(e){r.trigger_cleanup_error=true;}r.decision='QLT1_FAILURE_LATCHED';return;}
   s=qltLoad_(p);if(s.phase==='STOPPED'){try{qltDelete_();delete s.cleanup_error;}catch(e){s.cleanup_error=true;r.trigger_cleanup_error=true;}return;}
   if(started<s.last_clock_ms)throw new Error('QLT1_CLOCK_REVERSED');
   if(['POLL_RESERVED','DISPATCH_RESERVED'].includes(s.phase))throw new Error('QLT1_INTERRUPTED_EXECUTION');
@@ -197,12 +206,12 @@ function qltExecute_(event,isWatch){
  }catch(e){
   r.error_code=qltError_(e);
   try{if(s)qltStop_(p,s,r.error_code,admitted);else{qltDelete_();qltEmergency_(p,r.error_code);}}
-  catch(e2){r.persistence_or_cleanup_error=true;try{qltDelete_();}catch(e3){r.trigger_cleanup_error=true;}qltEmergency_(p,'QLT1_PERSISTENCE_ERROR');}
+  catch(e2){r.persistence_or_cleanup_error=true;qltLatchFailure_(p,s,'QLT1_PERSISTENCE_ERROR');}
  }finally{
   r.elapsed_ms=Date.now()-started;
   if(s){
    if(admitted){const row=s.budget.find(b=>b[0]===reserveHour);if(row){row[1]-=r.reserved_fetch-r.fetch_calls;row[3]+=Math.max(r.elapsed_ms,isWatch?1000:3000)-QLT1.reserveBody;}s.reserved_body_ms=0;}
-   try{qltSave_(p,s);}catch(e){r.persistence_error=true;try{qltDelete_();}catch(e2){r.trigger_cleanup_error=true;}qltEmergency_(p,'QLT1_PERSISTENCE_ERROR');}
+   try{qltSave_(p,s);}catch(e){r.persistence_error=true;qltLatchFailure_(p,s,'QLT1_PERSISTENCE_ERROR');}
    r.phase=s.phase;r.decision=s.decision;r.run_id=s.inflight?s.inflight.id:s.last_completed_run_id||null;
    r.budget_fetch=qltTotal_(s,1);r.budget_dispatch=qltTotal_(s,2);r.budget_body_ms=qltTotal_(s,3);
   }
@@ -215,7 +224,7 @@ function startQuoteRescueLongTerm(){
  const lock=LockService.getScriptLock();if(!lock.tryLock(0))throw new Error('QLT1_BUSY');
  try{
   const p=PropertiesService.getScriptProperties();
-  if(p.getProperty(QLT1.stateKey)||p.getProperty('QLT1_STARTED')||qltOwned_().length)throw new Error('QLT1_ALREADY_STARTED');
+  if(p.getProperty(QLT1.stateKey)||p.getProperty('QLT1_STARTED')||p.getProperty('QLT1_FAILURE_LATCH')||qltOwned_().length)throw new Error('QLT1_ALREADY_STARTED');
   if(ScriptApp.getProjectTriggers().some(t=>t.getHandlerFunction()===QRV1.handler))throw new Error('QLT1_VALIDATION_STILL_RUNNING');
   qltCredentials_(p,null,true);if(MailApp.getRemainingDailyQuota()<1)throw new Error('QLT1_MAIL_NO_QUOTA');
   const now=Date.now(),s={version:1,phase:'RUNNING',decision:'STARTED',started_ms:now,last_clock_ms:now,last_poll_ms:now,budget:[],attempted:[],inflight:null,reserved_body_ms:0,notice:null};

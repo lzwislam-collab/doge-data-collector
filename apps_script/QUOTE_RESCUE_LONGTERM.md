@@ -96,6 +96,9 @@ shared and the reused workflow retains only its compact result for 3 days.
   the normal Apps Script project and morning briefing remain untouched. No
   automatic recovery or state reset is provided. Preserve the stopped state
   and diagnose before any explicitly reviewed manual recovery.
+  An independent `QLT1_FAILURE_LATCH` blocks later HTTP after uncertain state
+  persistence, even if the failed write actually committed and trigger deletion
+  also failed. Surviving stopped callbacks retry their own trigger cleanup only.
 
 Use `showQuoteRescueLongTerm` for nonsecret state. Use
 `stopQuoteRescueLongTerm` for a deliberate stop. Never run the timed handlers
