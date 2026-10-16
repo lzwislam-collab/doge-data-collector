@@ -9,7 +9,8 @@ import engineering_run_receipt as terminal
 ROOT=Path(__file__).resolve().parent
 SOURCE_WORKFLOW='.github/workflows/okx_hourly_extreme_history.yml'
 CLOCK_WORKFLOWS={'.github/workflows/bybit_liquidations.yml','.github/workflows/binance_liquidations.yml',
- '.github/workflows/phase2_forward_audit_v2.yml','.github/workflows/learned_shadow_v1.yml'}
+ '.github/workflows/phase2_forward_audit_v2.yml','.github/workflows/learned_shadow_v1.yml',
+ '.github/workflows/collect.yml'}
 
 def match_event(event,run):
  if any(event.get(k)!=run.get(k) for k in ('id','run_attempt','head_sha','path')):raise ValueError('completion identity/attempt changed')
