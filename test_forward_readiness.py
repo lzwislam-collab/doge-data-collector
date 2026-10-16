@@ -47,6 +47,12 @@ class Readiness(unittest.TestCase):
   for field,value in (('head_branch','feature'),('event','pull_request'),('head_repository',{'full_name':'other/repo'})):
    bad=copy.deepcopy(event);bad[field]=value;self.assertFalse(a.trusted_completion(bad,[]))
   with self.assertRaises(ValueError):a.match_event(event,{**event,'run_attempt':2})
+ def test_existing_collector_completion_is_only_trusted_after_success(self):
+  a=self.engine();run=self.event();run['path']='.github/workflows/collect.yml';run['conclusion']='success'
+  self.assertTrue(a.trusted_completion(run,[]))
+  run['conclusion']='failure';self.assertFalse(a.trusted_completion(run,[]))
+  run['conclusion']='success';run['head_branch']='feature';self.assertFalse(a.trusted_completion(run,[]))
+
  def test_no_cycle_when_no_current_issue_or_target_needed(self):
   a=self.engine();now=datetime(2026,10,14,tzinfo=timezone.utc)
   self.assertEqual(a.actions([],[],now,False,False),[])
