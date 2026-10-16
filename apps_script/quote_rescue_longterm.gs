@@ -130,8 +130,7 @@ function qltHash_(id){return Utilities.computeDigest(Utilities.DigestAlgorithm.S
 function qltRead_(p,s,r){
  const raw='https://raw.githubusercontent.com/'+QLT1.repo+'/main/data/direction_v42/';
  const data={registry:quoteRescueLiveCsv_(qltRequest_(p,s,r,raw+'forward_registry.csv','get').text,['forecast_id','issued_at_utc','target_utc']),
-  scores:quoteRescueLiveCsv_(qltRequest_(p,s,r,raw+'forward_scores.csv','get').text,['forecast_id','status']),
-  runs:JSON.parse(qltRequest_(p,s,r,'https://api.github.com/repos/'+QLT1.repo+'/actions/runs?branch=main&per_page=30','get').text).workflow_runs};
+  scores:quoteRescueLiveCsv_(qltRequest_(p,s,r,raw+'forward_scores.csv','get').text,['forecast_id','status']),runs:[]};
  if(data.scores.some(row=>!['scored','unscorable_missing_target_quote'].includes(row.status)))throw new Error('QLT1_SCORE_STATUS');
  return data;
 }
@@ -160,9 +159,16 @@ function qltMonitorRun_(p,s,r){
 }
 function qltPoll_(p,s,r){
  if(s.inflight){qltMonitorRun_(p,s,r);return;}
- const data=qltRead_(p,s,r);if(!Array.isArray(data.runs))throw new Error('QLT1_RUN_SCHEMA');
- const now=Date.now(),verdict=quoteRescueLiveDecide_(data,now);
+ const data=qltRead_(p,s,r);
+ let now=Date.now(),verdict=quoteRescueLiveDecide_(data,now);
  if(verdict.decision==='SKIP_INCONSISTENT_READ')throw new Error('QLT1_INCONSISTENT_READ');
+ if(verdict.decision==='REQUEST_QUOTE_ONLY_WORKFLOW'){
+  // Empty runs above is only a candidate probe, never dispatch permission.
+  // No-target polls need no run-list I/O; candidates must pass the real guard.
+  data.runs=JSON.parse(qltRequest_(p,s,r,'https://api.github.com/repos/'+QLT1.repo+'/actions/runs?branch=main&per_page=30','get').text).workflow_runs;
+  if(!Array.isArray(data.runs))throw new Error('QLT1_RUN_SCHEMA');
+  now=Date.now();verdict=quoteRescueLiveDecide_(data,now);
+ }
  s.phase='RUNNING';s.decision=verdict.decision;
  if(verdict.decision!=='REQUEST_QUOTE_ONLY_WORKFLOW')return;
  s.attempted=s.attempted.filter(a=>a[1]>=now);
@@ -186,7 +192,7 @@ function qltExecute_(event,isWatch){
  if(!event||!event.triggerUid)throw new Error('QLT1_TIMED_EVENT_REQUIRED');
  const lock=LockService.getScriptLock();if(!lock.tryLock(0))return;
  const p=PropertiesService.getScriptProperties(),started=Date.now();let s=null,admitted=false,reserveHour=null;
- const r={kind:'LONGTERM',watchdog:isWatch,started_at_utc:new Date(started).toISOString(),fetch_calls:0,dispatch_calls:0,request_ms:[],reserved_fetch:0,deadline_ms:started+QLT1.reserveBody};
+ const r={kind:'LONGTERM',caller_revision:'IDLE_GATE_20261016',watchdog:isWatch,started_at_utc:new Date(started).toISOString(),fetch_calls:0,dispatch_calls:0,request_ms:[],reserved_fetch:0,deadline_ms:started+QLT1.reserveBody};
  try{
   if(p.getProperty('QLT1_FAILURE_LATCH')){try{qltDelete_();}catch(e){r.trigger_cleanup_error=true;}r.decision='QLT1_FAILURE_LATCHED';return;}
   s=qltLoad_(p);if(s.phase==='STOPPED'){try{qltDelete_();delete s.cleanup_error;}catch(e){s.cleanup_error=true;r.trigger_cleanup_error=true;}return;}
