@@ -18,6 +18,7 @@ NEWS_SOURCES = frozenset({"FED_NEWS", "ECB_NEWS", "CRYPTO_NEWS"})
 TOKENS = {
     "DOGE_SPECIFIC": (r"\bdogecoin\b", r"\bdoge\b", r"\belon musk\b", r"\b(?:x|twitter) payments?\b"),
     "MARKET_INFRASTRUCTURE": (r"\bhack(?:ed|ing)?\b", r"\bexploit\b", r"\bbankrupt(?:cy)?\b", r"\binsolvenc(?:y|ies)\b", r"\bwithdrawals? (?:halted|suspended|paused)\b", r"\bdepeg(?:ged|ging)?\b", r"\boutage\b", r"\bsecurity breach\b"),
+    "LEVERAGE_STRESS": (r"\bliquidat(?:ed|ing|ion|ions)\b", r"\bmargin calls?\b", r"\bforced (?:sell(?:ing)?|unwind)\b", r"\blong squeeze\b", r"\bshort squeeze\b"),
     "REGULATION": (r"\bsec\b", r"\bcftc\b", r"\bregulat(?:ion|or|ory)\b", r"\bcrypto(?:currency)? (?:ban|lawsuit|rule|bill|law)\b", r"\betf (?:approved|approval|rejected|rejection)\b"),
     "MACRO_POLICY": (r"\bfederal reserve\b", r"\bfed (?:raises?|cuts?|rate|policy|meeting)\b", r"\binterest rates?\b", r"\bcpi\b", r"\binflation\b", r"\bnonfarm payroll\b", r"\bjobs report\b", r"\becb\b"),
     "GEOPOLITICAL": (r"\bsanctions?\b", r"\btariffs?\b", r"\bmilitary strike\b", r"\bwar (?:starts?|breaks? out|escalates?)\b"),
@@ -25,7 +26,7 @@ TOKENS = {
 NEG = tuple(re.compile(x, re.I) for x in (r"\bhack(?:ed)?\b",r"\bexploit\b",r"\bban(?:ned)?\b",r"\breject(?:ed|ion)?\b",r"\bcrash\b",r"\bdepeg(?:ged)?\b",r"\bhalt(?:ed)?\b",r"\battack\b",r"\bdefault\b",r"\bbankrupt(?:cy)?\b",r"\blawsuit\b",r"\bsanction(?:s|ed)?\b"))
 POS = tuple(re.compile(x, re.I) for x in (r"\bapprov(?:e|ed|al)\b",r"\blaunch(?:ed)?\b",r"\badopt(?:ed|ion)?\b",r"\bintegrat(?:e|ed|ion)\b",r"\brecover(?:y|ed)\b"))
 RULES = {k:tuple(re.compile(v, re.I) for v in ps) for k,ps in TOKENS.items()}
-PRIORITY = ("MARKET_INFRASTRUCTURE", "DOGE_SPECIFIC", "REGULATION", "MACRO_POLICY", "GEOPOLITICAL")
+PRIORITY = ("MARKET_INFRASTRUCTURE", "LEVERAGE_STRESS", "DOGE_SPECIFIC", "REGULATION", "MACRO_POLICY", "GEOPOLITICAL")
 
 
 def timestamp(value: str) -> datetime:
@@ -50,14 +51,12 @@ def classify(title: str, source: str) -> dict:
     if not isinstance(title,str): raise ValueError("title_required")
     tags=[kind for kind,ps in RULES.items() if any(p.search(title) for p in ps)]
     # Source alone cannot certify a headline's event nature or future DOGE impact.
-    if source == "FED_NEWS" and "MACRO_POLICY" not in tags: tags.append("MACRO_POLICY")
-    if source == "ECB_NEWS" and "MACRO_POLICY" not in tags: tags.append("MACRO_POLICY")
     adverse=any(p.search(title) for p in NEG)
     favorable=any(p.search(title) for p in POS)
     polarity="MIXED" if adverse and favorable else "NEGATIVE_WORDING" if adverse else "POSITIVE_WORDING" if favorable else "UNSPECIFIED"
     return {"event_types":sorted(tags),"primary_type":next((k for k in PRIORITY if k in tags),"UNCLASSIFIED"),
             "wording":polarity,"market_direction":"UNKNOWN","verified_event_impact":False,
-            "macro_surprise":"UNKNOWN","critical_watch_only":bool(set(tags)&{"MARKET_INFRASTRUCTURE","DOGE_SPECIFIC","REGULATION","MACRO_POLICY","GEOPOLITICAL"})}
+            "macro_surprise":"UNKNOWN","critical_watch_only":bool(set(tags)&{"MARKET_INFRASTRUCTURE","LEVERAGE_STRESS","DOGE_SPECIFIC","REGULATION","MACRO_POLICY","GEOPOLITICAL"})}
 
 
 def build_report(rows: list[dict], asof: datetime, *, max_age_hours: float = 24.0,
