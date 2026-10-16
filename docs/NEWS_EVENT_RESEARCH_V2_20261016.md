@@ -77,3 +77,19 @@ The three within-one-hour headlines were: BlackRock crypto ETF assets (+11 minut
 **Finite decision — RESEARCH_NO_GO_NOW.** The diagnostic is sufficient to reject the current claim that this RSS tone data is a reliable time-sensitive forecasting input. Stop adding classifiers, sources, weights or new scheduled jobs merely to improve apparent signal volume. Continue frozen original18/R2 and their independent scorekeeping as before. Revisit event-driven forecasting only after (a) auditable first-seen coverage/latency appropriate to the chosen horizon, (b) registered nonoverlap events and same-event BTC/liquidity comparators, and (c) pre-registered forward uplift that survives costs and missingness. Keep this draft as historical research evidence; no model promotion, trade, schedule or strategy change.
 
 Note: the source Git blob binds the archived input only; real-time endpoint status, future article completeness and actual market impact remain unverified.
+
+
+## Fixed-as-of real data acceptance (2026-10-16 05:10:24 UTC)
+
+**Reproducible GitHub run:** [38858462401](https://github.com/lzwislam-collab/doge-data-collector/actions/runs/38858462401), branch `research/news-event-pit-v2-20261016`, code commit `8251d40f3405dc26a609ca907600d17b90821d1d`. Read back: isolated job `success`, **23/23 unit tests PASS**, actual retained ledger replay PASS. This run has no schedule and does not produce or deploy forecasts.
+
+Frozen sample: 9,744 retained mixed-source observations, including 102 news ledger rows; 100 distinct observed news events after per-provider revision selection and canonical URL deduplication. Publication-to-first-seen lag: **3 within 1 hour, 24 within 1–6 hours, 32 within 6–24 hours, 41 over 24 hours**. Source success receipts from all three RSS providers were **21.233 h old** at the fixed as-of; latest actual new-item ages were 21.233h (crypto), 38.462h (ECB), and 50.484h (Fed). This demonstrates why last new headline age is NOT poll health. 21 historical category-relevant headline mentions, but **0 timely current eligible risk watches**. These measures are of available feed entries, not independent market-impact events or calibrated recall.
+
+The Oct 15 `Nearly $1 billion in crypto bets liquidated as bitcoin, ether and XRP slide` article is now `LEVERAGE_STRESS` and `AFTER_MOVE_HEADLINE`. It is a report of an already observed price move; it is **not** a verified advance signal. The model does not assign an UP/DOWN direction, and publication time is never treated as first availability.
+
+### Stop / go (single scoped experiment)
+
+- **PASS only:** research script compiles and runs on actual frozen evidence, 23 tests pass, original18/R2/previous ablation records remain untouched, zero trading permission, source receipts clearly separate from headlines.
+- **NO-GO:** current news feed is not timely enough to substantiate **1H** news-led directional forecasts (3/100 <=1h), has incomplete DOGE social and major-breaking-event coverage, and has no demonstrable incremental predictive advantage or economic return. Do not merge as a production predictor or set automatic model weight.
+- **NEXT RESEARCH GATE:** test whether pre-known BTC trend, DOGE/BTC relative movement, and observed leverage/market depth offer incremental **same-event** validation; news remains qualitative risk context pending materially more timely and well-attributed sources. Do not restart feature sprawl or relabel post-move articles as forecasts.
+- **No indefinite remediation:** this V2 prototype closes at `RESEARCH_DIAGNOSTIC_PASS / PREDICTIVE_ADMISSION_REJECTED` on this evidence. A new iteration requires genuinely new data/evidence, not repeated nominal changes.
