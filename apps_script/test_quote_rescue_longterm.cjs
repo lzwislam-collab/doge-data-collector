@@ -8,7 +8,7 @@ let passed=0,failed=0;
 function test(name,fn){try{fn();passed++;console.log('PASS '+name);}catch(e){failed++;console.error('FAIL '+name+': '+e.message);}}
 function fixture(opt={}){
  let now=epoch,locked=false,uid=0;
- const props={GH_ACTIONS_READ_TOKEN:'synthetic-read-secret',GH_QUOTE_RESCUE_DISPATCH_TOKEN:'synthetic-dispatch-secret',DRY_TRIAL_STATE:'original-failure',QRV1_STATE:'old-real-proof',QLT1_DEPLOYMENT_READY:'QLT1_REVIEW_20261016',QLT1_READ_TOKEN_EXPIRES_UTC:'2026-11-16T00:00:00Z',QLT1_DISPATCH_TOKEN_EXPIRES_UTC:'2026-11-16T00:00:00Z',QLT1_MAIL_ENABLED:'true'};
+ const props={GH_ACTIONS_READ_TOKEN:'synthetic-read-secret',GH_QUOTE_RESCUE_DISPATCH_TOKEN:'synthetic-dispatch-secret',DRY_TRIAL_STATE:'original-failure',QRV1_STATE:'old-real-proof',QLT1_DEPLOYMENT_READY:'QLT1_REVIEW_20261016',QLT1_READ_TOKEN_EXPIRES_UTC:'2026-11-16T00:00:00Z',QLT1_DISPATCH_TOKEN_EXPIRES_UTC:'2026-11-16T00:00:00Z',QLT1_MAIL_ENABLED:'true',QLT1_SCORE_FIX_READY:'PINNED_SCORE_20261016'};
  const requests=[],emails=[],mailAttempts=[],logs=[];
  const trigger=name=>({getHandlerFunction:()=>name,getUniqueId:()=>String(++uid)});
  const unrelated=trigger('normal_unrelated'),triggers=[unrelated];
@@ -18,12 +18,13 @@ function fixture(opt={}){
  class Clock extends Date{constructor(...args){super(...(args.length?args:[now]));}static now(){return now;}}
  const c=vm.createContext({Date:Clock,console:{log:x=>logs.push(JSON.parse(x))},
   PropertiesService:{getScriptProperties:()=>store},LockService:{getScriptLock:()=>({tryLock:()=>{if(locked)return false;locked=true;return true;},releaseLock:()=>{locked=false;}})},
-  Utilities:{parseCsv:t=>t.trim().split(/\r?\n/).map(s=>s.split(',')),DigestAlgorithm:{SHA_256:'SHA_256'},Charset:{UTF_8:'UTF_8'},computeDigest:(_,s)=>[...crypto.createHash('sha256').update(s).digest()]},
+  Utilities:{parseCsv:t=>t.trim().split(/\r?\n/).map(s=>s.split(',')),DigestAlgorithm:{SHA_256:'SHA_256',SHA_1:'SHA_1'},Charset:{UTF_8:'UTF_8'},computeDigest:(alg,s)=>[...crypto.createHash(alg==='SHA_1'?'sha1':'sha256').update(Array.isArray(s)?Buffer.from(s.map(n=>n&255)):s).digest()],base64Decode:s=>[...Buffer.from(s,'base64')],newBlob:s=>({getBytes:()=>[...Buffer.from(typeof s==='string'?s:s.map(n=>n&255))],getDataAsString:()=>Buffer.from(s.map(n=>n&255)).toString('utf8')})},
   ScriptApp:{getProjectTriggers:()=>triggers.slice(),deleteTrigger:t=>{if(opt.failDelete)throw new Error('delete failed');triggers.splice(triggers.indexOf(t),1);},newTrigger:name=>({timeBased:()=>({everyMinutes:m=>({create:()=>{if(opt.failCreate===name)throw new Error('trigger create failed');const t=trigger(name);triggers.push(t);return t;}})})})},
   MailApp:{getRemainingDailyQuota:()=>opt.mailQuota??100,sendEmail:(to,subject,body)=>{mailAttempts.push({to,subject});if(opt.failMail)throw new Error('mail synthetic-secret');emails.push({to,subject,body});}},
   UrlFetchApp:{fetch:(url,options)=>{requests.push({url,options});opt.onFetch?.(url,options,{advance:ms=>{now+=ms;},props});if(opt.failFetch)throw new Error('network synthetic-secret');
    const post=options.method==='post',code=post?(opt.postCode??200):(opt.getCodeFor?.(url)??opt.getCode??200);
-   const text=post?(opt.postBody??JSON.stringify({workflow_run_id:12345})):url.includes('registry.csv')?registry:url.includes('scores.csv')?scores:/\/runs\/\d+$/.test(url)?JSON.stringify(run):(opt.runsBody??JSON.stringify({workflow_runs:runs}));
+   const pin=opt.pinnedScores??scores;const bytes=Buffer.from(pin);const payload={type:'file',path:'data/direction_v42/forward_scores.csv',encoding:'base64',size:bytes.length,sha:crypto.createHash('sha1').update(Buffer.concat([Buffer.from('blob '+bytes.length+'\0'),bytes])).digest('hex'),content:bytes.toString('base64'),...(opt.contentsOverrides||{})};
+   const text=url.endsWith('/branches/main')?(opt.branchBody??JSON.stringify({name:'main',commit:{sha:'a'.repeat(40)}})):url.includes('/contents/')?JSON.stringify(payload):post?(opt.postBody??JSON.stringify({workflow_run_id:12345})):url.includes('registry.csv')?registry:url.includes('scores.csv')?scores:/\/runs\/\d+$/.test(url)?JSON.stringify(run):(opt.runsBody??JSON.stringify({workflow_runs:runs}));
    return {getResponseCode:()=>code,getContentText:()=>text,getAllHeaders:()=>({'x-ratelimit-limit':'5000','x-ratelimit-remaining':String(opt.rateRemaining??4900)})};}}
  });
  vm.runInContext(live+'\n'+source,c);
@@ -115,4 +116,84 @@ test('target becoming open during CSV reads receives real guard',()=>{
  f.start();f.tick();assert.equal(f.requests.filter(r=>r.options.method==='post').length,1);
  assert(f.requests[2].url.endsWith('/actions/runs?branch=main&per_page=30'));assert.equal(f.state().phase,'WAIT_RUN');
 });
+
+const validScore='forecast_id,status,observed_at_utc,target_quote_utc\ndue,scored,2026-10-16T08:00:01Z,2026-10-16T08:00:00Z\n';
+function completed(opt={}){const f=fixture(opt);f.start();f.tick();f.setRun({status:'completed',conclusion:'success'});f.advance(5*60000);return f;}
+test('completed-run verification ignores stale raw main and pins the resolved commit',()=>{
+ const f=completed({pinnedScores:validScore});f.tick();assert.equal(f.state().phase,'RUNNING');
+ assert.equal(f.state().decision,'RUN_FINISHED_SCORES_PRESENT');assert.equal(f.requests.length,7);
+ assert(f.requests.at(-2).url.endsWith('/branches/main'));
+ assert(f.requests.at(-1).url.endsWith('/contents/data/direction_v42/forward_scores.csv?ref='+ 'a'.repeat(40)));
+ assert.equal(f.logs.at(-1).score_ref,'a'.repeat(40));assert.equal(f.emails.length,0);
+});
+test('invalid branch revision cannot reach score content or resume dispatch',()=>{
+ for(const branchBody of ['{}',JSON.stringify({name:'other',commit:{sha:'a'.repeat(40)}}),JSON.stringify({name:'main',commit:{sha:'main'}})]){
+  const f=completed({branchBody,pinnedScores:validScore});f.tick();assert.equal(f.state().phase,'STOPPED');
+  assert.equal(f.requests.filter(x=>x.url.includes('/contents/')).length,0);assert.equal(f.requests.filter(x=>x.options.method==='post').length,1);
+ }
+});
+test('content identity encoding size and digest errors stop before trusting a score',()=>{
+ for(const contentsOverrides of [{type:'symlink'},{path:'other'},{encoding:'none'},{size:1000001},{sha:'b'.repeat(40)},{content:'%%%'}]){
+  const f=completed({pinnedScores:validScore,contentsOverrides});f.tick();assert.equal(f.state().phase,'STOPPED');assert.equal(f.own().length,0);
+ }
+});
+test('pinned missing duplicate wrong-status and late scores retain strict failure reasons',()=>{
+ const header='forecast_id,status,observed_at_utc,target_quote_utc\n';
+ for(const [pinnedScores,want] of [[header,'MISSING'],[validScore+validScore.split('\n')[1]+'\n','DUPLICATE'],[validScore.replace(',scored,',',unscorable_missing_target_quote,'),'STATUS'],[validScore.replace('08:00:00Z','08:21:00Z'),'QUOTE_WINDOW'],[validScore.replace('08:00:01Z','invalid'),'OBSERVED_CLOCK']]){
+  const f=completed({pinnedScores});f.tick();assert.equal(f.state().decision,'QLT1_RESULT_NOT_SCORED');
+  assert.equal(f.logs.at(-1).score_checks[0].reason,want);assert.equal(f.own().length,0);assert.equal(f.emails.length,1);
+ }
+});
+function stoppedScore(opt={}){const f=completed(opt);f.tick();assert.equal(f.state().phase,'STOPPED');return f;}
+test('reviewed recovery archives exact stop and retains counters attempts and original start',()=>{
+ const opt={},f=stoppedScore(opt),before=f.props.QLT1_STATE,s=f.state();opt.pinnedScores=validScore;
+ const n=f.requests.length;f.c.resumeQuoteRescueLongTermAfterScoreFix();const after=f.state();
+ assert.equal(f.props.QLT1_STOP_ARCHIVE_20261016,before);assert.equal(after.started_ms,s.started_ms);
+ assert.deepEqual(after.attempted,s.attempted);assert.equal(after.budget.reduce((n,b)=>n+b[1],0),s.budget.reduce((n,b)=>n+b[1],0)+3);
+ assert.equal(after.budget.reduce((n,b)=>n+b[2],0),1);assert.equal(f.requests.length,n+3);assert(f.requests.slice(n).every(x=>x.options.method==='get'));
+ assert.equal(after.inflight,null);assert.equal(after.last_completed_run_id,12345);assert.equal(after.phase,'RUNNING');assert.equal(f.own().length,2);
+ assert.equal(f.props.DRY_TRIAL_STATE,'original-failure');assert.equal(f.props.QRV1_STATE,'old-real-proof');assert.equal(f.emails.length,1);
+ assert.throws(()=>f.c.resumeQuoteRescueLongTermAfterScoreFix());assert.equal(f.own().length,2);
+});
+test('recovery refuses unreviewed other-error latched or still-running state without HTTP',()=>{
+ for(const mode of ['unreviewed','other','latched','running']){const f=stoppedScore();if(mode==='unreviewed')delete f.props.QLT1_SCORE_FIX_READY;if(mode==='other')f.mutate(s=>s.decision='QLT1_READ_HTTP_403');if(mode==='latched')f.props.QLT1_FAILURE_LATCH='QLT1_PERSISTENCE_ERROR';if(mode==='running')f.mutate(s=>s.phase='RUNNING');const n=f.requests.length;assert.throws(()=>f.c.resumeQuoteRescueLongTermAfterScoreFix());assert.equal(f.requests.length,n);assert.equal(f.own().length,0);}
+});
+test('recovery archival failure prevents requests and trigger creation',()=>{
+ let armed=false;const f=stoppedScore({failStore:(k)=>armed&&k==='QLT1_STOP_ARCHIVE_20261016'});armed=true;const before=f.props.QLT1_STATE,n=f.requests.length;
+ assert.throws(()=>f.c.resumeQuoteRescueLongTermAfterScoreFix());assert.equal(f.requests.length,n);assert.equal(f.own().length,0);assert.equal(f.props.QLT1_STATE,before);
+});
+test('failed pinned recovery stays stopped and cannot be blindly repeated',()=>{
+ const f=stoppedScore(),n=f.requests.length;assert.throws(()=>f.c.resumeQuoteRescueLongTermAfterScoreFix());assert.equal(f.own().length,0);assert.equal(f.state().phase,'STOPPED');assert(f.props.QLT1_STOP_ARCHIVE_20261016);const after=f.requests.length;assert.equal(after,n+3);assert.throws(()=>f.c.resumeQuoteRescueLongTermAfterScoreFix());assert.equal(f.requests.length,after);
+});
+test('partial recovery timer failure cleans only owned timers and keeps original archive',()=>{
+ const opt={},f=stoppedScore(opt);opt.pinnedScores=validScore;opt.failCreate=watchdog;
+ assert.throws(()=>f.c.resumeQuoteRescueLongTermAfterScoreFix());assert.equal(f.own().length,0);assert.equal(f.triggers.length,1);assert(f.props.QLT1_STOP_ARCHIVE_20261016);assert.equal(f.state().phase,'STOPPED');
+});
+
+
+test('recovery credential warning and unavailable mail cannot mutate stop before archive',()=>{
+ for(const mode of ['expiry','mail']){const opt={},f=stoppedScore(opt);opt.pinnedScores=validScore;const before=f.props.QLT1_STATE,n=f.requests.length,mail=f.mailAttempts.length;
+  if(mode==='expiry')f.props.QLT1_READ_TOKEN_EXPIRES_UTC='2026-10-17T07:00:00Z';else opt.mailQuota=0;
+  assert.throws(()=>f.c.resumeQuoteRescueLongTermAfterScoreFix());assert.equal(f.props.QLT1_STATE,before);assert.equal(f.requests.length,n);assert.equal(f.mailAttempts.length,mail);assert(!f.props.QLT1_STOP_ARCHIVE_20261016);assert.equal(f.own().length,0);
+ }
+});
+test('a callback after hard-stopped partial recovery cannot query with RESERVED marker',()=>{
+ const f=fixture();f.start();f.props.QLT1_SCORE_RECOVERY_20261016=JSON.stringify({phase:'RESERVED'});const n=f.requests.length;
+ f.tick();assert.equal(f.requests.length,n);assert.equal(f.own().length,0);assert.equal(f.state().phase,'STOPPED');assert.equal(f.state().decision,'QLT1_RECOVERY_INTERRUPTED');
+});
+test('recovery reserves full read and execution budgets before archival or HTTP',()=>{
+ const opt={},f=stoppedScore(opt);opt.pinnedScores=validScore;f.mutate(s=>s.budget=[[Math.floor(epoch/3600000),1198,1,10000,1]]);const before=f.props.QLT1_STATE,n=f.requests.length;
+ assert.throws(()=>f.c.resumeQuoteRescueLongTermAfterScoreFix());assert.equal(f.props.QLT1_STATE,before);assert.equal(f.requests.length,n);assert(!f.props.QLT1_STOP_ARCHIVE_20261016);
+});
+
+
+test('recovery cannot restore a caller without reserved stop-notice capacity',()=>{
+ for(const mode of ['mail_slots','reservation']){const opt={},f=stoppedScore(opt);opt.pinnedScores=validScore;
+  if(mode==='mail_slots')f.mutate(s=>s.budget[0][4]=3);else f.props.QLT1_STOP_NOTICE_BUDGET=JSON.stringify({status:'RESERVED',reserved_ms:360000});
+  const before=f.props.QLT1_STATE,n=f.requests.length;assert.throws(()=>f.c.resumeQuoteRescueLongTermAfterScoreFix());assert.equal(f.props.QLT1_STATE,before);assert.equal(f.requests.length,n);assert.equal(f.own().length,0);assert(!f.props.QLT1_STOP_ARCHIVE_20261016);
+ }
+});
+
+test('recovery clock reversal leaves the original stop untouched',()=>{const f=stoppedScore({pinnedScores:undefined});f.setTime(epoch-1);const n=f.requests.length,before=f.props.QLT1_STATE;assert.throws(()=>f.c.resumeQuoteRescueLongTermAfterScoreFix());assert.equal(f.requests.length,n);assert.equal(f.props.QLT1_STATE,before);assert(!f.props.QLT1_STOP_ARCHIVE_20261016);});
+test('recovery ages expired rolling notice buckets without resetting original archive',()=>{const opt={},f=stoppedScore(opt);opt.pinnedScores=validScore;f.mutate(s=>s.budget=[[Math.floor(epoch/3600000)-27,99,1,10000,3]]);const old=f.props.QLT1_STATE;f.c.resumeQuoteRescueLongTermAfterScoreFix();assert.equal(f.state().phase,'RUNNING');assert.equal(f.props.QLT1_STOP_ARCHIVE_20261016,old);assert.equal(f.state().budget.reduce((n,b)=>n+b[4],0),0);});
 console.log(`${passed} passed, ${failed} failed; all platform effects synthetic.`);process.exitCode=failed?1:0;

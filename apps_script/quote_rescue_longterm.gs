@@ -107,7 +107,9 @@ function qltCredentials_(p,s,starting){
 function qltRequest_(p,s,r,url,method,payload){
  const raw='https://raw.githubusercontent.com/'+QLT1.repo+'/main/data/direction_v42/';
  const api='https://api.github.com/repos/'+QLT1.repo+'/actions/';
- const allowed=method==='get'?[raw+'forward_registry.csv',raw+'forward_scores.csv',api+'runs?branch=main&per_page=30'].concat(s.inflight?[api+'runs/'+s.inflight.id]:[]):method==='post'?[api+'workflows/quote_only_rescue.yml/dispatches']:[];
+ const root='https://api.github.com/repos/'+QLT1.repo+'/';
+ const pinned=/^[a-f0-9]{40}$/.test(r.score_ref||'')?[root+'contents/data/direction_v42/forward_scores.csv?ref='+r.score_ref]:[];
+ const allowed=method==='get'?[raw+'forward_registry.csv',raw+'forward_scores.csv',api+'runs?branch=main&per_page=30',root+'branches/main'].concat(s.inflight?[api+'runs/'+s.inflight.id]:[],pinned):method==='post'?[api+'workflows/quote_only_rescue.yml/dispatches']:[];
  if(!allowed.includes(url))throw new Error('QLT1_URL_NOT_ALLOWED');
  const now=Date.now();if(now>=r.deadline_ms)throw new Error('QLT1_EXECUTION_BUDGET');
  if(method==='post'&&now>r.witness_deadline_ms)throw new Error('QLT1_TARGET_WINDOW_CLOSED');
@@ -134,6 +136,35 @@ function qltRead_(p,s,r){
  if(data.scores.some(row=>!['scored','unscorable_missing_target_quote'].includes(row.status)))throw new Error('QLT1_SCORE_STATUS');
  return data;
 }
+function qltPinnedScores_(p,s,r){
+ const root='https://api.github.com/repos/'+QLT1.repo+'/';
+ const branchText=qltRequest_(p,s,r,root+'branches/main','get').text;
+ if(branchText.length>65536)throw new Error('QLT1_BRANCH_SCHEMA');
+ const branch=JSON.parse(branchText);
+ if(!branch||branch.name!=='main'||!branch.commit||!(/^[a-f0-9]{40}$/).test(branch.commit.sha||''))throw new Error('QLT1_BRANCH_SCHEMA');
+ r.score_ref=branch.commit.sha;
+ const body=qltRequest_(p,s,r,root+'contents/data/direction_v42/forward_scores.csv?ref='+r.score_ref,'get').text;
+ if(body.length>1500000)throw new Error('QLT1_SCORE_CONTENT_SCHEMA');
+ const obj=JSON.parse(body);
+ if(!obj||obj.type!=='file'||obj.path!=='data/direction_v42/forward_scores.csv'||obj.encoding!=='base64'
+  ||!Number.isSafeInteger(obj.size)||obj.size<1||obj.size>1000000||!(/^[a-f0-9]{40}$/).test(obj.sha||'')
+  ||typeof obj.content!=='string'||!(/^[A-Za-z0-9+/=\s]+$/).test(obj.content))throw new Error('QLT1_SCORE_CONTENT_SCHEMA');
+ const bytes=Utilities.base64Decode(obj.content);
+ if(bytes.length!==obj.size)throw new Error('QLT1_SCORE_CONTENT_SIZE');
+ const header=Utilities.newBlob('blob '+bytes.length+'\0').getBytes();
+ const hash=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_1,header.concat(bytes)).map(b=>(b&255).toString(16).padStart(2,'0')).join('');
+ if(hash!==obj.sha)throw new Error('QLT1_SCORE_CONTENT_HASH');
+ r.score_blob_sha=obj.sha;
+ return quoteRescueLiveCsv_(Utilities.newBlob(bytes).getDataAsString('UTF-8'),['forecast_id','status','observed_at_utc','target_quote_utc']);
+}
+function qltScoreReason_(matches,target){
+ if(!matches.length)return 'MISSING';if(matches.length!==1)return 'DUPLICATE';
+ const score=matches[0];if(score.status!=='scored')return 'STATUS';
+ const quote=Date.parse(score.target_quote_utc),seen=Date.parse(score.observed_at_utc);
+ if(!Number.isFinite(quote))return 'QUOTE_CLOCK';if(!Number.isFinite(seen))return 'OBSERVED_CLOCK';
+ if(quote<target||quote>target+25*60000)return 'QUOTE_WINDOW';
+ if(seen>target+25*60000)return 'OBSERVED_WINDOW';return 'OK';
+}
 function qltMonitorRun_(p,s,r){
  const active=s.inflight;
  const run=JSON.parse(qltRequest_(p,s,r,'https://api.github.com/repos/'+QLT1.repo+'/actions/runs/'+active.id,'get').text);
@@ -145,14 +176,12 @@ function qltMonitorRun_(p,s,r){
   s.phase='WAIT_RUN';s.decision='AWAIT_RUN_COMPLETION';return;
  }
  if(run.conclusion!=='success')throw new Error('QLT1_RUN_FAILED');
- const raw='https://raw.githubusercontent.com/'+QLT1.repo+'/main/data/direction_v42/forward_scores.csv';
- const scores=quoteRescueLiveCsv_(qltRequest_(p,s,r,raw,'get').text,['forecast_id','status','observed_at_utc','target_quote_utc']);
- for(const t of active.targets){
-  const matches=scores.filter(row=>row.forecast_id===t.id),score=matches[0];
-  if(matches.length!==1||score.status!=='scored'||!Number.isFinite(Date.parse(score.target_quote_utc))||!Number.isFinite(Date.parse(score.observed_at_utc))
-   ||Date.parse(score.target_quote_utc)<t.target_ms||Date.parse(score.target_quote_utc)>t.target_ms+25*60000
-   ||Date.parse(score.observed_at_utc)>t.target_ms+25*60000)throw new Error('QLT1_RESULT_NOT_SCORED');
- }
+ const scores=qltPinnedScores_(p,s,r);
+ r.score_checks=active.targets.map(t=>{
+  const matches=scores.filter(row=>row.forecast_id===t.id);
+  return {id:t.id,match_count:matches.length,reason:qltScoreReason_(matches,t.target_ms)};
+ });
+ if(r.score_checks.some(x=>x.reason!=='OK'))throw new Error('QLT1_RESULT_NOT_SCORED');
  s.last_completed_run_id=active.id;s.inflight=null;s.phase='RUNNING';s.decision='RUN_FINISHED_SCORES_PRESENT';
  // No email or raw-binding attestation: a green run plus CSV is only a health
  // check. The unchanged server entry owns full frozen-evidence validation.
@@ -192,14 +221,18 @@ function qltExecute_(event,isWatch){
  if(!event||!event.triggerUid)throw new Error('QLT1_TIMED_EVENT_REQUIRED');
  const lock=LockService.getScriptLock();if(!lock.tryLock(0))return;
  const p=PropertiesService.getScriptProperties(),started=Date.now();let s=null,admitted=false,reserveHour=null;
- const r={kind:'LONGTERM',caller_revision:'IDLE_GATE_20261016',watchdog:isWatch,started_at_utc:new Date(started).toISOString(),fetch_calls:0,dispatch_calls:0,request_ms:[],reserved_fetch:0,deadline_ms:started+QLT1.reserveBody};
+ const r={kind:'LONGTERM',caller_revision:'PINNED_SCORE_20261016',watchdog:isWatch,started_at_utc:new Date(started).toISOString(),fetch_calls:0,dispatch_calls:0,request_ms:[],reserved_fetch:0,deadline_ms:started+QLT1.reserveBody};
  try{
   if(p.getProperty('QLT1_FAILURE_LATCH')){try{qltDelete_();}catch(e){r.trigger_cleanup_error=true;}r.decision='QLT1_FAILURE_LATCHED';return;}
-  s=qltLoad_(p);if(s.phase==='STOPPED'){try{qltDelete_();delete s.cleanup_error;}catch(e){s.cleanup_error=true;r.trigger_cleanup_error=true;}return;}
+  s=qltLoad_(p);
+  const recovery=p.getProperty('QLT1_SCORE_RECOVERY_20261016');
+  if(recovery){let saved=null;try{saved=JSON.parse(recovery);}catch(e){/* Reject incomplete or corrupt recovery metadata. */}
+   if(!saved||saved.phase!=='COMPLETE')throw new Error('QLT1_RECOVERY_INTERRUPTED');}
+  if(s.phase==='STOPPED'){try{qltDelete_();delete s.cleanup_error;}catch(e){s.cleanup_error=true;r.trigger_cleanup_error=true;}return;}
   if(started<s.last_clock_ms)throw new Error('QLT1_CLOCK_REVERSED');
   if(['POLL_RESERVED','DISPATCH_RESERVED'].includes(s.phase))throw new Error('QLT1_INTERRUPTED_EXECUTION');
   const row=qltHour_(s,started);
-  r.reserved_fetch=isWatch?0:s.inflight?2:4;
+  r.reserved_fetch=isWatch?0:s.inflight?3:4;
   // Keep another full execution available for the one-shot stop/emergency
   // notice, including when normal poll admission is denied.
   if(qltTotal_(s,1)+r.reserved_fetch>QLT1.maxFetch||qltTotal_(s,3)+2*QLT1.reserveBody>QLT1.maxBody)throw new Error('QLT1_ROLLING_BUDGET');
@@ -255,4 +288,48 @@ function testQuoteRescueLongTermNotification(){
   MailApp.sendEmail(QLT1.owner,'DOGE 独立补采：通知测试','这是一封长期补采异常通知测试邮件。尚未启动长期补采；正常程序、冻结规则和旧证据未改动。');
   p.setProperty('QLT1_MAIL_TEST','SENT');console.log(JSON.stringify({kind:'LONGTERM_MAIL_TEST',status:'SENT'}));
  }finally{lock.releaseLock();}
+}
+
+function resumeQuoteRescueLongTermAfterScoreFix(){
+ const lock=LockService.getScriptLock();if(!lock.tryLock(0))throw new Error('QLT1_BUSY');
+ const p=PropertiesService.getScriptProperties(),started=Date.now();let s=null,admitted=false,reserveHour=null;
+ const archive='QLT1_STOP_ARCHIVE_20261016',marker='QLT1_SCORE_RECOVERY_20261016';
+ const r={kind:'LONGTERM_RECOVERY',caller_revision:'PINNED_SCORE_20261016',started_at_utc:new Date(started).toISOString(),fetch_calls:0,dispatch_calls:0,request_ms:[],reserved_fetch:3,deadline_ms:started+QLT1.reserveBody};
+ try{
+  if(p.getProperty('QLT1_SCORE_FIX_READY')!=='PINNED_SCORE_20261016')throw new Error('QLT1_RECOVERY_NOT_REVIEWED');
+  if(p.getProperty(archive)||p.getProperty(marker)||p.getProperty('QLT1_FAILURE_LATCH')||qltOwned_().length)throw new Error('QLT1_RECOVERY_NOT_ALLOWED');
+  s=qltLoad_(p);
+  if(s.phase!=='STOPPED'||s.decision!=='QLT1_RESULT_NOT_SCORED'||!s.inflight)throw new Error('QLT1_RECOVERY_NOT_ALLOWED');
+  if(started<s.last_clock_ms)throw new Error('QLT1_CLOCK_REVERSED');
+  qltCredentials_(p,s,true);
+  if(MailApp.getRemainingDailyQuota()<1)throw new Error('QLT1_MAIL_NO_QUOTA');
+  const row=qltHour_(s,started);
+  const stopReserve=JSON.parse(p.getProperty('QLT1_STOP_NOTICE_BUDGET')||'null');
+  if(qltTotal_(s,4)>=QLT1.maxMail||!stopReserve||stopReserve.status!=='AVAILABLE'||stopReserve.reserved_ms!==QLT1.reserveBody)throw new Error('QLT1_RECOVERY_NO_NOTICE_BUDGET');
+  if(qltTotal_(s,1)+3>QLT1.maxFetch||qltTotal_(s,3)+2*QLT1.reserveBody>QLT1.maxBody)throw new Error('QLT1_ROLLING_BUDGET');
+  // Archive the exact stopped JSON before changing any durable runtime state.
+  p.setProperty(archive,p.getProperty(QLT1.stateKey));
+  p.setProperty(marker,JSON.stringify({phase:'RESERVED',run_id:s.inflight.id,started_at_utc:r.started_at_utc}));
+  reserveHour=row[0];row[1]+=3;row[3]+=QLT1.reserveBody;s.reserved_body_ms=QLT1.reserveBody;s.phase='POLL_RESERVED';s.last_clock_ms=started;
+  admitted=true;qltSave_(p,s);
+  qltMonitorRun_(p,s,r);
+  if(s.phase!=='RUNNING'||s.inflight)throw new Error('QLT1_RECOVERY_NOT_VERIFIED');
+  // Prior mail remains in the immutable archive. A future incident may notify.
+  s.notice=null;s.last_poll_ms=Date.now();s.decision='RESUMED_PINNED_SCORE_VERIFIED';qltSave_(p,s);
+  ScriptApp.newTrigger(QLT1.handler).timeBased().everyMinutes(5).create();
+  ScriptApp.newTrigger(QLT1.watchdog).timeBased().everyMinutes(15).create();
+  p.setProperty(marker,JSON.stringify({phase:'COMPLETE',resumed_at_utc:new Date(Date.now()).toISOString(),run_id:s.last_completed_run_id,score_ref:r.score_ref,score_blob_sha:r.score_blob_sha}));
+ }catch(e){
+  r.error_code=qltError_(e);
+  if(admitted){try{qltStop_(p,s,r.error_code,true);}catch(e2){qltLatchFailure_(p,s,'QLT1_PERSISTENCE_ERROR');}}
+  throw new Error(r.error_code);
+ }finally{
+  r.elapsed_ms=Date.now()-started;
+  if(admitted){
+   const row=s.budget.find(b=>b[0]===reserveHour);if(row){row[1]-=3-r.fetch_calls;row[3]+=Math.max(r.elapsed_ms,3000)-QLT1.reserveBody;}s.reserved_body_ms=0;
+   try{qltSave_(p,s);}catch(e){r.persistence_error=true;qltLatchFailure_(p,s,'QLT1_PERSISTENCE_ERROR');}
+   r.phase=s.phase;r.decision=s.decision;r.budget_fetch=qltTotal_(s,1);r.budget_dispatch=qltTotal_(s,2);r.budget_body_ms=qltTotal_(s,3);
+  }
+  console.log(JSON.stringify(r));lock.releaseLock();
+ }
 }
