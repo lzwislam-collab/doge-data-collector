@@ -46,7 +46,7 @@ Read-only replay of the existing **main-branch** `data/enhancement_sources_v1/ob
 | Raw news-source rows (including revisions) | 102 |
 | Unique publisher record keys | 100 |
 | First observed within 1h after publication | **3/100 = 3%** |
-| First observed within 6h | **30/100 = 30%** |
+| First observed within 6h | **27/100 = 27%** |
 | First observed within 24h | **59/100 = 59%** |
 | First observed more than 24h after publication | **41/100 = 41%** |
 | Distinct DOGE/Dogecoin/Elon-specific headlines captured | **0/100** |
