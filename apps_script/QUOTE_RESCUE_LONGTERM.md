@@ -38,8 +38,9 @@ dependencies of the new caller. Preserve the old trial states and failures.
 
 ## Limits and accounting
 
-Counters use hourly buckets including the oldest partially overlapping hour.
-This conservatively includes up to 25 hours and never resets at midnight.
+Counters use hourly buckets including the oldest partially overlapping hour
+plus one hour for executions spanning a bucket boundary. This conservatively
+includes up to 26 hours and never resets at midnight.
 Caps: 1,200 URL Fetch attempts, 48 dispatch intents and 30 minutes **internal**
 execution budget. Each invocation must reserve the full 6-minute execution
 allowance before HTTP or an expiry-warning mail; interruption retains that

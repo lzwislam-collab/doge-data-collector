@@ -26,9 +26,10 @@ function qltLoad_(p){
 }
 function qltHour_(s,now){
  const hour=Math.floor(now/3600000);
- // Keep the partially overlapping oldest hour: at most 25 hours, never a
- // midnight reset that could hide requests inside the last 24 hours.
- s.budget=s.budget.filter(b=>b[0]>=hour-24);
+ // Charge by execution-start hour; a six-minute execution can cross into
+ // the next hour. Retain that extra hour too (at most 26 hours), so no later
+ // request disappears while it is still inside the last 24 hours.
+ s.budget=s.budget.filter(b=>b[0]>=hour-25);
  let row=s.budget.find(b=>b[0]===hour);if(!row){row=[hour,0,0,0,0];s.budget.push(row);}return row;
 }
 function qltTotal_(s,column){return s.budget.reduce((n,b)=>n+b[column],0);}
@@ -63,6 +64,10 @@ function qltEmergency_(p,code){
  // Independent one-shot outbox preserves corrupt original state. Never resend
  // when an email result or persistence result is unknown.
  try{if(p.getProperty('QLT1_EMERGENCY_MAIL'))return;
+  let durable=null;try{durable=JSON.parse(p.getProperty(QLT1.stateKey)||'null');}catch(e){/* Preserve unreadable state. */}
+  if(durable&&durable.notice&&(['RESERVED','UNCERTAIN'].includes(durable.notice.status)||(durable.phase==='STOPPED'&&durable.notice.status==='SENT')))return;
+  if(durable&&Array.isArray(durable.budget)&&durable.budget.every(b=>Array.isArray(b)&&Number.isFinite(b[3]))
+   &&durable.budget.reduce((n,b)=>n+b[3],0)+QLT1.reserveBody>QLT1.maxBody)return;
   const reserve=JSON.parse(p.getProperty('QLT1_STOP_NOTICE_BUDGET')||'null');
   if(!reserve||reserve.status!=='AVAILABLE'||reserve.reserved_ms!==QLT1.reserveBody)return;
   p.setProperty('QLT1_STOP_NOTICE_BUDGET',JSON.stringify({status:'RESERVED',reserved_ms:QLT1.reserveBody}));
