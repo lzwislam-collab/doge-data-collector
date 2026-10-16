@@ -22,8 +22,8 @@ function fixture(opt={}){
   ScriptApp:{getProjectTriggers:()=>triggers.slice(),deleteTrigger:t=>{if(opt.failDelete)throw new Error('delete failed');triggers.splice(triggers.indexOf(t),1);},newTrigger:name=>({timeBased:()=>({everyMinutes:m=>({create:()=>{if(opt.failCreate===name)throw new Error('trigger create failed');const t=trigger(name);triggers.push(t);return t;}})})})},
   MailApp:{getRemainingDailyQuota:()=>opt.mailQuota??100,sendEmail:(to,subject,body)=>{mailAttempts.push({to,subject});if(opt.failMail)throw new Error('mail synthetic-secret');emails.push({to,subject,body});}},
   UrlFetchApp:{fetch:(url,options)=>{requests.push({url,options});opt.onFetch?.(url,options,{advance:ms=>{now+=ms;},props});if(opt.failFetch)throw new Error('network synthetic-secret');
-   const post=options.method==='post',code=post?(opt.postCode??200):(opt.getCode??200);
-   const text=post?(opt.postBody??JSON.stringify({workflow_run_id:12345})):url.includes('registry.csv')?registry:url.includes('scores.csv')?scores:/\/runs\/\d+$/.test(url)?JSON.stringify(run):JSON.stringify({workflow_runs:runs});
+   const post=options.method==='post',code=post?(opt.postCode??200):(opt.getCodeFor?.(url)??opt.getCode??200);
+   const text=post?(opt.postBody??JSON.stringify({workflow_run_id:12345})):url.includes('registry.csv')?registry:url.includes('scores.csv')?scores:/\/runs\/\d+$/.test(url)?JSON.stringify(run):(opt.runsBody??JSON.stringify({workflow_runs:runs}));
    return {getResponseCode:()=>code,getContentText:()=>text,getAllHeaders:()=>({'x-ratelimit-limit':'5000','x-ratelimit-remaining':String(opt.rateRemaining??4900)})};}}
  });
  vm.runInContext(live+'\n'+source,c);
@@ -41,7 +41,7 @@ test('completed run with scored target resumes without claiming raw attestation'
 test('failed workflow stops and emails owner once',()=>{const f=fixture();f.start();f.tick();f.setRun({status:'completed',conclusion:'failure'});f.advance(5*60000);f.tick();assert.equal(f.state().phase,'STOPPED');assert.equal(f.own().length,0);assert.equal(f.emails.length,1);assert.equal(f.emails[0].to,'lzwislam@gmail.com');assert(f.emails[0].body.includes('12345'));f.tick();f.watch();assert.equal(f.emails.length,1);});
 test('green run without a valid score stops instead of declaring capture success',()=>{const f=fixture();f.start();f.tick();f.setRun({status:'completed',conclusion:'success'});f.advance(5*60000);f.tick();assert.equal(f.state().phase,'STOPPED');assert.equal(f.state().decision,'QLT1_RESULT_NOT_SCORED');assert.equal(f.emails.length,1);});
 test('wrong run identity is rejected and cannot resume dispatch',()=>{const f=fixture();f.start();f.tick();f.setRun({path:'.github/workflows/normal.yml'});f.advance(5*60000);f.tick();assert.equal(f.state().phase,'STOPPED');assert.equal(f.requests.filter(r=>r.options.method==='post').length,1);});
-test('missing and existing scores are never dispatched or changed',()=>{const f=fixture();f.setScores('forecast_id,status,observed_at_utc,target_quote_utc\ndue,unscorable_missing_target_quote,,\n');f.start();f.tick();assert.equal(f.requests.length,3);assert.equal(f.state().phase,'RUNNING');assert.equal(f.state().decision,'SKIP_NO_OPEN_TARGET');});
+test('missing and existing scores are never dispatched or changed',()=>{const f=fixture();f.setScores('forecast_id,status,observed_at_utc,target_quote_utc\ndue,unscorable_missing_target_quote,,\n');f.start();f.tick();assert.equal(f.requests.length,2);assert.equal(f.state().phase,'RUNNING');assert.equal(f.state().decision,'SKIP_NO_OPEN_TARGET');});
 test('normal collector in progress is left alone',()=>{const f=fixture();f.setRuns([{path:'.github/workflows/okx_hourly_extreme_history.yml',head_branch:'main',status:'in_progress'}]);f.start();f.tick();assert.equal(f.requests.length,3);assert.equal(f.state().decision,'SKIP_EXISTING_RUN');});
 test('HTTP errors stop, redact secrets and notify once',()=>{const f=fixture({getCode:403});f.start();f.tick();assert.equal(f.state().phase,'STOPPED');assert.equal(f.own().length,0);assert.equal(f.emails.length,1);assert(!JSON.stringify([f.logs,f.emails,f.state()]).includes('synthetic-secret'));});
 test('network errors never log credentials or untrusted responses',()=>{const f=fixture({failFetch:true});f.start();f.tick();assert.equal(f.state().phase,'STOPPED');assert.equal(f.requests.length,1);assert(!JSON.stringify([f.logs,f.emails,f.state()]).includes('secret'));});
@@ -69,13 +69,50 @@ test('successful HTTP with invalid registry or inconsistent CSV stops safely',()
 test('completed normal score disappearing cannot trigger same target twice',()=>{const f=fixture();f.start();f.tick();f.setRun({status:'completed',conclusion:'success'});f.setScores('forecast_id,status,observed_at_utc,target_quote_utc\ndue,scored,2026-10-16T08:00:01Z,2026-10-16T08:00:00Z\n');f.advance(5*60000);f.tick();f.setScores('forecast_id,status\n');f.advance(5*60000);f.tick();assert.equal(f.state().decision,'SKIP_ALREADY_REQUESTED');assert.equal(f.requests.filter(r=>r.options.method==='post').length,1);});
 test('inflight run stuck beyond ten minutes stops without cancelling normal jobs',()=>{const f=fixture();f.start();f.tick();f.advance(11*60000);f.tick();assert.equal(f.state().decision,'QLT1_RUN_TIMEOUT');assert.equal(f.own().length,0);assert(f.requests.every(r=>r.options.method!=='delete'));});
 test('notification test is one-shot and starts no timers or collection',()=>{const f=fixture();f.c.testQuoteRescueLongTermNotification();assert.throws(()=>f.c.testQuoteRescueLongTermNotification());assert.equal(f.emails.length,1);assert.equal(f.own().length+f.requests.length,0);assert.equal(f.props.QLT1_MAIL_TEST,'SENT');});
-test('full day with healthy five-minute polling stays within conservative budget',()=>{const f=fixture();f.setScores('forecast_id,status\ndue,scored\n');f.start();for(let i=0;i<288;i++){f.advance(5*60000);f.tick();if(i%3===2)f.watch();}assert.equal(f.state().phase,'RUNNING');assert.equal(f.requests.length,864);assert.equal(f.emails.length,0);const body=f.state().budget.reduce((n,b)=>n+b[3],0);assert(body<=1260000);assert.equal(f.own().length,2);});
+test('full day with healthy five-minute polling stays within conservative budget',()=>{const f=fixture();f.setScores('forecast_id,status\ndue,scored\n');f.start();for(let i=0;i<288;i++){f.advance(5*60000);f.tick();if(i%3===2)f.watch();}assert.equal(f.state().phase,'RUNNING');assert.equal(f.requests.length,576);assert.equal(f.emails.length,0);const body=f.state().budget.reduce((n,b)=>n+b[3],0);assert(body<=1260000);assert.equal(f.own().length,2);});
 test('staggered targets use earliest cutoff after slow durable save',()=>{const f=fixture({onStore:(k,v,a)=>{if(k==='QLT1_STATE'&&JSON.parse(v).phase==='DISPATCH_RESERVED')a.advance(2*60000);}});f.setRegistry('forecast_id,issued_at_utc,target_utc\nold,2026-10-16T06:00:00Z,2026-10-16T07:41:00Z\nnew,2026-10-16T06:00:00Z,2026-10-16T07:55:00Z\n');f.start();f.tick();assert.equal(f.requests.filter(r=>r.options.method==='post').length,0);assert.equal(f.state().decision,'QLT1_TARGET_WINDOW_CLOSED');});
 test('failed expiry warning prevents all HTTP and is not resent under a new reason',()=>{const f=fixture({failMail:true});f.start();f.props.QLT1_DISPATCH_TOKEN_EXPIRES_UTC='2026-10-17T07:00:00Z';f.tick();assert.equal(f.requests.length,0);assert.equal(f.own().length,0);assert.equal(f.state().phase,'STOPPED');assert.equal(f.mailAttempts.length,1);});
 test('stopped callbacks retry only their own failed trigger cleanup',()=>{const options={getCode:403,failDelete:true},f=fixture(options);f.start();f.tick();assert.equal(f.state().phase,'STOPPED');assert.equal(f.own().length,2);const n=f.requests.length;options.failDelete=false;f.watch();assert.equal(f.own().length,0);assert.equal(f.triggers.length,1);assert.equal(f.requests.length,n);assert.equal(f.emails.length,1);});
 test('runtime admission rejection never sends unreserved uncharged email',()=>{const f=fixture();f.start();f.mutate(s=>s.budget=[[Math.floor(epoch/3600000),0,0,1440001,0]]);f.tick();assert.equal(f.mailAttempts.length,0);assert.equal(f.state().notice.status,'NO_RUNTIME_BUDGET');assert.equal(f.own().length,0);});
 test('unknown score status stops instead of appearing healthy',()=>{const f=fixture();f.setScores('forecast_id,status\ndue,unknown_status\n');f.start();f.tick();assert.equal(f.state().phase,'STOPPED');assert.equal(f.state().decision,'QLT1_SCORE_STATUS');assert.equal(f.requests.filter(r=>r.options.method==='post').length,0);});
 test('failed SENT persistence cannot duplicate an already reserved regular notice',()=>{const f=fixture({getCode:401,failStore:(k,v)=>k==='QLT1_STATE'&&JSON.parse(v).notice?.status==='SENT'});f.start();f.tick();assert.equal(f.mailAttempts.length,1);assert.equal(f.emails.length,1);assert.equal(f.own().length,0);});
-test('cross-hour execution remains charged until every request is older than 24 hours',()=>{let advanced=false;const f=fixture({onFetch:(u,o,a)=>{if(!advanced){a.advance(2*60000);advanced=true;}}});f.setTime(Date.parse('2026-10-16T08:59:00Z'));f.setScores('forecast_id,status\ndue,scored\n');f.start();f.tick();assert.equal(f.requests.length,3);f.setTime(Date.parse('2026-10-17T09:00:00Z'));f.tick();assert.equal(f.state().budget.reduce((n,b)=>n+b[1],0),6);});
-test('write-then-throw final save latches stop even when trigger deletion fails',()=>{let armed=false;const f=fixture({failDelete:true,onStore:(k,v,a)=>{if(armed&&k==='QLT1_STATE'&&JSON.parse(v).phase==='RUNNING'){a.props[k]=v;throw new Error('acknowledgement lost');}}});f.setScores('forecast_id,status\ndue,scored\n');f.start();armed=true;f.tick();assert.equal(f.requests.length,3);assert(f.props.QLT1_FAILURE_LATCH);f.tick();assert.equal(f.requests.length,3);assert.equal(f.state().phase,'STOPPED');});
+test('cross-hour execution remains charged until every request is older than 24 hours',()=>{let advanced=false;const f=fixture({onFetch:(u,o,a)=>{if(!advanced){a.advance(2*60000);advanced=true;}}});f.setTime(Date.parse('2026-10-16T08:59:00Z'));f.setScores('forecast_id,status\ndue,scored\n');f.start();f.tick();assert.equal(f.requests.length,2);f.setTime(Date.parse('2026-10-17T09:00:00Z'));f.tick();assert.equal(f.state().budget.reduce((n,b)=>n+b[1],0),4);});
+test('write-then-throw final save latches stop even when trigger deletion fails',()=>{let armed=false;const f=fixture({failDelete:true,onStore:(k,v,a)=>{if(armed&&k==='QLT1_STATE'&&JSON.parse(v).phase==='RUNNING'){a.props[k]=v;throw new Error('acknowledgement lost');}}});f.setScores('forecast_id,status\ndue,scored\n');f.start();armed=true;f.tick();assert.equal(f.requests.length,2);assert(f.props.QLT1_FAILURE_LATCH);f.tick();assert.equal(f.requests.length,2);assert.equal(f.state().phase,'STOPPED');});
+test('idle poll skips irrelevant authenticated run list and its failures',()=>{
+ const f=fixture({getCodeFor:u=>u.includes('/actions/')?401:200});
+ f.setScores('forecast_id,status\ndue,scored\n');f.start();f.tick();
+ assert.equal(f.state().phase,'RUNNING');assert.equal(f.state().decision,'SKIP_NO_OPEN_TARGET');
+ assert.equal(f.requests.length,2);assert(f.requests.every(r=>r.url.includes('.csv')&&r.options.method==='get'));
+ assert.equal(f.emails.length,0);assert.equal(f.state().budget.reduce((n,b)=>n+b[1],0),2);
+});
+test('candidate poll still queries real run guard before dispatch',()=>{
+ const f=fixture();f.start();f.tick();
+ assert.deepEqual(f.requests.map(r=>r.options.method),['get','get','get','post']);
+ assert(f.requests[2].url.endsWith('/actions/runs?branch=main&per_page=30'));
+ assert.equal(f.state().phase,'WAIT_RUN');assert.equal(f.state().inflight.id,12345);
+});
+test('deferred run guard authentication error stops before POST',()=>{
+ const f=fixture({getCodeFor:u=>u.includes('/actions/')?401:200});f.start();f.tick();
+ assert.equal(f.requests.length,3);assert.equal(f.state().phase,'STOPPED');
+ assert.equal(f.state().decision,'QLT1_READ_HTTP_401');assert.equal(f.own().length,0);assert.equal(f.emails.length,1);
+});
+test('malformed deferred run list fails closed without POST',()=>{
+ for(const runsBody of ['{}','{"workflow_runs":null}','{"workflow_runs":{}}']){
+  const f=fixture({runsBody});f.start();f.tick();
+  assert.equal(f.requests.length,3);assert.equal(f.state().phase,'STOPPED');
+  assert.equal(f.state().decision,'QLT1_RUN_SCHEMA');assert.equal(f.emails.length,1);
+ }
+});
+test('target expiring during deferred guard is skipped at fresh clock',()=>{
+ const f=fixture({onFetch:(u,o,a)=>{if(u.includes('/actions/runs?'))a.advance(2*60000);}});
+ f.setRegistry('forecast_id,issued_at_utc,target_utc\ndue,2026-10-16T06:50:00Z,2026-10-16T07:41:00Z\n');
+ f.start();f.tick();assert.equal(f.requests.length,3);assert.equal(f.state().phase,'RUNNING');
+ assert.equal(f.state().decision,'SKIP_NO_OPEN_TARGET');assert.equal(f.state().attempted.length,0);
+});
+test('target becoming open during CSV reads receives real guard',()=>{
+ const f=fixture({onFetch:(u,o,a)=>{if(u.includes('scores.csv'))a.advance(2*60000);}});
+ f.setRegistry('forecast_id,issued_at_utc,target_utc\ndue,2026-10-16T06:50:00Z,2026-10-16T08:01:00Z\n');
+ f.start();f.tick();assert.equal(f.requests.filter(r=>r.options.method==='post').length,1);
+ assert(f.requests[2].url.endsWith('/actions/runs?branch=main&per_page=30'));assert.equal(f.state().phase,'WAIT_RUN');
+});
 console.log(`${passed} passed, ${failed} failed; all platform effects synthetic.`);process.exitCode=failed?1:0;
