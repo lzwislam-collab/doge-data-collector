@@ -19,6 +19,13 @@ class EventResearchTests(unittest.TestCase):
         self.assertEqual(classify('DOGE payment approved','CRYPTO_NEWS')['wording'],'POSITIVE_WORDING')
         self.assertEqual(classify('ETF approval despite hack','CRYPTO_NEWS')['wording'],'MIXED')
         self.assertFalse(classify('Bitcoin rally','CRYPTO_NEWS')['critical_watch_only'])
+    def test_liquidations_are_leverage_stress_not_proven_forecast(self):
+        c=classify("Nearly $1 billion in crypto bets liquidated as bitcoin slides", "CRYPTO_NEWS")
+        self.assertEqual(c['primary_type'], 'LEVERAGE_STRESS')
+        self.assertEqual(c['market_direction'], 'UNKNOWN')
+    def test_official_news_source_not_auto_major_catalyst(self):
+        self.assertEqual(classify('Board appoints a new committee secretary', 'FED_NEWS')['primary_type'],'UNCLASSIFIED')
+        self.assertEqual(classify('Fed cuts interest rates', 'FED_NEWS')['primary_type'],'MACRO_POLICY')
     def test_unseen_future_cannot_enter_asof(self):
         x=event(seen='2026-10-16T05:01:00Z')
         self.assertEqual(build_report([x],T)['deduplicated_event_count'],0)
