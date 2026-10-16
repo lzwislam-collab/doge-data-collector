@@ -61,6 +61,30 @@ class EventResearchTests(unittest.TestCase):
         a=event();b=event(title='FED cuts interest rate',source='FED_NEWS',url='https://fed.gov/news',published='2026-10-16T04:30:00Z')
         b['observation_key']='event-2'
         self.assertEqual(build_report([a,b],T),build_report([b,a],T))
+    def test_old_backfilled_headline_never_becomes_live_risk_alert(self):
+        x=event(title='Dogecoin hack',seen='2026-10-16T04:59:00Z',published='2026-10-13T04:00:00Z')
+        r=build_report([x],T)
+        self.assertEqual(r['news_over_24h_not_timely'],1)
+        self.assertEqual(r['critical_watch_count'],0)
+        self.assertTrue(r['events'][0]['backfill_not_timely_for_1h'])
+    def test_timely_headline_is_watch_only_never_prediction(self):
+        x=event(seen='2026-10-16T04:59:00Z',published='2026-10-16T04:58:00Z')
+        r=build_report([x],T)
+        self.assertEqual(r['critical_watch_count'],1)
+        self.assertEqual(r['news_timely_within_1h'],1)
+        self.assertIsNone(r['prediction_direction'])
+        self.assertEqual(r['events'][0]['market_direction'],'UNKNOWN')
+    def test_revision_preserves_initial_sighting_for_latency(self):
+        a=event(title='Dogecoin hack',seen='2026-10-16T04:00:00Z',published='2026-10-16T03:59:00Z')
+        b=copy.deepcopy(a);b['title']='Dogecoin hacked';b['first_seen_utc']='2026-10-16T04:45:00Z';b['usable_from_utc']='2026-10-16T04:45:00Z'
+        r=build_report([a,b],T)
+        self.assertEqual(r['events'][0]['first_seen_utc'],'2026-10-16T04:00:00+00:00')
+        self.assertTrue(r['events'][0]['watch_now_by_timeliness'])
+    def test_late_visible_item_not_current_watch(self):
+        a=event(seen='2026-10-16T02:00:00Z',published='2026-10-16T01:59:00Z')
+        r=build_report([a],T)
+        self.assertEqual(r['critical_watch_count'],0)
+        self.assertEqual(r['news_timely_within_1h'],1)
     def test_canonical_url(self):
         self.assertEqual(canonical_url('https://EXAMPLE.com/a/?utm_campaign=zz&x=1'),'https://example.com/a?x=1')
 
