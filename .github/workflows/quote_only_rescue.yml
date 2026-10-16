@@ -1,0 +1,62 @@
+name: Independent DOGE target quote rescue
+on:
+  workflow_dispatch:
+    inputs:
+      expected_ids_json:
+        description: JSON array witnessing still-open unscored IDs; stale requests skip; captures current open batch
+        required: true
+        type: string
+  pull_request:
+    paths: ['quote_only_rescue.py', 'test_quote_only_rescue.py', 'apps_script/quote_rescue_live.gs', 'apps_script/test_quote_rescue_live.cjs', '.github/workflows/quote_only_rescue.yml']
+  push:
+    branches: [main]
+    paths: ['quote_only_rescue.py', 'test_quote_only_rescue.py', 'apps_script/quote_rescue_live.gs', 'apps_script/test_quote_rescue_live.cjs', '.github/workflows/quote_only_rescue.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest test_quote_only_rescue test_quote_evidence_v2 test_publish_forward_evidence -v
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node apps_script/test_quote_rescue_live.cjs
+  rescue:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions:
+      contents: write
+    concurrency:
+      group: okx-hourly-extreme-history
+      cancel-in-progress: false
+      queue: max # joining this group must not replace a pending normal collector
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main # acquired shared lock first; do not capture from the dispatch head
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Capture only a still-open TARGET and verify persisted raw evidence
+        env:
+          EXPECTED_IDS_JSON: ${{ inputs.expected_ids_json }}
+        run: python quote_only_rescue.py --expected-ids-json "$EXPECTED_IDS_JSON"
+      - name: Retain compact independent result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quote-rescue-result-${{ github.run_id }}
+          path: quote_rescue_result.json
+          if-no-files-found: ignore
+          retention-days: 3
