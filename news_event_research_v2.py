@@ -91,7 +91,9 @@ def build_report(rows: list[dict], asof: datetime, *, max_age_hours: float = 24.
             old=dedup.get(key)
             if old is not None and usable<=old['usable']:
                 continue
-            dedup[key]={"source":source,"title":title,"url":url,"usable":usable,"first_seen":seen,
+            # Later headline revisions retain the first observation for lag accounting.
+            original_first_seen=min(seen,old['first_seen']) if old is not None else seen
+            dedup[key]={"source":source,"title":title,"url":url,"usable":usable,"first_seen":original_first_seen,
                         "published":published,"raw_sha256":row['raw_sha256'],
                         "revision_of_sha256":row.get('revision_of_sha256'),"observation_key":key[1]}
             if source not in latest_seen or usable>latest_seen[source]:latest_seen[source]=usable
@@ -103,12 +105,28 @@ def build_report(rows: list[dict], asof: datetime, *, max_age_hours: float = 24.
         key=r['url'];old=by_url.get(key)
         if old is None or (r['usable'],r['source']) < (old['usable'],old['source']):by_url[key]=r
     events=[]
+    delay_counts=Counter()
     for r in sorted(by_url.values(), key=lambda e:(e['usable'],e['url'])):
         c=classify(r['title'],r['source'])
+        # Publication lag is a data-quality gate, NOT a price-impact estimate.
+        # Do not mistake days-old RSS imports for actionable one-hour catalysts.
+        lag_h=(r['first_seen']-r['published']).total_seconds()/3600
+        if lag_h < 0:
+            errors['negative_publication_lag']+=1
+            continue
+        bucket=('within_1h' if lag_h<=1 else 'within_6h' if lag_h<=6
+                else 'within_24h' if lag_h<=24 else 'over_24h')
+        delay_counts[bucket]+=1
+        # Only a promptly observed, still-recent item can enter today's risk watch.
+        watch_now=(c['critical_watch_only'] and lag_h<=1
+                   and (asof-r['first_seen'])<=timedelta(hours=1))
         events.append({"event_id":hashlib.sha256(r['url'].encode()).hexdigest(),
           "first_usable_utc":r['usable'].isoformat(),"source":r['source'],
           "source_key":r['observation_key'],"raw_sha256":r['raw_sha256'],
           "published_at_utc":r['published'].isoformat(),"title":r['title'],
+          "first_seen_utc":r['first_seen'].isoformat(),"publication_lag_hours":round(lag_h,3),
+          "publication_lag_bucket":bucket,"backfill_not_timely_for_1h":lag_h>1,
+          "watch_now_by_timeliness":bool(watch_now),
           **c})
     ages={s:round((asof-t).total_seconds()/3600,3) for s,t in sorted(latest_seen.items())}
     stale=sorted(s for s in expected_sources if s not in latest_seen or ages[s]>max_age_hours)
@@ -116,7 +134,12 @@ def build_report(rows: list[dict], asof: datetime, *, max_age_hours: float = 24.
       "research_only":True,"prediction_direction":None,"production_model_changed":False,
       "news_sources":sorted(expected_sources),"source_age_hours":ages,"missing_or_stale_sources":stale,
       "input_news_rows":scanned,"distinct_provider_records":len(dedup),"deduplicated_event_count":len(events),
-      "critical_watch_count":sum(bool(e['critical_watch_only']) for e in events),
+      "critical_watch_count":sum(bool(e['watch_now_by_timeliness']) for e in events),
+      "critical_event_mentions_all_history":sum(bool(e['critical_watch_only']) for e in events),
+      "news_publication_lag_buckets":dict(sorted(delay_counts.items())),
+      "news_timely_within_1h":delay_counts['within_1h'],
+      "news_over_24h_not_timely":delay_counts['over_24h'],
+      "source_health_not_verified_by_new_headline_recency":True,
       "negative_wording_count":sum(e['wording']=='NEGATIVE_WORDING' for e in events),
       "positive_wording_count":sum(e['wording']=='POSITIVE_WORDING' for e in events),
       "rejected_rows":dict(errors),"coverage_sufficient_for_directional_claim":False,
