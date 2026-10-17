@@ -1,13 +1,13 @@
 # DOGE 前瞻验证与现货纸面收益
 
-截止 UTC：2026-10-16T06:04:52.102608+00:00
+截止 UTC：2026-10-17T06:00:25.822752+00:00
 
 运行状态：ok；90%覆盖率、70%准确率与经济优势均须单独验收。
 
 |期限|正式到期|有效原始报价|报价覆盖率|发行覆盖率|验收|
 |---|---:|---:|---:|---:|---|
-|1h|96|92|95.83333333333333|95.1|INSUFFICIENT_EVIDENCE|
-|24h|4|4|100.0|100.0|INSUFFICIENT_EVIDENCE|
+|1h|120|116|96.66666666666667|96.03|INSUFFICIENT_EVIDENCE|
+|24h|5|5|100.0|100.0|INSUFFICIENT_EVIDENCE|
 
 所有基准使用同一组正式预测和同一报价；缺失仍进入覆盖率分母。
 逐模型准确率、配对胜负、首次提交凭据和输入哈希见 JSON。
@@ -15,13 +15,13 @@
 ## 固定成本前瞻现货纸面验证
 
 {
-  "completed_intervals": 4,
+  "completed_intervals": 5,
   "blocked_forecast_id": null,
   "all_selected_intervals_complete": true,
-  "strategy_net_return_pct": 1.0015793179639632,
-  "buy_hold_net_return_pct": -6.800754948766197,
+  "strategy_net_return_pct": 0.25224953005784645,
+  "buy_hold_net_return_pct": -7.21425911709801,
   "cash_net_return_pct": 0,
-  "strategy_checkpoint_max_drawdown_pct": 1.3211213656123877,
+  "strategy_checkpoint_max_drawdown_pct": 2.0532190585122123,
   "intervals": [
     {
       "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1791759600000_24h",
@@ -42,6 +42,11 @@
       "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792018800000_24h",
       "entry_utc": "2026-10-15T00:10:46.805652+00:00",
       "exit_utc": "2026-10-16T00:34:17.568000+00:00"
+    },
+    {
+      "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792105200000_24h",
+      "entry_utc": "2026-10-16T00:34:27.425908+00:00",
+      "exit_utc": "2026-10-17T00:36:46.962000+00:00"
     }
   ],
   "economic_edge_validated": false,
@@ -49,7 +54,7 @@
   "drawdown_between_checkpoints_unmeasured": true,
   "strategy_rule": "24h first UTC-day forecast; UP long then liquidate, DOWN cash; cash between intervals; stop at first missing or overlapping interval",
   "effective_from_utc": "2026-10-12T00:00:00+00:00",
-  "registered_daily_intervals": 5,
+  "registered_daily_intervals": 6,
   "missing_issuance_days": 0
 }
 
