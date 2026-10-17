@@ -4,8 +4,8 @@
 
 独立版本：DOGE_PLUS_EVIDENCE_V1_0_20261012；系统登记：registered_evidence_only；数据：data/plus_evidence_v1_0。
 旧SPOT_PLUS_v0.1、V1诊断、冻结V2及预发行补充记录分别保留。旧收益/胜率不升级或合并为本版本成绩。
-报告统一观察时点UTC：2026-10-17T10:20:18.850664+00:00；各来源原始截止仍分别列示。
-来源版本清单：[data/plus_evidence_v1_0/sources/manifests/20261017T102019567183Z_354498c18b674f2b972cfcf4b248b890.json](../data/plus_evidence_v1_0/sources/manifests/20261017T102019567183Z_354498c18b674f2b972cfcf4b248b890.json)。
+报告统一观察时点UTC：2026-10-17T10:54:20.275736+00:00；各来源原始截止仍分别列示。
+来源版本清单：[data/plus_evidence_v1_0/sources/manifests/20261017T105420885549Z_f5eba34f885f441592a7209960ae9d19.json](../data/plus_evidence_v1_0/sources/manifests/20261017T105420885549Z_f5eba34f885f441592a7209960ae9d19.json)。
 外部保留验证：NOT_CONFIGURED；independent_retention_verified=False。
 公开后盘口采样：captured；错误：无。
 
