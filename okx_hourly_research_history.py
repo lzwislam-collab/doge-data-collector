@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Bounded OKX 1H history backfill for hourly crash research; independent from live collector."""
-import csv,io,json,math,os,time,urllib.parse,urllib.request
+import csv,io,json,math,os,time,uuid,urllib.parse,urllib.request
 from datetime import datetime,timezone,timedelta
 from pathlib import Path
 import stored_history_integrity as stored
@@ -8,6 +8,7 @@ ROOT=Path(__file__).resolve().parent
 BASE=ROOT/'data/hourly_research'
 BASE.mkdir(parents=True,exist_ok=True)
 DATA=BASE/'ohlc.csv'
+REFRESH_RECEIPTS=ROOT/'publication-refresh-output'
 SYMBOLS=('DOGE-USDT','BTC-USDT','ETH-USDT')
 COLUMNS=('symbol','open_utc_ms','open','high','low','close','volume_base','first_ingested_utc','source')
 HOUR=3600000
@@ -18,21 +19,21 @@ API='https://www.okx.com/api/v5/market/history-candles'
 def iso(ms):return datetime.fromtimestamp(ms/1000,timezone.utc).isoformat()
 def atomic(p,s):
  t=p.with_name(p.name+'.tmp');t.write_text(s,encoding='utf-8');os.replace(t,p)
-def request(symbol,cursor=None):
+def request(symbol,cursor=None,*,attempts=3,timeout=24):
  params={'instId':symbol,'bar':'1H','limit':'100'}
  if cursor is not None:params['after']=str(cursor)
  url=API+'?'+urllib.parse.urlencode(params)
  req=urllib.request.Request(url,headers={'Accept':'application/json','User-Agent':'DOGE-hourly-extreme-research/1.0'})
  last=None
- for attempt in range(3):
+ for attempt in range(attempts):
   try:
-   with urllib.request.urlopen(req,timeout=24) as resp:obj=json.load(resp)
+   with urllib.request.urlopen(req,timeout=timeout) as resp:obj=json.load(resp)
    if obj.get('code')!='0' or not isinstance(obj.get('data'),list):
     raise ValueError('OKX reply code='+str(obj.get('code'))+' '+str(obj.get('msg')))
    return obj['data']
   except Exception as e:
    last=e
-   if attempt<2:time.sleep(1+attempt*2)
+   if attempt<attempts-1:time.sleep(1+attempt*2)
  raise RuntimeError('OKX hourly API failed: '+type(last).__name__+': '+str(last)[:100])
 def parse(symbol,record,captured,now):
  if len(record)<9 or str(record[8])!='1':return None
@@ -67,7 +68,69 @@ def assess(rows):
  if len({per[s]['last_confirmed_start_utc'] for s in SYMBOLS})>1:
   raise ValueError('latest 1H source timestamp mismatched across symbols')
  return per
+def publication_refresh(rows,clock,fetch):
+ """At most one recent page per stale symbol; never change caller's rows."""
+ candidate=dict(rows);now=clock();wanted=(now//HOUR-1)*HOUR;added=0
+ for sym in SYMBOLS:
+  if (sym,wanted) in candidate:continue
+  response=fetch(sym);captured=clock()
+  for raw in response:
+   row=parse(sym,raw,iso(captured),captured)
+   if row is None:continue
+   key=(sym,int(row['open_utc_ms']))
+   if key in candidate:stored.same_candle(candidate[key],row)
+   else:candidate[key]=row;added+=1
+ sealed=clock();required=(sealed//HOUR-1)*HOUR
+ if any((sym,required) not in candidate for sym in SYMBOLS):
+  raise ValueError('publication source stale at final clock; bounded refresh exhausted')
+ return candidate,added,sealed
+
+def save_refresh_receipt(status):
+ REFRESH_RECEIPTS.mkdir(parents=True,exist_ok=True)
+ path=REFRESH_RECEIPTS/(uuid.uuid4().hex+'.json')
+ with path.open('x',encoding='utf-8') as stream:
+  stream.write(json.dumps(status,ensure_ascii=False,indent=2)+'\n')
+ return path
+
+def run_publication_refresh():
+ status={'schema_version':1,'status':'error','research_only':True,
+  'mode':'BOUNDED_PRE_PUBLICATION_REFRESH','started_utc':datetime.now(timezone.utc).isoformat(),
+  'page_budget_per_symbol':0,'inserted':0,'errors':[],
+  'per_symbol':{},'archive_complete':False,'intended_oldest_utc':iso(OLDEST_TARGET),
+  'source':'OKX public history-candles, 1H, confirm=1',
+  'no_pre_event_real_time_alert_claim':True}
+ try:
+  rows,added,at=publication_refresh(read_old(),lambda:int(time.time()*1000),
+   lambda sym:request(sym,attempts=1,timeout=8))
+  stats=assess(rows)
+  # This gate only checks fresh stored OHLCV, never forecast/publication eligibility.
+  if (int(time.time()*1000)//HOUR-1)*HOUR!=(at//HOUR-1)*HOUR:
+   raise ValueError('publication clock crossed during validation')
+  buf=io.StringIO();writer=csv.DictWriter(buf,fieldnames=COLUMNS);writer.writeheader()
+  writer.writerows(rows[k] for k in sorted(rows))
+  # Recheck after serialization, immediately before the atomic data write.
+  if (int(time.time()*1000)//HOUR-1)*HOUR!=(at//HOUR-1)*HOUR:
+   raise ValueError('publication clock crossed during serialization')
+  atomic(DATA,buf.getvalue())
+  if (int(time.time()*1000)//HOUR-1)*HOUR!=(at//HOUR-1)*HOUR:
+   raise ValueError('publication clock crossed during data write; original rows preserved')
+  status.update(status='ok',inserted=added,quality={'symbols':stats,'duplicate_keys':0},
+   freshness_checked_at_utc=iso(at),required_closed_start_utc=iso((at//HOUR-1)*HOUR),
+   archive_complete=all(datetime.fromisoformat(stats[s]['earliest_utc']).timestamp()*1000<=OLDEST_TARGET for s in SYMBOLS))
+  status['per_symbol']={s:{'backfill_pages':0,'latest_confirmed_start_utc':stats[s]['last_confirmed_start_utc']} for s in SYMBOLS}
+  status['limitations']=['Current OHLCV freshness is not original prediction/publication proof',
+   'Original ingestion times and historical OHLCV are preserved; no historical PIT claim']
+  if not status['archive_complete']:status['status']='partial_backfill'
+ except Exception as exc:
+  status['errors'].append(type(exc).__name__+': '+str(exc)[:380])
+ status['ended_utc']=datetime.now(timezone.utc).isoformat()
+ save_refresh_receipt(status)
+ atomic(BASE/'latest.json',json.dumps(status,ensure_ascii=False,indent=2)+'\n')
+ print(json.dumps(status),flush=True)
+ return 0 if status['status'] in ('ok','partial_backfill') else 1
+
 def run():
+ if os.getenv('DOGE_HOURLY_PUBLICATION_REFRESH')=='1':return run_publication_refresh()
  now=int(time.time()*1000);start=datetime.now(timezone.utc).isoformat()
  status={'schema_version':1,'status':'error','started_utc':start,
   'source':'OKX public history-candles, 1H, confirm=1',
