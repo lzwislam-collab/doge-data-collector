@@ -10,6 +10,7 @@ import os
 import re
 import subprocess
 import zipfile
+from bisect import bisect_left
 from datetime import datetime,timedelta,timezone
 from pathlib import Path
 from urllib.request import Request,urlopen
@@ -109,6 +110,46 @@ def package(objects,head,at):
     return stream.getvalue()
 
 
+def restore_source(current,reference):
+    """Reconstruct original bytes, never reserialize historical CSV values."""
+    if reference.get('source_path')!='data/hourly_research/ohlc.csv':raise ValueError('unsafe source reference')
+    if 'prefix_bytes' in reference:
+        count=reference['prefix_bytes']
+        if isinstance(count,bool) or not isinstance(count,int) or not 0<count<=len(current):raise ValueError('invalid source prefix')
+        raw=current[:count]
+    else:
+        pieces=[];end=0
+        for start,count in reference['byte_ranges']:
+            if (any(isinstance(x,bool) or not isinstance(x,int) for x in (start,count))
+                or start<end or count<=0 or start+count>len(current)):raise ValueError('invalid source byte range')
+            pieces.append(current[start:start+count]);end=start+count
+        raw=b''.join(pieces)
+    if not raw or hashlib.sha256(raw).hexdigest()!=reference['sha256']:raise ValueError('source reconstruction hash mismatch')
+    return raw
+
+
+def source_reference(current,original):
+    """Reuse exact line ranges when sorted symbol appends break whole-file prefixes."""
+    reference={'source_path':'data/hourly_research/ohlc.csv','sha256':hashlib.sha256(original).hexdigest()}
+    if current.startswith(original):
+        reference['prefix_bytes']=len(original)
+    else:
+        positions={};offset=0
+        for line in current.splitlines(keepends=True):
+            positions.setdefault(line,[]).append(offset);offset+=len(line)
+        ranges=[];end=0
+        for line in original.splitlines(keepends=True):
+            candidates=positions.get(line,[]);i=bisect_left(candidates,end)
+            if i==len(candidates):return None
+            start=candidates[i]
+            if ranges and start==end:ranges[-1][1]+=len(line)
+            else:ranges.append([start,len(line)])
+            end=start+len(line)
+        reference['byte_ranges']=ranges
+    restore_source(current,reference)
+    return reference
+
+
 def run(upload=False):
     frozen_bundle.guard()
     now=datetime.now(timezone.utc);rows=derivatives.read(ROOT);failures=derivatives.read_failures(ROOT)
@@ -167,8 +208,9 @@ def run(upload=False):
                 original=git('show',source_commit+':data/hourly_research/ohlc.csv')
                 if hashlib.sha256(original).hexdigest()!=event['input_source_sha256']:raise ValueError('event input bytes changed')
                 if shadow.frame_from_csv(original,shadow.utc(event['issued_at_utc']))!=event['frame']:raise ValueError('event frame source differs')
-                if current_source.startswith(original):
-                    prefixes[source_commit]={'source_path':'data/hourly_research/ohlc.csv','prefix_bytes':len(original),'sha256':event['input_source_sha256']}
+                reference=source_reference(current_source,original)
+                if reference is not None:
+                    prefixes[source_commit]=reference
                 else:objects['input_sources/'+source_commit+'/ohlc.csv']=original
     objects['input_source_prefixes.json']=canon(prefixes)
     if sum(len(raw) for raw in objects.values())>retention.LIMIT:raise ValueError('uncompressed evidence exceeds cap')

@@ -1,5 +1,5 @@
 """Opt-in OSS BucketWorm daily inventory custody, never historical PIT approval."""
-import base64, hashlib, json, os, re, io, zipfile, argparse, urllib.request, subprocess
+import base64, hashlib, json, os, re, io, zipfile, argparse, urllib.request, subprocess, tempfile, shutil
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
@@ -10,6 +10,9 @@ BUCKET='doge-evidence-1379992038848464-cn'
 ENDPOINT='https://oss-cn-hangzhou.aliyuncs.com'
 PREFIX='doge/evidence/'
 LIMIT=256*1024*1024
+# Transport container budget is separate from the unchanged per-object cap.
+# It matches the existing maximum extracted artifact size and is streamed to disk.
+ARTIFACT_LIMIT=1024*1024*1024
 
 def digest(raw):return hashlib.sha256(raw).hexdigest()
 def utc(value):
@@ -70,9 +73,9 @@ def upload_one(bucket,raw,extension,lock,now=None):
 
 def extract_artifact(raw,destination):
     destination=Path(destination).resolve()
-    with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+    with zipfile.ZipFile(io.BytesIO(raw) if isinstance(raw,bytes) else raw) as archive:
         entries=archive.infolist();names=[e.filename for e in entries]
-        if len(names)!=len(set(names)) or sum(e.file_size for e in entries)>1024*1024*1024:
+        if len(names)!=len(set(names)) or sum(e.file_size for e in entries)>ARTIFACT_LIMIT:
             raise ValueError('duplicate paths or archive exceeds cap')
         for entry in entries:
             name=entry.filename
@@ -83,9 +86,10 @@ def extract_artifact(raw,destination):
             if not path.resolve().is_relative_to(destination):raise ValueError('artifact escape')
             if not entry.is_dir():
                 path.parent.mkdir(parents=True,exist_ok=True)
-                with path.open('xb') as f:f.write(archive.read(entry))
+                with archive.open(entry) as source,path.open('xb') as target:
+                    shutil.copyfileobj(source,target,length=1024*1024)
 
-def github(path,binary=False):
+def github_response(path):
     # Never forward Authorization across artifact-download redirects.
     class Redirect(urllib.request.HTTPRedirectHandler):
         def redirect_request(self,req,fp,code,msg,headers,newurl):
@@ -95,10 +99,35 @@ def github(path,binary=False):
             return redirected
     url='https://api.github.com/repos/lzwislam-collab/doge-data-collector'+path
     headers={'Authorization':'Bearer '+os.environ['GITHUB_TOKEN'],'Accept':'application/vnd.github+json','User-Agent':'DOGE-OSS-retention'}
-    with urllib.request.build_opener(Redirect()).open(urllib.request.Request(url,headers=headers),timeout=90) as response:
+    return urllib.request.build_opener(Redirect()).open(urllib.request.Request(url,headers=headers),timeout=90)
+
+def github(path,binary=False):
+    with github_response(path) as response:
         raw=response.read(256*1024*1024+1)
     if len(raw)>256*1024*1024:raise ValueError('GitHub response exceeds cap')
     return raw if binary else json.loads(raw)
+
+def download_artifact(artifact,destination):
+    """Stream a verified outer ZIP without relaxing any stored evidence cap."""
+    size=artifact.get('size_in_bytes');expected=artifact.get('digest','').removeprefix('sha256:')
+    if (isinstance(size,bool) or not isinstance(size,int) or not 0<size<=ARTIFACT_LIMIT
+        or not re.fullmatch('[a-f0-9]{64}',expected)):
+        raise ValueError('invalid artifact size or digest')
+    destination=Path(destination);created=False;count=0;hasher=hashlib.sha256()
+    try:
+        with destination.open('xb') as target:
+            created=True
+            with github_response('/actions/artifacts/'+str(int(artifact['id']))+'/zip') as response:
+                for chunk in iter(lambda:response.read(1024*1024),b''):
+                    count+=len(chunk)
+                    if count>size:raise ValueError('artifact transport exceeds declared size')
+                    target.write(chunk);hasher.update(chunk)
+            if count!=size or hasher.hexdigest()!=expected:
+                raise ValueError('artifact transport size or digest mismatch')
+        return destination
+    except Exception:
+        if created:destination.unlink(missing_ok=True)
+        raise
 
 def stage(root,force=False):
     root=Path(root).resolve();base=root/'data/pit_retention_preparation_v1'
@@ -122,10 +151,11 @@ def stage(root,force=False):
         run['path']!='.github/workflows/okx_hourly_extreme_history.yml' or
         artifact.get('digest','').removeprefix('sha256:')!=marker['artifact_archive_sha256']):
         raise ValueError('source artifact provenance mismatch')
-    raw=github('/actions/artifacts/'+str(artifact['id'])+'/zip',True)
-    if digest(raw)!=marker['artifact_archive_sha256']:raise ValueError('artifact transport digest mismatch')
     stage_root=root/'oss-inventory-stage';destination=stage_root/'data/pit_retention_preparation_v1'
-    destination.mkdir(parents=True,exist_ok=True);extract_artifact(raw,destination)
+    destination.mkdir(parents=True,exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='oss-artifact-',dir=root) as temporary:
+        archive=download_artifact(artifact,Path(temporary)/'inventory.zip')
+        extract_artifact(archive,destination)
     copied=json.loads((destination/'latest.json').read_bytes())
     if copied['bundle_sha256']!=sha:raise ValueError('artifact inventory mismatch')
     import pit_retention_preparation as pit
