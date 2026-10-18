@@ -1,14 +1,14 @@
 {
   "schema_version": 2,
   "status": "ok",
-  "evaluated_utc": "2026-10-18T07:54:25.271638+00:00",
+  "evaluated_utc": "2026-10-18T08:21:08.727700+00:00",
   "rule_version": "V4.2_scoring_only_v1",
   "legacy_watch_rows_unmodified": true,
   "horizon": "event candle START >= issued_at + 1h AND < issued_at + 12h; evaluate only after each eligible candle closes",
   "score_window_lead_min_hours": 1,
   "alarm_cooldown_hours": 12,
   "event_cluster_hours": 12,
-  "registered": 169,
+  "registered": 170,
   "scored": [
     {
       "watch_id": "shock_watch_rule_frozen_20261011_v1_1791680400000",
@@ -1725,14 +1725,20 @@
       "alert": false,
       "realized_event": false,
       "event_starts_utc": []
+    },
+    {
+      "watch_id": "shock_watch_rule_frozen_20261011_v1_1792260000000",
+      "issued_at_utc": "2026-10-17T19:04:23.952123+00:00",
+      "signal_hour_start_utc": "2026-10-17T18:00:00+00:00",
+      "target_first_hour_start_utc": "2026-10-17T21:00:00+00:00",
+      "target_end_exclusive_hour_start_utc": "2026-10-18T08:00:00+00:00",
+      "last_hour_required_utc": "2026-10-18T07:00:00+00:00",
+      "alert": false,
+      "realized_event": false,
+      "event_starts_utc": []
     }
   ],
   "pending": [
-    {
-      "watch_id": "shock_watch_rule_frozen_20261011_v1_1792260000000",
-      "reason": "awaiting complete forward target candle",
-      "last_required_utc": "2026-10-18T07:00:00+00:00"
-    },
     {
       "watch_id": "shock_watch_rule_frozen_20261011_v1_1792263600000",
       "reason": "awaiting complete forward target candle",
@@ -1792,10 +1798,15 @@
       "watch_id": "shock_watch_rule_frozen_20261011_v1_1792303200000",
       "reason": "awaiting complete forward target candle",
       "last_required_utc": "2026-10-18T19:00:00+00:00"
+    },
+    {
+      "watch_id": "shock_watch_rule_frozen_20261011_v1_1792306800000",
+      "reason": "awaiting complete forward target candle",
+      "last_required_utc": "2026-10-18T20:00:00+00:00"
     }
   ],
   "quarantined": [],
-  "scored_count": 156,
+  "scored_count": 157,
   "pending_count": 13,
   "quarantined_count": 0,
   "active_alerts": 1,
