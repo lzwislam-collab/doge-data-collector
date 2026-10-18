@@ -15,6 +15,8 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 REPO='lzwislam-collab/doge-data-collector'
+WATCH_LOOKAHEAD_SECONDS=300
+MAX_WAIT_SECONDS=900
 TRACKS={
  'original18':('data/learned_shadow_v1','config/learned_shadow_v1.json','.github/workflows/learned_shadow_v1.yml'),
  'r2':('data/phase2_forward_v2','config/phase2_forward_v2.json','.github/workflows/phase2_forward_audit_v2.yml'),
@@ -33,6 +35,8 @@ def watch_targets(root,now,budget):
    raw=path.read_bytes();e=json.loads(raw)
    if track=='r2' and (e.get('cohort')!='formal' or not e.get('included_in_formal_statistics')):continue
    target=utc(e['target_utc']);deadline=target+window
+   if track=='original18':
+    deadline=min(deadline,utc(e['slot_utc'])+timedelta(hours=p['slot_steps_hours'][str(e['horizon_hours'])]))
    if target<=now+timedelta(seconds=budget) and now<deadline:
     result.append({'track':track,'event_id':e['event_id'],'target':target.isoformat(),'deadline':deadline.isoformat(),'event_raw':raw})
  return result
@@ -53,16 +57,25 @@ def target_witnessed(w,score_raw,runs,read_at):
   except (KeyError,ValueError,TypeError):continue
  return False
 
-def wait_for_witness(watch,probe,*,budget=300,interval=15,monotonic=time.monotonic,sleep=time.sleep):
- if not 0<budget<=300 or interval<=0:raise ValueError('bounded positive wait required')
+def wait_budget(watch,now):
+ # Conservative for mixed targets: never wait past the first original close.
+ # This limits report freshness waiting, never extends scoring eligibility.
+ return min(MAX_WAIT_SECONDS,max(0,min((utc(w['deadline'])-now).total_seconds() for w in watch))) if watch else 0
+
+def wait_for_witness(watch,probe,*,budget=MAX_WAIT_SECONDS,interval=15,monotonic=time.monotonic,sleep=time.sleep,progress=None):
+ if not 0<=budget<=MAX_WAIT_SECONDS or interval<=0:raise ValueError('bounded positive wait required')
  out={'status':'NO_PENDING_TARGET','attempts':0,'pending':[w['event_id'] for w in watch],
       'eligibility_authority':False,'dispatch_performed':False}
- if not watch:return out
  started=monotonic();last=None
+ def snapshot(status):
+  out.update(status=status,budget_seconds=budget,elapsed_seconds=monotonic()-started)
+  if progress:progress(dict(out))
+  return out
+ if not watch:return snapshot('NO_PENDING_TARGET')
  while True:
   remaining=budget-(monotonic()-started)
   if remaining<=0:
-   out['status']='TIMEOUT';return out
+   return snapshot('TIMEOUT')
   out['attempts']+=1
   try:
    last=probe(watch,remaining)
@@ -70,16 +83,17 @@ def wait_for_witness(watch,probe,*,budget=300,interval=15,monotonic=time.monoton
    out.update(head_sha=last['head_sha'],pending=last['pending'])
   except TimeoutError:
    out.update(status='TIMEOUT',error_type='TimeoutError')
-   return out
+   return snapshot('TIMEOUT')
   except Exception as exc:
    out.update(status='ERROR',error_type=type(exc).__name__)
    # Do not emit a checkout ref on a remote read/integrity failure.
    out.pop('head_sha',None)
-   return out
+   return snapshot('ERROR')
   if monotonic()-started>=budget:
-   out['status']='TIMEOUT';return out
+   return snapshot('TIMEOUT')
   if not out['pending']:
-   out['status']='READY';return out
+   return snapshot('READY')
+  snapshot('WAITING')
   sleep(min(interval,max(0,budget-(monotonic()-started))))
 
 class Reader:
@@ -114,16 +128,20 @@ class Reader:
 
 def save_result(path,result):
  path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
- path.write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
+ temporary=path.with_name(path.name+'.tmp')
+ temporary.write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
+ temporary.replace(path)
 
 def main():
  parser=argparse.ArgumentParser();parser.add_argument('--out',required=True);args=parser.parse_args()
  save_result(args.out,{'status':'STARTED','checked_at_utc':datetime.now(timezone.utc).isoformat(),
                        'dispatch_performed':False,'eligibility_authority':False})
  try:
-  now=datetime.now(timezone.utc);watch=watch_targets(Path(__file__).resolve().parent,now,300)
-  reader=Reader(300)
-  out=wait_for_witness(watch,reader.probe)
+  now=datetime.now(timezone.utc);watch=watch_targets(Path(__file__).resolve().parent,now,WATCH_LOOKAHEAD_SECONDS)
+  budget=wait_budget(watch,datetime.now(timezone.utc))
+  reader=Reader(budget)
+  out=wait_for_witness(watch,reader.probe,budget=budget,progress=lambda result:save_result(args.out,{
+    **result,'checked_at_utc':datetime.now(timezone.utc).isoformat()}))
  except Exception as exc:out={'status':'ERROR','error_type':type(exc).__name__,'dispatch_performed':False,'eligibility_authority':False}
  out['checked_at_utc']=datetime.now(timezone.utc).isoformat()
  save_result(args.out,out)
