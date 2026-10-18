@@ -157,7 +157,10 @@ jobs:
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: python publication_recovery.py
+        run: |
+          refresh_failed=0
+          DOGE_HOURLY_PUBLICATION_REFRESH=1 python okx_hourly_research_history.py || refresh_failed=1
+          DOGE_HOURLY_REFRESH_FAILED="$refresh_failed" DOGE_VERIFY_HOURLY_PUBLICATION=1 python publication_recovery.py
       - name: Read back minimal contexts from the same original publication
         id: minimal_publication
         if: steps.early_publish.outcome == 'success' && steps.minimal_bind.outcome == 'success'
@@ -454,6 +457,7 @@ jobs:
           retention-days: 90
           if-no-files-found: error
           path: |
+            publication-refresh-output/
             data/plus_evidence_v1_0/
             system/versions/DOGE_PLUS_EVIDENCE_V1_0_20261012.json
             system/current_plus_evidence.json
@@ -510,6 +514,9 @@ jobs:
         run: exit 1
       - name: Fail visibly on independent minimal market errors after saving evidence
         if: always() && (steps.minimal_prepare.outcome == 'failure' || steps.minimal_bind.outcome == 'failure' || steps.minimal_publication.outcome == 'failure' || steps.minimal_audit.outcome == 'failure')
+        run: exit 1
+      - name: Fail visibly on optional source refresh after preserving core publication and artifacts
+        if: always() && steps.early_publish.outputs.hourly_source_failed == 'true'
         run: exit 1
       - name: Fail on collector or quality error
         if: always() && (steps.validation.outcome != 'success' || steps.quote_watch.outcome != 'success' || steps.fast_hourly.outcome != 'success' || steps.collect.outcome != 'success' || steps.evaluate.outcome != 'success' || steps.forward.outcome != 'success' || steps.v42.outcome != 'success' || (steps.direction.outcome != 'success' && steps.direction_late_audit.outcome != 'success') || steps.minute_shadow.outcome != 'success' || steps.error_review.outcome != 'success' || steps.regression.outcome != 'success' || steps.early_publish.outcome != 'success' || steps.operations.outcome != 'success' || steps.persist.outcome != 'success' || steps.artifact.outcome != 'success' || steps.public_witness.outcome == 'failure')
