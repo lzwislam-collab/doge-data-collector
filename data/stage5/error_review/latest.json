@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "status": "ok",
-  "generated_at_utc": "2026-10-18T05:05:45.669696+00:00",
+  "generated_at_utc": "2026-10-18T05:35:49.488795+00:00",
   "source": "Immutable DOGE V4.2 registered forecasts + official scored ticker and independent confirmed-1m scores",
   "study_effective_from_utc": "2026-10-12T00:00:00+00:00",
   "track_definitions": {
@@ -9,13 +9,13 @@
     "confirmed_1m_close": "separate first fully confirmed minute close after target, never exact quote"
   },
   "registered": 346,
-  "original_quote_score_rows": 305,
+  "original_quote_score_rows": 307,
   "source_sha256": {
     "forecast_registry": "cd20de9327a0a6d3fa17a65565ad5cfb630bb52874a48d39a2cf026fe24896d6",
-    "original_quote_scores": "d859105d2269fb6a20d2b74fde7af2430a07bd8f0ff89d2affa1904ae79d7677",
-    "independent_minute_scores": "939e8a505301ab480e236db3db76e94abf678c285d4cb36eab36480ec8e36c00"
+    "original_quote_scores": "55fde38a1c3d36b9e1005c19c94043b1087c4b3b87354f338dcf74692bb4362f",
+    "independent_minute_scores": "b89384c84f87bdb427561b352923c9c66c46a8bd3d6cf3b2b7141bd6e88e4d20"
   },
-  "independent_minute_score_rows": 305,
+  "independent_minute_score_rows": 306,
   "cohort_statistics": {
     "original_ticker_1h_pre_freeze_diagnostic": {
       "registered": 21,
@@ -42,20 +42,20 @@
     },
     "original_ticker_1h_preregistered_forward": {
       "registered": 145,
-      "scored": 131,
-      "correct": 69,
+      "scored": 132,
+      "correct": 70,
       "wrong": 62,
       "unscorable": 12,
-      "pending": 2,
+      "pending": 1,
       "awaiting_or_overdue": 0,
-      "accuracy_pct": 52.67,
+      "accuracy_pct": 53.03,
       "by_prediction_direction": {
         "UP": {
           "scored": 68,
           "wrong": 36
         },
         "DOWN": {
-          "scored": 63,
+          "scored": 64,
           "wrong": 26
         }
       },
@@ -90,17 +90,17 @@
     },
     "original_ticker_24h_preregistered_forward": {
       "registered": 145,
-      "scored": 100,
+      "scored": 101,
       "correct": 53,
-      "wrong": 47,
+      "wrong": 48,
       "unscorable": 20,
-      "pending": 25,
+      "pending": 24,
       "awaiting_or_overdue": 0,
-      "accuracy_pct": 53.0,
+      "accuracy_pct": 52.48,
       "by_prediction_direction": {
         "UP": {
-          "scored": 70,
-          "wrong": 47
+          "scored": 71,
+          "wrong": 48
         },
         "DOWN": {
           "scored": 30,
@@ -108,7 +108,7 @@
         }
       },
       "wrong_factor_counts": {
-        "doge_underperformed_btc": 24,
+        "doge_underperformed_btc": 25,
         "no_dominant_hourly_proxy": 12,
         "btc_eth_co_movement_correlated": 18,
         "doge_outperformed_btc": 1
@@ -228,8 +228,8 @@
       "correct": 77,
       "wrong": 66,
       "unscorable": 0,
-      "pending": 2,
-      "awaiting_or_overdue": 0,
+      "pending": 1,
+      "awaiting_or_overdue": 1,
       "accuracy_pct": 53.85,
       "by_prediction_direction": {
         "UP": {
@@ -273,17 +273,17 @@
     },
     "confirmed_1m_close_24h_preregistered_forward": {
       "registered": 145,
-      "scored": 120,
+      "scored": 121,
       "correct": 65,
-      "wrong": 55,
+      "wrong": 56,
       "unscorable": 0,
-      "pending": 25,
+      "pending": 24,
       "awaiting_or_overdue": 0,
-      "accuracy_pct": 54.17,
+      "accuracy_pct": 53.72,
       "by_prediction_direction": {
         "UP": {
-          "scored": 84,
-          "wrong": 55
+          "scored": 85,
+          "wrong": 56
         },
         "DOWN": {
           "scored": 36,
@@ -291,7 +291,7 @@
         }
       },
       "wrong_factor_counts": {
-        "doge_underperformed_btc": 30,
+        "doge_underperformed_btc": 31,
         "no_dominant_hourly_proxy": 11,
         "btc_eth_co_movement_correlated": 23,
         "doge_outperformed_btc": 1
@@ -383,24 +383,6 @@
     }
   },
   "errors_and_coverage_examples": [
-    {
-      "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792162800000_24h",
-      "cohort": "preregistered_forward",
-      "track": "original_ticker",
-      "horizon_hours": 24,
-      "issued_at_utc": "2026-10-16T16:11:06.168585+00:00",
-      "target_utc": "2026-10-17T16:11:06.168585+00:00",
-      "predicted_direction": "UP",
-      "outcome_direction": null,
-      "status": "unscorable",
-      "category": "observation_coverage_failure",
-      "explanatory_factors": [
-        "target_ticker_not_observed_within_25min"
-      ],
-      "context": null,
-      "classification_certainty": "observed_result_only_no_causal_attribution",
-      "model_revision_authorized": false
-    },
     {
       "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792166400000_1h",
       "cohort": "preregistered_forward",
@@ -1169,6 +1151,51 @@
       "model_revision_authorized": false
     },
     {
+      "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792209600000_24h",
+      "cohort": "preregistered_forward",
+      "track": "original_ticker",
+      "horizon_hours": 24,
+      "issued_at_utc": "2026-10-17T05:31:26.791520+00:00",
+      "target_utc": "2026-10-18T05:31:26.791520+00:00",
+      "predicted_direction": "UP",
+      "outcome_direction": "DOWN",
+      "status": "scored",
+      "category": "direction_wrong",
+      "explanatory_factors": [
+        "doge_underperformed_btc"
+      ],
+      "context": {
+        "state": "retrospective_association_only",
+        "bar_anchor_ms": 1792209600000,
+        "bar_target_ms": 1792296000000,
+        "historical_retrieval_is_not_proof_of_real_time_availability": true,
+        "returns_pct": {
+          "BTC-USDT": 0.3214,
+          "ETH-USDT": -0.378,
+          "DOGE-USDT": -1.2306
+        },
+        "anchor_first_seen_after_issue": false,
+        "outcome_first_seen_after_target": false,
+        "ex_ante_market_features_verified": false,
+        "source_first_seen_utc_by_symbol": {
+          "BTC-USDT": {
+            "anchor": "2026-10-17T05:31:20.493776+00:00",
+            "target_context": "2026-10-18T05:05:08.704118+00:00"
+          },
+          "ETH-USDT": {
+            "anchor": "2026-10-17T05:31:20.663440+00:00",
+            "target_context": "2026-10-18T05:05:08.925623+00:00"
+          },
+          "DOGE-USDT": {
+            "anchor": "2026-10-17T05:31:20.319298+00:00",
+            "target_context": "2026-10-18T05:05:08.485224+00:00"
+          }
+        }
+      },
+      "classification_certainty": "observed_result_only_no_causal_attribution",
+      "model_revision_authorized": false
+    },
+    {
       "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792213200000_1h",
       "cohort": "preregistered_forward",
       "track": "original_ticker",
@@ -1720,51 +1747,6 @@
   ],
   "minute_wrong_diagnostic_examples": [
     {
-      "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792202400000_24h",
-      "cohort": "preregistered_forward",
-      "track": "confirmed_1m_close",
-      "horizon_hours": 24,
-      "issued_at_utc": "2026-10-17T03:20:00.979289+00:00",
-      "target_utc": "2026-10-18T03:20:00.979289+00:00",
-      "predicted_direction": "UP",
-      "outcome_direction": "DOWN",
-      "status": "scored",
-      "category": "direction_wrong",
-      "explanatory_factors": [
-        "doge_underperformed_btc"
-      ],
-      "context": {
-        "state": "retrospective_association_only",
-        "bar_anchor_ms": 1792202400000,
-        "bar_target_ms": 1792288800000,
-        "historical_retrieval_is_not_proof_of_real_time_availability": true,
-        "returns_pct": {
-          "BTC-USDT": 0.4131,
-          "ETH-USDT": -0.2221,
-          "DOGE-USDT": -0.7855
-        },
-        "anchor_first_seen_after_issue": false,
-        "outcome_first_seen_after_target": true,
-        "ex_ante_market_features_verified": false,
-        "source_first_seen_utc_by_symbol": {
-          "BTC-USDT": {
-            "anchor": "2026-10-17T03:19:56.555652+00:00",
-            "target_context": "2026-10-18T03:20:03.779538+00:00"
-          },
-          "ETH-USDT": {
-            "anchor": "2026-10-17T03:19:56.774853+00:00",
-            "target_context": "2026-10-18T03:20:03.999601+00:00"
-          },
-          "DOGE-USDT": {
-            "anchor": "2026-10-17T03:19:56.341954+00:00",
-            "target_context": "2026-10-18T03:20:03.535377+00:00"
-          }
-        }
-      },
-      "classification_certainty": "observed_result_only_no_causal_attribution",
-      "model_revision_authorized": false
-    },
-    {
       "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792206000000_24h",
       "cohort": "preregistered_forward",
       "track": "confirmed_1m_close",
@@ -1803,6 +1785,51 @@
           "DOGE-USDT": {
             "anchor": "2026-10-17T04:27:23.703417+00:00",
             "target_context": "2026-10-18T04:34:34.065371+00:00"
+          }
+        }
+      },
+      "classification_certainty": "observed_result_only_no_causal_attribution",
+      "model_revision_authorized": false
+    },
+    {
+      "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792209600000_24h",
+      "cohort": "preregistered_forward",
+      "track": "confirmed_1m_close",
+      "horizon_hours": 24,
+      "issued_at_utc": "2026-10-17T05:31:26.791520+00:00",
+      "target_utc": "2026-10-18T05:31:26.791520+00:00",
+      "predicted_direction": "UP",
+      "outcome_direction": "DOWN",
+      "status": "scored",
+      "category": "direction_wrong",
+      "explanatory_factors": [
+        "doge_underperformed_btc"
+      ],
+      "context": {
+        "state": "retrospective_association_only",
+        "bar_anchor_ms": 1792209600000,
+        "bar_target_ms": 1792296000000,
+        "historical_retrieval_is_not_proof_of_real_time_availability": true,
+        "returns_pct": {
+          "BTC-USDT": 0.3214,
+          "ETH-USDT": -0.378,
+          "DOGE-USDT": -1.2306
+        },
+        "anchor_first_seen_after_issue": false,
+        "outcome_first_seen_after_target": false,
+        "ex_ante_market_features_verified": false,
+        "source_first_seen_utc_by_symbol": {
+          "BTC-USDT": {
+            "anchor": "2026-10-17T05:31:20.493776+00:00",
+            "target_context": "2026-10-18T05:05:08.704118+00:00"
+          },
+          "ETH-USDT": {
+            "anchor": "2026-10-17T05:31:20.663440+00:00",
+            "target_context": "2026-10-18T05:05:08.925623+00:00"
+          },
+          "DOGE-USDT": {
+            "anchor": "2026-10-17T05:31:20.319298+00:00",
+            "target_context": "2026-10-18T05:05:08.485224+00:00"
           }
         }
       },
