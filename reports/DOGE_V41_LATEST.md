@@ -2,10 +2,10 @@
 
 **状态：RESEARCH_ONLY / NO_VALIDATED_EDGE；非买卖指令。**
 **本次证据总状态：DEGRADED_NO_VALIDATED_EDGE；方向审计可用=False；本次质量=blocked。工程测试通过不能覆盖数据失败。**
-生成于：2026-10-19T01:47:33.452919+00:00；行情起点：OKX已收盘1Dutc 2026-10-18；DOGE起点价格：0.07944 USDT。
+生成于：2026-10-19T10:49:40.803993+00:00；行情起点：OKX已收盘1Dutc 2026-10-18；DOGE起点价格：0.07944 USDT。
 实施顺序以 [最新权威路线图](DOGE_NEXT_STAGE_IMPLEMENTATION_2026-10-12.md) 为准：P0优先，P1/P2同步且不阻塞积累；工程PASS不等于运行、预测或盈利达标。冻结协议不变。
 预测对象为目标UTC日线收盘价，不是盘中最高最低价。不能把历史频率当成已校准真实概率。
-**时点警示：UTC收盘基准 2026-10-19T00:00:00+00:00，原始预测首次不可修改登记 2026-10-19T01:12:34.538564+00:00（日线收盘后 72.58 分钟），本报告生成已过 107.29 分钟；这不是报告发布后完整24小时预测。**
+**时点警示：UTC收盘基准 2026-10-19T00:00:00+00:00，原始预测首次不可修改登记 2026-10-19T01:12:34.538564+00:00（日线收盘后 72.58 分钟），本报告生成已过 649.38 分钟；这不是报告发布后完整24小时预测。**
 
 ## F01｜首要目标：DOGE四周期涨跌方向预测（70%待验证）
 **方向模型的本期历史审计缺失或截止时间不一致，不能发布70%准确率声明。**
@@ -17,6 +17,7 @@
 |2026-10-19（收盘 2026-10-20T00:00:00+00:00；参考 2026-10-19T00:00:00+00:00；首次登记 2026-10-19T01:12:34.538564+00:00；延迟 72.58分钟）|1天|0.07575|0.07929|0.08337|46.59%|跌幅≤-10%: 1.91%|
 |2026-10-25（收盘 2026-10-26T00:00:00+00:00；参考 2026-10-19T00:00:00+00:00；首次登记 2026-10-19T01:12:34.538564+00:00；延迟 72.58分钟）|7天|0.06885|0.07826|0.09172|43.31%|跌幅≤-20%: 2.32%|
 |2026-11-17（收盘 2026-11-18T00:00:00+00:00；参考 2026-10-19T00:00:00+00:00；首次登记 2026-10-19T01:12:34.538564+00:00；延迟 72.58分钟）|30天|0.05775|0.07663|0.10561|43.17%|跌幅≤-40%: 0.41%|
+**本轮登记窗口已关闭：已有合格历史登记仍正常保留、等待到期评分；未登记的当日预测不能事后补登。**
 
 365天：仅提供宏观、网络结构及牛熊压力情景；长期独立样本不足，**不提供精确概率或已校准价格区间**。
 情景解释：上行条件为BTC风险环境改善、DOGE相对强弱回升且流动性确认；下行条件为BTC走弱、杠杆压力和流动性收缩。上述是条件假设，尚未验证为预测规则。
@@ -26,14 +27,14 @@
 上涨概率未经真实前瞻校准；DOWN＝跌／平，目标价等于参考价时 y=0。未核实发行不显示方向或概率；目标证据仅决定是否可评分。
 |轨道/周期|事件|状态 / 生效UTC|参考报价UTC / 参考价USDT|发行UTC|目标UTC|报价至发行延迟秒|方向|上涨模型概率|
 |---|---|---|---|---|---|---:|---|---:|
-|original18/1h|1792360800_1|SCORED_PUBLICLY_VERIFIED / 2026-10-16T00:00:00+00:00|2026-10-18T22:15:48.867000+00:00 / 0.07866|2026-10-18T22:15:49.545780+00:00|2026-10-18T23:15:49.545780+00:00|0.67878|跌／平|46.93%|
-|original18/24h|1792288800_24|PENDING_TARGET / 2026-10-16T00:00:00+00:00|2026-10-18T02:22:48.364000+00:00 / 0.07938|2026-10-18T02:22:49.286194+00:00|2026-10-19T02:22:49.286194+00:00|0.922194|跌／平|46.46%|
+|original18/1h|1792404000_1|PENDING_TARGET / 2026-10-16T00:00:00+00:00|2026-10-19T10:15:11.073000+00:00 / 0.07965|2026-10-19T10:15:11.998563+00:00|2026-10-19T11:15:11.998563+00:00|0.925563|上涨|50.05%|
+|original18/24h|1792288800_24|SCORED_PUBLICLY_VERIFIED / 2026-10-16T00:00:00+00:00|2026-10-18T02:22:48.364000+00:00 / 0.07938|2026-10-18T02:22:49.286194+00:00|2026-10-19T02:22:49.286194+00:00|0.922194|跌／平|46.46%|
 |r2/1h|未知|WAIT_ACTIVATION / 2026-10-20T00:00:00Z|未知 / 未知|未知|未知|未知|未知|未知|
 
 ## F02｜OKX现货及日线/1H时效
 - 已收盘DOGE日线共 2483 条，开始于 2020-01-01；内部日线缺失0，历史审计重复键0。
 - 最近DOGE日线收盘：0.07944 USDT；相对前日变化 0.16%。
-- OKX现货快照：有效窗口内（采集时间 2026-10-19T01:37:25.203847+00:00）。**若过期，不称为实时价格**。
+- OKX现货快照：有效窗口内（采集时间 2026-10-19T10:36:12.523467+00:00）。**若过期，不称为实时价格**。
 
 ## F03｜趋势、波动、相对强弱
 - DOGE最近7天收盘收益：-8.47%；30天：-9.17%。
@@ -72,10 +73,10 @@
 - 下行条件：BTC持续走弱、DOGE/BTC相对强弱恶化、盘口收缩或合约风险显著增加。
 - 上行条件：BTC企稳、DOGE相对强弱改善、成交/流动性得到确认。
 - 上述条件属于待检验的风险监控规则，不是已经验证的预测因子。
-- **V4.2暴跌风险辅助评分（不替代主任务）**：状态 ok；历史登记 187，目标到期 174，待评分 13；真实预警精确率 0.0%，真实暴跌事件召回率 样本不足，模型授权 BLOCKED_NO_VALIDATED_EDGE。必须先在实际发出后等待至少1小时，才允许计算随后K线的暴跌命中。
+- **V4.2暴跌风险辅助评分（不替代主任务）**：状态 ok；历史登记 196，目标到期 183，待评分 13；真实预警精确率 0.0%，真实暴跌事件召回率 样本不足，模型授权 BLOCKED_NO_VALIDATED_EDGE。必须先在实际发出后等待至少1小时，才允许计算随后K线的暴跌命中。
 - **V4.2分钟级可行性**：pilot_ok；样本 594条；源采集 2026-10-15T07:56:22.995095+00:00。仅为小时采样的1m/5m确认K线测试，非连续分钟级流和已验证风险预测。
-- **真实未来1小时监测**：ok；已登记 187 条观察，成熟评分 175 条；当前精确率 0.0%，召回率 样本不足；阈值在10月9日暴跌后选择，前瞻积累不足，**不构成70%通过证据**。
-- 1小时极端暴跌历史研究：research_fail_70pct；计算时间 2026-10-19T01:16:49.705213+00:00，历史K线截止 2026-10-19T00:00:00+00:00；有效1H样本 26791小时，≥5%小时暴跌 40次，规则事后触发 131次；精确率 12.21%、召回率 35.0%、误报 0.722 次/周，命中事件提前 0.0, 1.0, 2.0, 0.0, 9.0, 9.0, 1.0, 0.0, 1.0, 0.0, 8.0, 7.0, 0.0, 11.0, 4.0, 5.0, 0.0, 10.0 小时。这是事后选参研究，不是独立测试或可靠预警。
+- **真实未来1小时监测**：ok；已登记 196 条观察，成熟评分 184 条；当前精确率 0.0%，召回率 样本不足；阈值在10月9日暴跌后选择，前瞻积累不足，**不构成70%通过证据**。
+- 1小时极端暴跌历史研究：research_fail_70pct；计算时间 2026-10-19T10:40:05.643174+00:00，历史K线截止 2026-10-19T09:00:00+00:00；有效1H样本 26800小时，≥5%小时暴跌 40次，规则事后触发 131次；精确率 12.21%、召回率 35.0%、误报 0.722 次/周，命中事件提前 0.0, 1.0, 2.0, 0.0, 9.0, 9.0, 1.0, 0.0, 1.0, 0.0, 8.0, 7.0, 0.0, 11.0, 4.0, 5.0, 0.0, 10.0 小时。这是事后选参研究，不是独立测试或可靠预警。
 
 ## F10｜历史回测与前瞻兑现
 |周期|滚动样本外窗口数|经验P10–P90覆盖率|滚动区间分数|扩展历史基线区间分数|非重叠窗口数|
@@ -98,43 +99,43 @@
 旧系统前瞻、历史回测、original18、R2及canary分别列示，禁止合并准确率。下表仅为最新事件，不能代表完整队列成绩。
 |轨道/周期|事件|合格最新评分数|命中(0/1)|Brier|成本净收益|压力净收益|同事件冻结基准|
 |---|---|---:|---:|---:|---:|---:|---|
-|original18/1h|1792360800_1|1|0|0.2816741999680726|0.00%|0.00%|{"frozen_majority": {"accuracy": 0, "brier": 0.2522010165298572}, "frozen_rule": {"accuracy": 0}}|
-|original18/24h|1792288800_24|0|未知|未知|未知|未知|{}|
+|original18/1h|1792404000_1|0|未知|未知|未知|未知|{}|
+|original18/24h|1792288800_24|1|0|0.2867055927884451|0.00%|0.00%|{"frozen_majority": {"accuracy": 0, "brier": 0.2732090145751039}, "frozen_rule": {"accuracy": 1}}|
 |r2/1h|未知|0|未知|未知|未知|未知|{}|
 ### PLUS 完整固定分母成绩（分轨）
 未到最终评分期限的槽位不入分母；漏发、漏评和未核实记录保留并不得计为命中。0/0表示尚无成熟样本，非0%准确率。
 |轨道/周期|命中/固定分母|已核实评分|覆盖率|漏发|发行未核实|漏评|
 |---|---:|---:|---:|---:|---:|---:|
-|original18/1h|18/36|31|86.1%|2|0|3|
-|original18/24h|1/2|2|100.0%|0|0|0|
+|original18/1h|19/41|34|82.9%|4|0|3|
+|original18/24h|1/3|3|100.0%|0|0|0|
 |r2/1h|0/0|0|未知|0|0|0|
 完整独立评审：INDEPENDENT_FIXED_PROTOCOL_AS_OF_REVIEW；评审截止 2026-10-15T11:58:07.249150+00:00；正式合格样本 0；准确率 未知。未提供适用评审时保持未知；70%及经济优势尚未证明。
-分轨账本记录数（不是合格评分数）：{"original18_events": 37, "original18_local_scores": 34, "r2_engineering_canaries": 1, "r2_formal_events": 0, "r2_local_formal_scores": 0}
-计划槽位、漏发、漏评：{"original18": {"issue": [], "matured_missing_issuance": {"1": 2, "24": 0}, "score": []}, "r2": {"canary_issued": 1, "formal_issued": 0, "formal_scheduled": 0, "formal_scores_local": 0, "matured_missing_issuance": 0, "matured_missing_targets": 0, "promotion_authorized": false, "validated_70pct": false}}
+分轨账本记录数（不是合格评分数）：{"original18_events": 41, "original18_local_scores": 38, "r2_engineering_canaries": 1, "r2_formal_events": 0, "r2_local_formal_scores": 0}
+计划槽位、漏发、漏评：{"original18": {"issue": [], "matured_missing_issuance": {"1": 4, "24": 0}, "score": []}, "r2": {"canary_issued": 1, "formal_issued": 0, "formal_scheduled": 0, "formal_scores_local": 0, "matured_missing_issuance": 0, "matured_missing_targets": 0, "promotion_authorized": false, "validated_70pct": false}}
 
 ## F11｜来源、缺失、时效及最终审计
-- OKX日线截止：2026-10-18 UTC；OKX市场快照：2026-10-19T01:37:25.203847+00:00；衍生品：2026-10-15T07:45:47.940000+00:00；旧巨鲸SSE：2026-10-15T08:04:22.453109+00:00；确认区块扫描：2026-10-15T10:32:06.168920+00:00；PoR：2026-10-15T07:37:30.263283+00:00；链上日度活动：2026-10-15T02:04:05.871698+00:00；原始链快照：2026-10-15T01:52:16.006000+00:00。
-- ETF：2026-10-15T06:05:05.763970+00:00；FRED：2026-10-15T03:59:20.632288+00:00；政策日历：2026-10-15T07:56:24.514918+00:00；样本外评分：2026-10-19T01:47:19.044623+00:00。
+- OKX日线截止：2026-10-18 UTC；OKX市场快照：2026-10-19T10:36:12.523467+00:00；衍生品：2026-10-15T07:45:47.940000+00:00；旧巨鲸SSE：2026-10-15T08:04:22.453109+00:00；确认区块扫描：2026-10-15T10:32:06.168920+00:00；PoR：2026-10-15T07:37:30.263283+00:00；链上日度活动：2026-10-15T02:04:05.871698+00:00；原始链快照：2026-10-15T01:52:16.006000+00:00。
+- ETF：2026-10-15T06:05:05.763970+00:00；FRED：2026-10-15T03:59:20.632288+00:00；政策日历：2026-10-15T07:56:24.514918+00:00；样本外评分：2026-10-19T10:49:24.073580+00:00。
 - 历史接通范围（不代表本次运行PASS，当前状态以本次质量重验为准）：①链上/巨鲸/交易所净流：PARTIAL；②强平/流动性：PARTIAL；③ETF、④宏观政策：有采集记录/因果效应未验证；⑤历史/预测：预测有效性未验证。
-- **独立数据质量门禁**：状态 blocked，报告时记录 2026-10-19T01:47:33.452919+00:00；关键故障 ['onchain', 'liquidations_okx', 'liquidity', 'macro', 'whale_confirmed_blocks']，可选数据告警 ['whale_sse_optional', 'onchain_daily_activity', 'okx_por_balances_optional', 'bybit_liquidations_optional', 'binance_liquidations_optional']。对已过期文件不能凭历史PASS宣称实时。
+- **独立数据质量门禁**：状态 blocked，报告时记录 2026-10-19T10:49:40.803993+00:00；关键故障 ['onchain', 'liquidations_okx', 'liquidity', 'etf', 'macro', 'whale_confirmed_blocks']，可选数据告警 ['whale_sse_optional', 'onchain_daily_activity', 'okx_por_balances_optional', 'bybit_liquidations_optional', 'binance_liquidations_optional']。对已过期文件不能凭历史PASS宣称实时。
 - **旧模型审计时间一致性**：旧多因子/概率基线截止 2026-10-14，当前DOGE日线截止 2026-10-18；旧模型统计滞后：STALE_NOT_USED_FOR_V41。 旧预测门禁状态 ok，不决定V4.1有效性。
-- V4.2实测窗口审计时间：2026-10-19T01:16:50.803607+00:00；1m/5m可行性样本时间：2026-10-15T07:56:22.995095+00:00。V4.2的70%资格门禁保持BLOCKED，历史回测不能替代前瞻评分。
+- V4.2实测窗口审计时间：2026-10-19T10:40:06.686124+00:00；1m/5m可行性样本时间：2026-10-15T07:56:22.995095+00:00。V4.2的70%资格门禁保持BLOCKED，历史回测不能替代前瞻评分。
 - **Google Sheets/Apps Script单独验收**：本GitHub报告不代表Apps Script触发、执行记录及表格回读已验证；禁止合并声称成功。
 - 数据事实与情景判断严格区分；本报告不修改DOGE定投执行规则。
-PLUS 本次核实生成 2026-10-19T01:47:33.937191+00:00；小时闭合截止 2026-10-19T01:00:00+00:00；来源提交 d0cfae6423d7bb027591bc27a51d6b9f04b6e8f0；来源哈希 151456e7934e9d0a0379f7c4319e64109009032a45da70beece06e354f5431b1
+PLUS 本次核实生成 2026-10-19T10:49:41.181483+00:00；小时闭合截止 2026-10-19T10:00:00+00:00；来源提交 aec8cbde2e8a5603568c059c19a72a67c4cc887c；来源哈希 eaca8a1a50dd5aacc0380f0b494e6a5afbed947ea25e9fe14ba830245e38c4c1
 冻结身份：{"original18_package_sha256": "c93004aadc669c074f51a4cb6411769c3d84d388b31773d1251823b1d45ccad3", "r2_identity": "0843d2e836f0d94cd46e66644460f1a543aef460e51ad884394a5880dadf3baf"}
 发布证据错误：{"original18": {"1792267200_1": "target raw packet lacks in-window exact server publication witness"}, "r2": {}}
 晋升关闭；预测优势、校准、长期成本净收益尚未证明。已有外部OSS每日清单锁定存证；逐次预测的目标前存证与固定期限须分别核验，GitHub归档不能替代；不以独立管理方为必备门槛。
-逐次外部存证：{"daily_inventory_run_url": "https://github.com/lzwislam-collab/doge-data-collector/actions/runs/39181973074", "daily_inventory_scope": "Recorded daily inventory only; not per-forecast proof", "daily_inventory_status": "LOCKED_DAILY_INVENTORY_VERIFIED", "daily_inventory_verified_at_utc": "2026-10-19T00:45:51.204889+00:00", "events": [{"event_id": "1792360800_1", "receipt": {"bucket": "doge-evidence-1379992038848464-cn", "bucket_worm": {"owner": "1379992038848464", "policy_created_at_utc": "2026-10-15T04:53:26.000Z", "retention_days": 732, "state": "Locked", "worm_id": "9DFBE5FB72654409B8F16D34CFE30EAB"}, "byte_count": 147631, "calculated_retain_until_utc": "2028-10-19T22:43:54+00:00", "endpoint": "https://oss-cn-hangzhou.aliyuncs.com", "event_id": "1792360800_1", "formal_statistics_eligible": true, "historical_backfill": false, "independent_custodian_verified": false, "issued_at_utc": "2026-10-18T22:15:49.545780+00:00", "key": "doge/evidence/per-forecast/v1/original18/1792360800_1/3a010cf770cbe1ac91c54db28c287f89e710bdb71a967ca8a055cca61e39adc1.json", "readback_request_id": "6AD54BAB741C4E333676CA6F", "recovery_head_request_id": null, "run_id": "39173419983", "schema": "DOGE_PER_FORECAST_WORM_V1", "server_last_modified_utc": "2026-10-18T22:43:54+00:00", "server_response_date_utc": "2026-10-18T22:43:55+00:00", "sha256": "3a010cf770cbe1ac91c54db28c287f89e710bdb71a967ca8a055cca61e39adc1", "source_commit": "562641768d085539229d324c9070fa61978be8d5", "status": "PRE_TARGET_WORM_VERIFIED", "target_utc": "2026-10-18T23:15:49.545780+00:00", "track": "original18", "upload_request_id": "6AD54BAA741C4E333640C86F", "verified_at_utc": "2026-10-18T22:43:55.728813+00:00", "version_id": "CAEQswIYgYCAuJHfxIoaIiBjNDc1OWI4OGExMGM0NmYyYjNhODIxNjlmNWZhYjQxZA--"}, "status": "RECORDED_RECEIPT_REQUIRES_LIVE_RECHECK", "track": "original18"}, {"event_id": "1792288800_24", "receipt": {"bucket": "doge-evidence-1379992038848464-cn", "bucket_worm": {"owner": "1379992038848464", "policy_created_at_utc": "2026-10-15T04:53:26.000Z", "retention_days": 732, "state": "Locked", "worm_id": "9DFBE5FB72654409B8F16D34CFE30EAB"}, "byte_count": 147898, "calculated_retain_until_utc": "2028-10-19T02:53:03+00:00", "endpoint": "https://oss-cn-hangzhou.aliyuncs.com", "event_id": "1792288800_24", "formal_statistics_eligible": true, "historical_backfill": false, "independent_custodian_verified": false, "issued_at_utc": "2026-10-18T02:22:49.286194+00:00", "key": "doge/evidence/per-forecast/v1/original18/1792288800_24/810dc7dfbd28be1d1eb74c2017bf5c8a171bbbe8d1137599ed6a43e1148021d4.json", "readback_request_id": "6AD4348F727FF537341181FF", "recovery_head_request_id": null, "run_id": "39091589669", "schema": "DOGE_PER_FORECAST_WORM_V1", "server_last_modified_utc": "2026-10-18T02:53:03+00:00", "server_response_date_utc": "2026-10-18T02:53:03+00:00", "sha256": "810dc7dfbd28be1d1eb74c2017bf5c8a171bbbe8d1137599ed6a43e1148021d4", "source_commit": "7c9bb0666c9dc98af39e39d38a3daf19516ebfe3", "status": "PRE_TARGET_WORM_VERIFIED", "target_utc": "2026-10-19T02:22:49.286194+00:00", "track": "original18", "upload_request_id": "6AD4348F727FF53734847FFF", "verified_at_utc": "2026-10-18T02:53:04.202769+00:00", "version_id": "CAEQswIYgYDAsNDas4oaIiA2Yjg0N2E3NDAyZDI0Y2NjOTAyMWVhNDcyNzUzZDYxNA--"}, "status": "RECORDED_RECEIPT_REQUIRES_LIVE_RECHECK", "track": "original18"}], "external_immutable_retention_verified": false, "fixed_horizon_utc": "2028-10-16T00:00:00+00:00", "live_oss_readback_this_report": false, "per_forecast_status": "BLOCKED_LIVE_RECEIPT_RECHECK_REQUIRED"}
+逐次外部存证：{"daily_inventory_run_url": "https://github.com/lzwislam-collab/doge-data-collector/actions/runs/39181973074", "daily_inventory_scope": "Recorded daily inventory only; not per-forecast proof", "daily_inventory_status": "LOCKED_DAILY_INVENTORY_VERIFIED", "daily_inventory_verified_at_utc": "2026-10-19T00:45:51.204889+00:00", "events": [{"event_id": "1792404000_1", "receipt": {"bucket": "doge-evidence-1379992038848464-cn", "bucket_worm": {"owner": "1379992038848464", "policy_created_at_utc": "2026-10-15T04:53:26.000Z", "retention_days": 732, "state": "Locked", "worm_id": "9DFBE5FB72654409B8F16D34CFE30EAB"}, "byte_count": 147819, "calculated_retain_until_utc": "2028-10-20T10:46:29+00:00", "endpoint": "https://oss-cn-hangzhou.aliyuncs.com", "event_id": "1792404000_1", "formal_statistics_eligible": true, "historical_backfill": false, "independent_custodian_verified": false, "issued_at_utc": "2026-10-19T10:15:11.998563+00:00", "key": "doge/evidence/per-forecast/v1/original18/1792404000_1/b416113efd0b02660e053300d5762f08d0f44f368f13aba9608e2ba9cb052450.json", "readback_request_id": "6AD5F50679504D3538BA6C51", "recovery_head_request_id": null, "run_id": "39239664345", "schema": "DOGE_PER_FORECAST_WORM_V1", "server_last_modified_utc": "2026-10-19T10:46:29+00:00", "server_response_date_utc": "2026-10-19T10:46:30+00:00", "sha256": "b416113efd0b02660e053300d5762f08d0f44f368f13aba9608e2ba9cb052450", "source_commit": "c7babb379fad6579bd90601c982cba8aacc5bfbf", "status": "PRE_TARGET_WORM_VERIFIED", "target_utc": "2026-10-19T11:15:11.998563+00:00", "track": "original18", "upload_request_id": "6AD5F50579504D3538926951", "verified_at_utc": "2026-10-19T10:46:30.456225+00:00", "version_id": "CAEQswIYgYCA3pyKz4oaIiA3OTE2OWU3ZGMzZmI0NTE4OWRkODkyYmNjZWE4MmJiZg--"}, "status": "RECORDED_RECEIPT_REQUIRES_LIVE_RECHECK", "track": "original18"}, {"event_id": "1792288800_24", "receipt": {"bucket": "doge-evidence-1379992038848464-cn", "bucket_worm": {"owner": "1379992038848464", "policy_created_at_utc": "2026-10-15T04:53:26.000Z", "retention_days": 732, "state": "Locked", "worm_id": "9DFBE5FB72654409B8F16D34CFE30EAB"}, "byte_count": 147898, "calculated_retain_until_utc": "2028-10-19T02:53:03+00:00", "endpoint": "https://oss-cn-hangzhou.aliyuncs.com", "event_id": "1792288800_24", "formal_statistics_eligible": true, "historical_backfill": false, "independent_custodian_verified": false, "issued_at_utc": "2026-10-18T02:22:49.286194+00:00", "key": "doge/evidence/per-forecast/v1/original18/1792288800_24/810dc7dfbd28be1d1eb74c2017bf5c8a171bbbe8d1137599ed6a43e1148021d4.json", "readback_request_id": "6AD4348F727FF537341181FF", "recovery_head_request_id": null, "run_id": "39091589669", "schema": "DOGE_PER_FORECAST_WORM_V1", "server_last_modified_utc": "2026-10-18T02:53:03+00:00", "server_response_date_utc": "2026-10-18T02:53:03+00:00", "sha256": "810dc7dfbd28be1d1eb74c2017bf5c8a171bbbe8d1137599ed6a43e1148021d4", "source_commit": "7c9bb0666c9dc98af39e39d38a3daf19516ebfe3", "status": "PRE_TARGET_WORM_VERIFIED", "target_utc": "2026-10-19T02:22:49.286194+00:00", "track": "original18", "upload_request_id": "6AD4348F727FF53734847FFF", "verified_at_utc": "2026-10-18T02:53:04.202769+00:00", "version_id": "CAEQswIYgYDAsNDas4oaIiA2Yjg0N2E3NDAyZDI0Y2NjOTAyMWVhNDcyNzUzZDYxNA--"}, "status": "RECORDED_RECEIPT_REQUIRES_LIVE_RECHECK", "track": "original18"}], "external_immutable_retention_verified": false, "fixed_horizon_utc": "2028-10-16T00:00:00+00:00", "live_oss_readback_this_report": false, "per_forecast_status": "BLOCKED_LIVE_RECEIPT_RECHECK_REQUIRED"}
 报告质量：{"current_full_statistics_claimed": false, "independent_full_run_id": 38730988947, "review_artifact_sha256": "9af7b3ee25a3fd0d52efce71b16b79adaf755d594505a68177feea71b8295795", "source_latest73_ready": true, "status": "AS_OF_FULL_REPLAY_ONLY"}
-独立full及执行回读绑定：{"execution": {"artifact_readback_status": "WAIT_EXTERNAL_ARTIFACT_READBACK", "report_run_attempt": "1", "report_run_id": "39186899675", "scheduled_daily_execution_verified": false, "source_commit": "d0cfae6423d7bb027591bc27a51d6b9f04b6e8f0"}, "review_artifact_sha256": "9af7b3ee25a3fd0d52efce71b16b79adaf755d594505a68177feea71b8295795", "review_run_id": 38730988947}
+独立full及执行回读绑定：{"execution": {"artifact_readback_status": "WAIT_EXTERNAL_ARTIFACT_READBACK", "report_run_attempt": "1", "report_run_id": "39240100238", "scheduled_daily_execution_verified": false, "source_commit": "aec8cbde2e8a5603568c059c19a72a67c4cc887c"}, "review_artifact_sha256": "9af7b3ee25a3fd0d52efce71b16b79adaf755d594505a68177feea71b8295795", "review_run_id": 38730988947}
 - 影子预测，不授权交易或替换生产模型。
 - 概率校准尚未通过真实前瞻验证。
 - 工程canary不计入正式成绩；缺成本数据不按零收益处理。
 - 近期事件结果不等于完整队列准确率；全样本成绩须读取独立完整评审。
 - GitHub调度可能错过评分窗口；公开归档不等于锁定留存。
 - 独立评审仅代表通过重放的原评审时点；旧评审不适用于当前账本或远端不可达时，隔离该成绩，不影响独立核实的最新预测。
-质量对照：旧快照 2026-10-18T06:01:06.070839+00:00 / blocked；本次重验 2026-10-19T01:47:33.452919+00:00 / blocked；关键故障 ['onchain', 'liquidations_okx', 'liquidity', 'macro', 'whale_confirmed_blocks']。
+质量对照：旧快照 2026-10-19T06:14:05.699707+00:00 / blocked；本次重验 2026-10-19T10:49:40.803993+00:00 / blocked；关键故障 ['onchain', 'liquidations_okx', 'liquidity', 'etf', 'macro', 'whale_confirmed_blocks']。
 方向输入截止 2026-10-14T00:00:00+00:00；要求日线起点 2026-10-18T00:00:00Z。
 **本次综合证据状态：DEGRADED_NO_VALIDATED_EDGE；预测优势尚未证明，晋升关闭。**
 **综合裁决：RESEARCH_ONLY / NO_VALIDATED_EDGE。**
