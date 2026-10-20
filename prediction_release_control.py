@@ -72,6 +72,25 @@ def _download(url):
  if len(raw)>32000000:raise ValueError('review artifact exceeds cap')
  return raw
 
+def review_records(head,folder):
+ # Reproduce the server-pinned checkout, not a timestamp-selected subset of
+ # today's journal. Even a future-dated row present then must reach evaluate.
+ if not re.fullmatch('[a-f0-9]{40}',head) or folder not in ('events','scores'):raise ValueError('unsafe review snapshot')
+ prefix=f.BASE+'/'+folder+'/'
+ def git(*args):
+  try:return subprocess.check_output(['git','-c','safe.directory=*',*args],cwd=ROOT,stderr=subprocess.DEVNULL)
+  except subprocess.CalledProcessError as exc:raise ValueError('original review snapshot unavailable; fetch complete history') from exc
+ entries=git('ls-tree','-r','-z',head,'--',prefix).split(b'\0');answer=[]
+ for entry in filter(None,entries):
+  metadata,name=entry.split(b'\t',1);path=name.decode('utf-8');mode,kind,_=metadata.split()
+  if mode!=b'100644' or kind!=b'blob' or not path.startswith(prefix) or not re.fullmatch(r'[0-9]+_(formal|canary)\.json',path[len(prefix):]):raise ValueError('unsafe original review record')
+  raw=git('show',head+':'+path);current=ROOT/path
+  if current.is_symlink() or not current.is_file() or current.read_bytes()!=raw:raise ValueError('original review journal deleted or changed')
+  row=json.loads(raw)
+  if encode(row)!=raw or row['event_id']+'.json'!=path[len(prefix):]:raise ValueError('noncanonical original review record')
+  answer.append(row)
+ return answer
+
 def review_source(rid):
  p,reg,files=assessment_runtime.guard();forward.run('local');api=forward.frozen.api
  run=api('/actions/runs/'+str(rid));jobs=api('/actions/runs/'+str(rid)+'/attempts/'+str(run['run_attempt'])+'/jobs')['jobs'];arts=api('/actions/runs/'+str(rid)+'/artifacts')['artifacts']
@@ -91,7 +110,7 @@ def review_source(rid):
  at=f.utc(a['at_utc']);started=f.utc(job['started_at']);finished=f.utc(job['completed_at'])
  if not f.utc(run['created_at'])<=started<=at<=finished<=datetime.now(timezone.utc):raise ValueError('review payload/server clock mismatch')
  # Recompute scores/metrics; stored success booleans are not sufficient.
- events=forward.records('events');scores=forward.records('scores');prereg=a.get('independent_registration')
+ events=review_records(run['head_sha'],'events');scores=review_records(run['head_sha'],'scores');prereg=a.get('independent_registration')
  if not prereg:raise ValueError('original pre-window assessment registration missing')
  preg_run=api('/actions/runs/'+str(prereg['run_id']));preg_jobs=api('/actions/runs/'+str(prereg['run_id'])+'/jobs')['jobs'];preg=[{**preg_run,'audit_job':j} for j in preg_jobs if j['name']=='independent']
  registered=assessment_runtime.registration_witness(files,preg,assessment_runtime.read_at,at,events) is not None
