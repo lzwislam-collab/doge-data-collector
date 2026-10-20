@@ -1,0 +1,205 @@
+name: Publish DOGE E1 forward evidence
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Activate verified registration, capture current slot, or score one event
+        type: choice
+        options: [tick, activate, score]
+        default: tick
+      registration_run_id:
+        description: Successful independent main E1 registration run (activate only)
+        type: string
+      event_id:
+        description: Exact expected E1 event (score only)
+        type: string
+  workflow_run:
+    workflows: ['Backfill DOGE BTC ETH 1H extreme-event research history', 'Witness DOGE E1 forward evidence']
+    types: [completed]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  publish:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       github.event.workflow_run.event != 'pull_request' && github.event.workflow_run.event != 'pull_request_target' &&
+       (github.event.workflow_run.name == 'Backfill DOGE BTC ETH 1H extreme-event research history' ||
+        github.event.workflow_run.conclusion == 'success'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: write
+    concurrency:
+      group: e1-forward-write
+      cancel-in-progress: false
+      queue: max
+    outputs:
+      event_id: ${{ steps.runtime.outputs.event_id }}
+      target_utc: ${{ steps.runtime.outputs.target_utc }}
+      journal_pushed: ${{ steps.persist.outputs.pushed }}
+    env:
+      PYTHONUTF8: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install numpy==2.3.5
+      - name: Actual clock E1 operation
+        id: runtime
+        continue-on-error: true
+        env:
+          MODE: ${{ inputs.mode || 'tick' }}
+          REGISTRATION_RUN_ID: ${{ inputs.registration_run_id }}
+          EXPECTED_EVENT_ID: ${{ inputs.event_id }}
+        run: |
+          case "$MODE" in
+            activate) test -n "$REGISTRATION_RUN_ID"; python e1_forward.py confirm-registration --run-id "$REGISTRATION_RUN_ID" ;;
+            score) test -n "$EXPECTED_EVENT_ID"; python e1_forward.py score --event-id "$EXPECTED_EVENT_ID" ;;
+            tick) python e1_forward.py tick ;;
+            *) exit 1 ;;
+          esac
+      - name: Persist exact E1 captures with bounded conflict retry
+        id: persist
+        run: &persist |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          mkdir -p e1-forward-output
+          if [ -d data/e1_forward_v1 ]; then
+            cp -a data/e1_forward_v1 e1-forward-output/captured-journal
+          fi
+          python e1_forward.py check
+          if [ -d data/e1_forward_v1 ]; then git add -f -- data/e1_forward_v1; fi
+          if git diff --cached --quiet; then exit 0; fi
+          git diff --cached --name-only | while IFS= read -r path; do
+            case "$path" in data/e1_forward_v1/*) ;; *) exit 1 ;; esac
+          done
+          python - <<'PY'
+          import hashlib, json, pathlib
+          root = pathlib.Path('data/e1_forward_v1')
+          captured = {str(p): hashlib.sha256(p.read_bytes()).hexdigest()
+                      for p in root.rglob('*') if p.is_file()}
+          pathlib.Path('/tmp/e1-captured-hashes.json').write_text(json.dumps(captured))
+          PY
+          git commit -m 'data: append actual E1 forward evidence'
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              echo 'pushed=true' >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            if [ "$attempt" = 3 ]; then exit 1; fi
+            git fetch origin main
+            git rebase origin/main
+            python - <<'PY'
+          import hashlib, json, pathlib
+          for name, digest in json.loads(pathlib.Path('/tmp/e1-captured-hashes.json').read_text()).items():
+              path = pathlib.Path(name)
+              if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != digest:
+                  raise SystemExit('Exact local E1 evidence changed during rebase: ' + name)
+          PY
+            python e1_forward.py check
+          done
+      - name: Request independent witness after publication or missing source proof
+        if: steps.persist.outcome == 'success' && (steps.persist.outputs.pushed == 'true' || steps.runtime.outputs.request_witness == 'true')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run e1_forward_witness.yml --ref main -f mode=verify
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e1-forward-live-${{ github.run_id }}
+          path: |
+            e1-forward-output/
+            data/e1_forward_v1/
+          if-no-files-found: warn
+          retention-days: 90
+      - name: Truthful runtime status after preservation
+        if: steps.runtime.outcome != 'success' || steps.runtime.outputs.has_errors == 'true'
+        run: exit 1
+  wait-target:
+    needs: publish
+    if: always() && needs.publish.outputs.journal_pushed == 'true' && needs.publish.outputs.event_id != '' && needs.publish.outputs.target_utc != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 80
+    concurrency:
+      group: e1-forward-target-${{ needs.publish.outputs.event_id }}
+      cancel-in-progress: false
+      queue: max
+    steps:
+      - name: Wait for the actual target without holding the journal write lock
+        env:
+          TARGET_UTC: ${{ needs.publish.outputs.target_utc }}
+        run: |
+          python - <<'PY'
+          import datetime as dt, os, time
+          target = dt.datetime.fromisoformat(os.environ['TARGET_UTC'].replace('Z', '+00:00'))
+          remaining = (target - dt.datetime.now(dt.timezone.utc)).total_seconds()
+          if remaining > 4500:
+              raise SystemExit('Target exceeds bounded wait')
+          while remaining > 0:
+              time.sleep(min(60, remaining))
+              remaining = (target - dt.datetime.now(dt.timezone.utc)).total_seconds()
+          PY
+  score-target:
+    needs: [publish, wait-target]
+    if: always() && needs.wait-target.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: write
+    concurrency:
+      group: e1-forward-write
+      cancel-in-progress: false
+      queue: max
+    env:
+      PYTHONUTF8: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install numpy==2.3.5
+      - name: Capture exact due event at the real clock
+        id: runtime
+        continue-on-error: true
+        env:
+          EXPECTED_EVENT_ID: ${{ needs.publish.outputs.event_id }}
+        run: python e1_forward.py score --event-id "$EXPECTED_EVENT_ID"
+      - name: Persist exact target capture
+        id: persist
+        run: *persist
+      - name: Immediate independent target witness
+        if: steps.persist.outputs.pushed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run e1_forward_witness.yml --ref main -f mode=verify
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e1-forward-target-${{ github.run_id }}
+          path: |
+            e1-forward-output/
+            data/e1_forward_v1/
+          if-no-files-found: warn
+          retention-days: 90
+      - name: Truthful score status after preservation
+        if: steps.runtime.outcome != 'success' || steps.runtime.outputs.has_errors == 'true'
+        run: exit 1

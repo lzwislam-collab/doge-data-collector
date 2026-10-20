@@ -1,0 +1,52 @@
+{
+  "schema": "DOGE_E1_ENGINEERING_POLICY_V1",
+  "parent_protocol_sha256": "47561e0479fd55f4dcaa0d39f9bbae988795e60e7faf154447395720dca3937a",
+  "parent_model_sha256": "52bc43dc0429df772357bb52555b43c26b63661c7e70de16432839eca495fa16",
+  "policy": {
+    "schema": "DOGE_PHASE2_FROZEN_FORWARD_V2",
+    "protocol_id": "DOGE_E1_FORWARD_20261021",
+    "effective_from_utc": "2026-10-21T00:00:00+00:00",
+    "observation_end_utc": "2027-01-19T00:00:00+00:00",
+    "model_expires_utc": "2027-02-11T08:00:00Z",
+    "fixed_review_utc": [
+      "2027-01-19T00:25:00+00:00",
+      "2027-02-11T08:00:00Z"
+    ],
+    "minimum_calendar_days": 90,
+    "minimum_nonoverlap_events": 100,
+    "family_size_upper_bound": 10000,
+    "familywise_alpha": 0.05,
+    "block_days": 3,
+    "feature_decimal_places": 9,
+    "accuracy_margin": 0.01,
+    "brier_margin": 0.002,
+    "regime_min_events": 20,
+    "regime_max_brier_harm": 0.01,
+    "max_training_data_age_days": 120,
+    "horizon_seconds": 3600,
+    "slot_seconds": 7200,
+    "target_ticker_need_not_follow_http_request": true,
+    "max_quote_age_seconds": 120,
+    "issue_window_seconds": 2700,
+    "target_window_seconds": 1500,
+    "canary_horizon_seconds": 600,
+    "canary_max_events": 1,
+    "canary_included_in_formal_statistics": false,
+    "fee_per_side": 0.001,
+    "slippage_per_side": 0.0005,
+    "stress_multiplier": 2,
+    "notional_usdt": 100,
+    "shadow_issuance_authorized": true,
+    "automatic_retraining": false,
+    "automatic_promotion": false,
+    "real_orders_authorized": false,
+    "promotion_requires": [
+      "complete independently replayed raw prospective cohort including missing events",
+      "dependency-robust fixed-look family-adjusted lower bound >=0.70",
+      "same-event frozen model/constant/majority direction and probability excess",
+      "cross-regime coverage and no material harm",
+      "same-event raw depth nominal and stress net benefit",
+      "independent evidence review and explicit new production version with rollback"
+    ]
+  }
+}
