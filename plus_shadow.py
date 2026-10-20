@@ -1,5 +1,7 @@
 """Read-only PLUS projection of frozen actual journals. Never issues forecasts."""
-import argparse,html,json,math,os,subprocess
+import argparse,html,json,math,os,subprocess,sys,types,re
+from urllib.error import HTTPError
+from urllib.parse import quote
 from datetime import datetime,timedelta,timezone
 from pathlib import Path
 import learned_shadow_runtime as legacy
@@ -13,6 +15,47 @@ import plus_scorecard
 
 ROOT=Path(__file__).resolve().parent
 JAPAN=timezone(timedelta(hours=9))
+
+class ReportEvidenceReadError(RuntimeError):
+ def __init__(self,diagnostic):
+  self.diagnostic=diagnostic
+  super().__init__(json.dumps(diagnostic,sort_keys=True))
+
+class ReportEvidenceReader:
+ """A missing path in a verified Git tree is a mismatch, never a witness."""
+ def __init__(self,root,read_at):
+  self.root=root;self.read_at=read_at;self.diagnostics=[]
+ def __call__(self,head,path):
+  # Validate before constructing diagnostics; do not expose arbitrary error URLs.
+  if not re.fullmatch('[a-f0-9]{40}',head) or not re.fullmatch('[A-Za-z0-9_./-]+',path) or path.startswith('/') or '..' in path.split('/'):
+   raise ValueError('invalid pinned report evidence address')
+  try:return self.read_at(head,path)
+  except (OSError,TimeoutError) as exc:
+   status=exc.code if isinstance(exc,HTTPError) else None
+   diagnostic={'operation':'r2_pinned_evidence_read','commit':head,'path':path,
+    'observed_at_utc':datetime.now(timezone.utc).isoformat(),'report_run_id':os.environ.get('GITHUB_RUN_ID'),'job':os.environ.get('GITHUB_JOB'),
+    'url':'https://raw.githubusercontent.com/'+f.old.REPO+'/'+head+'/'+quote(path,safe='/'),
+    'http_status':status,'error_type':type(exc).__name__,'classification':'REMOTE_EVIDENCE_UNAVAILABLE'}
+   if status==404:
+    command=['git','--literal-pathspecs','-c','safe.directory=*']
+    tree=subprocess.run([*command,'cat-file','-e',head+'^{tree}'],cwd=self.root,capture_output=True)
+    if tree.returncode==0:
+     entries=subprocess.run([*command,'ls-tree','-z','--full-tree',head,'--',path],cwd=self.root,capture_output=True)
+     if entries.returncode==0 and entries.stdout==b'':
+      diagnostic['classification']='PINNED_PATH_ABSENT'
+      self.diagnostics.append(diagnostic);print(json.dumps(diagnostic,sort_keys=True),file=sys.stderr)
+      return b''
+   self.diagnostics.append(diagnostic);print(json.dumps(diagnostic,sort_keys=True),file=sys.stderr)
+   raise ReportEvidenceReadError(diagnostic) from exc
+
+def report_r2_verifiers(reader):
+ # Rebind only these read-only functions' dependencies. The frozen function
+ # code, protocol and module globals remain untouched, including other callers.
+ scope=dict(vars(r2));scope['read_at']=reader
+ for name in ('provenance','publication'):
+  original=getattr(r2,name)
+  scope[name]=types.FunctionType(original.__code__,scope,original.__name__,original.__defaults__,original.__closure__)
+ return scope['publication'],scope['provenance']
 
 def forecast_row(track,h,e,s,prediction_verified,score_verified,now):
  if track not in ('original18','r2') or h not in (1,24) or track=='r2' and h!=1:raise ValueError('unregistered PLUS track/horizon')
@@ -77,12 +120,14 @@ def r2_proofs(p,files,events,scores,now,online):
   for kind in ('prediction','target'):
    path=ROOT/f.BASE/'bindings'/(e['event_id']+'_'+kind+'.json')
    if path.exists():ids.append(json.loads(path.read_bytes())['run_id'])
- runs=r2.runs_server(ids);scored,rejected=r2.publication(p,events,scores,files,runs);good={q['event_id'] for q in scored if q['formal_eligible']}
+ reader=ReportEvidenceReader(ROOT,r2.read_at)
+ publication,provenance=report_r2_verifiers(reader)
+ runs=r2.runs_server(ids);scored,rejected=publication(p,events,scores,files,runs);good={q['event_id'] for q in scored if q['formal_eligible']}
  proofs={}
  for e in events:
   try:
-   r2.provenance(e,files,runs)
-   pred=f.witness({**files,f.BASE+'/events/'+e['event_id']+'.json':f.encode(e)},runs,r2.read_at,f.utc(e['target_utc']),f.utc(e['issued_at_utc']))
+   provenance(e,files,runs)
+   pred=f.witness({**files,f.BASE+'/events/'+e['event_id']+'.json':f.encode(e)},runs,reader,f.utc(e['target_utc']),f.utc(e['issued_at_utc']))
    proofs[e['event_id']]=(pred is not None,e['event_id'] in good)
   except ValueError as exc:rejected[e['event_id']]=str(exc)
  return proofs,rejected
@@ -191,3 +236,4 @@ def main():
  if report['status'].startswith('BLOCKED'):raise SystemExit(1)
 
 if __name__=='__main__':main()
+
