@@ -1,20 +1,25 @@
 {
   "schema_version": 1,
-  "status": "stale_hour_no_new_registration",
-  "generated_utc": "2026-10-19T23:57:48.772523+00:00",
-  "quote_at_utc": "2026-10-19T23:57:48.365000+00:00",
-  "quote_price": 0.07974,
-  "reference_quote_age_sec": 0.4,
-  "feature_close_at_utc": "2026-10-19T23:00:00+00:00",
-  "feature_lag_min": 57.81,
+  "status": "ok",
+  "generated_utc": "2026-10-20T00:40:58.473898+00:00",
+  "quote_at_utc": "2026-10-20T00:40:57.565000+00:00",
+  "quote_price": 0.07943,
+  "reference_quote_age_sec": 0.9,
+  "feature_close_at_utc": "2026-10-20T00:00:00+00:00",
+  "feature_lag_min": 40.97,
   "forecast_window_definition": "genuine quote issued_at -> target issued_at + N hours",
   "target_resolution": "first genuinely observed quote in [target,target+25m], never historical reconstruction or interpolation",
-  "new_ids": [],
-  "forecast_rows": 432,
-  "scores_added": 0,
-  "scored_count": 324,
-  "unscorable_count": 68,
-  "pending_count": 40,
+  "new_ids": [
+    "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792450800000_1h",
+    "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792450800000_24h",
+    "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792450800000_168h",
+    "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792450800000_720h"
+  ],
+  "forecast_rows": 436,
+  "scores_added": 1,
+  "scored_count": 326,
+  "unscorable_count": 69,
+  "pending_count": 41,
   "direction_accuracy_target_pct": 70,
   "models": [
     "majority",
@@ -23,19 +28,19 @@
   ],
   "horizons": {
     "1h": {
-      "total_registered": 208,
+      "total_registered": 209,
       "models": {
         "majority": {
           "all_scored": {
-            "n": 172,
-            "accuracy_pct": 44.19,
+            "n": 173,
+            "accuracy_pct": 43.93,
             "up_recall_pct": 91.57,
             "down_recall_pct": 0.0,
             "balanced_accuracy_pct": 45.78
           },
           "nonoverlap_fixed_phase": {
-            "n": 124,
-            "accuracy_pct": 44.35,
+            "n": 125,
+            "accuracy_pct": 44.0,
             "up_recall_pct": 91.67,
             "down_recall_pct": 0.0,
             "balanced_accuracy_pct": 45.83,
@@ -44,47 +49,47 @@
         },
         "doge_reversal": {
           "all_scored": {
-            "n": 172,
-            "accuracy_pct": 52.33,
+            "n": 173,
+            "accuracy_pct": 52.6,
             "up_recall_pct": 53.01,
-            "down_recall_pct": 51.69,
-            "balanced_accuracy_pct": 52.35
+            "down_recall_pct": 52.22,
+            "balanced_accuracy_pct": 52.62
           },
           "nonoverlap_fixed_phase": {
-            "n": 124,
-            "accuracy_pct": 50.81,
+            "n": 125,
+            "accuracy_pct": 51.2,
             "up_recall_pct": 51.67,
-            "down_recall_pct": 50.0,
-            "balanced_accuracy_pct": 50.83,
+            "down_recall_pct": 50.77,
+            "balanced_accuracy_pct": 51.22,
             "exploratory_only_not_formal": true
           }
         },
         "btc_momentum": {
           "all_scored": {
-            "n": 172,
-            "accuracy_pct": 43.6,
+            "n": 173,
+            "accuracy_pct": 43.35,
             "up_recall_pct": 43.37,
-            "down_recall_pct": 43.82,
-            "balanced_accuracy_pct": 43.6
+            "down_recall_pct": 43.33,
+            "balanced_accuracy_pct": 43.35
           },
           "nonoverlap_fixed_phase": {
-            "n": 124,
-            "accuracy_pct": 44.35,
+            "n": 125,
+            "accuracy_pct": 44.0,
             "up_recall_pct": 46.67,
-            "down_recall_pct": 42.19,
-            "balanced_accuracy_pct": 44.43,
+            "down_recall_pct": 41.54,
+            "balanced_accuracy_pct": 44.1,
             "exploratory_only_not_formal": true
           }
         }
       }
     },
     "24h": {
-      "total_registered": 208,
+      "total_registered": 209,
       "models": {
         "majority": {
           "all_scored": {
-            "n": 152,
-            "accuracy_pct": 67.11,
+            "n": 153,
+            "accuracy_pct": 66.67,
             "up_recall_pct": 0.0,
             "down_recall_pct": 100.0,
             "balanced_accuracy_pct": 50.0
@@ -100,11 +105,11 @@
         },
         "doge_reversal": {
           "all_scored": {
-            "n": 152,
-            "accuracy_pct": 58.55,
-            "up_recall_pct": 100.0,
+            "n": 153,
+            "accuracy_pct": 58.17,
+            "up_recall_pct": 98.04,
             "down_recall_pct": 38.24,
-            "balanced_accuracy_pct": 69.12
+            "balanced_accuracy_pct": 68.14
           },
           "nonoverlap_fixed_phase": {
             "n": 8,
@@ -117,11 +122,11 @@
         },
         "btc_momentum": {
           "all_scored": {
-            "n": 152,
-            "accuracy_pct": 44.08,
-            "up_recall_pct": 40.0,
+            "n": 153,
+            "accuracy_pct": 44.44,
+            "up_recall_pct": 41.18,
             "down_recall_pct": 46.08,
-            "balanced_accuracy_pct": 43.04
+            "balanced_accuracy_pct": 43.63
           },
           "nonoverlap_fixed_phase": {
             "n": 8,
@@ -135,7 +140,7 @@
       }
     },
     "168h": {
-      "total_registered": 8,
+      "total_registered": 9,
       "models": {
         "majority": {
           "all_scored": {
@@ -191,7 +196,7 @@
       }
     },
     "720h": {
-      "total_registered": 8,
+      "total_registered": 9,
       "models": {
         "majority": {
           "all_scored": {
