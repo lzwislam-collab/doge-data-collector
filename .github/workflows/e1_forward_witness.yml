@@ -1,0 +1,71 @@
+name: Witness DOGE E1 forward evidence
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Independent registration or exact public evidence verification
+        type: choice
+        options: [verify, register]
+        default: verify
+  workflow_run:
+    workflows: ['Backfill DOGE BTC ETH 1H extreme-event research history']
+    types: [completed]
+  push:
+    paths: ['e1_forward.py', 'test_e1_forward*.py', 'config/e1_forward*.json', '.github/workflows/e1_forward*.yml']
+  pull_request:
+    paths: ['e1_forward.py', 'test_e1_forward*.py', 'config/e1_forward*.json', '.github/workflows/e1_forward*.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  witness:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       github.event.workflow_run.event != 'pull_request' && github.event.workflow_run.event != 'pull_request_target')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PYTHONUTF8: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install numpy==2.3.5
+      - name: Exact frozen bytes and actual public evidence
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          WITNESS_KIND: ${{ inputs.mode || 'verify' }}
+        run: python e1_forward.py witness --kind "$WITNESS_KIND"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e1-forward-witness-${{ github.run_id }}
+          path: e1-forward-output/
+          if-no-files-found: error
+          retention-days: 90
+  ci:
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install numpy==2.3.5 scipy==1.16.3 scikit-learn==1.7.2 joblib==1.5.2 threadpoolctl==3.6.0 botocore==1.43.112
+      - run: |
+          python -m unittest discover -q
+          python forward_validation_v2.py --integrity-only
+          python e1_forward.py check
