@@ -3,6 +3,73 @@ from pathlib import Path
 from unittest.mock import patch
 from datetime import datetime,timezone,timedelta
 
+class Report404Adapter(unittest.TestCase):
+ def fixture(self):
+  import subprocess
+  tmp=tempfile.TemporaryDirectory();self.addCleanup(tmp.cleanup);root=Path(tmp.name)
+  subprocess.run(['git','init','-q',str(root)],check=True)
+  (root/'present.json').write_text('{}',encoding='utf-8')
+  subprocess.run(['git','-C',str(root),'add','present.json'],check=True)
+  subprocess.run(['git','-C',str(root),'-c','user.name=Regression','-c','user.email=regression@example.invalid','commit','-qm','fixture'],check=True)
+  head=subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip()
+  return root,head
+ def error(self,status):
+  from urllib.error import HTTPError
+  return HTTPError('https://example.invalid/private?secret=never-log',status,'test',{},None)
+ def test_proven_absent_pinned_file_is_only_a_nonmatching_candidate(self):
+  import plus_shadow as m
+  root,head=self.fixture()
+  reader=m.ReportEvidenceReader(root,lambda h,p:(_ for _ in ()).throw(self.error(404)))
+  self.assertEqual(reader(head,'data/phase2_forward_v2/scores/1792461600_formal.json'),b'')
+  self.assertEqual(reader.diagnostics[-1]['classification'],'PINNED_PATH_ABSENT')
+ def test_existing_path_404_remains_blocked_and_diagnostics_are_sanitized(self):
+  import plus_shadow as m
+  root,head=self.fixture();reader=m.ReportEvidenceReader(root,lambda h,p:(_ for _ in ()).throw(self.error(404)))
+  with self.assertRaises(m.ReportEvidenceReadError) as caught:reader(head,'present.json')
+  self.assertEqual(caught.exception.diagnostic['http_status'],404)
+  self.assertNotIn('secret',str(caught.exception));self.assertNotIn('example.invalid',str(caught.exception))
+ def test_unknown_commit_404_is_not_proven_absent(self):
+  import plus_shadow as m
+  root,_=self.fixture();reader=m.ReportEvidenceReader(root,lambda h,p:(_ for _ in ()).throw(self.error(404)))
+  with self.assertRaises(m.ReportEvidenceReadError):reader('f'*40,'missing.json')
+ def test_permission_rate_limit_and_network_failures_remain_blocked(self):
+  import plus_shadow as m
+  root,head=self.fixture()
+  for exc in (self.error(403),self.error(429),TimeoutError('private endpoint'),OSError('unavailable')):
+   with self.subTest(error=type(exc).__name__),self.assertRaises(m.ReportEvidenceReadError):
+    m.ReportEvidenceReader(root,lambda h,p:(_ for _ in ()).throw(exc))(head,'missing.json')
+ def test_success_keeps_exact_bytes(self):
+  import plus_shadow as m
+  root,head=self.fixture();raw=b'original bytes\n'
+  self.assertEqual(m.ReportEvidenceReader(root,lambda h,p:raw)(head,'present.json'),raw)
+ def test_verifier_clones_do_not_mutate_frozen_module_globals(self):
+  import plus_shadow as m
+  original=m.r2.read_at;reader=lambda h,p:b''
+  publication,provenance=m.report_r2_verifiers(reader)
+  self.assertIs(publication.__globals__['read_at'],reader)
+  self.assertIs(provenance.__globals__['read_at'],reader)
+  self.assertIs(publication.__globals__['provenance'],provenance)
+  self.assertIs(m.r2.read_at,original)
+ def test_frozen_witness_skips_missing_candidate_without_inventing_proof(self):
+  import plus_shadow as m
+  root,head=self.fixture();now=datetime(2026,10,20,3,20,tzinfo=timezone.utc)
+  run={'id':1,'repository':{'full_name':m.f.old.REPO},'path':m.f.WORKFLOW,'head_branch':'main','event':'workflow_dispatch','status':'completed','conclusion':'success','created_at':(now-timedelta(minutes=2)).isoformat(),'head_sha':head,'audit_job':{'name':'audit','status':'completed','conclusion':'success','started_at':(now-timedelta(minutes=1)).isoformat(),'completed_at':now.isoformat()}}
+  missing='data/phase2_forward_v2/scores/1792461600_formal.json';raw=b'expected-score'
+  reader=m.ReportEvidenceReader(root,lambda h,p:(_ for _ in ()).throw(self.error(404)))
+  self.assertIsNone(m.f.witness({missing:raw},[run],reader,now+timedelta(minutes=1)))
+  # A distinct, exact successful candidate can still qualify; no timestamp or
+  # byte check in the frozen witness function is weakened by the adapter.
+  later=dict(run,id=2)
+  calls=[self.error(404),raw]
+  def read(h,p):
+   value=calls.pop(0)
+   if isinstance(value,Exception):raise value
+   return value
+  good=m.f.witness({missing:raw},[run,later],m.ReportEvidenceReader(root,read),now+timedelta(minutes=1))
+  self.assertEqual(good['run_id'],2)
+  self.assertIsNone(m.f.witness({missing:raw},[run],m.ReportEvidenceReader(root,lambda h,p:b'wrong bytes'),now+timedelta(minutes=1)))
+  self.assertIsNone(m.f.witness({missing:raw},[run],m.ReportEvidenceReader(root,lambda h,p:raw),now-timedelta(minutes=3)))
+
 class Plus(unittest.TestCase):
  def test_reference_clock_and_flat_direction_display(self):
   m=self.module();at,e=self.event();e['entry_packet']={'fixture':True}
@@ -59,7 +126,8 @@ class Adapters(unittest.TestCase):
   self.assertEqual(proof[e['event_id']],(True,False));self.assertIn(e['event_id'],errors)
  def test_r2_prediction_proof_survives_missing_target(self):
   m=self.module();at,e=self.event('r2');e.update(registration_run_id=1,source_run_id=2)
-  with patch.object(m.r2,'runs_server',return_value=[]),patch.object(m.r2,'publication',return_value=([],{e['event_id']:'target missing'})),patch.object(m.r2,'provenance'),patch.object(m.f,'witness',return_value={'verified':True}):
+  from unittest.mock import Mock
+  with patch.object(m.r2,'runs_server',return_value=[]),patch.object(m,'report_r2_verifiers',return_value=(Mock(return_value=([],{e['event_id']:'target missing'})),Mock())),patch.object(m.f,'witness',return_value={'verified':True}):
    proof,_=m.r2_proofs({}, {}, [e],[],at,True)
   self.assertEqual(proof[e['event_id']],(True,False))
  def test_failure_clears_previous_success_output(self):
@@ -97,3 +165,4 @@ class AuditBoundaries(unittest.TestCase):
    self.assertEqual(m.selection_state(True,datetime.now(timezone.utc))['selection'],'FROZEN_REFERENCE');check.assert_called_once()
 
 if __name__=='__main__':unittest.main()
+
