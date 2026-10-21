@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "status": "ok",
-  "audited_at_utc": "2026-10-20T06:07:41.362998+00:00",
+  "audited_at_utc": "2026-10-21T06:11:02.065554+00:00",
   "protocol_id": "DOGE_THREE_RISK_GATES_20261014_V1",
-  "source_v2_cutoff_utc": "2026-10-20T06:07:12.946103+00:00",
+  "source_v2_cutoff_utc": "2026-10-21T06:10:34.364860+00:00",
   "official_V2_P1_P2_frozen_files_unchanged": true,
   "catalogue": {
     "catalogue_entries": 36,
@@ -34,32 +34,32 @@
         "fold_count": 3,
         "test_points_per_fold": 48,
         "min_purged_training": 239,
-        "full_model_historical_brier": 0.2508112,
+        "full_model_historical_brier": 0.25299257,
         "ablation": {
           "DOGE return 1h": {
-            "brier_without_group": 0.25078468,
-            "delta_minus_full_brier": -2.651e-05,
+            "brier_without_group": 0.25296101,
+            "delta_minus_full_brier": -3.157e-05,
             "suggests_possible_overfit_if_negative": true
           },
           "DOGE return 24h": {
-            "brier_without_group": 0.25086952,
-            "delta_minus_full_brier": 5.832e-05,
+            "brier_without_group": 0.25302642,
+            "delta_minus_full_brier": 3.385e-05,
             "suggests_possible_overfit_if_negative": false
           },
           "BTC return 1h": {
-            "brier_without_group": 0.25080703,
-            "delta_minus_full_brier": -4.16e-06,
-            "suggests_possible_overfit_if_negative": true
+            "brier_without_group": 0.25299439,
+            "delta_minus_full_brier": 1.82e-06,
+            "suggests_possible_overfit_if_negative": false
           },
           "BTC return 24h": {
-            "brier_without_group": 0.25081658,
-            "delta_minus_full_brier": 5.38e-06,
-            "suggests_possible_overfit_if_negative": false
+            "brier_without_group": 0.25298702,
+            "delta_minus_full_brier": -5.55e-06,
+            "suggests_possible_overfit_if_negative": true
           },
           "DOGE abs return 24h": {
-            "brier_without_group": 0.25082293,
-            "delta_minus_full_brier": 1.173e-05,
-            "suggests_possible_overfit_if_negative": false
+            "brier_without_group": 0.25298813,
+            "delta_minus_full_brier": -4.44e-06,
+            "suggests_possible_overfit_if_negative": true
           }
         },
         "is_real_independent_prospective_evaluation": false
@@ -68,31 +68,31 @@
         "fold_count": 3,
         "test_points_per_fold": 48,
         "min_purged_training": 239,
-        "full_model_historical_brier": 0.24923195,
+        "full_model_historical_brier": 0.2493806,
         "ablation": {
           "DOGE return 1h": {
-            "brier_without_group": 0.24919353,
-            "delta_minus_full_brier": -3.842e-05,
+            "brier_without_group": 0.24933247,
+            "delta_minus_full_brier": -4.814e-05,
             "suggests_possible_overfit_if_negative": true
           },
           "DOGE return 24h": {
-            "brier_without_group": 0.24910916,
-            "delta_minus_full_brier": -0.00012279,
+            "brier_without_group": 0.24922441,
+            "delta_minus_full_brier": -0.0001562,
             "suggests_possible_overfit_if_negative": true
           },
           "BTC return 1h": {
-            "brier_without_group": 0.24924788,
-            "delta_minus_full_brier": 1.593e-05,
+            "brier_without_group": 0.24939472,
+            "delta_minus_full_brier": 1.412e-05,
             "suggests_possible_overfit_if_negative": false
           },
           "BTC return 24h": {
-            "brier_without_group": 0.24911266,
-            "delta_minus_full_brier": -0.00011929,
+            "brier_without_group": 0.24924238,
+            "delta_minus_full_brier": -0.00013823,
             "suggests_possible_overfit_if_negative": true
           },
           "DOGE abs return 24h": {
-            "brier_without_group": 0.24911207,
-            "delta_minus_full_brier": -0.00011987,
+            "brier_without_group": 0.24923507,
+            "delta_minus_full_brier": -0.00014553,
             "suggests_possible_overfit_if_negative": true
           }
         },
@@ -108,7 +108,7 @@
   },
   "shadow_decision_gate": {
     "action": "NO_TRADE",
-    "new_records": 1,
+    "new_records": 0,
     "all_shadow_records": 4,
     "timely_audited_records": 0,
     "may_count_missing_as_correct_direction": false,
@@ -124,10 +124,10 @@
       "p0_30d_higher_reliability": "WAIT",
       "p0_30d_horizons": {
         "1h": {
-          "expected": 195,
-          "issued": 190,
-          "missing": 5,
-          "coverage_pct": 97.43589743589743,
+          "expected": 220,
+          "issued": 214,
+          "missing": 6,
+          "coverage_pct": 97.27272727272727,
           "slots": [
             {
               "slot_start_utc": "2026-10-12T02:00:00+00:00",
@@ -5342,11 +5342,603 @@
                   "created_at": "2026-10-20T04:58:58Z"
                 }
               ]
+            },
+            {
+              "slot_start_utc": "2026-10-20T05:00:00+00:00",
+              "deadline_utc": "2026-10-20T05:45:00+00:00",
+              "status": "verified_issued",
+              "forecast_ids": [
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792468800000_1h"
+              ],
+              "run_ids": [
+                39375700145
+              ],
+              "runs": [
+                {
+                  "id": 39375700145,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T05:35:21Z"
+                }
+              ]
+            },
+            {
+              "slot_start_utc": "2026-10-20T06:00:00+00:00",
+              "deadline_utc": "2026-10-20T06:45:00+00:00",
+              "status": "verified_issued",
+              "forecast_ids": [
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792472400000_1h"
+              ],
+              "run_ids": [
+                39378756167
+              ],
+              "runs": [
+                {
+                  "id": 39378756167,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T06:09:10Z"
+                }
+              ]
+            },
+            {
+              "slot_start_utc": "2026-10-20T07:00:00+00:00",
+              "deadline_utc": "2026-10-20T07:45:00+00:00",
+              "status": "verified_issued",
+              "forecast_ids": [
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792476000000_1h"
+              ],
+              "run_ids": [
+                39384033913,
+                39388609062
+              ],
+              "runs": [
+                {
+                  "id": 39384033913,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T07:03:07Z"
+                },
+                {
+                  "id": 39388609062,
+                  "event": "schedule",
+                  "conclusion": "success",
+                  "created_at": "2026-10-20T07:45:15Z"
+                }
+              ]
+            },
+            {
+              "slot_start_utc": "2026-10-20T08:00:00+00:00",
+              "deadline_utc": "2026-10-20T08:45:00+00:00",
+              "status": "verified_issued",
+              "forecast_ids": [
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792479600000_1h"
+              ],
+              "run_ids": [
+                39392413059
+              ],
+              "runs": [
+                {
+                  "id": 39392413059,
+                  "event": "schedule",
+                  "conclusion": "success",
+                  "created_at": "2026-10-20T08:18:10Z"
+                }
+              ]
+            },
+            {
+              "slot_start_utc": "2026-10-20T09:00:00+00:00",
+              "deadline_utc": "2026-10-20T09:45:00+00:00",
+              "status": "verified_issued",
+              "forecast_ids": [
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792483200000_1h"
+              ],
+              "run_ids": [
+                39397859152,
+                39402067756
+              ],
+              "runs": [
+                {
+                  "id": 39397859152,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T09:03:13Z"
+                },
+                {
+                  "id": 39402067756,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T09:37:43Z"
+                }
+              ]
+            },
+            {
+              "slot_start_utc": "2026-10-20T10:00:00+00:00",
+              "deadline_utc": "2026-10-20T10:45:00+00:00",
+              "status": "verified_issued",
+              "forecast_ids": [
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792486800000_1h"
+              ],
+              "run_ids": [
+                39406304510,
+                39410789154
+              ],
+              "runs": [
+                {
+                  "id": 39406304510,
+                  "event": "schedule",
+                  "conclusion": "success",
+                  "created_at": "2026-10-20T10:12:39Z"
+                },
+                {
+                  "id": 39410789154,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T10:50:44Z"
+                }
+              ]
+            },
+            {
+              "slot_start_utc": "2026-10-20T11:00:00+00:00",
+              "deadline_utc": "2026-10-20T11:45:00+00:00",
+              "status": "verified_issued",
+              "forecast_ids": [
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792490400000_1h"
+              ],
+              "run_ids": [
+                39414444936,
+                39418718175
+              ],
+              "runs": [
+                {
+                  "id": 39414444936,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T11:22:07Z"
+                },
+                {
+                  "id": 39418718175,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T11:57:54Z"
+                }
+              ]
+            },
+            {
+              "slot_start_utc": "2026-10-20T12:00:00+00:00",
+              "deadline_utc": "2026-10-20T12:45:00+00:00",
+              "status": "no_issuance",
+              "forecast_ids": [],
+              "run_ids": [
+                39424546781,
+                39424658759
+              ],
+              "runs": [
+                {
+                  "id": 39424546781,
+                  "event": "workflow_dispatch",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T12:43:53Z"
+                },
+                {
+                  "id": 39424658759,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T12:44:44Z"
+                }
+              ]
+            },
+            {
+              "slot_start_utc": "2026-10-20T13:00:00+00:00",
+              "deadline_utc": "2026-10-20T13:45:00+00:00",
+              "status": "verified_issued",
+              "forecast_ids": [
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792497600000_1h"
+              ],
+              "run_ids": [
+                39430564030
+              ],
+              "runs": [
+                {
+                  "id": 39430564030,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T13:27:37Z"
+                }
+              ]
+            },
+            {
+              "slot_start_utc": "2026-10-20T14:00:00+00:00",
+              "deadline_utc": "2026-10-20T14:45:00+00:00",
+              "status": "verified_issued",
+              "forecast_ids": [
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792501200000_1h"
+              ],
+              "run_ids": [
+                39437402932,
+                39443600072
+              ],
+              "runs": [
+                {
+                  "id": 39437402932,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T14:14:27Z"
+                },
+                {
+                  "id": 39443600072,
+                  "event": "schedule",
+                  "conclusion": "success",
+                  "created_at": "2026-10-20T14:55:02Z"
+                }
+              ]
+            },
+            {
+              "slot_start_utc": "2026-10-20T15:00:00+00:00",
+              "deadline_utc": "2026-10-20T15:45:00+00:00",
+              "status": "verified_issued",
+              "forecast_ids": [
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792504800000_1h"
+              ],
+              "run_ids": [
+                39448904449
+              ],
+              "runs": [
+                {
+                  "id": 39448904449,
+                  "event": "schedule",
+                  "conclusion": "success",
+                  "created_at": "2026-10-20T15:29:36Z"
+                }
+              ]
+            },
+            {
+              "slot_start_utc": "2026-10-20T16:00:00+00:00",
+              "deadline_utc": "2026-10-20T16:45:00+00:00",
+              "status": "verified_issued",
+              "forecast_ids": [
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792508400000_1h"
+              ],
+              "run_ids": [
+                39455318592,
+                39460975742
+              ],
+              "runs": [
+                {
+                  "id": 39455318592,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T16:12:04Z"
+                },
+                {
+                  "id": 39460975742,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T16:50:37Z"
+                }
+              ]
+            },
+            {
+              "slot_start_utc": "2026-10-20T17:00:00+00:00",
+              "deadline_utc": "2026-10-20T17:45:00+00:00",
+              "status": "verified_issued",
+              "forecast_ids": [
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792512000000_1h"
+              ],
+              "run_ids": [
+                39466011279
+              ],
+              "runs": [
+                {
+                  "id": 39466011279,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T17:25:56Z"
+                }
+              ]
+            },
+            {
+              "slot_start_utc": "2026-10-20T18:00:00+00:00",
+              "deadline_utc": "2026-10-20T18:45:00+00:00",
+              "status": "verified_issued",
+              "forecast_ids": [
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792515600000_1h"
+              ],
+              "run_ids": [
+                39471071469,
+                39476666432
+              ],
+              "runs": [
+                {
+                  "id": 39471071469,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T18:01:02Z"
+                },
+                {
+                  "id": 39476666432,
+                  "event": "schedule",
+                  "conclusion": "success",
+                  "created_at": "2026-10-20T18:39:29Z"
+                }
+              ]
+            },
+            {
+              "slot_start_utc": "2026-10-20T19:00:00+00:00",
+              "deadline_utc": "2026-10-20T19:45:00+00:00",
+              "status": "verified_issued",
+              "forecast_ids": [
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792519200000_1h"
+              ],
+              "run_ids": [
+                39482582489,
+                39487765035
+              ],
+              "runs": [
+                {
+                  "id": 39482582489,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T19:20:13Z"
+                },
+                {
+                  "id": 39487765035,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T19:56:50Z"
+                }
+              ]
+            },
+            {
+              "slot_start_utc": "2026-10-20T20:00:00+00:00",
+              "deadline_utc": "2026-10-20T20:45:00+00:00",
+              "status": "verified_issued",
+              "forecast_ids": [
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792522800000_1h"
+              ],
+              "run_ids": [
+                39492484876
+              ],
+              "runs": [
+                {
+                  "id": 39492484876,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T20:30:02Z"
+                }
+              ]
+            },
+            {
+              "slot_start_utc": "2026-10-20T21:00:00+00:00",
+              "deadline_utc": "2026-10-20T21:45:00+00:00",
+              "status": "verified_issued",
+              "forecast_ids": [
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792526400000_1h"
+              ],
+              "run_ids": [
+                39497573364,
+                39502164708
+              ],
+              "runs": [
+                {
+                  "id": 39497573364,
+                  "event": "schedule",
+                  "conclusion": "success",
+                  "created_at": "2026-10-20T21:05:55Z"
+                },
+                {
+                  "id": 39502164708,
+                  "event": "schedule",
+                  "conclusion": "success",
+                  "created_at": "2026-10-20T21:39:47Z"
+                }
+              ]
+            },
+            {
+              "slot_start_utc": "2026-10-20T22:00:00+00:00",
+              "deadline_utc": "2026-10-20T22:45:00+00:00",
+              "status": "verified_issued",
+              "forecast_ids": [
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792530000000_1h"
+              ],
+              "run_ids": [
+                39506477330,
+                39510815409
+              ],
+              "runs": [
+                {
+                  "id": 39506477330,
+                  "event": "schedule",
+                  "conclusion": "success",
+                  "created_at": "2026-10-20T22:13:13Z"
+                },
+                {
+                  "id": 39510815409,
+                  "event": "schedule",
+                  "conclusion": "success",
+                  "created_at": "2026-10-20T22:49:10Z"
+                }
+              ]
+            },
+            {
+              "slot_start_utc": "2026-10-20T23:00:00+00:00",
+              "deadline_utc": "2026-10-20T23:45:00+00:00",
+              "status": "verified_issued",
+              "forecast_ids": [
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792533600000_1h"
+              ],
+              "run_ids": [
+                39514136455,
+                39517631980
+              ],
+              "runs": [
+                {
+                  "id": 39514136455,
+                  "event": "schedule",
+                  "conclusion": "success",
+                  "created_at": "2026-10-20T23:18:27Z"
+                },
+                {
+                  "id": 39517631980,
+                  "event": "schedule",
+                  "conclusion": "success",
+                  "created_at": "2026-10-20T23:50:51Z"
+                }
+              ]
+            },
+            {
+              "slot_start_utc": "2026-10-21T00:00:00+00:00",
+              "deadline_utc": "2026-10-21T00:45:00+00:00",
+              "status": "verified_issued",
+              "forecast_ids": [
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792537200000_1h"
+              ],
+              "run_ids": [
+                39518623277,
+                39520781892
+              ],
+              "runs": [
+                {
+                  "id": 39518623277,
+                  "event": "workflow_dispatch",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-21T00:00:29Z"
+                },
+                {
+                  "id": 39520781892,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-21T00:21:05Z"
+                }
+              ]
+            },
+            {
+              "slot_start_utc": "2026-10-21T01:00:00+00:00",
+              "deadline_utc": "2026-10-21T01:45:00+00:00",
+              "status": "verified_issued",
+              "forecast_ids": [
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792540800000_1h"
+              ],
+              "run_ids": [
+                39525794883,
+                39529626125
+              ],
+              "runs": [
+                {
+                  "id": 39525794883,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-21T01:10:51Z"
+                },
+                {
+                  "id": 39529626125,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-21T01:50:34Z"
+                }
+              ]
+            },
+            {
+              "slot_start_utc": "2026-10-21T02:00:00+00:00",
+              "deadline_utc": "2026-10-21T02:45:00+00:00",
+              "status": "verified_issued",
+              "forecast_ids": [
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792544400000_1h"
+              ],
+              "run_ids": [
+                39532531676,
+                39536004131
+              ],
+              "runs": [
+                {
+                  "id": 39532531676,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-21T02:21:11Z"
+                },
+                {
+                  "id": 39536004131,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-21T02:58:44Z"
+                }
+              ]
+            },
+            {
+              "slot_start_utc": "2026-10-21T03:00:00+00:00",
+              "deadline_utc": "2026-10-21T03:45:00+00:00",
+              "status": "verified_issued",
+              "forecast_ids": [
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792548000000_1h"
+              ],
+              "run_ids": [
+                39539458219
+              ],
+              "runs": [
+                {
+                  "id": 39539458219,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-21T03:35:59Z"
+                }
+              ]
+            },
+            {
+              "slot_start_utc": "2026-10-21T04:00:00+00:00",
+              "deadline_utc": "2026-10-21T04:45:00+00:00",
+              "status": "verified_issued",
+              "forecast_ids": [
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792551600000_1h"
+              ],
+              "run_ids": [
+                39542884819,
+                39546463740
+              ],
+              "runs": [
+                {
+                  "id": 39542884819,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-21T04:13:50Z"
+                },
+                {
+                  "id": 39546463740,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-21T04:53:06Z"
+                }
+              ]
+            },
+            {
+              "slot_start_utc": "2026-10-21T05:00:00+00:00",
+              "deadline_utc": "2026-10-21T05:45:00+00:00",
+              "status": "verified_issued",
+              "forecast_ids": [
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792555200000_1h"
+              ],
+              "run_ids": [
+                39549343997,
+                39552711302
+              ],
+              "runs": [
+                {
+                  "id": 39549343997,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-21T05:24:08Z"
+                },
+                {
+                  "id": 39552711302,
+                  "event": "schedule",
+                  "conclusion": null,
+                  "created_at": "2026-10-21T05:59:40Z"
+                }
+              ]
             }
           ],
-          "target_due": 189,
-          "target_scored": 164,
-          "target_missing": 25,
+          "target_due": 213,
+          "target_scored": 184,
+          "target_missing": 29,
           "target_missing_ids": [
             "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1791928800000_1h",
             "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1791957600000_1h",
@@ -5372,9 +5964,13 @@
             "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792389600000_1h",
             "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792407600000_1h",
             "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792411200000_1h",
-            "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792414800000_1h"
+            "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792414800000_1h",
+            "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792468800000_1h",
+            "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792472400000_1h",
+            "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792497600000_1h",
+            "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792508400000_1h"
           ],
-          "target_coverage_pct": 86.77248677248677,
+          "target_coverage_pct": 86.3849765258216,
           "seven_full_days_observed": true,
           "rolling_window_hours": 720,
           "full_window_observed": false,
@@ -5382,8 +5978,8 @@
           "original_effective_from_utc": "2026-10-12T02:00:00+00:00"
         },
         "24h": {
-          "expected": 8,
-          "issued": 8,
+          "expected": 9,
+          "issued": 9,
           "missing": 0,
           "coverage_pct": 100.0,
           "slots": [
@@ -8510,16 +9106,330 @@
                   "created_at": "2026-10-20T01:59:33Z"
                 }
               ]
+            },
+            {
+              "slot_start_utc": "2026-10-20T02:00:00+00:00",
+              "deadline_utc": "2026-10-21T02:00:00+00:00",
+              "status": "verified_issued",
+              "forecast_ids": [
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792458000000_24h",
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792461600000_24h",
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792465200000_24h",
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792468800000_24h",
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792472400000_24h",
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792476000000_24h",
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792479600000_24h",
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792483200000_24h",
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792486800000_24h",
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792490400000_24h",
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792497600000_24h",
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792501200000_24h",
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792504800000_24h",
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792508400000_24h",
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792512000000_24h",
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792515600000_24h",
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792519200000_24h",
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792522800000_24h",
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792526400000_24h",
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792530000000_24h",
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792533600000_24h",
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792537200000_24h",
+                "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792540800000_24h"
+              ],
+              "run_ids": [
+                39359604723,
+                39362749001,
+                39366431480,
+                39369165396,
+                39372431720,
+                39375700145,
+                39378756167,
+                39384033913,
+                39388609062,
+                39392413059,
+                39397859152,
+                39402067756,
+                39406304510,
+                39410789154,
+                39414444936,
+                39418718175,
+                39424546781,
+                39424658759,
+                39430564030,
+                39437402932,
+                39443600072,
+                39448904449,
+                39455318592,
+                39460975742,
+                39466011279,
+                39471071469,
+                39476666432,
+                39482582489,
+                39487765035,
+                39492484876,
+                39497573364,
+                39502164708,
+                39506477330,
+                39510815409,
+                39514136455,
+                39517631980,
+                39518623277,
+                39520781892,
+                39525794883,
+                39529626125
+              ],
+              "runs": [
+                {
+                  "id": 39359604723,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T02:33:53Z"
+                },
+                {
+                  "id": 39362749001,
+                  "event": "schedule",
+                  "conclusion": "success",
+                  "created_at": "2026-10-20T03:08:52Z"
+                },
+                {
+                  "id": 39366431480,
+                  "event": "schedule",
+                  "conclusion": "success",
+                  "created_at": "2026-10-20T03:50:57Z"
+                },
+                {
+                  "id": 39369165396,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T04:21:45Z"
+                },
+                {
+                  "id": 39372431720,
+                  "event": "schedule",
+                  "conclusion": "success",
+                  "created_at": "2026-10-20T04:58:58Z"
+                },
+                {
+                  "id": 39375700145,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T05:35:21Z"
+                },
+                {
+                  "id": 39378756167,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T06:09:10Z"
+                },
+                {
+                  "id": 39384033913,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T07:03:07Z"
+                },
+                {
+                  "id": 39388609062,
+                  "event": "schedule",
+                  "conclusion": "success",
+                  "created_at": "2026-10-20T07:45:15Z"
+                },
+                {
+                  "id": 39392413059,
+                  "event": "schedule",
+                  "conclusion": "success",
+                  "created_at": "2026-10-20T08:18:10Z"
+                },
+                {
+                  "id": 39397859152,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T09:03:13Z"
+                },
+                {
+                  "id": 39402067756,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T09:37:43Z"
+                },
+                {
+                  "id": 39406304510,
+                  "event": "schedule",
+                  "conclusion": "success",
+                  "created_at": "2026-10-20T10:12:39Z"
+                },
+                {
+                  "id": 39410789154,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T10:50:44Z"
+                },
+                {
+                  "id": 39414444936,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T11:22:07Z"
+                },
+                {
+                  "id": 39418718175,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T11:57:54Z"
+                },
+                {
+                  "id": 39424546781,
+                  "event": "workflow_dispatch",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T12:43:53Z"
+                },
+                {
+                  "id": 39424658759,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T12:44:44Z"
+                },
+                {
+                  "id": 39430564030,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T13:27:37Z"
+                },
+                {
+                  "id": 39437402932,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T14:14:27Z"
+                },
+                {
+                  "id": 39443600072,
+                  "event": "schedule",
+                  "conclusion": "success",
+                  "created_at": "2026-10-20T14:55:02Z"
+                },
+                {
+                  "id": 39448904449,
+                  "event": "schedule",
+                  "conclusion": "success",
+                  "created_at": "2026-10-20T15:29:36Z"
+                },
+                {
+                  "id": 39455318592,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T16:12:04Z"
+                },
+                {
+                  "id": 39460975742,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T16:50:37Z"
+                },
+                {
+                  "id": 39466011279,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T17:25:56Z"
+                },
+                {
+                  "id": 39471071469,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T18:01:02Z"
+                },
+                {
+                  "id": 39476666432,
+                  "event": "schedule",
+                  "conclusion": "success",
+                  "created_at": "2026-10-20T18:39:29Z"
+                },
+                {
+                  "id": 39482582489,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T19:20:13Z"
+                },
+                {
+                  "id": 39487765035,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T19:56:50Z"
+                },
+                {
+                  "id": 39492484876,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-20T20:30:02Z"
+                },
+                {
+                  "id": 39497573364,
+                  "event": "schedule",
+                  "conclusion": "success",
+                  "created_at": "2026-10-20T21:05:55Z"
+                },
+                {
+                  "id": 39502164708,
+                  "event": "schedule",
+                  "conclusion": "success",
+                  "created_at": "2026-10-20T21:39:47Z"
+                },
+                {
+                  "id": 39506477330,
+                  "event": "schedule",
+                  "conclusion": "success",
+                  "created_at": "2026-10-20T22:13:13Z"
+                },
+                {
+                  "id": 39510815409,
+                  "event": "schedule",
+                  "conclusion": "success",
+                  "created_at": "2026-10-20T22:49:10Z"
+                },
+                {
+                  "id": 39514136455,
+                  "event": "schedule",
+                  "conclusion": "success",
+                  "created_at": "2026-10-20T23:18:27Z"
+                },
+                {
+                  "id": 39517631980,
+                  "event": "schedule",
+                  "conclusion": "success",
+                  "created_at": "2026-10-20T23:50:51Z"
+                },
+                {
+                  "id": 39518623277,
+                  "event": "workflow_dispatch",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-21T00:00:29Z"
+                },
+                {
+                  "id": 39520781892,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-21T00:21:05Z"
+                },
+                {
+                  "id": 39525794883,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-21T01:10:51Z"
+                },
+                {
+                  "id": 39529626125,
+                  "event": "schedule",
+                  "conclusion": "cancelled",
+                  "created_at": "2026-10-21T01:50:34Z"
+                }
+              ]
             }
           ],
-          "target_due": 8,
-          "target_scored": 6,
+          "target_due": 9,
+          "target_scored": 7,
           "target_missing": 2,
           "target_missing_ids": [
             "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1791853200000_24h",
             "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792026000000_24h"
           ],
-          "target_coverage_pct": 75.0,
+          "target_coverage_pct": 77.77777777777777,
           "seven_full_days_observed": true,
           "rolling_window_hours": 720,
           "full_window_observed": false,
@@ -8530,10 +9440,10 @@
       "p0_7d_horizons": {
         "1h": {
           "closed_slots": 168,
-          "issued": 168,
-          "issuance_coverage_pct": 100.0,
-          "matured_targets": 167,
-          "target_coverage_pct": 85.02994011976048,
+          "issued": 167,
+          "issuance_coverage_pct": 99.4047619047619,
+          "matured_targets": 166,
+          "target_coverage_pct": 83.13253012048193,
           "seven_days_pass": false
         },
         "24h": {
@@ -8541,7 +9451,7 @@
           "issued": 7,
           "issuance_coverage_pct": 100.0,
           "matured_targets": 7,
-          "target_coverage_pct": 71.42857142857143,
+          "target_coverage_pct": 85.71428571428571,
           "seven_days_pass": false
         }
       },
@@ -8549,15 +9459,15 @@
       "thirty_day_rate_source_available": true
     },
     "p1": {
-      "official_nonoverlap_valid_24h": 4,
-      "official_due_24h": 4,
+      "official_nonoverlap_valid_24h": 5,
+      "official_due_24h": 5,
       "preliminary_evidence_candidate": false,
       "replication_sample_minimum_reached": false,
       "paired_baseline_and_regime_replication_independently_verified": false,
       "signal_edge_validated": false
     },
     "p2": {
-      "completed_independent_intervals": 3,
+      "completed_independent_intervals": 4,
       "paper_candidate": false,
       "execution_bid_ask_verified": false,
       "real_profit_validated": false

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "status": "ok",
-  "source_audited_at_utc": "2026-10-20T06:07:12.946103+00:00",
+  "source_audited_at_utc": "2026-10-21T06:10:34.364860+00:00",
   "protocol_id": "DOGE_P2_SPOT_PAPER_20261013_0200_V1",
   "effective_from_utc": "2026-10-13T02:00:00+00:00",
   "source_v2_qualified": true,
@@ -10,34 +10,39 @@
   "entry_public_after_quote_not_verified": true,
   "external_execution_quality_not_verified": true,
   "issuance_coverage_pct": 100.0,
-  "due_quote_coverage_pct": 75.0,
+  "due_quote_coverage_pct": 77.77777777777777,
   "eligible_24h_nonoverlap_forecasts": 4,
   "matured_missing_24h_issuance_slots": [],
-  "completed_prefix_intervals": 3,
+  "completed_prefix_intervals": 4,
   "blocked_forecast_id": null,
   "excluded_or_blocking": [],
   "strategy": {
     "model": "doge_reversal",
-    "completed_intervals": 3,
+    "completed_intervals": 4,
     "initial_equity_usdt": 10000.0,
-    "final_equity_usdt": 9854.335091763112,
-    "net_return_pct": -1.4566490823688771,
+    "final_equity_usdt": 10108.242651640106,
+    "net_return_pct": 1.0824265164010693,
     "checkpoint_max_drawdown_pct": 1.8305973997575713,
-    "turnover_usdt": 39522.6858873502,
-    "trade_legs": 4,
+    "turnover_usdt": 59502.97645837552,
+    "trade_legs": 6,
     "cost_usdt_components": {
-      "buy_fee_usdt_equiv": 19.802088693504114,
-      "sell_fee_usdt": 19.69096631810546,
-      "entry_slippage_usdt": 9.901044346752057,
-      "exit_slippage_usdt": 9.852872813662977,
-      "entry_half_spread_usdt": 4.9505221733760285,
-      "exit_half_spread_usdt": 4.926436406831488
+      "buy_fee_usdt_equiv": 29.649038572857712,
+      "sell_fee_usdt": 29.809327330758222,
+      "entry_slippage_usdt": 14.824519286428856,
+      "exit_slippage_usdt": 14.915850553294081,
+      "entry_half_spread_usdt": 7.412259643214428,
+      "exit_half_spread_usdt": 7.457925276647041
     },
     "by_exante_BTC_momentum_proxy": {
       "BTC_momentum_issued_UP": {
         "intervals": 3,
         "long_intervals": 2,
         "sum_interval_net_pct": -1.4496759441066098
+      },
+      "BTC_momentum_issued_DOWN": {
+        "intervals": 1,
+        "long_intervals": 1,
+        "sum_interval_net_pct": 2.5766077316492497
       }
     },
     "ledger": [
@@ -103,18 +108,39 @@
           "exit_half_spread_usdt": 2.467900748324785
         },
         "execution_status": "HYPOTHETICAL_LAST_PRICE_PROXY_NOT_PUBLIC_EXECUTION"
+      },
+      {
+        "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792458000000_24h",
+        "start_utc": "2026-10-20T02:00:26.285102+00:00",
+        "end_utc": "2026-10-21T02:22:00.176000+00:00",
+        "signal": "UP",
+        "entry_reference_usdt": 0.07935,
+        "exit_reference_usdt": 0.08168,
+        "doge_bought_net": 123971.05141114358,
+        "equity_before_usdt": 9854.335091763112,
+        "equity_after_usdt": 10108.242651640106,
+        "interval_net_return_pct": 2.5766077316492497,
+        "cost_usdt_components": {
+          "buy_fee_usdt_equiv": 9.846949879353597,
+          "sell_fee_usdt": 10.11836101265276,
+          "entry_slippage_usdt": 4.923474939676798,
+          "exit_slippage_usdt": 5.062977739631104,
+          "entry_half_spread_usdt": 2.461737469838399,
+          "exit_half_spread_usdt": 2.531488869815552
+        },
+        "execution_status": "HYPOTHETICAL_LAST_PRICE_PROXY_NOT_PUBLIC_EXECUTION"
       }
     ],
-    "hold_final_equity_usdt": 9392.387743627363,
-    "hold_net_return_pct": -6.076122563726372,
+    "hold_final_equity_usdt": 9624.516759496713,
+    "hold_net_return_pct": -3.7548324050328707,
     "hold_checkpoint_max_drawdown_pct": 6.076122563726367,
     "cash_net_return_pct": 0.0,
-    "excess_over_hold_pct_points": 4.619473481357491,
-    "excess_over_cash_pct_points": -1.4566490823688765
+    "excess_over_hold_pct_points": 4.837258921433931,
+    "excess_over_cash_pct_points": 1.082426516401065
   },
   "btc_momentum_strategy": {
     "model": "btc_momentum",
-    "completed_intervals": 3,
+    "completed_intervals": 4,
     "initial_equity_usdt": 10000.0,
     "final_equity_usdt": 9465.742830167841,
     "net_return_pct": -5.342571698321585,
@@ -134,6 +160,11 @@
         "intervals": 3,
         "long_intervals": 3,
         "sum_interval_net_pct": -5.393039529541022
+      },
+      "BTC_momentum_issued_DOWN": {
+        "intervals": 1,
+        "long_intervals": 0,
+        "sum_interval_net_pct": 0.0
       }
     },
     "ledger": [
@@ -199,37 +230,63 @@
           "exit_half_spread_usdt": 2.3705824488906826
         },
         "execution_status": "HYPOTHETICAL_LAST_PRICE_PROXY_NOT_PUBLIC_EXECUTION"
+      },
+      {
+        "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792458000000_24h",
+        "start_utc": "2026-10-20T02:00:26.285102+00:00",
+        "end_utc": "2026-10-21T02:22:00.176000+00:00",
+        "signal": "DOWN",
+        "entry_reference_usdt": 0.07935,
+        "exit_reference_usdt": 0.08168,
+        "doge_bought_net": 0.0,
+        "equity_before_usdt": 9465.742830167841,
+        "equity_after_usdt": 9465.742830167841,
+        "interval_net_return_pct": 0.0,
+        "cost_usdt_components": {
+          "buy_fee_usdt_equiv": 0.0,
+          "sell_fee_usdt": 0.0,
+          "entry_slippage_usdt": 0.0,
+          "exit_slippage_usdt": 0.0,
+          "entry_half_spread_usdt": 0.0,
+          "exit_half_spread_usdt": 0.0
+        },
+        "execution_status": "HYPOTHETICAL_LAST_PRICE_PROXY_NOT_PUBLIC_EXECUTION"
       }
     ],
-    "hold_final_equity_usdt": 9392.387743627363,
-    "hold_net_return_pct": -6.076122563726372,
+    "hold_final_equity_usdt": 9624.516759496713,
+    "hold_net_return_pct": -3.7548324050328707,
     "hold_checkpoint_max_drawdown_pct": 6.076122563726367,
     "cash_net_return_pct": 0.0,
-    "excess_over_hold_pct_points": 0.7335508654047771,
+    "excess_over_hold_pct_points": -1.5877392932887233,
     "excess_over_cash_pct_points": -5.342571698321589
   },
   "always_interval_up": {
     "model": "always_interval_up",
-    "completed_intervals": 3,
+    "completed_intervals": 4,
     "initial_equity_usdt": 10000.0,
-    "final_equity_usdt": 9465.742830167841,
-    "net_return_pct": -5.342571698321585,
+    "final_equity_usdt": 9709.637891787981,
+    "net_return_pct": -2.903621082120189,
     "checkpoint_max_drawdown_pct": 5.701773873934016,
-    "turnover_usdt": 57586.65847630391,
-    "trade_legs": 6,
+    "turnover_usdt": 76779.05354468743,
+    "trade_legs": 8,
     "cost_usdt_components": {
-      "buy_fee_usdt_equiv": 29.013725959593465,
-      "sell_fee_usdt": 28.529758843074077,
-      "entry_slippage_usdt": 14.506862979796733,
-      "exit_slippage_usdt": 14.27558611112038,
-      "entry_half_spread_usdt": 7.253431489898366,
-      "exit_half_spread_usdt": 7.13779305556019
+      "buy_fee_usdt_equiv": 38.47237480312866,
+      "sell_fee_usdt": 38.249116092111095,
+      "entry_slippage_usdt": 19.23618740156433,
+      "exit_slippage_usdt": 19.13891223022822,
+      "entry_half_spread_usdt": 9.618093700782165,
+      "exit_half_spread_usdt": 9.56945611511411
     },
     "by_exante_BTC_momentum_proxy": {
       "BTC_momentum_issued_UP": {
         "intervals": 3,
         "long_intervals": 3,
         "sum_interval_net_pct": -5.393039529541022
+      },
+      "BTC_momentum_issued_DOWN": {
+        "intervals": 1,
+        "long_intervals": 1,
+        "sum_interval_net_pct": 2.5766077316492497
       }
     },
     "ledger": [
@@ -295,37 +352,63 @@
           "exit_half_spread_usdt": 2.3705824488906826
         },
         "execution_status": "HYPOTHETICAL_LAST_PRICE_PROXY_NOT_PUBLIC_EXECUTION"
+      },
+      {
+        "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792458000000_24h",
+        "start_utc": "2026-10-20T02:00:26.285102+00:00",
+        "end_utc": "2026-10-21T02:22:00.176000+00:00",
+        "signal": "UP",
+        "entry_reference_usdt": 0.07935,
+        "exit_reference_usdt": 0.08168,
+        "doge_bought_net": 119082.42211331637,
+        "equity_before_usdt": 9465.742830167841,
+        "equity_after_usdt": 9709.637891787981,
+        "interval_net_return_pct": 2.5766077316492497,
+        "cost_usdt_components": {
+          "buy_fee_usdt_equiv": 9.45864884353519,
+          "sell_fee_usdt": 9.719357249037019,
+          "entry_slippage_usdt": 4.729324421767595,
+          "exit_slippage_usdt": 4.863326119107841,
+          "entry_half_spread_usdt": 2.3646622108837976,
+          "exit_half_spread_usdt": 2.4316630595539204
+        },
+        "execution_status": "HYPOTHETICAL_LAST_PRICE_PROXY_NOT_PUBLIC_EXECUTION"
       }
     ],
-    "hold_final_equity_usdt": 9392.387743627363,
-    "hold_net_return_pct": -6.076122563726372,
+    "hold_final_equity_usdt": 9624.516759496713,
+    "hold_net_return_pct": -3.7548324050328707,
     "hold_checkpoint_max_drawdown_pct": 6.076122563726367,
     "cash_net_return_pct": 0.0,
-    "excess_over_hold_pct_points": 0.7335508654047771,
-    "excess_over_cash_pct_points": -5.342571698321589
+    "excess_over_hold_pct_points": 0.8512113229126771,
+    "excess_over_cash_pct_points": -2.9036210821201895
   },
   "double_cost_stress": {
     "model": "doge_reversal",
-    "completed_intervals": 3,
+    "completed_intervals": 4,
     "initial_equity_usdt": 10000.0,
-    "final_equity_usdt": 9785.53677156863,
-    "net_return_pct": -2.144632284313708,
+    "final_equity_usdt": 10002.571152637212,
+    "net_return_pct": 0.025711526372118598,
     "checkpoint_max_drawdown_pct": 2.173883850799175,
-    "turnover_usdt": 39419.42995514456,
-    "trade_legs": 4,
+    "turnover_usdt": 59242.63962146334,
+    "trade_legs": 6,
     "cost_usdt_components": {
-      "buy_fee_usdt_equiv": 39.50596428341504,
-      "sell_fee_usdt": 39.21472622542828,
-      "entry_slippage_usdt": 19.75298214170752,
-      "exit_slippage_usdt": 19.63681834022448,
-      "entry_half_spread_usdt": 9.87649107085376,
-      "exit_half_spread_usdt": 9.81840917011224
+      "buy_fee_usdt_equiv": 59.047725185199624,
+      "sell_fee_usdt": 59.259958996244336,
+      "entry_slippage_usdt": 29.523862592599812,
+      "exit_slippage_usdt": 29.67449123497463,
+      "entry_half_spread_usdt": 14.761931296299906,
+      "exit_half_spread_usdt": 14.837245617487316
     },
     "by_exante_BTC_momentum_proxy": {
       "BTC_momentum_issued_UP": {
         "intervals": 3,
         "long_intervals": 2,
         "sum_interval_net_pct": -2.1439822584259582
+      },
+      "BTC_momentum_issued_DOWN": {
+        "intervals": 1,
+        "long_intervals": 1,
+        "sum_interval_net_pct": 2.2179098207383507
       }
     },
     "ledger": [
@@ -391,14 +474,35 @@
           "exit_half_spread_usdt": 4.909938440510781
         },
         "execution_status": "HYPOTHETICAL_LAST_PRICE_PROXY_NOT_PUBLIC_EXECUTION"
+      },
+      {
+        "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792458000000_24h",
+        "start_utc": "2026-10-20T02:00:26.285102+00:00",
+        "end_utc": "2026-10-21T02:22:00.176000+00:00",
+        "signal": "UP",
+        "entry_reference_usdt": 0.07935,
+        "exit_reference_usdt": 0.08168,
+        "doge_bought_net": 122890.21663504104,
+        "equity_before_usdt": 9785.53677156863,
+        "equity_after_usdt": 10002.571152637212,
+        "interval_net_return_pct": 2.2179098207383507,
+        "cost_usdt_components": {
+          "buy_fee_usdt_equiv": 19.54176090178458,
+          "sell_fee_usdt": 20.045232770816057,
+          "entry_slippage_usdt": 9.77088045089229,
+          "exit_slippage_usdt": 10.037672894750152,
+          "entry_half_spread_usdt": 4.885440225446145,
+          "exit_half_spread_usdt": 5.018836447375076
+        },
+        "execution_status": "HYPOTHETICAL_LAST_PRICE_PROXY_NOT_PUBLIC_EXECUTION"
       }
     ],
-    "hold_final_equity_usdt": 9359.543706993605,
-    "hold_net_return_pct": -6.404562930063951,
+    "hold_final_equity_usdt": 9590.860995950794,
+    "hold_net_return_pct": -4.09139004049206,
     "hold_checkpoint_max_drawdown_pct": 6.404562930063948,
     "cash_net_return_pct": 0.0,
-    "excess_over_hold_pct_points": 4.259930645750246,
-    "excess_over_cash_pct_points": -2.1446322843137025
+    "excess_over_hold_pct_points": 4.117101566864185,
+    "excess_over_cash_pct_points": 0.025711526372124354
   },
   "strict_cost_model": {
     "taker_fee_fraction_each_side": 0.001,
