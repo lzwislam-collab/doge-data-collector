@@ -63,8 +63,10 @@ retained so old evidence is not lost when it leaves the first page of Actions.
 
 Issuance is restricted to the current 45-minute window; there is no backfill.
 The final quote window is 25 minutes. Endpoints are fixed slot+h, rather than
-issue+h, so quote-to-target duration can be up to 45 minutes shorter than the
-nominal horizon. Daily/weekly prior target capture happens before the next entry
+issue+h for daily/weekly slots, so their quote-to-target duration can be up to
+45 minutes shorter than the nominal horizon. 1H retains the existing actual
+issue+1H target and uses the final possible issue+target deadline for missing
+slots. Daily/weekly prior target capture happens before the next entry
 capture; if the previous target remains open without a score, issuance waits.
 Failures remain missing and never silently become historical predictions.
 

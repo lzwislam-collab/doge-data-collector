@@ -32,19 +32,23 @@ class HorizonTests(unittest.TestCase):
         self.assertTrue(hp.issue_due(p,24,start+timedelta(minutes=10),[]))
     def test_core_table_missing_pending_duplicate_and_baselines(self):
         t=datetime(2026,10,26,tzinfo=timezone.utc);p=hp.new_policy(t)
-        e={'event_id':str(int(t.timestamp()))+'_1','slot_utc':t.isoformat(),'issued_at_utc':(t+timedelta(minutes=10)).isoformat(),'target_utc':(t+timedelta(hours=1)).isoformat(),'horizon_hours':1,'raw_score':.6,'direction':'UP','selective_direction':'NO_TRADE','probability_up':None,'btc_direction':'DOWN','frozen_direction':'UP'}
-        r=hp.core_table(p,[e],[],{},t+timedelta(hours=2))['1']
+        e={'event_id':str(int(t.timestamp()))+'_1','slot_utc':t.isoformat(),'issued_at_utc':(t+timedelta(minutes=10)).isoformat(),'target_utc':(t+timedelta(hours=1,minutes=10)).isoformat(),'horizon_hours':1,'raw_score':.6,'direction':'UP','selective_direction':'NO_TRADE','probability_up':None,'btc_direction':'DOWN','frozen_direction':'UP'}
+        r=hp.core_table(p,[e],[],{},t+timedelta(hours=2,minutes=30))['1']
         self.assertEqual(r['Matured'],1);self.assertEqual(r['Missing'],1)
         self.assertIsNone(r['Brier']);self.assertIsNone(r['Net return'])
-        with self.assertRaises(ValueError):hp.core_table(p,[e,e],[],{},t+timedelta(hours=2))
+        with self.assertRaises(ValueError):hp.core_table(p,[e,e],[],{},t+timedelta(hours=2,minutes=30))
         s={'event_id':e['event_id'],'y':1,'net_return':None}
-        r=hp.core_table(p,[e],[s],{e['event_id']:True},t+timedelta(hours=2))['1']
+        r=hp.core_table(p,[e],[s],{e['event_id']:True},t+timedelta(hours=2,minutes=30))['1']
         self.assertEqual(r['Always Up'],1);self.assertEqual(r['BTC baseline'],0)
         self.assertEqual(r['NO_TRADE rate'],1);self.assertIsNone(r['Selective Accuracy'])
     def test_pending_not_missing(self):
         t=datetime(2026,10,26,tzinfo=timezone.utc);r=hp.core_table(hp.new_policy(t),[],[],{},t)['24']
         self.assertEqual(r['Matured'],0);self.assertEqual(r['Missing'],0)
         self.assertIsNone(r['Coverage'])
+    def test_hourly_keeps_actual_one_hour_horizon_and_final_deadline(self):
+        t=datetime(2026,10,26,tzinfo=timezone.utc);p=hp.new_policy(t)
+        self.assertEqual(hp.core_table(p,[],[],{},t+timedelta(hours=2))['1']['Matured'],0)
+        self.assertEqual(hp.target_time(t,t+timedelta(minutes=40),1),t+timedelta(hours=1,minutes=40))
     def test_partial_witness_never_enters_formal_statistics(self):
         t=datetime(2026,10,26,tzinfo=timezone.utc);p=hp.new_policy(t)
         e={'event_id':str(int(t.timestamp()))+'_1','slot_utc':t.isoformat(),'issued_at_utc':t.isoformat(),'target_utc':(t+timedelta(hours=1)).isoformat(),'horizon_hours':1,'raw_score':.6,'direction':'UP','selective_direction':'UP','probability_up':None,'btc_direction':'UP','frozen_direction':'UP'}

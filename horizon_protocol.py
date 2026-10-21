@@ -41,7 +41,7 @@ def new_policy(start):
     weekly=start+timedelta(days=(-start.weekday())%7)
     return {'schema':'DOGE_HORIZON_PROTOCOL_V1','starts':{str(h):(weekly if h==168 else start).isoformat() for h in HORIZONS},
             'steps_hours':{'1':2,'24':24,'168':168},'issue_window_minutes':45,'target_window_minutes':25,
-            'label':'fixed slot endpoint; entry at actual issue quote; target at slot+h, not issue+h',
+            'label':'1H target=actual issue+1H; 24H/7D target=fixed slot+h; all entries use actual issue quote',
             'daily_target_n':100,'fee_per_side':.001,'slippage_per_side':.0005,'notional_usdt':100,
             'real_orders_authorized':False,'production_promotion_authorized':False,'automatic_retraining':False}
 
@@ -55,6 +55,8 @@ def issue_due(p,h,now,events):
     return now>=utc(p['starts'][str(h)]) and now<s+timedelta(minutes=p['issue_window_minutes']) and not any(e['event_id']==event_id(s,h) for e in events)
 
 def event_id(s,h):return str(int(s.timestamp()))+'_'+str(h)
+
+def target_time(s,issued,h):return (issued if h==1 else s)+timedelta(hours=h)
 
 def indexed(rows):
     result={r['event_id']:r for r in rows}
@@ -112,11 +114,11 @@ def core_table(p,events,scores,proofs,now):
     result={}
     for h in HORIZONS:
         es=[e for e in events if e['horizon_hours']==h];mature=[];s=utc(p['starts'][str(h)])
-        while s+timedelta(hours=h,minutes=p['target_window_minutes'])<=now:
+        while s+timedelta(hours=h,minutes=p['target_window_minutes']+(p['issue_window_minutes'] if h==1 else 0))<=now:
             mature.append(event_id(s,h));s+=timedelta(hours=p['steps_hours'][str(h)])
         for e in es:
             t=utc(e['slot_utc']);issued=utc(e['issued_at_utc'])
-            if e['event_id']!=event_id(t,h) or slot(p,h,t)!=t or t<utc(p['starts'][str(h)]) or not t<=issued<t+timedelta(minutes=p['issue_window_minutes']) or issued>now or utc(e['target_utc'])!=t+timedelta(hours=h):raise ValueError('off-grid/future/mismatched timestamp')
+            if e['event_id']!=event_id(t,h) or slot(p,h,t)!=t or t<utc(p['starts'][str(h)]) or not t<=issued<t+timedelta(minutes=p['issue_window_minutes']) or issued>now or utc(e['target_utc'])!=target_time(t,issued,h):raise ValueError('off-grid/future/mismatched timestamp')
         pairs=[(em[k],sm[k]) for k in mature if k in em and k in sm and qualified(proofs.get(k))]
         n=len(pairs);selected=[(e,s) for e,s in pairs if e['selective_direction']!='NO_TRADE']
         def mean(values):return sum(values)/len(values) if values else None
@@ -362,7 +364,7 @@ def run(online=False):
                 if not q['captured']<=at<=q['captured']+timedelta(seconds=30):raise ValueError('entry quote stale')
                 m=package['models'][str(h)];raw,f,x=predict(m,rawsource,at);s=slot(p,h,at)
                 # BTC momentum uses h historical closed hours; not another model.
-                e={'event_id':event_id(s,h),'horizon_hours':h,'slot_utc':s.isoformat(),'issued_at_utc':at.isoformat(),'target_utc':(s+timedelta(hours=h)).isoformat(),
+                e={'event_id':event_id(s,h),'horizon_hours':h,'slot_utc':s.isoformat(),'issued_at_utc':at.isoformat(),'target_utc':target_time(s,at,h).isoformat(),
                    'package_identity':package['identity'],'model_id':m['model_id'],'source_sha256':sha(rawsource),'source_raw':rawsource.decode(),
                    'entry_packet':packet,'features':x,**derived(rawsource,raw,m,at),'real_orders_authorized':False}
                 validate_event(e,package)
