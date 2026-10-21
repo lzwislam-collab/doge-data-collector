@@ -13,6 +13,7 @@ import os
 import re
 import subprocess
 import tempfile
+from functools import lru_cache
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import phase1_research as research
@@ -235,6 +236,7 @@ def records(folder):
 def predict(m,raw,at):
     h=m['horizon_hours']
     if m['base']['kind']=='r2':
+        r2.check_age(json.loads((ROOT/r2.MODEL).read_bytes()),at)
         f=r2.frame_from_raw(raw,at);x=r2.features(f,at);score=models.predict(m['base']['model'],[x])[0]
     else:
         f=legacy.frame_from_csv(raw,at.isoformat());x=legacy.causal_features(f,at);score=research.predict(m['base']['model'],[x])[0]
@@ -263,6 +265,7 @@ def validate_event(e,package):
     q=legacy.quote(e['entry_packet'])
     if e['entry_packet'].get('capture_errors') or not q['captured']<=at<=q['captured']+timedelta(seconds=30):raise ValueError('stale/failed entry capture')
 
+@lru_cache(maxsize=4096)
 def read_at(head,path):
     if not re.fullmatch('[a-f0-9]{40}',head) or not re.fullmatch('[A-Za-z0-9_./-]+',path) or '..' in path.split('/') or path.startswith('/'):raise ValueError('unsafe pinned horizon path')
     try:return git('show',head+':'+path)
@@ -286,6 +289,11 @@ def witnesses(events,scores,package,now):
             if rid not in known:runs.append(bundle.api('/actions/runs/'+str(rid)))
         for run in runs:
             if run['head_branch']!='main' or run['status']!='completed' or run['conclusion']!='success' or run['event'] not in ('workflow_dispatch','workflow_run'):continue
+            created=utc(run['created_at']);updated=utc(run.get('updated_at',now.isoformat()))
+            need_registration=registration is None and created<min(utc(v) for v in package['policy']['starts'].values())
+            need_event=any((not proof.get(e['event_id'],{}).get('prediction') and created<utc(e['target_utc']) and updated>=utc(e['issued_at_utc'])) or
+                (e['event_id'] in indexed(scores) and not proof.get(e['event_id'],{}).get('score') and created<utc(e['target_utc'])+timedelta(minutes=package['policy']['target_window_minutes']) and updated>=utc(indexed(scores)[e['event_id']]['observed_at_utc'])) for e in events)
+            if not need_registration and not need_event:continue
             jobs=bundle.api('/actions/runs/'+str(run['id'])+'/jobs')['jobs']
             job=next((j for j in jobs if j['name']=='horizons' and j['conclusion']=='success'),None)
             if not job:continue

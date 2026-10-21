@@ -80,6 +80,10 @@ class HorizonTests(unittest.TestCase):
         m={'horizon_hours':168,'calibration':{'status':'UNCALIBRATED'}}
         self.assertEqual(hp.probability_layer(.2,m,168)['label'],'raw score / uncalibrated')
         with self.assertRaises(ValueError):hp.probability_layer(.2,m,24)
+    def test_existing_r2_expiry_is_preserved(self):
+        m={'horizon_hours':1,'base':{'kind':'r2','model':{}}}
+        with patch.object(hp.r2,'check_age',side_effect=ValueError('expired')),patch.object(hp.r2,'frame_from_raw',return_value={}),patch.object(hp.r2,'features',return_value=[]),patch.object(hp.models,'predict',return_value=[.5]):
+            with self.assertRaisesRegex(ValueError,'expired'):hp.predict(m,b'',datetime(2028,1,1,tzinfo=timezone.utc))
     def test_threshold_selection_is_invariant_to_validation_results(self):
         rows=[{'anchor_ms':i,'label_end_ms':i+1,'raw_score':.7,'y':1} for i in range(40)]
         frozen=hp.freeze_threshold(rows,100)
