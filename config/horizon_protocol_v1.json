@@ -1,0 +1,398 @@
+{
+  "fixed_files": {
+    ".github/workflows/horizon_protocol.yml": "deb8cefcca5cfc457cb9b47dff99344280e28ae545804282bda823ddb118aa22",
+    "evidence_append_guard.py": "d7b5cdc45dbbb2fbe25bc92246b598d2b4e19946e94f4836eaa59ba6623411b0",
+    "factor_evaluation_v1.py": "2cf889c0d057dd8f60b294e7680fa1ba6973820ed7a103d2dfe45192dfe3a777",
+    "forward_execution_evidence.py": "148d6af548d6a115bd18f6e77ad120becb41f9d8090234630a225a5d6c9b0b29",
+    "horizon_protocol.py": "7813b7b92f21826f89c1c1e882722c27a59156af1a5529f4decbe7438e67fcda",
+    "learned_shadow_bundle.py": "ea698f9ca72b49e6519c78a86918ed93811ba432502145476f6dc49ad86bdf1e",
+    "learned_shadow_v1.py": "185162adecb04af4cd3d0ff28e7689763a930df83ed95018bc70abb21d8ab7f8",
+    "phase1_research.py": "8a95203d6f3f633843457ab2c99be79589aa879ff9fd428e7009227193a7ddd7",
+    "phase1_research_audit.py": "0e5fd2e02bec3c3484c05348a732c43cfeb9fc42d2d0ccc7d0e31e5140cd0684",
+    "phase2_factor_library.py": "4eb532fd8633bc5eaf9ba2aad3deae67e0c066877b713755ce943e23282bf644",
+    "phase2_forward_runtime_v2.py": "518d1589f4a506f27d6e6e7735c9a52fbc53ff13035fc0f11e3486d6fc9d59c5",
+    "phase2_forward_v2.py": "e7571d32d0cb616e2229119e0a98e9cfe15f54932f3bdbe124b24aaa94b5cb8d",
+    "phase2_models_v2.py": "6bdd287c0e02c2a3c8fa8cb152a6b3af055298d7ea5b1bf6c02d39a847e7accc",
+    "phase2_research.py": "1632b9cfd16d1019bd000742c21c4c4feb8b62693013c48d0445be405bbb66fd",
+    "research/learned_shadow_v1/model_package.json": "c93004aadc669c074f51a4cb6411769c3d84d388b31773d1251823b1d45ccad3",
+    "research/phase2_forward_v2/model.json": "52bc43dc0429df772357bb52555b43c26b63661c7e70de16432839eca495fa16",
+    "test_horizon_protocol.py": "8eebbf373b4adc0065348cf464420753f6c587b6a60e8b84a983acdfe3e2d400"
+  },
+  "frozen_at_utc": "2026-10-21T22:57:16.139145+00:00",
+  "identity": "bb05afa4e97d51a0dccc467e3db074dd15eec0e1d9e7d5a7d39fc8bf9445a17c",
+  "method_sources": [
+    "https://scikit-learn.org/stable/modules/calibration.html",
+    "https://scikit-learn.org/stable/modules/classification_threshold.html"
+  ],
+  "models": {
+    "1": {
+      "base": {
+        "kind": "r2",
+        "model": {
+          "base": {
+            "kind": "linear",
+            "model": {
+              "intercept": -0.004713087746,
+              "mean": [
+                0.005552597686,
+                0.005865612186,
+                0.037831906252,
+                0.154673314477,
+                0.072183884295,
+                0.055559818477,
+                1.6213223e-05,
+                6.78071e-05,
+                0.000419402594,
+                0.001212340601,
+                -5.4115453e-05,
+                -0.00130182057
+              ],
+              "model_family": "shrinkage_lda",
+              "n_train": 4096,
+              "probability_calibration_validated": false,
+              "regularization": 0.3,
+              "scale": [
+                0.003417517696,
+                0.003107625497,
+                0.024264753427,
+                1.629286828137,
+                1.307959547913,
+                1.412417131056,
+                0.004056959158,
+                0.007800665125,
+                0.019414781061,
+                0.037203485026,
+                0.004552285831,
+                0.019874299501
+              ],
+              "weights": [
+                0.005289565398,
+                0.014782506633,
+                0.022907614824,
+                0.059615109973,
+                0.038607433666,
+                0.043814587319,
+                -0.070118923649,
+                -0.059033161743,
+                -0.011921830672,
+                0.018950777307,
+                -0.080254117613,
+                -0.042569433961
+              ]
+            },
+            "n_train": 4096
+          },
+          "calibration": "raw",
+          "probability_calibration_validated": false
+        },
+        "parent_identity": "0843d2e836f0d94cd46e66644460f1a543aef460e51ad884394a5880dadf3baf"
+      },
+      "calibration": {
+        "n_fit": 88,
+        "n_validation": 45,
+        "reason": "requires >=100 independent fit and >=100 untouched validation labels; historical is not forward quote calibration",
+        "status": "UNCALIBRATED"
+      },
+      "historical_proxy_not_formal": true,
+      "horizon_hours": 1,
+      "last_label_ms": 1792612800000,
+      "model_id": "df3caa16db57f240babc114b1627f59697d9b41cb1bc1cd3637aa606d00ff60f",
+      "split_counts": {
+        "calibration": 88,
+        "threshold_selection": 43,
+        "untouched_validation": 45
+      },
+      "split_sha256": "a6554d1e8b07483c499fa59b56e7e02ee611a3ba29a81901df966027118907a0",
+      "threshold": {
+        "curve": [
+          {
+            "accuracy": 0.581395348837,
+            "coverage": 1.0,
+            "margin": 0.0,
+            "n": 43,
+            "wilson_lower": 0.43328577387
+          },
+          {
+            "accuracy": 0.617647058824,
+            "coverage": 0.790697674419,
+            "margin": 0.005504211925,
+            "n": 34,
+            "wilson_lower": 0.450410173444
+          },
+          {
+            "accuracy": 0.6,
+            "coverage": 0.581395348837,
+            "margin": 0.017257271064,
+            "n": 25,
+            "wilson_lower": 0.40739457359
+          },
+          {
+            "accuracy": 0.529411764706,
+            "coverage": 0.395348837209,
+            "margin": 0.02559446536,
+            "n": 17,
+            "wilson_lower": 0.3096323506
+          },
+          {
+            "accuracy": 0.25,
+            "coverage": 0.186046511628,
+            "margin": 0.046474294324,
+            "n": 8,
+            "wilson_lower": 0.071479212752
+          }
+        ],
+        "cutoff_ms": 1792623436139,
+        "margin": null,
+        "n": 43,
+        "scope": "historical proxy; no future tuning; all NO_TRADE when no eligible candidate",
+        "selection_rule": "five empirical margins; >=30 selected, >=10% coverage, Wilson lower>0.5; maximize lower then coverage",
+        "source_sha256": "d8977a720a6372041e7f30a9d5e2286583226fda6cb81255316e67fdb6b8acd0",
+        "status": "FROZEN_NO_SIGNAL",
+        "untouched_validation_curve": [
+          {
+            "accuracy": 0.466666666667,
+            "coverage": 1.0,
+            "margin": 0.0,
+            "n": 45,
+            "wilson_lower": 0.32935132065
+          },
+          {
+            "accuracy": 0.46511627907,
+            "coverage": 0.955555555556,
+            "margin": 0.005504211925,
+            "n": 43,
+            "wilson_lower": 0.325110577041
+          },
+          {
+            "accuracy": 0.4375,
+            "coverage": 0.711111111111,
+            "margin": 0.017257271064,
+            "n": 32,
+            "wilson_lower": 0.28165331115
+          },
+          {
+            "accuracy": 0.52,
+            "coverage": 0.555555555556,
+            "margin": 0.02559446536,
+            "n": 25,
+            "wilson_lower": 0.334985169504
+          },
+          {
+            "accuracy": 0.8,
+            "coverage": 0.111111111111,
+            "margin": 0.046474294324,
+            "n": 5,
+            "wilson_lower": 0.375534629763
+          }
+        ]
+      }
+    },
+    "168": {
+      "base": {
+        "existing_features": [
+          "doge_ret_1h",
+          "doge_ret_4h",
+          "doge_ret_24h",
+          "doge_vol_24h",
+          "doge_range_24h",
+          "doge_volume_ratio_24h",
+          "btc_ret_1h",
+          "btc_ret_4h",
+          "btc_ret_24h"
+        ],
+        "kind": "linear",
+        "model": {
+          "intercept": 0.185763216101,
+          "mean": [
+            0.000192607747,
+            0.002824410923,
+            0.010978821893,
+            0.009593408761,
+            0.06189468091,
+            -0.253309343599,
+            0.000482605443,
+            0.002091458552,
+            0.007350976974
+          ],
+          "n_train": 93,
+          "probability_calibration_validated": false,
+          "scale": [
+            0.007008891995,
+            0.017010271829,
+            0.047242121136,
+            0.005938289371,
+            0.040530648914,
+            0.482388925219,
+            0.004239215047,
+            0.010686374267,
+            0.029806493436
+          ],
+          "weights": [
+            -0.256830150083,
+            -0.024183576829,
+            -0.047727074096,
+            0.050503172341,
+            0.091501003221,
+            -0.300726507831,
+            0.059027469266,
+            0.157642193273,
+            -0.025071202817
+          ]
+        },
+        "training_last_label_ms": 1753315200000
+      },
+      "calibration": {
+        "n_fit": 30,
+        "n_validation": 16,
+        "reason": "requires >=100 independent fit and >=100 untouched validation labels; historical is not forward quote calibration",
+        "status": "UNCALIBRATED"
+      },
+      "historical_proxy_not_formal": true,
+      "horizon_hours": 168,
+      "last_label_ms": 1792022400000,
+      "model_id": "898631e142b7711546967e7b288870ec5f29fc89d6da4747051f3458ddbff220",
+      "split_counts": {
+        "calibration": 30,
+        "threshold_selection": 15,
+        "untouched_validation": 16
+      },
+      "split_sha256": "d4c816ce0bd359e64c13edc9f3f362e809b710a6cdc5eb2531aae23a982cd4a2",
+      "threshold": {
+        "margin": 0.0,
+        "status": "DIRECTION_ONLY",
+        "untouched_validation_curve": []
+      }
+    },
+    "24": {
+      "base": {
+        "kind": "linear",
+        "model": {
+          "columns": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "intercept": -0.086662284903,
+          "mean": [
+            -2.8498333e-05,
+            -0.000111840879,
+            -0.000690910122,
+            0.005814634564,
+            0.037398647148,
+            0.071447964214,
+            1.6876431e-05,
+            6.9763179e-05,
+            0.000385751782
+          ],
+          "n_train": 4096,
+          "probability_calibration_validated": false,
+          "scale": [
+            0.006721821773,
+            0.01285395515,
+            0.030407856862,
+            0.003119688409,
+            0.024269304832,
+            1.304730428571,
+            0.004042720035,
+            0.007767773344,
+            0.019382694402
+          ],
+          "weights": [
+            -0.010708013149,
+            -0.042718690623,
+            -0.030472245503,
+            0.049431132598,
+            0.097127721519,
+            -0.019540294981,
+            0.003131669938,
+            0.005196104684,
+            -0.021687953448
+          ]
+        },
+        "parent_package_sha256": "c93004aadc669c074f51a4cb6411769c3d84d388b31773d1251823b1d45ccad3"
+      },
+      "calibration": {
+        "n_fit": 2,
+        "n_validation": 2,
+        "reason": "requires >=100 independent fit and >=100 untouched validation labels; historical is not forward quote calibration",
+        "status": "UNCALIBRATED"
+      },
+      "historical_proxy_not_formal": true,
+      "horizon_hours": 24,
+      "last_label_ms": 1792540800000,
+      "model_id": "d797a691e9b3cb98d9346caec06f0856c7a42844a649cc4df5d7104315852545",
+      "split_counts": {
+        "calibration": 2,
+        "threshold_selection": 1,
+        "untouched_validation": 2
+      },
+      "split_sha256": "56d650c6224cca28bcd8c52bd54998c701069dbe9f31a6c644d9e2bace1c5337",
+      "threshold": {
+        "margin": 0.0,
+        "status": "DIRECTION_ONLY",
+        "untouched_validation_curve": []
+      }
+    }
+  },
+  "policy": {
+    "automatic_retraining": false,
+    "daily_target_n": 100,
+    "fee_per_side": 0.001,
+    "issue_window_minutes": 45,
+    "label": "1H target=actual issue+1H; 24H/7D target=fixed slot+h; all entries use actual issue quote",
+    "notional_usdt": 100,
+    "production_promotion_authorized": false,
+    "real_orders_authorized": false,
+    "schema": "DOGE_HORIZON_PROTOCOL_V1",
+    "slippage_per_side": 0.0005,
+    "starts": {
+      "1": "2026-10-22T00:00:00+00:00",
+      "168": "2026-10-26T00:00:00+00:00",
+      "24": "2026-10-22T00:00:00+00:00"
+    },
+    "steps_hours": {
+      "1": 2,
+      "168": 168,
+      "24": 24
+    },
+    "target_window_minutes": 25
+  },
+  "promotion_authorized": false,
+  "real_orders_authorized": false,
+  "source_commit": "c2e9881c3415f3c4f9cc88c107cd28909810cfa4",
+  "source_quality": {
+    "duplicate_keys": 0,
+    "historical_download_is_prospective_evidence": false,
+    "missing_internal_bars": 0,
+    "path": "ohlc.csv",
+    "rows": 80574,
+    "sha256": "fe19f654b92abfa8d1a40181d3ac882e764f52c658c00a4f91071c2d9a3c4c92",
+    "source": [
+      "OKX history-candles 1H confirmed"
+    ],
+    "symbols": {
+      "BTC-USDT": {
+        "bars": 26858,
+        "first_open_utc": "2023-09-28T18:00:00+00:00",
+        "last_closed_utc": "2026-10-21T20:00:00+00:00"
+      },
+      "DOGE-USDT": {
+        "bars": 26858,
+        "first_open_utc": "2023-09-28T18:00:00+00:00",
+        "last_closed_utc": "2026-10-21T20:00:00+00:00"
+      },
+      "ETH-USDT": {
+        "bars": 26858,
+        "first_open_utc": "2023-09-28T18:00:00+00:00",
+        "last_closed_utc": "2026-10-21T20:00:00+00:00"
+      }
+    }
+  },
+  "source_sha256": "fe19f654b92abfa8d1a40181d3ac882e764f52c658c00a4f91071c2d9a3c4c92"
+}

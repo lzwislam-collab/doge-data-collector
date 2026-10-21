@@ -1,0 +1,84 @@
+name: Audit and publish DOGE fixed horizon protocols
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ['Backfill DOGE BTC ETH 1H extreme-event research history']
+    types: [completed]
+  push:
+    branches: [main, 'fix/plus-horizons-*']
+    paths: ['horizon_protocol.py', 'test_horizon_protocol.py', 'config/horizon_protocol_v1.json', '.github/workflows/horizon_protocol.yml']
+  pull_request:
+    paths: ['horizon_protocol.py', 'test_horizon_protocol.py', 'config/horizon_protocol_v1.json', '.github/workflows/horizon_protocol.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: horizon-protocol-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  horizons:
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.event != 'pull_request')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    env:
+      PYTHONUTF8: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install numpy==2.3.5
+      - name: Scoped regression tests
+        run: |
+          python -m unittest test_horizon_protocol test_plus_scorecard test_paired_selection_v1 test_e1_forward -q
+          python e1_forward.py check
+      - name: Offline protocol replay on branches
+        if: github.ref != 'refs/heads/main' || github.event_name == 'pull_request'
+        run: python horizon_protocol.py audit
+      - name: Actual-clock tick using existing collector completion
+        id: tick
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        continue-on-error: true
+        run: python horizon_protocol.py tick
+      - name: Persist exact new horizon records only
+        if: always() && steps.tick.outcome != 'skipped' && steps.tick.outcome != ''
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if [ -d data/horizon_protocol_v1 ]; then git add -f -- data/horizon_protocol_v1; fi
+          if git diff --cached --quiet; then exit 0; fi
+          git diff --cached --name-only | while IFS= read -r p; do
+            case "$p" in data/horizon_protocol_v1/events/*|data/horizon_protocol_v1/scores/*|data/horizon_protocol_v1/locators/*) ;; *) exit 1 ;; esac
+          done
+          git diff --cached --diff-filter=MD --name-only | while IFS= read -r p; do test -z "$p"; done
+          git commit -m 'data: append actual fixed horizon evidence'
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then exit 0; fi
+            [ "$attempt" -lt 3 ] || exit 1
+            git fetch origin main
+            git rebase origin/main
+            python horizon_protocol.py audit
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doge-horizon-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            horizon-output/
+            config/horizon_protocol_v1.json
+            data/horizon_protocol_v1/
+          if-no-files-found: error
+          retention-days: 90
+      - name: Report tick errors after preserving evidence
+        if: steps.tick.outcome == 'failure'
+        run: exit 1
