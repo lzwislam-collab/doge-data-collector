@@ -1,17 +1,17 @@
 {
   "schema_version": 1,
   "status": "ok",
-  "audited_at_utc": "2026-10-21T00:23:34.137828+00:00",
-  "input_head": "a8526c40026da75b58eef4d6e0e13e99f25c3dc9",
+  "audited_at_utc": "2026-10-21T01:13:25.012865+00:00",
+  "input_head": "6e8ac377ac2e688e20e4ccd6c0871059e4abf710",
   "scope": "supplementary strict P0 operational monitor; does not replace frozen V2 scores",
   "frozen_protocol_id": "DOGE_FORWARD_RAW_QUOTE_BOUND_V2_20261012_0200",
   "frozen_implementation_verified": true,
   "official_frozen_v2_issuance": {
     "1h": {
-      "expected": 214,
-      "issued": 208,
+      "expected": 215,
+      "issued": 209,
       "missing": 6,
-      "coverage_pct": 97.19626168224299,
+      "coverage_pct": 97.20930232558139,
       "window_minutes": 45
     },
     "24h": {
@@ -29,32 +29,6 @@
       "missing": 1,
       "coverage_pct": 99.4047619047619,
       "slots": [
-        {
-          "slot_start_utc": "2026-10-14T00:00:00+00:00",
-          "deadline_utc": "2026-10-14T00:45:00+00:00",
-          "status": "verified_issued",
-          "forecast_ids": [
-            "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1791932400000_1h"
-          ],
-          "run_ids": [
-            38488137789,
-            38492324292
-          ],
-          "runs": [
-            {
-              "id": 38488137789,
-              "event": "schedule",
-              "conclusion": "failure",
-              "created_at": "2026-10-14T00:05:31Z"
-            },
-            {
-              "id": 38492324292,
-              "event": "schedule",
-              "conclusion": "failure",
-              "created_at": "2026-10-14T00:49:29Z"
-            }
-          ]
-        },
         {
           "slot_start_utc": "2026-10-14T01:00:00+00:00",
           "deadline_utc": "2026-10-14T01:45:00+00:00",
@@ -4198,6 +4172,32 @@
               "created_at": "2026-10-20T23:50:51Z"
             }
           ]
+        },
+        {
+          "slot_start_utc": "2026-10-21T00:00:00+00:00",
+          "deadline_utc": "2026-10-21T00:45:00+00:00",
+          "status": "verified_issued",
+          "forecast_ids": [
+            "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792537200000_1h"
+          ],
+          "run_ids": [
+            39518623277,
+            39520781892
+          ],
+          "runs": [
+            {
+              "id": 39518623277,
+              "event": "workflow_dispatch",
+              "conclusion": "cancelled",
+              "created_at": "2026-10-21T00:00:29Z"
+            },
+            {
+              "id": 39520781892,
+              "event": "schedule",
+              "conclusion": "cancelled",
+              "created_at": "2026-10-21T00:21:05Z"
+            }
+          ]
         }
       ],
       "target_due": 166,
@@ -6805,10 +6805,10 @@
   },
   "rolling_30d": {
     "1h": {
-      "expected": 214,
-      "issued": 208,
+      "expected": 215,
+      "issued": 209,
       "missing": 6,
-      "coverage_pct": 97.19626168224299,
+      "coverage_pct": 97.20930232558139,
       "slots": [
         {
           "slot_start_utc": "2026-10-12T02:00:00+00:00",
@@ -12466,10 +12466,36 @@
               "created_at": "2026-10-20T23:50:51Z"
             }
           ]
+        },
+        {
+          "slot_start_utc": "2026-10-21T00:00:00+00:00",
+          "deadline_utc": "2026-10-21T00:45:00+00:00",
+          "status": "verified_issued",
+          "forecast_ids": [
+            "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792537200000_1h"
+          ],
+          "run_ids": [
+            39518623277,
+            39520781892
+          ],
+          "runs": [
+            {
+              "id": 39518623277,
+              "event": "workflow_dispatch",
+              "conclusion": "cancelled",
+              "created_at": "2026-10-21T00:00:29Z"
+            },
+            {
+              "id": 39520781892,
+              "event": "schedule",
+              "conclusion": "cancelled",
+              "created_at": "2026-10-21T00:21:05Z"
+            }
+          ]
         }
       ],
-      "target_due": 207,
-      "target_scored": 178,
+      "target_due": 208,
+      "target_scored": 179,
       "target_missing": 29,
       "target_missing_ids": [
         "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1791928800000_1h",
@@ -12502,7 +12528,7 @@
         "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792497600000_1h",
         "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792508400000_1h"
       ],
-      "target_coverage_pct": 85.99033816425121,
+      "target_coverage_pct": 86.0576923076923,
       "seven_full_days_observed": true,
       "rolling_window_hours": 720,
       "full_window_observed": false,
@@ -22632,30 +22658,62 @@
         "commit_sha": "c02a5dce0857b18fc027d0b71ec07b4bfb8450a2",
         "committed_at_utc": "2026-10-21T00:01:54+00:00"
       }
+    },
+    "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792540800000_1h": {
+      "issued_at_utc": "2026-10-21T01:11:54.741087+00:00",
+      "source_quote_utc": "2026-10-21T01:11:53.671000+00:00",
+      "quote_id": "6fbfa134e1be12dba4d12254e92462fc97056d819cb57dbb0f96851904bd8544",
+      "publication": {
+        "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792540800000_1h",
+        "run_id": "39525962437",
+        "observed_public_utc": "2026-10-21T01:12:35+00:00",
+        "head_sha": "6e8ac377ac2e688e20e4ccd6c0871059e4abf710",
+        "run_url": "https://github.com/lzwislam-collab/doge-data-collector/actions/runs/39525962437"
+      },
+      "commit": {
+        "commit_sha": "6e8ac377ac2e688e20e4ccd6c0871059e4abf710",
+        "committed_at_utc": "2026-10-21T01:12:14+00:00"
+      }
+    },
+    "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792540800000_24h": {
+      "issued_at_utc": "2026-10-21T01:11:54.741087+00:00",
+      "source_quote_utc": "2026-10-21T01:11:53.671000+00:00",
+      "quote_id": "6fbfa134e1be12dba4d12254e92462fc97056d819cb57dbb0f96851904bd8544",
+      "publication": {
+        "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792540800000_24h",
+        "run_id": "39525962437",
+        "observed_public_utc": "2026-10-21T01:12:35+00:00",
+        "head_sha": "6e8ac377ac2e688e20e4ccd6c0871059e4abf710",
+        "run_url": "https://github.com/lzwislam-collab/doge-data-collector/actions/runs/39525962437"
+      },
+      "commit": {
+        "commit_sha": "6e8ac377ac2e688e20e4ccd6c0871059e4abf710",
+        "committed_at_utc": "2026-10-21T01:12:14+00:00"
+      }
     }
   },
   "rejected_evidence": {},
   "hourly_source": {
     "DOGE-USDT": {
-      "hours": 26838,
+      "hours": 26839,
       "earliest_utc": "2023-09-28T18:00:00+00:00",
-      "last_confirmed_start_utc": "2026-10-20T23:00:00+00:00",
+      "last_confirmed_start_utc": "2026-10-21T00:00:00+00:00",
       "missing_hours_between_endpoints": 0,
-      "feature_age_minutes": 23.57
+      "feature_age_minutes": 13.42
     },
     "BTC-USDT": {
-      "hours": 26838,
+      "hours": 26839,
       "earliest_utc": "2023-09-28T18:00:00+00:00",
-      "last_confirmed_start_utc": "2026-10-20T23:00:00+00:00",
+      "last_confirmed_start_utc": "2026-10-21T00:00:00+00:00",
       "missing_hours_between_endpoints": 0,
-      "feature_age_minutes": 23.57
+      "feature_age_minutes": 13.42
     },
     "ETH-USDT": {
-      "hours": 26838,
+      "hours": 26839,
       "earliest_utc": "2023-09-28T18:00:00+00:00",
-      "last_confirmed_start_utc": "2026-10-20T23:00:00+00:00",
+      "last_confirmed_start_utc": "2026-10-21T00:00:00+00:00",
       "missing_hours_between_endpoints": 0,
-      "feature_age_minutes": 23.57
+      "feature_age_minutes": 13.42
     }
   },
   "monitor_code_sha256": "16c4f24489be8cd10890e7021d28c1b71f3b2192f9517e166299397c2732b1ca",
