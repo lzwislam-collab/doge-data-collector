@@ -1,0 +1,147 @@
+name: Observe DOGE E1 cloud exceptions
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Inspect real evidence or send an isolated delivery probe
+        type: choice
+        options: [inspect, probe]
+        default: inspect
+      probe_id:
+        description: Stable probe key; repeat the same key to verify deduplication
+        type: string
+        default: ''
+  workflow_run:
+    workflows: ['Backfill DOGE BTC ETH 1H extreme-event research history', 'Publish DOGE E1 forward evidence', 'Witness DOGE E1 forward evidence']
+    types: [completed]
+  push:
+    branches: [main]
+    paths: ['e1_observer.py', 'e1_observer_cache.py', 'test_e1_observer*.py', '.github/scripts/e1_observer_notify.cjs', '.github/scripts/test_e1_observer_notify.cjs', '.github/workflows/e1_observer.yml', 'docs/e1-observer*.md', 'docs/e1-cloud-alert-design-20261021.md']
+  pull_request:
+    paths: ['e1_observer.py', 'e1_observer_cache.py', 'test_e1_observer*.py', '.github/scripts/e1_observer_notify.cjs', '.github/scripts/test_e1_observer_notify.cjs', '.github/workflows/e1_observer.yml', 'docs/e1-observer*.md', 'docs/e1-cloud-alert-design-20261021.md']
+permissions:
+  contents: read
+jobs:
+  observe:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       github.event.workflow_run.event != 'pull_request' && github.event.workflow_run.event != 'pull_request_target')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    concurrency:
+      group: e1-observer-notification
+      cancel-in-progress: false
+      queue: max
+    env:
+      PYTHONUTF8: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+      E1_OBSERVER_ISSUE_NUMBER: '70'
+    steps:
+      - name: Bound evidence deadlines before obtaining the main snapshot
+        id: snapshot
+        if: inputs.mode != 'probe'
+        run: echo "asof_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+      - name: Read current trusted main only
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Read-only detector dependency
+        if: inputs.mode != 'probe'
+        run: python -m pip install numpy==2.3.5
+      - name: Inspect real evidence without issuing or scoring
+        id: scan
+        if: inputs.mode != 'probe'
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          E1_OBSERVER_CUTOFF_UTC: ${{ steps.snapshot.outputs.asof_utc }}
+        run: python e1_observer.py
+      - name: Deliver only new exceptions or the isolated probe
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          OBSERVER_MODE: ${{ inputs.mode || 'inspect' }}
+          PROBE_ID: ${{ inputs.probe_id }}
+          SCAN_OUTCOME: ${{ steps.scan.outcome }}
+        with:
+          script: |
+            const fs = require('fs');
+            const out = 'e1-observer-output';
+            fs.mkdirSync(out, {recursive: true});
+            let receipt = {status: 'DELIVERY_FAILED', errors: []};
+            try {
+              const issueNumber = Number(process.env.E1_OBSERVER_ISSUE_NUMBER);
+              if (!Number.isSafeInteger(issueNumber) || issueNumber <= 0) throw new Error('Invalid observer issue number');
+              const probe = process.env.OBSERVER_MODE === 'probe';
+              if (probe && !process.env.PROBE_ID) throw new Error('probe_id is required for repeatable isolated probe');
+              let report = null;
+              if (!probe) {
+                try { report = JSON.parse(fs.readFileSync(out + '/report.json', 'utf8')); } catch {}
+                if (!report) {
+                  report = {schema: 'DOGE_E1_OBSERVER_V1', status: 'OBSERVATION_FAILED',
+                    checked_at_utc: new Date().toISOString(), source_commit: null,
+                    registration_identity: null, event_count: null, score_count: null,
+                    anomalies: [], errors: ['Detector report unavailable; scan outcome: ' + process.env.SCAN_OUTCOME]};
+                  fs.writeFileSync(out + '/report.json', JSON.stringify(report, null, 2));
+                }
+              }
+              const notify = require('./.github/scripts/e1_observer_notify.cjs');
+              receipt = await notify({github, context, report,
+                probeId: probe ? process.env.PROBE_ID : undefined,
+                issueNumber, recipient: 'lzwislam-collab'});
+              console.log(JSON.stringify(receipt));
+            } catch (error) {
+              if (error.receipt) receipt = error.receipt;
+              receipt.errors = [...(receipt.errors || []), String(error.message || error)];
+              core.setFailed(String(error.message || error));
+            } finally {
+              fs.writeFileSync(out + '/notification.json', JSON.stringify(receipt, null, 2));
+            }
+      - name: Preserve inspection and delivery receipts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e1-observer-${{ github.run_id }}-${{ github.run_attempt }}
+          path: e1-observer-output/
+          if-no-files-found: error
+          retention-days: 90
+      - name: Preserve truthful detector failure status
+        if: always() && steps.scan.outcome == 'failure'
+        run: exit 1
+  ci:
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    env:
+      PYTHONUTF8: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install numpy==2.3.5 scipy==1.16.3 scikit-learn==1.7.2 joblib==1.5.2 threadpoolctl==3.6.0 botocore==1.43.112
+      - name: Offline regression and original frozen integrity
+        run: |
+          python -m unittest discover -q
+          python forward_validation_v2.py --integrity-only
+          python e1_forward.py check
+          node --test .github/scripts/test_e1_observer_notify.cjs
