@@ -76,7 +76,7 @@ def forecast_row(track,h,e,s,prediction_verified,score_verified,now):
  if not prediction_verified:row['status']='UNVERIFIED_PUBLICATION';return row
  prob=e['candidate_p']['selected' if track=='r2' else 'full']
  if isinstance(prob,bool) or not math.isfinite(prob) or not 0<=prob<=1:raise ValueError('invalid frozen probability')
- row.update(probability_up=prob,direction='UP' if prob>=.5 else 'DOWN',prediction_verified=True,active_forecast=now<target)
+ row.update(raw_score=prob,probability_up=None,score_label='raw score / uncalibrated',direction='UP' if prob>=.5 else 'DOWN',prediction_verified=True,active_forecast=now<target)
  deadline=f.deadline(e,p) if track=='r2' else legacy.shadow.target_deadline(e,p)
  row['status']='PENDING_TARGET' if now<target else 'TARGET_WINDOW_OPEN' if now<deadline else 'MISSING_TARGET'
  if s is not None and not score_verified:row['status']='TARGET_EVIDENCE_PENDING' if now<deadline else 'TARGET_EVIDENCE_MISSING'
@@ -84,7 +84,7 @@ def forecast_row(track,h,e,s,prediction_verified,score_verified,now):
  if now<target:raise ValueError('score before target')
  y=s['y']
  if type(y) is not int or y not in (0,1):raise ValueError('invalid target direction')
- stats=row['latest_same_event'];stats.update(sample_count=1,accuracy=int(int(prob>=.5)==y),brier=(prob-y)**2)
+ stats=row['latest_same_event'];stats.update(sample_count=1,accuracy=int(int(prob>=.5)==y),brier=None,raw_score_squared_error=(prob-y)**2)
  if track=='r2':
   costs=s.get('economic_returns',{}) if s.get('cost_error') is None else {};selected=costs.get('selected')
   stats['baselines']={name:{'accuracy':int(int(q>=.5)==y),'brier':(q-y)**2,**(costs.get(name) or {'net_return':None,'stress_net_return':None})} for name,q in e['candidate_p'].items() if name!='selected'}
@@ -208,7 +208,8 @@ def render(report):
  for row in report.get('forecasts',[]):
   title=('历史记录 · ' if row.get('historical_record') else '')+('冻结参考' if row['track']=='original18' else 'R2研究挑战者')+' · '+str(row['horizon_hours'])+'小时'
   direction={'UP':'上涨','DOWN':'跌／平'}.get(row['direction'],'暂无方向')
-  prob='尚未发行或验证' if row['probability_up'] is None else f"上涨模型概率 {row['probability_up']:.1%}（校准未验证）"
+  raw=row.get('raw_score',row.get('probability_up'))
+  prob='尚未发行或验证' if raw is None else f"raw score / uncalibrated：{raw:.6f}"
   s=row['latest_same_event'];cost='成本净收益未知' if s['net_return'] is None else f"最新同事件名义净收益 {s['net_return']:.2%}"
   stress=esc('未知' if s['stress_net_return'] is None else format(s['stress_net_return'],'.2%'));target=esc(row.get('target_utc','尚未发行'))
   cards.append(f'<section><h2>{esc(title)}</h2><h3>{esc(direction)}</h3><p>{esc(prob)}</p><p class="status">{esc(labels.get(row["status"],row["status"]))}</p><p>{esc(cost)}</p><p>压力净收益：{stress}</p><p>目标（UTC）：{target}</p><small>仅最新事件；不代表全样本准确率。历史记录不会作为新的预测发行。</small></section>')

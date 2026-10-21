@@ -4,6 +4,12 @@ from unittest.mock import patch
 from datetime import datetime,timezone,timedelta
 
 class Report404Adapter(unittest.TestCase):
+ def test_uncalibrated_raw_score_is_never_rendered_as_probability(self):
+  import plus_shadow as m
+  r={'track':'r2','horizon_hours':1,'historical_record':False,'direction':'UP','raw_score':.6,'probability_up':None,'status':'PENDING_TARGET','latest_same_event':{'net_return':None,'stress_net_return':None}}
+  page=m.render({'forecasts':[r],'status':'SHADOW_REPORT_READY'})
+  self.assertIn('raw score / uncalibrated',page)
+  self.assertNotIn('上涨模型概率',page)
  def fixture(self):
   import subprocess
   tmp=tempfile.TemporaryDirectory();self.addCleanup(tmp.cleanup);root=Path(tmp.name)
