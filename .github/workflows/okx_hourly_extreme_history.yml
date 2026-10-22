@@ -96,7 +96,7 @@ concurrency:
 jobs:
   hourly-history:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15 # observed 8m28s plus the existing 6m first-daily PIT budget
+    timeout-minutes: 18 # observed first-daily 15m52s including archives plus 2m margin
     steps:
       - uses: actions/checkout@v4
         with:

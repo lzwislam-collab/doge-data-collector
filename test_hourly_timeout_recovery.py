@@ -17,7 +17,9 @@ class HourlyTimeoutRecovery(unittest.TestCase):
         pit=re.search(r'id: pit_preparation\b(?:(?!\n      - name:).)*?timeout-minutes:\s*(\d+)',text,re.S)
         self.assertIsNotNone(pit)
         self.assertGreaterEqual(minutes*60,508+max(120,int(pit.group(1))*60))
-        self.assertLessEqual(minutes,15)
+        # First-daily run 39701702728 took 952s including both archives.
+        self.assertGreaterEqual(minutes*60,952+120)
+        self.assertLessEqual(minutes,18)
 
     def test_existing_single_schedule_and_serialization_are_preserved(self):
         text=WORKFLOW.read_text(encoding='utf8')
