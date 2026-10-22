@@ -96,7 +96,7 @@ concurrency:
 jobs:
   hourly-history:
     runs-on: ubuntu-24.04
-    timeout-minutes: 12 # observed 8m28s run needs bounded room for retained evidence upload
+    timeout-minutes: 15 # observed 8m28s plus the existing 6m first-daily PIT budget
     steps:
       - uses: actions/checkout@v4
         with:

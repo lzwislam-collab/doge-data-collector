@@ -12,8 +12,11 @@ class HourlyTimeoutRecovery(unittest.TestCase):
         minutes=int(re.search(r'timeout-minutes:\s*(\d+)',job).group(1))
         # Run 39693555382 lasted 508s and GitHub annotated an 8m timeout.
         # Its source/persist succeeded; the 1.32GB retained evidence upload
-        # exhausted the budget. Retain all evidence and give 120s margin.
-        self.assertGreaterEqual(minutes*60,508+120)
+        # exhausted the budget. A new UTC day also permits an existing
+        # six-minute PIT preparation, which was a no-op in the 508s case.
+        pit=re.search(r'id: pit_preparation\b(?:(?!\n      - name:).)*?timeout-minutes:\s*(\d+)',text,re.S)
+        self.assertIsNotNone(pit)
+        self.assertGreaterEqual(minutes*60,508+max(120,int(pit.group(1))*60))
         self.assertLessEqual(minutes,15)
 
     def test_existing_single_schedule_and_serialization_are_preserved(self):
