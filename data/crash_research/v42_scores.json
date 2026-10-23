@@ -1,14 +1,14 @@
 {
   "schema_version": 2,
   "status": "ok",
-  "evaluated_utc": "2026-10-23T09:39:13.702557+00:00",
+  "evaluated_utc": "2026-10-23T14:31:04.267309+00:00",
   "rule_version": "V4.2_scoring_only_v1",
   "legacy_watch_rows_unmodified": true,
   "horizon": "event candle START >= issued_at + 1h AND < issued_at + 12h; evaluate only after each eligible candle closes",
   "score_window_lead_min_hours": 1,
   "alarm_cooldown_hours": 12,
   "event_cluster_hours": 12,
-  "registered": 261,
+  "registered": 262,
   "scored": [
     {
       "watch_id": "shock_watch_rule_frozen_20261011_v1_1791680400000",
@@ -2836,19 +2836,31 @@
       "alert": false,
       "realized_event": false,
       "event_starts_utc": []
-    }
-  ],
-  "pending": [
+    },
     {
       "watch_id": "shock_watch_rule_frozen_20261011_v1_1792699200000",
-      "reason": "awaiting complete forward target candle",
-      "last_required_utc": "2026-10-23T09:00:00+00:00"
+      "issued_at_utc": "2026-10-22T21:22:03.550456+00:00",
+      "signal_hour_start_utc": "2026-10-22T20:00:00+00:00",
+      "target_first_hour_start_utc": "2026-10-22T23:00:00+00:00",
+      "target_end_exclusive_hour_start_utc": "2026-10-23T10:00:00+00:00",
+      "last_hour_required_utc": "2026-10-23T09:00:00+00:00",
+      "alert": false,
+      "realized_event": false,
+      "event_starts_utc": []
     },
     {
       "watch_id": "shock_watch_rule_frozen_20261011_v1_1792710000000",
-      "reason": "awaiting complete forward target candle",
-      "last_required_utc": "2026-10-23T12:00:00+00:00"
-    },
+      "issued_at_utc": "2026-10-23T00:06:05.092509+00:00",
+      "signal_hour_start_utc": "2026-10-22T23:00:00+00:00",
+      "target_first_hour_start_utc": "2026-10-23T02:00:00+00:00",
+      "target_end_exclusive_hour_start_utc": "2026-10-23T13:00:00+00:00",
+      "last_hour_required_utc": "2026-10-23T12:00:00+00:00",
+      "alert": false,
+      "realized_event": false,
+      "event_starts_utc": []
+    }
+  ],
+  "pending": [
     {
       "watch_id": "shock_watch_rule_frozen_20261011_v1_1792724400000",
       "reason": "awaiting complete forward target candle",
@@ -2858,11 +2870,16 @@
       "watch_id": "shock_watch_rule_frozen_20261011_v1_1792742400000",
       "reason": "awaiting complete forward target candle",
       "last_required_utc": "2026-10-23T21:00:00+00:00"
+    },
+    {
+      "watch_id": "shock_watch_rule_frozen_20261011_v1_1792760400000",
+      "reason": "awaiting complete forward target candle",
+      "last_required_utc": "2026-10-24T02:00:00+00:00"
     }
   ],
   "quarantined": [],
-  "scored_count": 257,
-  "pending_count": 4,
+  "scored_count": 259,
+  "pending_count": 3,
   "quarantined_count": 0,
   "active_alerts": 2,
   "cooldown_suppressed_alert_ids": [],
