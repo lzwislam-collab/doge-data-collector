@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "status": "ok",
-  "generated_at_utc": "2026-10-24T14:33:27.583431+00:00",
+  "generated_at_utc": "2026-10-24T16:48:50.815573+00:00",
   "source": "Immutable DOGE V4.2 registered forecasts + official scored ticker and independent confirmed-1m scores",
   "study_effective_from_utc": "2026-10-12T00:00:00+00:00",
   "track_definitions": {
@@ -9,13 +9,13 @@
     "confirmed_1m_close": "separate first fully confirmed minute close after target, never exact quote"
   },
   "registered": 552,
-  "original_quote_score_rows": 526,
+  "original_quote_score_rows": 527,
   "source_sha256": {
     "forecast_registry": "c561827d33dce7229a60ce1bb7ee2b0d7a01016da6841c1f17b9eeca286ba4df",
-    "original_quote_scores": "a5483e735e28703e19fa092317851502675fe6c14874aaf501da1b59f8c2f336",
-    "independent_minute_scores": "48c2b6a76f695cdfe8675ecc9ec3213343de5db07f0004f7b63625458004651e"
+    "original_quote_scores": "9cf0c40b0ef2fa90e7fbe74ba2a6aeb087e375fe38a226d4d2fca723abe188a6",
+    "independent_minute_scores": "f1068f561e79469cce1c49ee30f3a41e5f4381b65c66c84f19d4eeb44838d528"
   },
-  "independent_minute_score_rows": 520,
+  "independent_minute_score_rows": 521,
   "cohort_statistics": {
     "original_ticker_1h_pre_freeze_diagnostic": {
       "registered": 21,
@@ -45,8 +45,8 @@
       "scored": 197,
       "correct": 107,
       "wrong": 90,
-      "unscorable": 45,
-      "pending": 1,
+      "unscorable": 46,
+      "pending": 0,
       "awaiting_or_overdue": 0,
       "accuracy_pct": 54.31,
       "by_prediction_direction": {
@@ -227,17 +227,17 @@
     },
     "confirmed_1m_close_1h_preregistered_forward": {
       "registered": 243,
-      "scored": 242,
+      "scored": 243,
       "correct": 129,
-      "wrong": 113,
+      "wrong": 114,
       "unscorable": 0,
-      "pending": 1,
+      "pending": 0,
       "awaiting_or_overdue": 0,
-      "accuracy_pct": 53.31,
+      "accuracy_pct": 53.09,
       "by_prediction_direction": {
         "UP": {
-          "scored": 117,
-          "wrong": 57
+          "scored": 118,
+          "wrong": 58
         },
         "DOWN": {
           "scored": 125,
@@ -246,8 +246,8 @@
       },
       "wrong_factor_counts": {
         "no_dominant_hourly_proxy": 96,
-        "btc_eth_co_movement_correlated": 13,
-        "doge_underperformed_btc": 4,
+        "btc_eth_co_movement_correlated": 14,
+        "doge_underperformed_btc": 5,
         "doge_outperformed_btc": 2
       }
     },
@@ -386,24 +386,6 @@
     }
   },
   "errors_and_coverage_examples": [
-    {
-      "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792569600000_24h",
-      "cohort": "preregistered_forward",
-      "track": "original_ticker",
-      "horizon_hours": 24,
-      "issued_at_utc": "2026-10-21T09:38:14.507190+00:00",
-      "target_utc": "2026-10-22T09:38:14.507190+00:00",
-      "predicted_direction": "DOWN",
-      "outcome_direction": null,
-      "status": "unscorable",
-      "category": "observation_coverage_failure",
-      "explanatory_factors": [
-        "target_ticker_not_observed_within_25min"
-      ],
-      "context": null,
-      "classification_certainty": "observed_result_only_no_causal_attribution",
-      "model_revision_authorized": false
-    },
     {
       "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792573200000_1h",
       "cohort": "preregistered_forward",
@@ -1204,54 +1186,27 @@
       },
       "classification_certainty": "observed_result_only_no_causal_attribution",
       "model_revision_authorized": false
+    },
+    {
+      "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792846800000_1h",
+      "cohort": "preregistered_forward",
+      "track": "original_ticker",
+      "horizon_hours": 1,
+      "issued_at_utc": "2026-10-24T14:32:43.486362+00:00",
+      "target_utc": "2026-10-24T15:32:43.486362+00:00",
+      "predicted_direction": "UP",
+      "outcome_direction": null,
+      "status": "unscorable",
+      "category": "observation_coverage_failure",
+      "explanatory_factors": [
+        "target_ticker_not_observed_within_25min"
+      ],
+      "context": null,
+      "classification_certainty": "observed_result_only_no_causal_attribution",
+      "model_revision_authorized": false
     }
   ],
   "minute_wrong_diagnostic_examples": [
-    {
-      "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792627200000_24h",
-      "cohort": "preregistered_forward",
-      "track": "confirmed_1m_close",
-      "horizon_hours": 24,
-      "issued_at_utc": "2026-10-22T01:08:07.988434+00:00",
-      "target_utc": "2026-10-23T01:08:07.988434+00:00",
-      "predicted_direction": "UP",
-      "outcome_direction": "DOWN",
-      "status": "scored",
-      "category": "direction_wrong",
-      "explanatory_factors": [
-        "btc_eth_co_movement_correlated"
-      ],
-      "context": {
-        "state": "retrospective_association_only",
-        "bar_anchor_ms": 1792627200000,
-        "bar_target_ms": 1792713600000,
-        "historical_retrieval_is_not_proof_of_real_time_availability": true,
-        "returns_pct": {
-          "BTC-USDT": -3.2602,
-          "ETH-USDT": -3.1876,
-          "DOGE-USDT": -3.4432
-        },
-        "anchor_first_seen_after_issue": false,
-        "outcome_first_seen_after_target": true,
-        "ex_ante_market_features_verified": false,
-        "source_first_seen_utc_by_symbol": {
-          "BTC-USDT": {
-            "anchor": "2026-10-22T01:08:00.303751+00:00",
-            "target_context": "2026-10-23T04:42:28.508118+00:00"
-          },
-          "ETH-USDT": {
-            "anchor": "2026-10-22T01:08:00.551011+00:00",
-            "target_context": "2026-10-23T04:42:28.666967+00:00"
-          },
-          "DOGE-USDT": {
-            "anchor": "2026-10-22T01:08:00.083331+00:00",
-            "target_context": "2026-10-23T04:42:28.354233+00:00"
-          }
-        }
-      },
-      "classification_certainty": "observed_result_only_no_causal_attribution",
-      "model_revision_authorized": false
-    },
     {
       "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792648800000_1h",
       "cohort": "preregistered_forward",
@@ -1741,6 +1696,52 @@
           "DOGE-USDT": {
             "anchor": "2026-10-24T13:18:53.526737+00:00",
             "target_context": "2026-10-24T14:32:35.522568+00:00"
+          }
+        }
+      },
+      "classification_certainty": "observed_result_only_no_causal_attribution",
+      "model_revision_authorized": false
+    },
+    {
+      "forecast_id": "DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792846800000_1h",
+      "cohort": "preregistered_forward",
+      "track": "confirmed_1m_close",
+      "horizon_hours": 1,
+      "issued_at_utc": "2026-10-24T14:32:43.486362+00:00",
+      "target_utc": "2026-10-24T15:32:43.486362+00:00",
+      "predicted_direction": "UP",
+      "outcome_direction": "DOWN",
+      "status": "scored",
+      "category": "direction_wrong",
+      "explanatory_factors": [
+        "btc_eth_co_movement_correlated",
+        "doge_underperformed_btc"
+      ],
+      "context": {
+        "state": "retrospective_association_only",
+        "bar_anchor_ms": 1792846800000,
+        "bar_target_ms": 1792850400000,
+        "historical_retrieval_is_not_proof_of_real_time_availability": true,
+        "returns_pct": {
+          "BTC-USDT": -0.5998,
+          "ETH-USDT": -1.0823,
+          "DOGE-USDT": -1.7281
+        },
+        "anchor_first_seen_after_issue": false,
+        "outcome_first_seen_after_target": true,
+        "ex_ante_market_features_verified": false,
+        "source_first_seen_utc_by_symbol": {
+          "BTC-USDT": {
+            "anchor": "2026-10-24T14:32:35.691576+00:00",
+            "target_context": "2026-10-24T16:47:56.097619+00:00"
+          },
+          "ETH-USDT": {
+            "anchor": "2026-10-24T14:32:35.854349+00:00",
+            "target_context": "2026-10-24T16:47:56.271393+00:00"
+          },
+          "DOGE-USDT": {
+            "anchor": "2026-10-24T14:32:35.522568+00:00",
+            "target_context": "2026-10-24T16:47:55.924372+00:00"
           }
         }
       },
