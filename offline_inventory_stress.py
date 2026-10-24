@@ -43,13 +43,14 @@ def zero_member(size):
 def byte_member(raw):
     return {'size':len(raw),'sha':hashlib.sha256(raw).hexdigest(),'crc':zlib.crc32(raw),'segments':[(0,raw)]}
 
-def sparse_zip(path,members):
+def sparse_zip(path,members,prefix_bytes=0):
     """Produce real ZIP/ZIP64 bytes, with holes only where payload bytes are zero."""
+    if type(prefix_bytes) is not int or prefix_bytes<0:raise ValueError('invalid sparse prefix')
     central=[];segments=[]
     with sparse_stream(path) as stream:
         def put(offset,raw):
             stream.seek(offset);stream.write(raw);segments.append((offset,raw))
-        cursor=0
+        cursor=prefix_bytes
         for name,member in members:
             encoded=name.encode('utf-8');size=member['size'];crc=member['crc'];offset=cursor
             if size>=0xffffffff:raise ValueError('fixture member too large')

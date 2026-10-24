@@ -138,6 +138,28 @@ def validate_inventory_references(stage_root,prior):
             if path.stat().st_size!=size:raise ValueError('inventory part declared size mismatch')
     return raw,parts
 
+def verify_single_inventory(stage_root,prior):
+    """Supply the single-package checks absent from the frozen hash-only branch."""
+    import pit_retention_preparation as pit
+    path=reject_link_ancestors(Path(stage_root)/prior['bundle_path'])
+    with zipfile.ZipFile(path) as archive:
+        detail=json.loads(archive.read('bundle_manifest.json'));names=archive.namelist()
+        objects=detail.get('objects') if isinstance(detail,dict) else None
+        if (not isinstance(objects,dict) or len(objects)!=prior['objects']
+            or len(names)!=len(set(names)) or set(names)!={'bundle_manifest.json',*objects}):
+            raise ValueError('single inventory coverage/count mismatch')
+        total=0
+        for name,expected in objects.items():
+            pit.safe(stage_root,name)
+            if not isinstance(expected,str) or not re.fullmatch('[a-f0-9]{64}',expected):
+                raise ValueError('invalid single inventory object digest')
+            total+=archive.getinfo(name).file_size
+            if total>LIMIT:raise ValueError('single inventory source exceeds frozen cap')
+            hasher=hashlib.sha256()
+            with archive.open(name) as stream:
+                for chunk in iter(lambda:stream.read(1024*1024),b''):hasher.update(chunk)
+            if hasher.hexdigest()!=expected:raise ValueError('single inventory content hash mismatch')
+
 def staged_capacity(stage_root,archive_bytes):
     destination=reject_link_ancestors(stage_root)/'data/pit_retention_preparation_v1'
     entries=[];nodes=0
@@ -182,6 +204,7 @@ def prepare_upload_inventory(root):
     validate_staged_packages(stage_root/'data/pit_retention_preparation_v1')
     import pit_retention_preparation as pit
     pit.verify_inventory_bundle(stage_root,prior)
+    if prior.get('bundle_kind') is None:verify_single_inventory(stage_root,prior)
     for path in (output/'receipt.json',root/'audit/oss_retention'/(prior['bundle_sha256']+'.json'),root/'audit/oss_retention/latest.json'):
         reject_link_ancestors(path)
     return {'root':root,'stage_root':stage_root,'output':output,'prior':prior,'source':source,'raw':raw,'parts':parts}
@@ -388,6 +411,7 @@ def stage(root,force=False):
         validate_staged_packages(destination)
         import pit_retention_preparation as pit
         pit.verify_inventory_bundle(private_root,copied)
+        if copied.get('bundle_kind') is None:verify_single_inventory(private_root,copied)
         head=subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()
         prepared_report=Path(temporary)/'publication-source.json'
         prepared_report.write_text(json.dumps({'source_commit':head,'artifact_source_commit':run['head_sha'],'artifact_id':artifact['id'],

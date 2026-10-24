@@ -69,7 +69,9 @@ class ReportEvidenceReader:
        diagnostic['classification']='PINNED_PATH_PRESENT_REMOTE_UNAVAILABLE'
        if empty:
         size=subprocess.run([*command,'cat-file','-s',head+':'+path],cwd=self.root,capture_output=True,env={**os.environ,'GIT_NO_LAZY_FETCH':'1','GIT_TERMINAL_PROMPT':'0'})
-        if size.returncode==0 and size.stdout.strip()==b'0':return self.remember(key,b'')
+        if size.returncode==0 and size.stdout.strip()==b'0':
+         kind=subprocess.run([*command,'cat-file','-t',head+':'+path],cwd=self.root,capture_output=True,env={**os.environ,'GIT_NO_LAZY_FETCH':'1','GIT_TERMINAL_PROMPT':'0'})
+         if kind.returncode==0 and kind.stdout.strip()==b'blob':return self.remember(key,b'')
     except OSError:
      pass
    self.diagnostics.append(diagnostic);print(json.dumps(diagnostic,sort_keys=True),file=sys.stderr)
