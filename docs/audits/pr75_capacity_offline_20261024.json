@@ -1,0 +1,103 @@
+{
+  "schema": "PR75_OFFLINE_CAPACITY_EVIDENCE_V1",
+  "as_of_utc": "2026-10-24T11:33:06.644156+00:00",
+  "based_on_pr_head": "3d7384d72899a4a5e21fd5d107cf3edaeeb4561a",
+  "synthetic_only": true,
+  "not_production_or_natural_schedule_evidence": true,
+  "regression": {
+    "modules": 17,
+    "tests": 214,
+    "passed": 212,
+    "skipped": 2,
+    "failures": 0,
+    "skips": "Existing Linux symlink cases cannot execute on this Windows host"
+  },
+  "full_stress": {
+    "schema": "OFFLINE_INVENTORY_CAPACITY_STRESS_V1",
+    "platform": "win32",
+    "linux_runtime": false,
+    "linux_symlink_tests_verified": false,
+    "python_version": "3.12.14",
+    "os_release": "11",
+    "synthetic_only": true,
+    "frozen_verifier_passed": true,
+    "shards": 64,
+    "raw_source_bytes": 17179869184,
+    "artifact_bytes": 17179932002,
+    "fixture_allocated_bytes": 12648448,
+    "capacity": {
+      "archive_bytes": 17179932002,
+      "expanded_bytes": 17179916372,
+      "zip_containers": 64,
+      "metadata_files": 2,
+      "entry_count": 66,
+      "disk_reserve_bytes": 268435456,
+      "peak_additional_disk_bytes": 34628283830,
+      "transport_cap_bytes": 22548578304,
+      "expanded_cap_bytes": 21474836480,
+      "basis": "declared ZIP sizes, checked before extraction; includes simultaneous archive and extracted bytes",
+      "frozen_producer_has_finite_container_maximum": false
+    },
+    "observations": [
+      {
+        "phase": "download_verified",
+        "allocated_private_bytes": 17192580985,
+        "peak_process_rss_bytes": 33091584
+      },
+      {
+        "phase": "expanded_archive_still_present",
+        "allocated_private_bytes": 34372497357,
+        "peak_process_rss_bytes": 33263616
+      },
+      {
+        "phase": "frozen_verifier_passed",
+        "allocated_private_bytes": 17192566403,
+        "peak_process_rss_bytes": 568209408
+      }
+    ],
+    "elapsed_seconds": 153.343,
+    "limitations": [
+      "STORE synthetic ZIPs accepted by the unchanged frozen verifier; not real production artifacts",
+      "No finite maximum frozen-producer container size; this proves the tested consumer domain only"
+    ]
+  },
+  "consumer_supported_boundary": {
+    "zip_max_count": 64,
+    "zip_max_bytes": 276824064,
+    "total_members_max": 512,
+    "other_member_max_bytes": 8388608,
+    "expanded_upper_bound_bytes": 21474836480,
+    "transport_cap_bytes": 22548578304,
+    "disk_reserve_bytes": 268435456,
+    "theoretical_peak_additional_disk_bytes": 44291850240,
+    "bound_tested_by": "test_inventory_capacity.CapacityTests.test_supported_expanded_max_includes_all_metadata",
+    "theoretical_peak_was_physically_stress_tested": false
+  },
+  "linux": {
+    "status": "UNVERIFIED_NO_EXISTING_ENVIRONMENT",
+    "user_confirmed_keep_pending": true,
+    "strict_offline_command": "python offline_linux_inventory_checks.py --output linux-checks.json",
+    "windows_junction_tests_passed": true,
+    "windows_is_not_linux_evidence": true
+  },
+  "freeze": {
+    "active_union_sha256_files": 33,
+    "all_match": true,
+    "inventory_producer_baseline_bytes_unchanged": true
+  },
+  "test_network": "Python socket connect/connect_ex forbidden; GitHub/provider endpoints are synthetic local-file fixtures",
+  "temporary_large_files": "Private TemporaryDirectory cleanup completed; full stress process exit 0",
+  "limitations": [
+    "No finite absolute producer-container maximum: zero-byte object count, paths and manifest length have no frozen protocol cap.",
+    "The 20 GiB expanded supported boundary is a mathematical/member-size test; actual full stress covers 16 GiB raw source and about 32 GiB simultaneous allocated files.",
+    "STORE ZIP/ZIP64 fixture is accepted by the unchanged frozen verifier, not captured market data or a production artifact.",
+    "Disk calculations describe file data and the configured reserve; filesystem/OS overhead and concurrent disk users are not universally bounded."
+  ],
+  "source_sha256": {
+    "oss_inventory_retention.py": "e86652871e3f2bde5358e503169db30aaea3c74683fd28abc9e654853a260b63",
+    "pit_retention_preparation.py": "7180d1842723960c1ca079eae6d7cf64cde6c654e44321fd5637875e2c3ef1b7",
+    "test_inventory_capacity.py": "0635eb1bde30b1aba85d55eca172d86f8f2352a05f0fd85838bb40dd5dfbcfde",
+    "offline_inventory_stress.py": "54a443a7b27f8dbd4f23beeff0c24093c827b83032e86e149f221a5cab1023a7",
+    "offline_linux_inventory_checks.py": "9cec92230da5f375c18b22368f852b466651553eba1c0b6980de397b3bbf70f2"
+  }
+}

@@ -1,5 +1,5 @@
 """Opt-in OSS BucketWorm daily inventory custody, never historical PIT approval."""
-import struct
+import struct,stat
 import base64, hashlib, json, os, re, io, zipfile, argparse, urllib.request, subprocess, tempfile, shutil
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
@@ -12,10 +12,11 @@ ENDPOINT='https://oss-cn-hangzhou.aliyuncs.com'
 PREFIX='doge/evidence/'
 LIMIT=256*1024*1024
 # Transport container budget is separate from the unchanged per-object cap.
-# Both transport and extraction stay bounded at 2 GiB; download streams to disk.
-# The observed 1,288,488,954-byte daily ZIP exceeds the old 1 GiB budget.
-ARTIFACT_LIMIT=2*1024*1024*1024
-ARTIFACT_EXPANDED_LIMIT=ARTIFACT_LIMIT
+# Transport is streamed; extraction requires an exact post-download capacity plan.
+# These are consumer resource budgets, not a maximum frozen-producer inventory.
+# 64 ZIP containers plus 448 metadata members can expand to exactly 20 GiB.
+ARTIFACT_LIMIT=21*1024*1024*1024
+ARTIFACT_EXPANDED_LIMIT=20*1024*1024*1024
 ARTIFACT_ENTRY_LIMIT=512
 ARTIFACT_DIRECTORY_LIMIT=1024*1024
 DISK_RESERVE=256*1024*1024
@@ -83,6 +84,53 @@ def upload_one(bucket,raw,extension,lock,now=None):
             'legacy_fixed_2028_10_16_horizon_satisfied':until>=utc('2028-10-16T00:00:00Z'),
             'historical_pre_target_retention_verified':False}
 
+def reject_link_ancestors(path):
+    """Check lexical ancestors before resolve; also reject NTFS junctions."""
+    path=Path(os.path.abspath(path))
+    for component in (path,*path.parents):
+        if component.is_symlink() or getattr(component,'is_junction',lambda:False)():
+            raise ValueError('unsafe staging link ancestor')
+        try:attributes=getattr(component.lstat(),'st_file_attributes',0)
+        except FileNotFoundError:continue
+        if attributes&getattr(stat,'FILE_ATTRIBUTE_REPARSE_POINT',0x400):
+            raise ValueError('unsafe staging reparse ancestor')
+    return path
+
+def inventory_capacity(entries,archive_bytes):
+    if type(archive_bytes) is not int or not 0<=archive_bytes<=ARTIFACT_LIMIT:
+        raise ValueError('artifact transport exceeds cap')
+    if len(entries)>ARTIFACT_ENTRY_LIMIT:raise ValueError('artifact entry count exceeds cap')
+    expanded=0;zips=0;metadata=0
+    for entry in entries:
+        size=entry.file_size
+        if type(size) is not int or size<0:raise ValueError('invalid inventory member size')
+        if entry.is_dir():
+            if size:raise ValueError('directory has payload')
+            continue
+        if entry.filename.lower().endswith('.zip'):
+            zips+=1;cap=STORED_ZIP_LIMIT
+        else:
+            metadata+=1;cap=INVENTORY_METADATA_LIMIT
+        if size>cap:raise ValueError('stored inventory object exceeds cap')
+        expanded+=size
+    if zips>64:raise ValueError('inventory exceeds 64 ZIP containers')
+    if expanded>ARTIFACT_EXPANDED_LIMIT:raise ValueError('expanded inventory exceeds cap')
+    return {'archive_bytes':archive_bytes,'expanded_bytes':expanded,'zip_containers':zips,
+            'metadata_files':metadata,'entry_count':len(entries),'disk_reserve_bytes':DISK_RESERVE,
+            'peak_additional_disk_bytes':archive_bytes+expanded+DISK_RESERVE,
+            'transport_cap_bytes':ARTIFACT_LIMIT,'expanded_cap_bytes':ARTIFACT_EXPANDED_LIMIT,
+            'basis':'declared ZIP sizes, checked before extraction; includes simultaneous archive and extracted bytes',
+            'frozen_producer_has_finite_container_maximum':False}
+
+def artifact_capacity(path):
+    with Path(path).open('rb') as stream:
+        expected=artifact_directory_preflight(stream)
+        size=stream.seek(0,2);stream.seek(0)
+        with zipfile.ZipFile(stream) as archive:
+            entries=archive.infolist()
+            if len(entries)!=expected:raise ValueError('artifact entry count mismatch')
+            return inventory_capacity(entries,size)
+
 def disk_budget(directory,required):
     if shutil.disk_usage(directory).free<required+DISK_RESERVE:raise ValueError('insufficient disk budget for inventory')
 
@@ -115,14 +163,13 @@ def artifact_directory_preflight(stream,entry_limit=None,directory_limit=None,tr
     return count
 
 def extract_artifact(raw,destination):
-    destination=Path(destination)
-    if destination.is_symlink():raise ValueError('unsafe artifact destination')
-    destination=destination.resolve();created=[];directories=[]
+    destination=reject_link_ancestors(destination).resolve();created=[];directories=[]
     with (io.BytesIO(raw) if isinstance(raw,bytes) else Path(raw).open('rb')) as stream:
       expected=artifact_directory_preflight(stream)
+      size=stream.seek(0,2);stream.seek(0)
       with zipfile.ZipFile(stream) as archive:
         entries=archive.infolist();names=[e.filename for e in entries]
-        total=sum(e.file_size for e in entries)
+        capacity=inventory_capacity(entries,size);total=capacity['expanded_bytes']
         if len(entries)!=expected or len(names)!=len({n.casefold() for n in names}) or total>ARTIFACT_EXPANDED_LIMIT:
             raise ValueError('duplicate paths or archive exceeds cap')
         for entry in entries:
@@ -134,7 +181,6 @@ def extract_artifact(raw,destination):
                 raise ValueError('unsafe artifact path/type')
             path=destination/name
             if not path.resolve().is_relative_to(destination) or path.exists() or path.is_symlink():raise ValueError('artifact escape or existing path')
-            if entry.file_size>(STORED_ZIP_LIMIT if name.endswith('.zip') else INVENTORY_METADATA_LIMIT):raise ValueError('stored inventory object exceeds cap')
         disk_budget(destination if destination.exists() else destination.parent,total)
         try:
           for entry in entries:
@@ -193,7 +239,7 @@ def download_artifact(artifact,destination):
     if (isinstance(size,bool) or not isinstance(size,int) or not 0<size<=ARTIFACT_LIMIT
         or not re.fullmatch('[a-f0-9]{64}',expected)):
         raise ValueError('invalid artifact size or digest')
-    destination=Path(destination);disk_budget(destination.parent,size)
+    destination=reject_link_ancestors(destination);disk_budget(destination.parent,size)
     created=False;count=0;hasher=hashlib.sha256()
     try:
         with destination.open('xb') as target:
@@ -211,11 +257,12 @@ def download_artifact(artifact,destination):
         raise
 
 def stage(root,force=False):
-    root=Path(root).resolve();base=root/'data/pit_retention_preparation_v1'
+    root=reject_link_ancestors(root).resolve();base=root/'data/pit_retention_preparation_v1'
     prior=json.loads((base/'latest.json').read_bytes());marker=json.loads((base/'artifact_publication.json').read_bytes())
     sha=prior['bundle_sha256']
     if not re.fullmatch('[a-f0-9]{64}',sha) or marker['bundle_sha256']!=sha:raise ValueError('publication binding mismatch')
-    output=root/'oss-retention-output';output.mkdir(exist_ok=True)
+    output=reject_link_ancestors(root/'oss-retention-output');output.mkdir(exist_ok=True)
+    reject_link_ancestors(output/'source.json');reject_link_ancestors(output/'status.json')
     previous=root/'audit/oss_retention'/f'{sha}.json'
     if previous.exists() and not force:
         old=json.loads(previous.read_bytes())
@@ -232,20 +279,31 @@ def stage(root,force=False):
         run['path']!='.github/workflows/okx_hourly_extreme_history.yml' or
         artifact.get('digest','').removeprefix('sha256:')!=marker['artifact_archive_sha256']):
         raise ValueError('source artifact provenance mismatch')
-    stage_root=root/'oss-inventory-stage';destination=stage_root/'data/pit_retention_preparation_v1'
-    destination.mkdir(parents=True,exist_ok=True)
+    stage_root=reject_link_ancestors(root/'oss-inventory-stage')
+    if stage_root.exists():raise ValueError('existing staging directory; refusing overwrite')
     with tempfile.TemporaryDirectory(prefix='oss-artifact-',dir=root) as temporary:
+        private_root=Path(temporary)/'stage'
+        destination=private_root/'data/pit_retention_preparation_v1'
+        destination.mkdir(parents=True)
         archive=download_artifact(artifact,Path(temporary)/'inventory.zip')
+        capacity=artifact_capacity(archive)
+        # The archive already occupies disk. Require only the additional expanded
+        # bytes plus reserve, rather than double-counting the archive as free space.
+        disk_budget(destination,capacity['expanded_bytes'])
         extract_artifact(archive,destination)
-    validate_staged_packages(destination)
-    copied=json.loads((destination/'latest.json').read_bytes())
-    if copied['bundle_sha256']!=sha:raise ValueError('artifact inventory mismatch')
-    import pit_retention_preparation as pit
-    pit.verify_inventory_bundle(stage_root,copied)
+        validate_staged_packages(destination)
+        copied=json.loads((destination/'latest.json').read_bytes())
+        if copied['bundle_sha256']!=sha:raise ValueError('artifact inventory mismatch')
+        import pit_retention_preparation as pit
+        pit.verify_inventory_bundle(private_root,copied)
+        reject_link_ancestors(stage_root)
+        if stage_root.exists():raise ValueError('staging destination appeared during validation')
+        private_root.rename(stage_root)
     head=subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()
     (output/'source.json').write_text(json.dumps({'source_commit':head,'artifact_source_commit':run['head_sha'],'artifact_id':artifact['id'],
         'artifact_digest':artifact['digest'],'source_run_id':run['id'],'source_run_url':run['html_url'],
-        'bundle_sha256':sha,'inventory_objects':copied['objects'],'prepared_at_utc':copied['prepared_at_utc']},indent=2)+'\n')
+        'bundle_sha256':sha,'inventory_objects':copied['objects'],'prepared_at_utc':copied['prepared_at_utc'],
+        'inventory_capacity':capacity},indent=2)+'\n')
     return True
 
 def upload_inventory(root):

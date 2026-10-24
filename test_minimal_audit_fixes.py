@@ -35,7 +35,7 @@ class MinimalFixTests(unittest.TestCase):
    self.assertFalse((Path(tmp)/'archive.zip').exists())
  def test_capacity_remains_bounded_and_inner_cap_unchanged(self):
   self.assertEqual(inventory.LIMIT,256*1024*1024)
-  self.assertEqual(inventory.ARTIFACT_LIMIT,2*1024*1024*1024)
+  self.assertEqual(inventory.ARTIFACT_LIMIT,21*1024*1024*1024)
   with tempfile.TemporaryDirectory() as tmp,patch.object(inventory,'github_response') as get:
    with self.assertRaises(ValueError):inventory.download_artifact({'id':1,'size_in_bytes':inventory.ARTIFACT_LIMIT+1,'digest':'0'*64},Path(tmp)/'archive.zip')
    get.assert_not_called()
