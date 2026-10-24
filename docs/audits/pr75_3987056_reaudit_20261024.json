@@ -1,0 +1,238 @@
+{
+  "schema": "PR75_3987056_INDEPENDENT_REAUDIT_V1",
+  "reviewed_commit": "39870566e1a63c536ce187bdcf2fc2ce021f4aee",
+  "checked_at_utc": "2026-10-24T12:46:54.859952+00:00",
+  "checked_at_jst": "2026-10-24T21:46:54.859952+09:00",
+  "offline_only": true,
+  "audit_scope": [
+    "All PR75 changed code/test/harness/evidence paths and relevant frozen verifier entry points",
+    "Single-package semantics and inner decompression resource domain",
+    "Empty-evidence/blob proof, non404 remote errors and failed local probes",
+    "Optimized-mode stress acceptance and exact per-file resource validation"
+  ],
+  "not_checked": [
+    "Actual Linux runtime and symlink behavior",
+    "Real cloud runner disk/resources/provider upload/readback/natural scheduling",
+    "Actual production inventories, deleted GitHub history, or system areas outside PR75"
+  ],
+  "fixed_findings": [
+    {
+      "id": "P2-OPTIMIZED-STRESS-ACCEPTANCE",
+      "fact": "In reviewed commit, critical stress acceptance was written with assert. Under python -O, a no-op extractor returned transport_and_extraction_passed=True with zero expanded bytes; a false-ready inventory stage could also return frozen_verifier_passed=True.",
+      "root_cause": "Python optimization removes assert statements; aggregate counts/sums also did not verify exact resource member names and individual sizes.",
+      "fix": "Replace every stress acceptance assert with explicit ValueError checks. Resource test compares exact names and per-file sizes and cleanup; inventory tool verifies ready/count/capacity/private residue before emitting frozen_verifier_passed phase.",
+      "impact": "Offline proof tools only. Does not establish that earlier normal-mode measurements were incorrect; it closes optimization-mode false-pass behavior.",
+      "acceptance": "In optimized child processes, missing expansion, redistributed sizes with equal total, wrong names, wrong fixture descriptor, false-ready, wrong source capacity, private residue and cleanup failure all reject; both complete optimized stress runs pass genuine execution."
+    },
+    {
+      "id": "P2-INNER-COMPRESSION-BUDGET",
+      "fact": "Inner ZIP preflight accepted BZIP2/LZMA. Declared output byte caps alone do not bound every codec decoder auxiliary memory requirement.",
+      "root_cause": "Outer ZIP had a codec allowlist, but inner preflight did not.",
+      "fix": "Reject inner members outside STORE/DEFLATE and encrypted members before frozen parsing.",
+      "impact": "Consumer preflight only. Frozen producer explicitly emits DEFLATE; existing STORE synthetic fixtures remain supported. No observed production corruption or measured memory exhaustion is claimed.",
+      "acceptance": "Small BZIP2/LZMA fixtures reject before frozen verifier and single semantic verifier; encryption flag rejects; STORE and DEFLATE pass full single stage and pre-upload semantics."
+    }
+  ],
+  "reviewed_without_new_defect": {
+    "single_package": "Coverage/count/safe path/streamed hash/CRC checks remain intact. New codec preflight occurs before parsing.",
+    "empty_evidence": "Zero-length blob type proof remains required; non404 401/403/429/500 errors never use local empty proof, failed blob-type probe blocks and is uncached. No report-code change this round."
+  },
+  "added_test_module": "test_pr75_final_boundaries.py",
+  "added_test_methods": 15,
+  "initial_red_result": "3 regression methods failed on the reviewed implementation (4 subcase failures: two unsupported codecs and two optimized-mode false passes).",
+  "tests": {
+    "total": 269,
+    "passed": 267,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 2,
+    "skipped_tests": [
+      [
+        "test_latest_symlink_cannot_overwrite_outside_file (test_pit_retention_preparation.PreparationTests.test_latest_symlink_cannot_overwrite_outside_file)",
+        "platform cannot create symlinks; Linux CI must exercise this test"
+      ],
+      [
+        "test_output_directory_symlink_cannot_redirect_package_writes (test_pit_retention_preparation.PreparationTests.test_output_directory_symlink_cannot_redirect_package_writes)",
+        "platform cannot create symlinks; Linux CI must exercise this test"
+      ]
+    ],
+    "network_blocked": true,
+    "modules": [
+      "test_inventory_transactions",
+      "test_inventory_capacity",
+      "test_pr75_reaudit",
+      "test_minimal_audit_fixes",
+      "test_plus_shadow",
+      "test_oss_inventory_retention",
+      "test_report_cohort_regressions",
+      "test_plus_report_refresh",
+      "test_plus_scorecard",
+      "test_report_custody",
+      "test_report_evidence",
+      "test_pit_retention_preparation",
+      "test_pit_retention_daily",
+      "test_learned_shadow_v1",
+      "test_phase2_forward_v2",
+      "test_phase2_forward_runtime_v2",
+      "test_forecast_worm",
+      "integration_oss_sdk",
+      "test_pr75_offline_completion",
+      "test_pr75_final_boundaries"
+    ],
+    "frozen_union_files": 33,
+    "all_frozen_hashes_match": true,
+    "frozen_producer_unchanged": true
+  },
+  "full_resource_boundary": {
+    "schema": "OFFLINE_RESOURCE_BOUNDARY_V1",
+    "full": true,
+    "platform": "win32",
+    "python_version": "3.12.14",
+    "synthetic_only": true,
+    "network_blocked": true,
+    "semantic_inventory_test": false,
+    "frozen_verifier_executed": false,
+    "zip_member_payloads_are_synthetic_resource_bytes": true,
+    "transport_and_extraction_passed": true,
+    "outer_crc_checked_during_extraction": true,
+    "temporary_files_cleaned": true,
+    "capacity": {
+      "archive_bytes": 22548578304,
+      "expanded_bytes": 21474836480,
+      "zip_containers": 64,
+      "metadata_files": 448,
+      "entry_count": 512,
+      "disk_reserve_bytes": 268435456,
+      "peak_additional_disk_bytes": 44291850240,
+      "transport_cap_bytes": 22548578304,
+      "expanded_cap_bytes": 21474836480,
+      "basis": "declared ZIP sizes, checked before extraction; includes simultaneous archive and extracted bytes",
+      "frozen_producer_has_finite_container_maximum": false
+    },
+    "observation": {
+      "consumer_allocated_bytes": 44023414784,
+      "fixture_allocated_bytes": 33619968,
+      "peak_process_rss_bytes": 36020224
+    },
+    "elapsed_seconds": 124.921,
+    "limitations": [
+      "No claim that zero-filled inner ZIP/JSON files are valid inventory",
+      "Tests consumer transport/extraction resource budgets only; synthetic inventory accepted by the frozen verifier has separate evidence",
+      "Windows measurements do not establish Linux symlink behavior or cloud runner capacity",
+      "File allocation and RSS are process/private-file observations, not entire OS/volume maxima"
+    ]
+  },
+  "full_synthetic_inventory": {
+    "schema": "OFFLINE_INVENTORY_CAPACITY_STRESS_V1",
+    "platform": "win32",
+    "linux_runtime": false,
+    "linux_symlink_tests_verified": false,
+    "python_version": "3.12.14",
+    "os_release": "11",
+    "synthetic_only": true,
+    "frozen_verifier_passed": true,
+    "shards": 64,
+    "raw_source_bytes": 17179869184,
+    "artifact_bytes": 17179932002,
+    "fixture_allocated_bytes": 12648448,
+    "capacity": {
+      "archive_bytes": 17179932002,
+      "expanded_bytes": 17179916372,
+      "zip_containers": 64,
+      "metadata_files": 2,
+      "entry_count": 66,
+      "disk_reserve_bytes": 268435456,
+      "peak_additional_disk_bytes": 34628283830,
+      "transport_cap_bytes": 22548578304,
+      "expanded_cap_bytes": 21474836480,
+      "basis": "declared ZIP sizes, checked before extraction; includes simultaneous archive and extracted bytes",
+      "frozen_producer_has_finite_container_maximum": false
+    },
+    "observations": [
+      {
+        "phase": "download_verified",
+        "allocated_private_bytes": 17192580985,
+        "peak_process_rss_bytes": 42020864
+      },
+      {
+        "phase": "expanded_archive_still_present",
+        "allocated_private_bytes": 34372497357,
+        "peak_process_rss_bytes": 42020864
+      },
+      {
+        "phase": "frozen_verifier_passed",
+        "allocated_private_bytes": 17192566403,
+        "peak_process_rss_bytes": 570781696
+      }
+    ],
+    "elapsed_seconds": 125.781,
+    "limitations": [
+      "STORE synthetic ZIPs accepted by the unchanged frozen verifier; not real production artifacts",
+      "No finite maximum frozen-producer container size; this proves the tested consumer domain only"
+    ]
+  },
+  "stress_execution": {
+    "python_flags": [
+      "-B",
+      "-O"
+    ],
+    "optimization_level": 1,
+    "resource_exit_code": 0,
+    "inventory_exit_code": 0,
+    "temporary_files_cleaned": true,
+    "commands": [
+      "python -B -O offline_inventory_boundary.py --full --output resource.json",
+      "python -B -O offline_inventory_stress.py --full --output synthetic-inventory.json"
+    ]
+  },
+  "evidence_interpretation": [
+    "Resource boundary is 21 GiB downloaded plus 20 GiB expanded zero-filled resource placeholders; observed consumer allocation 41 GiB. The 256 MiB reserve is budgeted, not occupied.",
+    "Resource test does not validate a legal semantic inventory and does not execute frozen verifier.",
+    "Separate 64x256 MiB STORE synthetic inventory is accepted by unchanged frozen verifier; neither fixture is a production artifact.",
+    "Windows file-allocation/RSS observations are not entire OS/volume maxima or cloud-runner guarantees."
+  ],
+  "freeze": {
+    "active_manifest_union": 33,
+    "all_hashes_match": true,
+    "frozen_producer_byte_identical_to_base": true,
+    "models_protocol_history_workflows_modified": false,
+    "previous_audit_evidence_preserved": true
+  },
+  "remaining": [
+    {
+      "priority": "P2",
+      "issue": "Finite consumer domain still cannot cover unbounded frozen-producer metadata or prove an absolute semantic container maximum.",
+      "acceptance": "Explicit support caps and fail-closed rejection remain; do not change frozen producer or protocol."
+    },
+    {
+      "priority": "P2",
+      "issue": "Real cloud free space/runtime/limits/provider custody and actual inventory remain unverified.",
+      "acceptance": "Separate authorized online acceptance; no success inference from offline or manual reads."
+    },
+    {
+      "priority": "P2",
+      "issue": "Witness daily/run-attempt/job/time-span caps and deleted historical evidence remain documented limits.",
+      "acceptance": "Overlimit/unstable discovery blocks rather than claiming absence/completeness."
+    },
+    {
+      "priority": "P3",
+      "issue": "Linux real symlink checks pending by user instruction.",
+      "acceptance": "Actual offline Linux strict harness and relevant tests pass without platform skips; Windows cannot close this gap."
+    },
+    {
+      "priority": "P3",
+      "issue": "Hard termination/crash, concurrent filesystem replacement and cross-file/cloud rollback remain outside ordinary cleanup and atomic file replacement guarantee.",
+      "acceptance": "Keep guarantee bounded; do not claim these scenarios were verified."
+    }
+  ],
+  "independent_review": "Read-only reviewer independently reproduced optimized false pass, confirmed codec preflight gap, ran 54 small existing tests and found no new definite blocker after fixes. Parent performed final 269-test suite and both full optimized physical stress runs.",
+  "merge_conclusion": "No known remaining definite blocker in reviewed code/offline domain. Linux and online acceptance incomplete; maintain draft and do not merge.",
+  "file_sha256": {
+    "oss_inventory_retention.py": "18b48fc2dc1f3efc2beb3f7310de5aefb1df70e733d4066f305764d5a91ed121",
+    "offline_inventory_boundary.py": "5fd4eb7b1d2dbcb53a1ad17ae483473628cb4c31353a12e5d79eae407375ff03",
+    "offline_inventory_stress.py": "6d2ee4625a7dcc5422ad5a13a2e19865b3096cfc1de8296c25517ef0afb9d532",
+    "test_pr75_offline_completion.py": "8d06c2a4d36bcaf5685678ca19de16b3cfbce9b25e2af126f95ef84267377e44",
+    "test_pr75_final_boundaries.py": "466e484b8a3072915b78d181e3ecc8ffeb89cbd4e868f4c3fb54a79ab543240d",
+    "plus_shadow.py": "7f914d4ef28a48874b2b754f642a86050391c7e72c3c37f268172fc519b669c9"
+  }
+}

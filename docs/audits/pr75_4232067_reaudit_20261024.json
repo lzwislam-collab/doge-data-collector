@@ -1,0 +1,217 @@
+{
+  "schema": "PR75_4232067_INDEPENDENT_REAUDIT_V1",
+  "reviewed_commit": "42320677a096afd2991cd82f0033298e4d288c32",
+  "checked_at_utc": "2026-10-24T12:29:56.260194+00:00",
+  "checked_at_jst": "2026-10-24T21:29:56.260194+09:00",
+  "offline_only": true,
+  "linux_status": "PENDING_USER_CONFIRMED_NO_ENVIRONMENT",
+  "production_artifacts_or_data_used": false,
+  "workflows_models_protocol_history_modified": false,
+  "audit_scope": [
+    "All PR75 changed code/test/harness/evidence paths, dependency entry points and frozen boundary manifests",
+    "Report witness pagination/attempts/jobs, fixed-tree 404/empty evidence classification",
+    "Inventory download/extraction budgets, source/shard/single-package integrity, private publication, pre-SDK validation, local receipts and failure handling"
+  ],
+  "not_checked": [
+    "Live provider custody or uploads/readback",
+    "Real cloud runner disk, Linux behavior, actual production inventories and natural scheduled execution",
+    "Independent verification of historical claims outside PR75 or deleted GitHub evidence"
+  ],
+  "fixed_findings": [
+    {
+      "id": "P1-SINGLE-PACKAGE-SEMANTICS",
+      "fact": "On reviewed commit, single package verifier returned after container digest; consumer budget validation did not read manifest/member contents. Wrong member hash and wrong object count fixtures were accepted.",
+      "root_cause": "Frozen verifier has an intentionally unchanged hash-only nonsharded branch; consumer had no compensating single-package semantic validation.",
+      "fix": "Consumer-only verify_single_inventory validates manifest object coverage/count, safe source paths, streamed member SHA-256 and ZIP CRC, after resource preflight and before provider entry.",
+      "impact": "Single-package staging and standalone upload; sharded frozen verification unchanged. No observation that production packages were corrupted.",
+      "acceptance": "Unchanged frozen producer single package passes; wrong content/count, malformed JSON, missing/extra members, CRC and unsafe paths reject; re-bound bad staged single package rejected before identity."
+    },
+    {
+      "id": "P2-EMPTY-TREE-NOT-BLOB",
+      "fact": "Zero-size Git tree could satisfy the empty-byte local size check without proving blob type. Reproduced with mocked outputs and with actual isolated Git objects.",
+      "root_cause": "Empty read recovery checked Git object size but not type.",
+      "fix": "Require cat-file -t result blob before accepting zero-byte evidence.",
+      "impact": "Report-only empty-content fallback; confirmed absence and remote errors remain nonmatching/blocked. Frozen verifier code unchanged.",
+      "acceptance": "Actual zero-size tree rejects; actual empty blob accepts; 404 and unknown-failure regressions pass."
+    }
+  ],
+  "added_test_module": "test_pr75_offline_completion.py",
+  "added_test_methods": 24,
+  "tests": {
+    "total": 254,
+    "passed": 252,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 2,
+    "skipped_tests": [
+      [
+        "test_latest_symlink_cannot_overwrite_outside_file (test_pit_retention_preparation.PreparationTests.test_latest_symlink_cannot_overwrite_outside_file)",
+        "platform cannot create symlinks; Linux CI must exercise this test"
+      ],
+      [
+        "test_output_directory_symlink_cannot_redirect_package_writes (test_pit_retention_preparation.PreparationTests.test_output_directory_symlink_cannot_redirect_package_writes)",
+        "platform cannot create symlinks; Linux CI must exercise this test"
+      ]
+    ],
+    "network_blocked": true,
+    "modules": [
+      "test_inventory_transactions",
+      "test_inventory_capacity",
+      "test_pr75_reaudit",
+      "test_minimal_audit_fixes",
+      "test_plus_shadow",
+      "test_oss_inventory_retention",
+      "test_report_cohort_regressions",
+      "test_plus_report_refresh",
+      "test_plus_scorecard",
+      "test_report_custody",
+      "test_report_evidence",
+      "test_pit_retention_preparation",
+      "test_pit_retention_daily",
+      "test_learned_shadow_v1",
+      "test_phase2_forward_v2",
+      "test_phase2_forward_runtime_v2",
+      "test_forecast_worm",
+      "integration_oss_sdk",
+      "test_pr75_offline_completion"
+    ],
+    "frozen_union_files": 33,
+    "all_frozen_hashes_match": true,
+    "frozen_producer_unchanged": true
+  },
+  "full_resource_boundary": {
+    "schema": "OFFLINE_RESOURCE_BOUNDARY_V1",
+    "full": true,
+    "platform": "win32",
+    "python_version": "3.12.14",
+    "synthetic_only": true,
+    "network_blocked": true,
+    "semantic_inventory_test": false,
+    "frozen_verifier_executed": false,
+    "zip_member_payloads_are_synthetic_resource_bytes": true,
+    "transport_and_extraction_passed": true,
+    "outer_crc_checked_during_extraction": true,
+    "temporary_files_cleaned": true,
+    "capacity": {
+      "archive_bytes": 22548578304,
+      "expanded_bytes": 21474836480,
+      "zip_containers": 64,
+      "metadata_files": 448,
+      "entry_count": 512,
+      "disk_reserve_bytes": 268435456,
+      "peak_additional_disk_bytes": 44291850240,
+      "transport_cap_bytes": 22548578304,
+      "expanded_cap_bytes": 21474836480,
+      "basis": "declared ZIP sizes, checked before extraction; includes simultaneous archive and extracted bytes",
+      "frozen_producer_has_finite_container_maximum": false
+    },
+    "observation": {
+      "consumer_allocated_bytes": 44023414784,
+      "fixture_allocated_bytes": 33619968,
+      "peak_process_rss_bytes": 33779712
+    },
+    "elapsed_seconds": 128.922,
+    "limitations": [
+      "No claim that zero-filled inner ZIP/JSON files are valid inventory",
+      "Tests consumer transport/extraction resource budgets only; genuine frozen inventory stress has separate evidence",
+      "Windows measurements do not establish Linux symlink behavior or cloud runner capacity",
+      "File allocation and RSS are process/private-file observations, not entire OS/volume maxima"
+    ]
+  },
+  "full_synthetic_inventory": {
+    "schema": "OFFLINE_INVENTORY_CAPACITY_STRESS_V1",
+    "platform": "win32",
+    "linux_runtime": false,
+    "linux_symlink_tests_verified": false,
+    "python_version": "3.12.14",
+    "os_release": "11",
+    "synthetic_only": true,
+    "frozen_verifier_passed": true,
+    "shards": 64,
+    "raw_source_bytes": 17179869184,
+    "artifact_bytes": 17179932002,
+    "fixture_allocated_bytes": 12648448,
+    "capacity": {
+      "archive_bytes": 17179932002,
+      "expanded_bytes": 17179916372,
+      "zip_containers": 64,
+      "metadata_files": 2,
+      "entry_count": 66,
+      "disk_reserve_bytes": 268435456,
+      "peak_additional_disk_bytes": 34628283830,
+      "transport_cap_bytes": 22548578304,
+      "expanded_cap_bytes": 21474836480,
+      "basis": "declared ZIP sizes, checked before extraction; includes simultaneous archive and extracted bytes",
+      "frozen_producer_has_finite_container_maximum": false
+    },
+    "observations": [
+      {
+        "phase": "download_verified",
+        "allocated_private_bytes": 17192580985,
+        "peak_process_rss_bytes": 40058880
+      },
+      {
+        "phase": "expanded_archive_still_present",
+        "allocated_private_bytes": 34372497357,
+        "peak_process_rss_bytes": 40058880
+      },
+      {
+        "phase": "frozen_verifier_passed",
+        "allocated_private_bytes": 17192566403,
+        "peak_process_rss_bytes": 568377344
+      }
+    ],
+    "elapsed_seconds": 131.297,
+    "limitations": [
+      "STORE synthetic ZIPs accepted by the unchanged frozen verifier; not real production artifacts",
+      "No finite maximum frozen-producer container size; this proves the tested consumer domain only"
+    ]
+  },
+  "stress_process_exit_codes": {
+    "resource_boundary": 0,
+    "synthetic_inventory": 0
+  },
+  "resource_evidence_clarification": "The boundary result is 21 GiB transport and 20 GiB expanded zero-filled resource placeholders. It does NOT execute the frozen verifier and is not a legal semantic inventory. Separate 64x256 MiB STORE synthetic inventory is accepted by unchanged frozen verifier; neither is real production inventory.",
+  "remaining": [
+    {
+      "priority": "P2",
+      "issue": "Finite consumer domain cannot cover unbounded frozen-producer metadata. Physical resource budget test does not establish an absolute legal semantic inventory maximum.",
+      "acceptance": "Keep limits explicit and fail closed outside domain; protocol unchanged."
+    },
+    {
+      "priority": "P2",
+      "issue": "Cloud runner free space, runtime/provider limits and real inventory/provider acceptance remain untested.",
+      "acceptance": "Separate explicitly authorized online acceptance; offline results do not count as natural schedule evidence."
+    },
+    {
+      "priority": "P2",
+      "issue": "Witness discovery has documented per-day/attempt/jobs/time-span caps and cannot prove deleted historical records.",
+      "acceptance": "Boundary and truncation tests must remain fail closed."
+    },
+    {
+      "priority": "P3",
+      "issue": "Linux real symlink tests remain pending by user instruction; Windows junction checks cannot close this gap.",
+      "acceptance": "Strict offline Linux harness and relevant new tests pass on actual Linux with zero platform skips."
+    },
+    {
+      "priority": "P3",
+      "issue": "Host crash/hard kill, concurrent filesystem replacement, directory durability and cross-file/cloud transaction rollback are not guaranteed.",
+      "acceptance": "Do not extend ordinary exception/cancellation cleanup and per-file replacement claims to these scenarios."
+    }
+  ],
+  "freeze": {
+    "active_manifest_union": 33,
+    "all_hashes_match": true,
+    "frozen_producer_byte_identical_to_base": true,
+    "previous_audit_evidence_preserved": true
+  },
+  "independent_read_only_review": "No further definite defect found after single-package integrity and empty-blob type fixes; boundary harness arithmetic checked; large stress executions performed by parent agent.",
+  "merge_conclusion": "No known remaining blocker in covered code/offline domain. Linux and online acceptance incomplete; maintain draft, do not merge.",
+  "file_sha256": {
+    "oss_inventory_retention.py": "da8901bff16b05d5fb331c93b8426892ff552d2ef81443167dc51e7d0057d582",
+    "plus_shadow.py": "7f914d4ef28a48874b2b754f642a86050391c7e72c3c37f268172fc519b669c9",
+    "offline_inventory_stress.py": "4d8b97ce6bccc87433d05ab334b3397fc0220859406a40ec1d03dd387fbf51b9",
+    "test_pr75_offline_completion.py": "8a610e2dec6e2da9ca271f154fc2229280b42f6fc02a85c5607eebc0adff2954",
+    "offline_inventory_boundary.py": "92b3f987bf0b9a5ea0b11bd29cd36b6b616afade9db3b4784f01d28f4cf61252"
+  }
+}
