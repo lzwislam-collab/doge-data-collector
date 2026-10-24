@@ -25,6 +25,8 @@ DISK_RESERVE=256*1024*1024
 STORED_ZIP_LIMIT=LIMIT+8*1024*1024
 INVENTORY_MEMBER_LIMIT=20000
 INVENTORY_METADATA_LIMIT=8*1024*1024
+ARTIFACT_PATH_DEPTH_LIMIT=8
+ARTIFACT_PATH_BYTES_LIMIT=1024
 
 def digest(raw):return hashlib.sha256(raw).hexdigest()
 def utc(value):
@@ -95,6 +97,94 @@ def reject_link_ancestors(path):
         if attributes&getattr(stat,'FILE_ATTRIBUTE_REPARSE_POINT',0x400):
             raise ValueError('unsafe staging reparse ancestor')
     return path
+
+def read_bounded(path,cap):
+    path=reject_link_ancestors(path)
+    if path.stat().st_size>cap:raise ValueError('inventory file exceeds read budget')
+    with path.open('rb') as stream:raw=stream.read(cap+1)
+    if len(raw)>cap:raise ValueError('inventory file grew beyond read budget')
+    return raw
+
+def read_inventory_json(path):
+    value=json.loads(read_bounded(path,INVENTORY_METADATA_LIMIT))
+    if not isinstance(value,dict):raise ValueError('inventory metadata must be an object')
+    return value
+
+def validate_inventory_references(stage_root,prior):
+    """Check declared types and sizes before the unchanged verifier parses ZIPs."""
+    stage_root=reject_link_ancestors(stage_root)
+    base='data/pit_retention_preparation_v1/bundles/'
+    sha=prior.get('bundle_sha256');kind=prior.get('bundle_kind')
+    if not isinstance(sha,str) or not re.fullmatch('[a-f0-9]{64}',sha):raise ValueError('invalid inventory digest')
+    if type(prior.get('objects')) is not int or prior['objects']<=0:raise ValueError('invalid inventory object count')
+    if kind not in (None,'SHARDED_INVENTORY_INDEX'):raise ValueError('unsupported inventory kind')
+    expected=base+sha+('.index.json' if kind else '.zip')
+    if prior.get('bundle_path')!=expected:raise ValueError('inventory path/type mismatch')
+    raw=read_bounded(stage_root/expected,INVENTORY_METADATA_LIMIT if kind else STORED_ZIP_LIMIT)
+    if digest(raw)!=sha:raise ValueError('inventory index/package digest mismatch')
+    parts=[]
+    if kind:
+        manifest=json.loads(raw)
+        if (not isinstance(manifest,dict) or manifest.get('bundle_kind')!=kind
+            or manifest.get('per_part_uncompressed_cap')!=LIMIT or not isinstance(manifest.get('parts'),list)
+            or not 2<=len(manifest['parts'])<=64):raise ValueError('invalid inventory shard index')
+        parts=manifest['parts'];seen=set()
+        for part in parts:
+            d=part.get('bundle_sha256');size=part.get('byte_count')
+            if (not isinstance(d,str) or not re.fullmatch('[a-f0-9]{64}',d)
+                or part.get('bundle_path')!=base+d+'.zip' or d in seen
+                or type(size) is not int or not 0<size<=STORED_ZIP_LIMIT):raise ValueError('inventory part path/type/size mismatch')
+            seen.add(d);path=reject_link_ancestors(stage_root/part['bundle_path'])
+            if path.stat().st_size!=size:raise ValueError('inventory part declared size mismatch')
+    return raw,parts
+
+def staged_capacity(stage_root,archive_bytes):
+    destination=reject_link_ancestors(stage_root)/'data/pit_retention_preparation_v1'
+    entries=[];nodes=0
+    for path in destination.rglob('*'):
+        nodes+=1
+        if nodes>ARTIFACT_ENTRY_LIMIT*(ARTIFACT_PATH_DEPTH_LIMIT+1):raise ValueError('inventory path count exceeds budget')
+        reject_link_ancestors(path)
+        relative=path.relative_to(destination).as_posix()
+        if len(path.relative_to(destination).parts)>ARTIFACT_PATH_DEPTH_LIMIT or len(relative.encode('utf-8'))>ARTIFACT_PATH_BYTES_LIMIT:
+            raise ValueError('inventory path exceeds budget')
+        if not path.is_file():continue
+        info=zipfile.ZipInfo(relative);info.file_size=path.stat().st_size;entries.append(info)
+        if len(entries)>ARTIFACT_ENTRY_LIMIT:raise ValueError('inventory file count exceeds budget')
+    if len({e.filename.casefold() for e in entries})!=len(entries):raise ValueError('inventory path collision')
+    return inventory_capacity(entries,archive_bytes)
+
+def publish_inventory(private_root,stage_root,prepared_report,report_path):
+    """Publish both artifacts, restoring the private directory if report commit fails."""
+    reject_link_ancestors(stage_root);reject_link_ancestors(report_path)
+    if stage_root.exists():raise ValueError('existing staging destination')
+    identity=private_root.stat();private_root.rename(stage_root)
+    try:
+        reject_link_ancestors(report_path)
+        prepared_report.replace(report_path)
+    except BaseException:
+        reject_link_ancestors(stage_root);current=stage_root.stat()
+        if (identity.st_dev,identity.st_ino)!=(current.st_dev,current.st_ino):raise RuntimeError('staging owner changed; refusing rollback of foreign directory')
+        stage_root.rename(private_root)
+        raise
+
+def prepare_upload_inventory(root):
+    root=reject_link_ancestors(root).resolve();stage_root=reject_link_ancestors(root/'oss-inventory-stage')
+    output=reject_link_ancestors(root/'oss-retention-output')
+    prior=read_inventory_json(stage_root/'data/pit_retention_preparation_v1/latest.json')
+    source=read_inventory_json(output/'source.json');capacity=source.get('inventory_capacity')
+    if (source.get('bundle_sha256')!=prior.get('bundle_sha256') or source.get('inventory_objects')!=prior.get('objects')
+        or not isinstance(capacity,dict)):raise ValueError('staged inventory/source receipt mismatch')
+    observed=staged_capacity(stage_root,capacity.get('archive_bytes'))
+    if any(observed[k]!=capacity.get(k) for k in ('expanded_bytes','zip_containers','metadata_files')):
+        raise ValueError('staged inventory changed after capacity validation')
+    raw,parts=validate_inventory_references(stage_root,prior)
+    validate_staged_packages(stage_root/'data/pit_retention_preparation_v1')
+    import pit_retention_preparation as pit
+    pit.verify_inventory_bundle(stage_root,prior)
+    for path in (output/'receipt.json',root/'audit/oss_retention'/(prior['bundle_sha256']+'.json'),root/'audit/oss_retention/latest.json'):
+        reject_link_ancestors(path)
+    return {'root':root,'stage_root':stage_root,'output':output,'prior':prior,'source':source,'raw':raw,'parts':parts}
 
 def inventory_capacity(entries,archive_bytes):
     if type(archive_bytes) is not int or not 0<=archive_bytes<=ARTIFACT_LIMIT:
@@ -174,7 +264,8 @@ def extract_artifact(raw,destination):
             raise ValueError('duplicate paths or archive exceeds cap')
         for entry in entries:
             name=entry.filename
-            if ('\\' in name or ':' in name or name.startswith('/') or
+            if (len(name.rstrip('/').split('/'))>ARTIFACT_PATH_DEPTH_LIMIT or len(name.encode('utf-8'))>ARTIFACT_PATH_BYTES_LIMIT
+                or '\\' in name or ':' in name or name.startswith('/') or
                 any(p in ('','.','..') for p in name.rstrip('/').split('/')) or
                 (entry.external_attr>>16)&0o170000 not in (0,0o100000,0o040000)
                 or entry.flag_bits&1 or entry.compress_type not in (zipfile.ZIP_STORED,zipfile.ZIP_DEFLATED)):
@@ -196,7 +287,7 @@ def extract_artifact(raw,destination):
                     if count>entry.file_size:raise ValueError('artifact expanded bytes exceed declaration')
                     target.write(chunk)
                 if count!=entry.file_size:raise ValueError('artifact expanded size mismatch')
-        except Exception:
+        except BaseException:
           for path in reversed(created):path.unlink(missing_ok=True)
           for directory in reversed(directories):directory.rmdir()
           raise
@@ -252,25 +343,25 @@ def download_artifact(artifact,destination):
             if count!=size or hasher.hexdigest()!=expected:
                 raise ValueError('artifact transport size or digest mismatch')
         return destination
-    except Exception:
+    except BaseException:
         if created:destination.unlink(missing_ok=True)
         raise
 
 def stage(root,force=False):
     root=reject_link_ancestors(root).resolve();base=root/'data/pit_retention_preparation_v1'
-    prior=json.loads((base/'latest.json').read_bytes());marker=json.loads((base/'artifact_publication.json').read_bytes())
+    prior=read_inventory_json(base/'latest.json');marker=read_inventory_json(base/'artifact_publication.json')
     sha=prior['bundle_sha256']
     if not re.fullmatch('[a-f0-9]{64}',sha) or marker['bundle_sha256']!=sha:raise ValueError('publication binding mismatch')
     output=reject_link_ancestors(root/'oss-retention-output');output.mkdir(exist_ok=True)
     reject_link_ancestors(output/'source.json');reject_link_ancestors(output/'status.json')
-    previous=root/'audit/oss_retention'/f'{sha}.json'
+    previous=reject_link_ancestors(root/'audit/oss_retention'/f'{sha}.json')
     if previous.exists() and not force:
-        old=json.loads(previous.read_bytes())
+        old=read_inventory_json(previous)
         if old.get('status')!='LOCKED_DAILY_INVENTORY_VERIFIED' or old.get('bundle_sha256')!=sha:
             raise ValueError('invalid previous receipt')
-        (output/'status.json').write_text(json.dumps({'status':'SKIP_PREVIOUSLY_VERIFIED_INVENTORY','bundle_sha256':sha,
+        write_json_atomic(output/'status.json',{'status':'SKIP_PREVIOUSLY_VERIFIED_INVENTORY','bundle_sha256':sha,
             'fresh_object_readback_performed':False,'previous_receipt':str(previous.relative_to(root)),
-            'independent_custodian_verified':False},indent=2)+'\n')
+            'independent_custodian_verified':False})
         return False
     artifact=github('/actions/artifacts/'+str(int(marker['artifact_id'])))
     run=github('/actions/runs/'+str(int(marker['run_id'])))
@@ -291,24 +382,48 @@ def stage(root,force=False):
         # bytes plus reserve, rather than double-counting the archive as free space.
         disk_budget(destination,capacity['expanded_bytes'])
         extract_artifact(archive,destination)
-        validate_staged_packages(destination)
-        copied=json.loads((destination/'latest.json').read_bytes())
+        copied=read_inventory_json(destination/'latest.json')
         if copied['bundle_sha256']!=sha:raise ValueError('artifact inventory mismatch')
+        validate_inventory_references(private_root,copied)
+        validate_staged_packages(destination)
         import pit_retention_preparation as pit
         pit.verify_inventory_bundle(private_root,copied)
-        reject_link_ancestors(stage_root)
-        if stage_root.exists():raise ValueError('staging destination appeared during validation')
-        private_root.rename(stage_root)
-    head=subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()
-    (output/'source.json').write_text(json.dumps({'source_commit':head,'artifact_source_commit':run['head_sha'],'artifact_id':artifact['id'],
-        'artifact_digest':artifact['digest'],'source_run_id':run['id'],'source_run_url':run['html_url'],
-        'bundle_sha256':sha,'inventory_objects':copied['objects'],'prepared_at_utc':copied['prepared_at_utc'],
-        'inventory_capacity':capacity},indent=2)+'\n')
+        head=subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()
+        prepared_report=Path(temporary)/'publication-source.json'
+        prepared_report.write_text(json.dumps({'source_commit':head,'artifact_source_commit':run['head_sha'],'artifact_id':artifact['id'],
+            'artifact_digest':artifact['digest'],'source_run_id':run['id'],'source_run_url':run['html_url'],
+            'bundle_sha256':sha,'inventory_objects':copied['objects'],'prepared_at_utc':copied['prepared_at_utc'],
+            'inventory_capacity':capacity},indent=2)+'\n')
+        publish_inventory(private_root,stage_root,prepared_report,output/'source.json')
     return True
 
+def write_json_atomic(path,value):
+    """Preserve an existing receipt until its complete replacement is durable."""
+    path=reject_link_ancestors(path)
+    raw=(json.dumps(value,indent=2)+'\n').encode('utf-8')
+    temporary=None
+    try:
+        with tempfile.NamedTemporaryFile(prefix='.receipt-',suffix='.tmp',dir=path.parent,delete=False) as stream:
+            temporary=Path(stream.name)
+            stream.write(raw);stream.flush();os.fsync(stream.fileno())
+        reject_link_ancestors(path)
+        temporary.replace(path)
+    finally:
+        if temporary is not None:temporary.unlink(missing_ok=True)
+
+def record_upload_failure(root,exc):
+    try:
+        folder=reject_link_ancestors(Path(root)/'oss-retention-output');folder.mkdir(exist_ok=True)
+        write_json_atomic(folder/'failure.json',{'status':'NOT_VERIFIED','error_type':type(exc).__name__,
+            'provider_code':str(getattr(exc,'code','')),'request_id':str(getattr(exc,'request_id','')),
+            'locked_bytes_verified':False})
+        return True
+    except Exception:
+        return False
+
 def upload_inventory(root):
-    root=Path(root).resolve();stage_root=root/'oss-inventory-stage';base=stage_root/'data/pit_retention_preparation_v1'
-    prior=json.loads((base/'latest.json').read_bytes());output=root/'oss-retention-output'
+    checked=prepare_upload_inventory(root)
+    root=checked['root'];stage_root=checked['stage_root'];prior=checked['prior'];output=checked['output']
     import oss2
     token=os.environ['ALIBABA_CLOUD_SECURITY_TOKEN']
     if not token:raise ValueError('short-lived STS token required')
@@ -323,19 +438,16 @@ def upload_inventory(root):
     bucket=oss2.Bucket(oss2.StsAuth(os.environ['ALIBABA_CLOUD_ACCESS_KEY_ID'],os.environ['ALIBABA_CLOUD_ACCESS_KEY_SECRET'],token),
                        ENDPOINT,BUCKET,connect_timeout=30)
     lock=check_bucket(bucket)
-    import pit_retention_preparation as pit
-    pit.verify_inventory_bundle(stage_root,prior)
-    index_path=pit.safe(stage_root,prior['bundle_path']);raw=index_path.read_bytes()
-    parts=json.loads(raw)['parts'] if prior.get('bundle_kind')=='SHARDED_INVENTORY_INDEX' else []
+    raw=checked['raw'];parts=checked['parts']
     receipts=[]
     for part in parts:
-        payload=pit.safe(stage_root,part['bundle_path']).read_bytes()
+        payload=read_bounded(stage_root/part['bundle_path'],STORED_ZIP_LIMIT)
         if digest(payload)!=part['bundle_sha256']:raise ValueError('part changed')
         receipts.append(upload_one(bucket,payload,'.zip',lock))
     receipts.append(upload_one(bucket,raw,'.json' if parts else '.zip',lock))
     final_lock=check_bucket(bucket)
     if final_lock!=lock:raise ValueError('bucket metadata changed during readback')
-    report=dict(json.loads((output/'source.json').read_bytes()),status='LOCKED_DAILY_INVENTORY_VERIFIED',
+    report=dict(checked['source'],status='LOCKED_DAILY_INVENTORY_VERIFIED',
         provider='aliyun_oss_locked_bucket_worm',bucket=BUCKET,endpoint=ENDPOINT,bucket_owner=OWNER,
         custody='USER_MANAGED_EXTERNAL_PROVIDER_WORM',independent_custodian_verified=False,
         objects=receipts,object_count=len(receipts),shard_count=len(parts),bucket_worm=final_lock,
@@ -347,10 +459,10 @@ def upload_inventory(root):
                 'Payment default may lead to provider deletion. No model or investment rule changed.',
                 '730-day approval does not automatically satisfy the legacy fixed 2028-10-16 horizon.'])
     report['run_url']='https://github.com/'+os.environ['GITHUB_REPOSITORY']+'/actions/runs/'+os.environ['GITHUB_RUN_ID']
-    (output/'receipt.json').write_text(json.dumps(report,indent=2)+'\n')
     folder=root/'audit/oss_retention';folder.mkdir(parents=True,exist_ok=True)
-    (folder/(prior['bundle_sha256']+'.json')).write_text(json.dumps(report,indent=2)+'\n')
-    (folder/'latest.json').write_text(json.dumps(report,indent=2)+'\n')
+    write_json_atomic(folder/(prior['bundle_sha256']+'.json'),report)
+    write_json_atomic(folder/'latest.json',report)
+    write_json_atomic(output/'receipt.json',report)
     return report
 
 if __name__=='__main__':
@@ -363,8 +475,5 @@ if __name__=='__main__':
     else:
         try:print(json.dumps(upload_inventory(root),sort_keys=True))
         except Exception as exc:
-            folder=root/'oss-retention-output';folder.mkdir(exist_ok=True)
-            (folder/'failure.json').write_text(json.dumps({'status':'NOT_VERIFIED','error_type':type(exc).__name__,
-                'provider_code':str(getattr(exc,'code','')),'request_id':str(getattr(exc,'request_id','')),
-                'locked_bytes_verified':False},indent=2)+'\n')
-            raise SystemExit('OSS upload/readback rejected; sanitized details in failure.json')
+            recorded=record_upload_failure(root,exc)
+            raise SystemExit('OSS upload/readback rejected; '+('sanitized details in failure.json' if recorded else 'failure details unavailable'))

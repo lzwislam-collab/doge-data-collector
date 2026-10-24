@@ -141,7 +141,7 @@ class Adapters(unittest.TestCase):
   with tempfile.TemporaryDirectory() as directory,patch.object(m,'ROOT',Path(directory)),patch.object(m,'snapshot',side_effect=ValueError('broken evidence')),patch('sys.argv',['plus_shadow.py']),patch.dict('os.environ',{'PLUS_ASSESSMENT_RUN_ID':''}):
    out=Path(directory)/'plus-shadow-output';out.mkdir();(out/'.owner').write_bytes(b'DOGE_PLUS_SHADOW_V1\n');(out/'report.json').write_text('old success');(out/'index.html').write_text('old probability')
    with self.assertRaises(SystemExit):m.main()
-   report=json.loads((out/'report.json').read_bytes());self.assertEqual(report['forecasts'],[]);self.assertNotIn('old probability',(out/'index.html').read_text())
+   report=json.loads((out/'report.json').read_bytes());self.assertEqual(report['forecasts'],[]);self.assertNotIn('old probability',(out/'index.html').read_text(encoding='utf-8'))
  def test_workflow_follows_both_actual_witness_names(self):
   m=self.module();workflow=(m.ROOT/'.github/workflows/plus_shadow.yml').read_text(encoding='utf-8')
   for name in ('learned_shadow_v1.yml','phase2_forward_audit_v2.yml'):
