@@ -26,7 +26,7 @@ class Report404Adapter(unittest.TestCase):
   import plus_shadow as m
   root,head=self.fixture()
   reader=m.ReportEvidenceReader(root,lambda h,p:(_ for _ in ()).throw(self.error(404)))
-  self.assertEqual(reader(head,'data/phase2_forward_v2/scores/1792461600_formal.json'),b'')
+  with self.assertRaises(m.ReportPinnedPathAbsent):reader(head,'data/phase2_forward_v2/scores/1792461600_formal.json')
   self.assertEqual(reader.diagnostics[-1]['classification'],'PINNED_PATH_ABSENT')
  def test_existing_path_404_remains_blocked_and_diagnostics_are_sanitized(self):
   import plus_shadow as m

@@ -1,4 +1,5 @@
 """Opt-in OSS BucketWorm daily inventory custody, never historical PIT approval."""
+import struct
 import base64, hashlib, json, os, re, io, zipfile, argparse, urllib.request, subprocess, tempfile, shutil
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
@@ -14,6 +15,15 @@ LIMIT=256*1024*1024
 # Both transport and extraction stay bounded at 2 GiB; download streams to disk.
 # The observed 1,288,488,954-byte daily ZIP exceeds the old 1 GiB budget.
 ARTIFACT_LIMIT=2*1024*1024*1024
+ARTIFACT_EXPANDED_LIMIT=ARTIFACT_LIMIT
+ARTIFACT_ENTRY_LIMIT=512
+ARTIFACT_DIRECTORY_LIMIT=1024*1024
+DISK_RESERVE=256*1024*1024
+# The frozen producer caps source bytes, not ZIP headers/manifest/deflate overhead.
+# Keep that 256 MiB source cap; separately bound the stored container overhead.
+STORED_ZIP_LIMIT=LIMIT+8*1024*1024
+INVENTORY_MEMBER_LIMIT=20000
+INVENTORY_METADATA_LIMIT=8*1024*1024
 
 def digest(raw):return hashlib.sha256(raw).hexdigest()
 def utc(value):
@@ -35,7 +45,8 @@ def check_bucket(bucket):
             'policy_created_at_utc':lock.creation_date,'owner':OWNER}
 
 def upload_one(bucket,raw,extension,lock,now=None):
-    if extension not in ('.zip','.json') or not 0<len(raw)<=LIMIT:raise ValueError('invalid evidence payload')
+    cap=STORED_ZIP_LIMIT if extension=='.zip' else LIMIT
+    if extension not in ('.zip','.json') or not 0<len(raw)<=cap:raise ValueError('invalid evidence payload')
     sha=digest(raw);key=PREFIX+sha+extension;uploaded=False
     try:head=bucket.head_object(key)
     except Exception as exc:
@@ -51,7 +62,7 @@ def upload_one(bucket,raw,extension,lock,now=None):
     try:
         for chunk in iter(lambda:result.read(1024*1024),b''):
             size+=len(chunk)
-            if size>LIMIT:raise ValueError('readback exceeds cap')
+            if size>cap:raise ValueError('readback exceeds cap')
             hasher.update(chunk)
     finally:result.close()
     finished=now or datetime.now(timezone.utc)
@@ -72,23 +83,91 @@ def upload_one(bucket,raw,extension,lock,now=None):
             'legacy_fixed_2028_10_16_horizon_satisfied':until>=utc('2028-10-16T00:00:00Z'),
             'historical_pre_target_retention_verified':False}
 
+def disk_budget(directory,required):
+    if shutil.disk_usage(directory).free<required+DISK_RESERVE:raise ValueError('insufficient disk budget for inventory')
+
+def artifact_directory_preflight(stream,entry_limit=None,directory_limit=None,transport_limit=None):
+    """Bound central-directory allocations before constructing ZipFile, including ZIP64."""
+    entry_limit=ARTIFACT_ENTRY_LIMIT if entry_limit is None else entry_limit
+    directory_limit=ARTIFACT_DIRECTORY_LIMIT if directory_limit is None else directory_limit
+    transport_limit=ARTIFACT_LIMIT if transport_limit is None else transport_limit
+    stream.seek(0,2);size=stream.tell()
+    if size>transport_limit:raise ValueError('artifact transport exceeds cap')
+    stream.seek(max(0,size-65557));tail=stream.read(65557);index=tail.rfind(b'PK\x05\x06')
+    if index<0 or index+22>len(tail):raise ValueError('invalid artifact end record')
+    end=max(0,size-65557)+index
+    _,disk,start_disk,on_disk,count,cd_size,offset,comment=struct.unpack('<4s4H2LH',tail[index:index+22])
+    if end+22+comment!=size or disk or start_disk or on_disk!=count:raise ValueError('invalid/multidisk artifact')
+    if count==65535 or cd_size==0xffffffff or offset==0xffffffff:
+        if end<20:raise ValueError('invalid ZIP64 locator')
+        stream.seek(end-20);locator=stream.read(20)
+        signature,record_disk,position,disks=struct.unpack('<4sLQL',locator)
+        if signature!=b'PK\x06\x07' or record_disk or disks!=1:raise ValueError('invalid ZIP64 locator')
+        if not 0<=position<=end-76:raise ValueError('invalid ZIP64 position')
+        stream.seek(position);record=stream.read(56)
+        signature,length,_,_,disk,start_disk,on_disk,count,cd_size,offset=struct.unpack('<4sQ2H2L4Q',record)
+        if (signature!=b'PK\x06\x06' or not 44<=length<=4096 or position+12+length!=end-20
+            or disk or start_disk or on_disk!=count):raise ValueError('invalid ZIP64 end record')
+        end=position
+    if count>entry_limit:raise ValueError('artifact entry count exceeds cap')
+    if cd_size>directory_limit or offset+cd_size>end:raise ValueError('artifact central directory exceeds cap')
+    stream.seek(0)
+    return count
+
 def extract_artifact(raw,destination):
-    destination=Path(destination).resolve()
-    with zipfile.ZipFile(io.BytesIO(raw) if isinstance(raw,bytes) else raw) as archive:
+    destination=Path(destination)
+    if destination.is_symlink():raise ValueError('unsafe artifact destination')
+    destination=destination.resolve();created=[];directories=[]
+    with (io.BytesIO(raw) if isinstance(raw,bytes) else Path(raw).open('rb')) as stream:
+      expected=artifact_directory_preflight(stream)
+      with zipfile.ZipFile(stream) as archive:
         entries=archive.infolist();names=[e.filename for e in entries]
-        if len(names)!=len(set(names)) or sum(e.file_size for e in entries)>ARTIFACT_LIMIT:
+        total=sum(e.file_size for e in entries)
+        if len(entries)!=expected or len(names)!=len({n.casefold() for n in names}) or total>ARTIFACT_EXPANDED_LIMIT:
             raise ValueError('duplicate paths or archive exceeds cap')
         for entry in entries:
             name=entry.filename
             if ('\\' in name or ':' in name or name.startswith('/') or
                 any(p in ('','.','..') for p in name.rstrip('/').split('/')) or
-                (entry.external_attr>>16)&0o170000==0o120000):raise ValueError('unsafe artifact path')
+                (entry.external_attr>>16)&0o170000 not in (0,0o100000,0o040000)
+                or entry.flag_bits&1 or entry.compress_type not in (zipfile.ZIP_STORED,zipfile.ZIP_DEFLATED)):
+                raise ValueError('unsafe artifact path/type')
             path=destination/name
-            if not path.resolve().is_relative_to(destination):raise ValueError('artifact escape')
-            if not entry.is_dir():
-                path.parent.mkdir(parents=True,exist_ok=True)
-                with archive.open(entry) as source,path.open('xb') as target:
-                    shutil.copyfileobj(source,target,length=1024*1024)
+            if not path.resolve().is_relative_to(destination) or path.exists() or path.is_symlink():raise ValueError('artifact escape or existing path')
+            if entry.file_size>(STORED_ZIP_LIMIT if name.endswith('.zip') else INVENTORY_METADATA_LIMIT):raise ValueError('stored inventory object exceeds cap')
+        disk_budget(destination if destination.exists() else destination.parent,total)
+        try:
+          for entry in entries:
+            if entry.is_dir():continue
+            path=destination/entry.filename
+            missing=[];parent=path.parent
+            while not parent.exists():missing.append(parent);parent=parent.parent
+            for parent in reversed(missing):parent.mkdir();directories.append(parent)
+            with archive.open(entry) as source,path.open('xb') as target:
+                created.append(path);count=0
+                for chunk in iter(lambda:source.read(1024*1024),b''):
+                    count+=len(chunk)
+                    if count>entry.file_size:raise ValueError('artifact expanded bytes exceed declaration')
+                    target.write(chunk)
+                if count!=entry.file_size:raise ValueError('artifact expanded size mismatch')
+        except Exception:
+          for path in reversed(created):path.unlink(missing_ok=True)
+          for directory in reversed(directories):directory.rmdir()
+          raise
+
+def validate_staged_packages(destination):
+    # The unchanged verifier parses inner ZIPs; bound those allocations first.
+    for path in Path(destination).rglob('*'):
+        if not path.is_file() or path.suffix.lower()!='.zip':continue
+        with path.open('rb') as stream:
+            expected=artifact_directory_preflight(stream,INVENTORY_MEMBER_LIMIT,INVENTORY_METADATA_LIMIT,STORED_ZIP_LIMIT)
+            with zipfile.ZipFile(stream) as archive:
+                entries=archive.infolist();names=[e.filename for e in entries]
+                if len(entries)!=expected or len(names)!=len(set(names)):raise ValueError('duplicate inner inventory members')
+                if sum(e.file_size for e in entries if e.filename!='bundle_manifest.json')>LIMIT:
+                    raise ValueError('inventory source bytes exceed frozen cap')
+                if archive.getinfo('bundle_manifest.json').file_size>INVENTORY_METADATA_LIMIT:
+                    raise ValueError('inventory manifest exceeds metadata cap')
 
 def github_response(path):
     # Never forward Authorization across artifact-download redirects.
@@ -114,7 +193,8 @@ def download_artifact(artifact,destination):
     if (isinstance(size,bool) or not isinstance(size,int) or not 0<size<=ARTIFACT_LIMIT
         or not re.fullmatch('[a-f0-9]{64}',expected)):
         raise ValueError('invalid artifact size or digest')
-    destination=Path(destination);created=False;count=0;hasher=hashlib.sha256()
+    destination=Path(destination);disk_budget(destination.parent,size)
+    created=False;count=0;hasher=hashlib.sha256()
     try:
         with destination.open('xb') as target:
             created=True
@@ -157,6 +237,7 @@ def stage(root,force=False):
     with tempfile.TemporaryDirectory(prefix='oss-artifact-',dir=root) as temporary:
         archive=download_artifact(artifact,Path(temporary)/'inventory.zip')
         extract_artifact(archive,destination)
+    validate_staged_packages(destination)
     copied=json.loads((destination/'latest.json').read_bytes())
     if copied['bundle_sha256']!=sha:raise ValueError('artifact inventory mismatch')
     import pit_retention_preparation as pit
