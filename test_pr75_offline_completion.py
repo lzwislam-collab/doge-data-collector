@@ -13,7 +13,7 @@ def single_fixture(root,mode=None):
  (root/'data').mkdir();source=root/'data/source';source.write_bytes(b'proof')
  package,prior=frozen.prepare_inventory_bundle(root,{'data/source':m.digest(b'proof')},now=NOW)
  raw=package.read_bytes()
- if mode in ('payload','manifest','missing','extra','crc','unsafe'):
+ if mode in ('payload','manifest','missing','extra','crc','unsafe','store'):
   stream=io.BytesIO()
   with zipfile.ZipFile(io.BytesIO(raw)) as old,zipfile.ZipFile(stream,'w') as new:
    for name in old.namelist():

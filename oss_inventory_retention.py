@@ -323,6 +323,8 @@ def validate_staged_packages(destination):
             expected=artifact_directory_preflight(stream,INVENTORY_MEMBER_LIMIT,INVENTORY_METADATA_LIMIT,STORED_ZIP_LIMIT)
             with zipfile.ZipFile(stream) as archive:
                 entries=archive.infolist();names=[e.filename for e in entries]
+                if any(e.compress_type not in (zipfile.ZIP_STORED,zipfile.ZIP_DEFLATED) or e.flag_bits&1 for e in entries):
+                    raise ValueError('unsupported inner inventory compression/encryption')
                 if len(entries)!=expected or len(names)!=len(set(names)):raise ValueError('duplicate inner inventory members')
                 if sum(e.file_size for e in entries if e.filename!='bundle_manifest.json')>LIMIT:
                     raise ValueError('inventory source bytes exceed frozen cap')

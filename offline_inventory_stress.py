@@ -131,11 +131,12 @@ def stress(parts,source_bytes):
         print(json.dumps({'phase':'capacity','plan':plan}),flush=True)
         with patch.object(inventory,'github',side_effect=get),patch.object(inventory,'github_response',side_effect=lambda path:artifact.open('rb')),patch.object(inventory,'download_artifact',side_effect=download),patch.object(inventory,'extract_artifact',side_effect=extract),patch.object(inventory.subprocess,'check_output',return_value='d'*40+'\n'):
             ready=inventory.stage(workspace)
-        observe('frozen_verifier_passed')
         source=json.loads((workspace/'oss-retention-output/source.json').read_bytes())
-        assert ready and source['inventory_objects']==parts
-        assert source['inventory_capacity']==plan
-        assert not list(workspace.glob('oss-artifact-*'))
+        if ready is not True or source.get('inventory_objects')!=parts:
+            raise ValueError('synthetic inventory staging/count acceptance failed')
+        if source.get('inventory_capacity')!=plan:raise ValueError('synthetic inventory capacity acceptance failed')
+        if list(workspace.glob('oss-artifact-*')):raise ValueError('private staging temporary files remain')
+        observe('frozen_verifier_passed')
         return {'schema':'OFFLINE_INVENTORY_CAPACITY_STRESS_V1','platform':sys.platform,'linux_runtime':sys.platform.startswith('linux'),'linux_symlink_tests_verified':False,'python_version':platform.python_version(),'os_release':platform.release(),
                 'synthetic_only':True,'frozen_verifier_passed':True,'shards':parts,'raw_source_bytes':parts*source_bytes,
                 'artifact_bytes':container['size'],'fixture_allocated_bytes':sum(allocated(p) for p in fixture.rglob('*') if p.is_file()),

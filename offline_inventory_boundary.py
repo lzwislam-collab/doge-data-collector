@@ -46,21 +46,23 @@ def stress(full=False):
   prefix=prefix_for_size(members,transport)
   if prefix<0:raise ValueError('transport budget below fixture size')
   source=fixture/'boundary.zip';descriptor=sparse_zip(source,members,prefix_bytes=prefix)
-  assert descriptor['size']==transport
+  if descriptor['size']!=transport:raise ValueError('fixture transport boundary mismatch')
   plan=inventory.artifact_capacity(source)
-  assert plan['expanded_bytes']==expanded and plan['peak_additional_disk_bytes']==plan_peak
+  if plan['expanded_bytes']!=expanded or plan['peak_additional_disk_bytes']!=plan_peak:
+   raise ValueError('fixture capacity boundary mismatch')
   print(json.dumps({'phase':'capacity','plan':plan}),flush=True)
   download=workspace/'download.zip';destination=workspace/'expanded';destination.mkdir()
   with patch.object(inventory,'github_response',side_effect=lambda p:source.open('rb')):
    inventory.download_artifact({'id':1,'size_in_bytes':transport,'digest':descriptor['sha']},download)
   inventory.extract_artifact(download,destination)
-  files=list(destination.iterdir());assert len(files)==zip_count+meta_count
-  assert sum(p.stat().st_size for p in files)==expanded
+  files=list(destination.iterdir());expected={name:member['size'] for name,member in members}
+  if any(p.is_symlink() or not p.is_file() for p in files) or {p.name:p.stat().st_size for p in files}!=expected:
+   raise ValueError('expanded file names/sizes do not match resource fixture')
   observation={'consumer_allocated_bytes':allocated(download)+sum(allocated(p) for p in files),'fixture_allocated_bytes':sum(allocated(p) for p in fixture.iterdir()),'peak_process_rss_bytes':peak_rss()}
   print(json.dumps({'phase':'maximum_simultaneous_files','observation':observation}),flush=True)
  cleaned=not root.exists()
- assert cleaned
- return {'schema':'OFFLINE_RESOURCE_BOUNDARY_V1','full':full,'platform':sys.platform,'python_version':platform.python_version(),'synthetic_only':True,'network_blocked':True,'semantic_inventory_test':False,'frozen_verifier_executed':False,'zip_member_payloads_are_synthetic_resource_bytes':True,'transport_and_extraction_passed':True,'outer_crc_checked_during_extraction':True,'temporary_files_cleaned':cleaned,'capacity':plan,'observation':observation,'elapsed_seconds':round(time.monotonic()-started,3),'limitations':['No claim that zero-filled inner ZIP/JSON files are valid inventory','Tests consumer transport/extraction resource budgets only; genuine frozen inventory stress has separate evidence','Windows measurements do not establish Linux symlink behavior or cloud runner capacity','File allocation and RSS are process/private-file observations, not entire OS/volume maxima']}
+ if not cleaned:raise ValueError('resource boundary temporary files were not cleaned')
+ return {'schema':'OFFLINE_RESOURCE_BOUNDARY_V1','full':full,'platform':sys.platform,'python_version':platform.python_version(),'synthetic_only':True,'network_blocked':True,'semantic_inventory_test':False,'frozen_verifier_executed':False,'zip_member_payloads_are_synthetic_resource_bytes':True,'transport_and_extraction_passed':True,'outer_crc_checked_during_extraction':True,'temporary_files_cleaned':cleaned,'capacity':plan,'observation':observation,'elapsed_seconds':round(time.monotonic()-started,3),'limitations':['No claim that zero-filled inner ZIP/JSON files are valid inventory','Tests consumer transport/extraction resource budgets only; synthetic inventory accepted by the frozen verifier has separate evidence','Windows measurements do not establish Linux symlink behavior or cloud runner capacity','File allocation and RSS are process/private-file observations, not entire OS/volume maxima']}
 
 
 def main():
