@@ -8,7 +8,7 @@ import argparse,json,platform,socket,sys,tempfile,time
 from pathlib import Path
 from unittest.mock import patch
 import oss_inventory_retention as inventory
-from offline_inventory_stress import sparse_zip,zero_member,allocated,peak_rss
+from offline_inventory_stress import sparse_zip,zero_member,allocated,peak_rss,evidence_destination,write_evidence_json
 
 
 def fixture_size(members,prefix):
@@ -67,7 +67,8 @@ def stress(full=False):
 
 def main():
  parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--full',action='store_true');parser.add_argument('--output',type=Path,required=True);args=parser.parse_args()
+ output=evidence_destination(args.output)
  with patch.object(socket.socket,'connect',side_effect=AssertionError('offline')),patch.object(socket.socket,'connect_ex',side_effect=AssertionError('offline')):result=stress(args.full)
- args.output.write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8');print(json.dumps(result),flush=True)
+ write_evidence_json(output,result);print(json.dumps(result),flush=True)
 
 if __name__=='__main__':main()

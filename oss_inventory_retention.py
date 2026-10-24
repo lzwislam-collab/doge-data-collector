@@ -291,7 +291,7 @@ def extract_artifact(raw,destination):
                 or '\\' in name or ':' in name or name.startswith('/') or
                 any(p in ('','.','..') for p in name.rstrip('/').split('/')) or
                 (entry.external_attr>>16)&0o170000 not in (0,0o100000,0o040000)
-                or entry.flag_bits&1 or entry.compress_type not in (zipfile.ZIP_STORED,zipfile.ZIP_DEFLATED)):
+                or entry.flag_bits&(1|0x20|0x40) or entry.compress_type not in (zipfile.ZIP_STORED,zipfile.ZIP_DEFLATED)):
                 raise ValueError('unsafe artifact path/type')
             path=destination/name
             if not path.resolve().is_relative_to(destination) or path.exists() or path.is_symlink():raise ValueError('artifact escape or existing path')
@@ -310,9 +310,17 @@ def extract_artifact(raw,destination):
                     if count>entry.file_size:raise ValueError('artifact expanded bytes exceed declaration')
                     target.write(chunk)
                 if count!=entry.file_size:raise ValueError('artifact expanded size mismatch')
-        except BaseException:
-          for path in reversed(created):path.unlink(missing_ok=True)
-          for directory in reversed(directories):directory.rmdir()
+        except BaseException as failure:
+          cleanup_errors=[]
+          for path in reversed(created):
+            try:path.unlink(missing_ok=True)
+            except BaseException as exc:cleanup_errors.append(exc)
+          for directory in reversed(directories):
+            try:directory.rmdir()
+            except FileNotFoundError:pass
+            except BaseException as exc:cleanup_errors.append(exc)
+          if cleanup_errors:
+            raise BaseExceptionGroup('artifact extraction failed; cleanup incomplete',[failure,*cleanup_errors]) from None
           raise
 
 def validate_staged_packages(destination):
@@ -323,7 +331,7 @@ def validate_staged_packages(destination):
             expected=artifact_directory_preflight(stream,INVENTORY_MEMBER_LIMIT,INVENTORY_METADATA_LIMIT,STORED_ZIP_LIMIT)
             with zipfile.ZipFile(stream) as archive:
                 entries=archive.infolist();names=[e.filename for e in entries]
-                if any(e.compress_type not in (zipfile.ZIP_STORED,zipfile.ZIP_DEFLATED) or e.flag_bits&1 for e in entries):
+                if any(e.compress_type not in (zipfile.ZIP_STORED,zipfile.ZIP_DEFLATED) or e.flag_bits&(1|0x20|0x40) for e in entries):
                     raise ValueError('unsupported inner inventory compression/encryption')
                 if len(entries)!=expected or len(names)!=len(set(names)):raise ValueError('duplicate inner inventory members')
                 if sum(e.file_size for e in entries if e.filename!='bundle_manifest.json')>LIMIT:
@@ -390,7 +398,9 @@ def stage(root,force=False):
         return False
     artifact=github('/actions/artifacts/'+str(int(marker['artifact_id'])))
     run=github('/actions/runs/'+str(int(marker['run_id'])))
-    if (artifact.get('expired') or artifact['workflow_run']['id']!=int(marker['run_id']) or
+    if (type(artifact.get('id')) is not int or artifact['id']!=int(marker['artifact_id'])
+        or type(run.get('id')) is not int or run['id']!=int(marker['run_id'])
+        or artifact.get('expired') is not False or artifact['workflow_run']['id']!=int(marker['run_id']) or
         run['head_branch']!='main' or run['event']=='pull_request' or run['repository']['full_name']!='lzwislam-collab/doge-data-collector' or
         run['path']!='.github/workflows/okx_hourly_extreme_history.yml' or
         artifact.get('digest','').removeprefix('sha256:')!=marker['artifact_archive_sha256']):

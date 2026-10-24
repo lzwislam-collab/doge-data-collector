@@ -1,0 +1,258 @@
+{
+  "schema": "PR75_3BF886B_FINAL_OFFLINE_ACCEPTANCE_V1",
+  "reviewed_commit": "3bf886bd9fde2b50e35261366326e57af6e0d22c",
+  "checked_at_utc": "2026-10-24T23:55:47.278489+00:00",
+  "checked_at_jst": "2026-10-25T08:55:47.278489+09:00",
+  "full_required_offline_acceptance_completed": true,
+  "linux_status": "PENDING_BY_USER_INSTRUCTION",
+  "production_operations_performed": false,
+  "scope": [
+    "PR75 code, relevant tests, resource tools and frozen boundaries",
+    "Optimized-mode acceptance, single/sharded ZIP preflight and semantics, failure cleanup, artifact/run identity binding and offline evidence publication",
+    "Regression of witness pagination/attempts/jobs and fixed-tree empty/404 classification"
+  ],
+  "not_checked": [
+    "Actual Linux execution and symlink behavior",
+    "Real cloud runner capacity/runtime, provider upload/readback, natural scheduler execution and production artifacts",
+    "Live market/model accuracy/returns, Google Sheets/Apps Script and E1 state outside PR75",
+    "Deleted historical evidence and other unreviewed system areas"
+  ],
+  "new_fixed_findings": [
+    {
+      "id": "P2-CLEANUP-CONTINUATION",
+      "fact": "One PermissionError during removal stopped cleanup of remaining owned files/directories.",
+      "fix": "Attempt every owned removal; collect errors with original failure in BaseExceptionGroup.",
+      "impact": "Failed artifact extraction only; normal cleanup remains unchanged.",
+      "acceptance": "CRC+unlink failure removes other removable file, retains locked file and original CRC/removal errors; directory failure does not skip other directory; cancellation plus cleanup failure both retained.",
+      "limit": "Operating-system-denied removal is reported as incomplete, not falsely claimed erased."
+    },
+    {
+      "id": "P2-SOURCE-LOCATOR-BINDING",
+      "fact": "Returned artifact.id and run.id were not compared with request marker IDs; unknown expiry could be treated as false.",
+      "fix": "Returned IDs must be exact integers equal to marker locators; expired must be False.",
+      "impact": "Stage provenance preflight, before artifact download.",
+      "acceptance": "Wrong IDs, bool/float artifact IDs and unknown expiry reject before download; ordinary fixtures pass.",
+      "limit": "No evidence that real GitHub returned mismatched IDs or production inventory was corrupted."
+    },
+    {
+      "id": "P2-OFFLINE-EVIDENCE-PUBLICATION",
+      "fact": "Reused --output could overwrite old results; direct final-path write followed by fsync+unlink double failure could leave a successful-looking JSON.",
+      "fix": "Reject existing/linked destination before stress; write and flush/fsync same-directory temporary JSON, then exclusive os.link publication; preserve old/racing evidence; retain double errors.",
+      "impact": "Both opt-in offline stress CLIs only.",
+      "acceptance": "Both CLIs reject existing output before stress; exclusive full JSON publication works; fsync failure removes new private output, fsync+cleanup double failure leaves no final success JSON, publication race preserves foreign result and cleans private temp. Full optimized CLI runs also publish new reports successfully.",
+      "limit": "A report published after successful fsync remains valid if later private-temp deletion fails; that cleanup error is raised. Directory crash durability and adversarial replacement are not guaranteed."
+    },
+    {
+      "id": "P3-ZIP-SPECIAL-FLAGS",
+      "fact": "Inner flags bit5 patched-data and bit6 strong-encryption passed preflight and were rejected only later by ZipFile reading.",
+      "fix": "Both outer/inner preflight reject flag mask 1|0x20|0x40.",
+      "impact": "Earlier rejection of unsupported transport formats; no frozen-producer format change.",
+      "acceptance": "Inner flag32/64 reject before reads; outer flag32/64 reject before writes; STORE/DEFLATE regression remains passing.",
+      "limit": "Previously these packages still failed later; do not claim successful malicious publication."
+    }
+  ],
+  "new_test_module": "test_pr75_cleanup_closure.py",
+  "new_test_methods": 13,
+  "tests": {
+    "total": 282,
+    "passed": 280,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 2,
+    "skipped_tests": [
+      [
+        "test_latest_symlink_cannot_overwrite_outside_file (test_pit_retention_preparation.PreparationTests.test_latest_symlink_cannot_overwrite_outside_file)",
+        "platform cannot create symlinks; Linux CI must exercise this test"
+      ],
+      [
+        "test_output_directory_symlink_cannot_redirect_package_writes (test_pit_retention_preparation.PreparationTests.test_output_directory_symlink_cannot_redirect_package_writes)",
+        "platform cannot create symlinks; Linux CI must exercise this test"
+      ]
+    ],
+    "network_blocked": true,
+    "modules": [
+      "test_inventory_transactions",
+      "test_inventory_capacity",
+      "test_pr75_reaudit",
+      "test_minimal_audit_fixes",
+      "test_plus_shadow",
+      "test_oss_inventory_retention",
+      "test_report_cohort_regressions",
+      "test_plus_report_refresh",
+      "test_plus_scorecard",
+      "test_report_custody",
+      "test_report_evidence",
+      "test_pit_retention_preparation",
+      "test_pit_retention_daily",
+      "test_learned_shadow_v1",
+      "test_phase2_forward_v2",
+      "test_phase2_forward_runtime_v2",
+      "test_forecast_worm",
+      "integration_oss_sdk",
+      "test_pr75_offline_completion",
+      "test_pr75_final_boundaries",
+      "test_pr75_cleanup_closure"
+    ],
+    "frozen_union_files": 33,
+    "all_frozen_hashes_match": true,
+    "frozen_producer_unchanged": true
+  },
+  "full_resource_boundary": {
+    "schema": "OFFLINE_RESOURCE_BOUNDARY_V1",
+    "full": true,
+    "platform": "win32",
+    "python_version": "3.12.14",
+    "synthetic_only": true,
+    "network_blocked": true,
+    "semantic_inventory_test": false,
+    "frozen_verifier_executed": false,
+    "zip_member_payloads_are_synthetic_resource_bytes": true,
+    "transport_and_extraction_passed": true,
+    "outer_crc_checked_during_extraction": true,
+    "temporary_files_cleaned": true,
+    "capacity": {
+      "archive_bytes": 22548578304,
+      "expanded_bytes": 21474836480,
+      "zip_containers": 64,
+      "metadata_files": 448,
+      "entry_count": 512,
+      "disk_reserve_bytes": 268435456,
+      "peak_additional_disk_bytes": 44291850240,
+      "transport_cap_bytes": 22548578304,
+      "expanded_cap_bytes": 21474836480,
+      "basis": "declared ZIP sizes, checked before extraction; includes simultaneous archive and extracted bytes",
+      "frozen_producer_has_finite_container_maximum": false
+    },
+    "observation": {
+      "consumer_allocated_bytes": 44023414784,
+      "fixture_allocated_bytes": 33619968,
+      "peak_process_rss_bytes": 36638720
+    },
+    "elapsed_seconds": 122.265,
+    "limitations": [
+      "No claim that zero-filled inner ZIP/JSON files are valid inventory",
+      "Tests consumer transport/extraction resource budgets only; synthetic inventory accepted by the frozen verifier has separate evidence",
+      "Windows measurements do not establish Linux symlink behavior or cloud runner capacity",
+      "File allocation and RSS are process/private-file observations, not entire OS/volume maxima"
+    ]
+  },
+  "full_synthetic_inventory": {
+    "schema": "OFFLINE_INVENTORY_CAPACITY_STRESS_V1",
+    "platform": "win32",
+    "linux_runtime": false,
+    "linux_symlink_tests_verified": false,
+    "python_version": "3.12.14",
+    "os_release": "11",
+    "synthetic_only": true,
+    "frozen_verifier_passed": true,
+    "shards": 64,
+    "raw_source_bytes": 17179869184,
+    "artifact_bytes": 17179932002,
+    "fixture_allocated_bytes": 12648448,
+    "capacity": {
+      "archive_bytes": 17179932002,
+      "expanded_bytes": 17179916372,
+      "zip_containers": 64,
+      "metadata_files": 2,
+      "entry_count": 66,
+      "disk_reserve_bytes": 268435456,
+      "peak_additional_disk_bytes": 34628283830,
+      "transport_cap_bytes": 22548578304,
+      "expanded_cap_bytes": 21474836480,
+      "basis": "declared ZIP sizes, checked before extraction; includes simultaneous archive and extracted bytes",
+      "frozen_producer_has_finite_container_maximum": false
+    },
+    "observations": [
+      {
+        "phase": "download_verified",
+        "allocated_private_bytes": 17192580985,
+        "peak_process_rss_bytes": 42283008
+      },
+      {
+        "phase": "expanded_archive_still_present",
+        "allocated_private_bytes": 34372497357,
+        "peak_process_rss_bytes": 42283008
+      },
+      {
+        "phase": "frozen_verifier_passed",
+        "allocated_private_bytes": 17192566403,
+        "peak_process_rss_bytes": 570867712
+      }
+    ],
+    "elapsed_seconds": 125.469,
+    "limitations": [
+      "STORE synthetic ZIPs accepted by the unchanged frozen verifier; not real production artifacts",
+      "No finite maximum frozen-producer container size; this proves the tested consumer domain only"
+    ]
+  },
+  "stress_execution": {
+    "python_flags": [
+      "-B",
+      "-O"
+    ],
+    "optimization_level": 1,
+    "resource_exit_code": 0,
+    "inventory_exit_code": 0,
+    "sequential_large_io": true,
+    "temporary_stress_files_cleaned": true
+  },
+  "evidence_interpretation": [
+    "Resource boundary uses zero-filled ZIP/JSON placeholders and tests transport/extraction budgets only, not a legal semantic inventory or frozen verification.",
+    "21 GiB archive and 20 GiB expanded files coexist; 256 MiB reserve is checked but not claimed occupied. Observations are private files/RSS, not entire OS/volume maxima.",
+    "Separate 64x256 MiB STORE synthetic inventory is accepted by unchanged frozen verifier; neither test uses actual market data or production artifacts.",
+    "Parent regression suite denies socket connect/connect_ex; optimized negative child fixtures use local mocked responses. Both complete stress CLIs deny socket connections. SDK construction uses already cached local dependencies, no install or real provider call."
+  ],
+  "previous_repairs_regressed": [
+    "Witness daily pagination, stable scan, historical attempts and job identity",
+    "404/empty blob classification and unknown/permission/rate-limit failure closure",
+    "Capacity math, download streaming/digest and inner codec limits",
+    "Single-package coverage/count/path/hash/CRC, sharded frozen verifier compatibility",
+    "Private publication rollback, ordinary/cancel cleanup, receipt atomic replacement",
+    "Optimization-safe explicit stress acceptance and exact resource file names/sizes"
+  ],
+  "freeze": {
+    "active_manifest_union": 33,
+    "all_hashes_match": true,
+    "frozen_producer_raw_bytes_match_base": true,
+    "models_protocol_history_workflows_changed": false,
+    "older_audit_json_preserved": true
+  },
+  "remaining": [
+    {
+      "priority": "P2",
+      "issue": "Finite consumer domain cannot cover unbounded frozen-producer metadata or prove an absolute legal container maximum.",
+      "acceptance": "Explicit caps and fail-closed rejection remain; no silent object omission or frozen protocol change."
+    },
+    {
+      "priority": "P2",
+      "issue": "Actual cloud runner disk/runtime/provider limits, real inventories, custody readback and natural scheduling remain unverified.",
+      "acceptance": "Separate authorized online acceptance; no inference from offline/manual tests."
+    },
+    {
+      "priority": "P2",
+      "issue": "Witness daily/run-attempt/jobs/time-span caps and deleted historical records remain limits.",
+      "acceptance": "Over-limit or unstable discovery blocks, not a completeness/absence claim."
+    },
+    {
+      "priority": "P3",
+      "issue": "Linux runtime/symlink tests remain pending; 2 known skips are not passes.",
+      "acceptance": "Actual available offline Linux strict harness and relevant tests pass without platform skips; no installation or device wake performed."
+    },
+    {
+      "priority": "P3",
+      "issue": "Hard kill/crash, concurrent replacement, directory durability and cross-file/cloud transaction rollback are outside guarantee.",
+      "acceptance": "Keep guarantee to tested exception/cancellation/best-effort cleanup and complete per-file publication; report inaccessible residues honestly."
+    }
+  ],
+  "independent_review": "Read-only reviewer reproduced cleanup continuation and ZIP flags gaps, reviewed locator/output binding and fsync+cleanup double failure, then found no further definite defect in prepared candidate. Current parent execution verified identical candidate hashes and ran full required offline acceptance.",
+  "merge_conclusion": "Covered code/offline domain has no known remaining definite blocker. Linux and online acceptance incomplete; maintain draft, do not merge/deploy.",
+  "file_sha256": {
+    "oss_inventory_retention.py": "30c0312c7ced57da976d97878b1c68f88177bb3eb92b4bbed3f27891bb896eab",
+    "offline_inventory_stress.py": "7e0a95e00e662e643dd6d10100e8b109d9312e8d107615d84781839ac440f0d6",
+    "offline_inventory_boundary.py": "294175c301f0bd10b0075cf85732f929d266f0e4463b0fe2a44e175d581a2dee",
+    "test_pr75_cleanup_closure.py": "dc3ca9bd896ea0ed998bce3ae035eab801a6e78de7512b1c30097cac8aa36616",
+    "plus_shadow.py": "7f914d4ef28a48874b2b754f642a86050391c7e72c3c37f268172fc519b669c9",
+    "test_pr75_final_boundaries.py": "466e484b8a3072915b78d181e3ecc8ffeb89cbd4e868f4c3fb54a79ab543240d",
+    "test_pr75_offline_completion.py": "8d06c2a4d36bcaf5685678ca19de16b3cfbce9b25e2af126f95ef84267377e44"
+  }
+}

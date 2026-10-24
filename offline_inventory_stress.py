@@ -144,12 +144,39 @@ def stress(parts,source_bytes):
                 'limitations':['STORE synthetic ZIPs accepted by the unchanged frozen verifier; not real production artifacts',
                                'No finite maximum frozen-producer container size; this proves the tested consumer domain only']}
 
+def evidence_destination(path):
+    path=inventory.reject_link_ancestors(path)
+    if path.exists():raise FileExistsError('refusing to overwrite prior offline evidence: '+str(path))
+    return path
+
+
+def write_evidence_json(path,result):
+    """Publish only a fully written/fsynced report, without replacing old evidence."""
+    path=evidence_destination(path);temporary=None
+    raw=(json.dumps(result,indent=2)+'\n').encode('utf-8')
+    try:
+        with tempfile.NamedTemporaryFile(prefix='.offline-evidence-',suffix='.tmp',dir=path.parent,delete=False) as handle:
+            temporary=Path(handle.name)
+            handle.write(raw);handle.flush();os.fsync(handle.fileno())
+        inventory.reject_link_ancestors(path)
+        os.link(temporary,path)
+    except BaseException as failure:
+        if temporary is not None:
+            try:temporary.unlink(missing_ok=True)
+            except BaseException as cleanup:
+                raise BaseExceptionGroup('offline evidence failed; temporary cleanup incomplete',[failure,cleanup]) from None
+        raise
+    else:
+        temporary.unlink(missing_ok=True)
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--full',action='store_true');parser.add_argument('--parts',type=int,default=4);parser.add_argument('--source-bytes',type=int,default=1024*1024);parser.add_argument('--output',type=Path,required=True);args=parser.parse_args()
+    output=evidence_destination(args.output)
     parts=64 if args.full else args.parts;source_bytes=frozen.LIMIT_BYTES if args.full else args.source_bytes
     if not 2<=parts<=64 or not 1<=source_bytes<=frozen.LIMIT_BYTES:raise ValueError('invalid synthetic inventory dimensions')
     with patch.object(socket.socket,'connect',side_effect=AssertionError('offline: network forbidden')),patch.object(socket.socket,'connect_ex',side_effect=AssertionError('offline: network forbidden')):
         result=stress(parts,source_bytes)
-    args.output.write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8');print(json.dumps(result),flush=True)
+    write_evidence_json(output,result);print(json.dumps(result),flush=True)
 
 if __name__=='__main__':main()
