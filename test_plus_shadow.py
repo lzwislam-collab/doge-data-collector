@@ -65,7 +65,7 @@ class Report404Adapter(unittest.TestCase):
   self.assertIsNone(m.f.witness({missing:raw},[run],reader,now+timedelta(minutes=1)))
   # A distinct, exact successful candidate can still qualify; no timestamp or
   # byte check in the frozen witness function is weakened by the adapter.
-  later=dict(run,id=2)
+  later=dict(run,id=2,head_sha='b'*40)
   calls=[self.error(404),raw]
   def read(h,p):
    value=calls.pop(0)
@@ -127,13 +127,13 @@ class Adapters(unittest.TestCase):
  def test_original_prediction_proof_survives_target_rejection(self):
   m=self.module();at,e=self.event()
   pred={(1,'full'):[{'event_id':e['event_id'],'group':'full','y':None}]}
-  with patch.object(m.legacy,'read_bindings',return_value={}),patch.object(m.legacy,'runs_from_server',return_value=[]),patch.object(m.legacy.shadow,'verified_rows',side_effect=[(None,pred,{}),(None,{}, {e['event_id']:'target missing'})]):
+  with patch.object(m,'report_witness_window',return_value=('2026-10-21','2026-10-21')),patch.object(m,'report_witness_runs',return_value=[]),patch.object(m.legacy,'read_bindings',return_value={}),patch.object(m.legacy,'runs_from_server',return_value=[]),patch.object(m.legacy.shadow,'verified_rows',side_effect=[(None,pred,{}),(None,{}, {e['event_id']:'target missing'})]):
    proof,errors=m.original_proofs({}, {}, {}, [e], [{'event_id':e['event_id']}],at,True)
   self.assertEqual(proof[e['event_id']],(True,False));self.assertIn(e['event_id'],errors)
  def test_r2_prediction_proof_survives_missing_target(self):
   m=self.module();at,e=self.event('r2');e.update(registration_run_id=1,source_run_id=2)
   from unittest.mock import Mock
-  with patch.object(m.r2,'runs_server',return_value=[]),patch.object(m,'report_r2_verifiers',return_value=(Mock(return_value=([],{e['event_id']:'target missing'})),Mock())),patch.object(m.f,'witness',return_value={'verified':True}):
+  with patch.object(m,'report_witness_window',return_value=('2026-10-21','2026-10-21')),patch.object(m,'report_witness_runs',return_value=[]),patch.object(m,'report_audit_jobs',return_value=[]),patch.object(m,'report_r2_verifiers',return_value=(Mock(return_value=([],{e['event_id']:'target missing'})),Mock())),patch.object(m.f,'witness',return_value={'verified':True}):
    proof,_=m.r2_proofs({}, {}, [e],[],at,True)
   self.assertEqual(proof[e['event_id']],(True,False))
  def test_failure_clears_previous_success_output(self):
