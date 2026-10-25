@@ -207,6 +207,14 @@ jobs:
       - name: Stop subsequent writers on fatal runtime integrity or publication failure
         if: always() && steps.deadline_service.outputs.fatal != 'false'
         run: exit 1
+      - name: Recover optional hourly source with fresh bytes after deadline capture
+        id: hourly_source_recovery
+        if: success() && steps.deadline_service.outputs.fatal == 'false' && steps.early_publish.outputs.hourly_source_failed == 'true'
+        continue-on-error: true
+        timeout-minutes: 3
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python hourly_publication_recovery.py
       - name: Backfill confirmed UTC 1H data with source-ingestion timestamps
         id: collect
         continue-on-error: true
@@ -410,6 +418,7 @@ jobs:
           if [ -d data/derived_4h_v1 ]; then git add -f data/derived_4h_v1; fi
           if [ -d data/feature_ablation_v1 ]; then git add -f data/feature_ablation_v1; fi
           if [ -d data/p0_operations ]; then git add -f data/p0_operations; fi
+          if [ -d data/hourly_publication_recovery_v1 ]; then git add -f data/hourly_publication_recovery_v1; fi
           for d in data/plus_evidence_v1_0/; do
             if [ -d "$d" ]; then git add -f "$d"; fi
           done
@@ -575,7 +584,7 @@ jobs:
         if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && (steps.minimal_prepare.outcome == 'failure' || steps.minimal_bind.outcome == 'failure' || steps.minimal_publication.outcome == 'failure' || steps.minimal_audit.outcome == 'failure')
         run: exit 1
       - name: Fail visibly on optional source refresh after preserving core publication and artifacts
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.early_publish.outputs.hourly_source_failed == 'true'
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.early_publish.outputs.hourly_source_failed == 'true' && (steps.hourly_source_recovery.outcome != 'success' || steps.hourly_source_recovery.outputs.recovered != 'true')
         run: exit 1
       - name: Fail on deadline service error after preserving evidence
         if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.deadline_service.outcome != 'success'
