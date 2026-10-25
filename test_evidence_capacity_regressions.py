@@ -55,6 +55,16 @@ class Transport(unittest.TestCase):
         with patch.object(inventory,'LIMIT',64):self.transfer(b'archive-container'*100)
         self.assertEqual(inventory.LIMIT,256*1024*1024)
 
+    def test_actual_published_inventory_reaches_stream_without_relaxing_object_cap(self):
+        artifact={'id':12581914557,'size_in_bytes':1410368543,
+                  'digest':'sha256:d6974f86bfffe7365e6d43f90e6b9cfea194c380acf493100c3959084c48a1d2'}
+        with tempfile.TemporaryDirectory() as d,patch.object(inventory,'github_response',side_effect=OSError('stream probe')) as response:
+            target=Path(d)/'inventory.zip'
+            with self.assertRaisesRegex(OSError,'stream probe'):inventory.download_artifact(artifact,target)
+            response.assert_called_once()
+            self.assertFalse(target.exists())
+        self.assertEqual(inventory.LIMIT,256*1024*1024)
+
     def test_transport_rejects_size_mismatch_and_hash_mismatch(self):
         for expected,sha in [(4,None),(3,'0'*64)]:
             with self.subTest(expected=expected),self.assertRaises(ValueError):self.transfer(b'abc',expected,sha)

@@ -11,8 +11,9 @@ ENDPOINT='https://oss-cn-hangzhou.aliyuncs.com'
 PREFIX='doge/evidence/'
 LIMIT=256*1024*1024
 # Transport container budget is separate from the unchanged per-object cap.
-# It matches the existing maximum extracted artifact size and is streamed to disk.
-ARTIFACT_LIMIT=1024*1024*1024
+# Covers the published 1.41 GB sharded inventory; both transport and extracted
+# containers remain bounded. The frozen per-object 256 MiB cap is unchanged.
+ARTIFACT_LIMIT=4*1024*1024*1024
 
 def digest(raw):return hashlib.sha256(raw).hexdigest()
 def utc(value):
