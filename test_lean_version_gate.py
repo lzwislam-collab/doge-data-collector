@@ -119,7 +119,7 @@ class VersionBoundary(unittest.TestCase):
         original = gate._object
         def changed(path):
             obj = original(path)
-            if str(path).endswith("config/phase2_forward_v2.json"):
+            if Path(path).as_posix().endswith("config/phase2_forward_v2.json"):
                 obj["protocol_id"] = "RENAMED_TO_LEAN_WITHOUT_FREEZE"
             return obj
         with patch.object(gate, "_object", side_effect=changed):
@@ -129,7 +129,7 @@ class VersionBoundary(unittest.TestCase):
     def test_unknown_or_extra_lean_output_directory_is_not_accepted(self):
         original_exists = Path.exists
         def path_exists(p):
-            if str(p).endswith("/data/lean_v1"):
+            if p.as_posix().endswith("/data/lean_v1"):
                 return True
             return original_exists(p)
         with patch.object(Path, "exists", path_exists):
