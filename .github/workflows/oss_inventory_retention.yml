@@ -19,7 +19,7 @@ on:
     workflows: ['Backfill DOGE BTC ETH 1H extreme-event research history', 'Publish frozen learned DOGE shadow candidates', 'Publish DOGE V2 R2 frozen forward evidence']
     types: [completed]
   pull_request:
-    paths: ['oss_inventory_retention.py', 'test_oss_inventory_retention.py', 'integration_oss_sdk.py', 'forecast_worm.py', 'test_forecast_worm.py', '.github/workflows/oss_inventory_retention.yml']
+    paths: ['oss_inventory_retention.py', 'test_oss_inventory_retention.py', 'test_evidence_capacity_regressions.py', 'integration_oss_sdk.py', 'forecast_worm.py', 'test_forecast_worm.py', '.github/workflows/oss_inventory_retention.yml']
 permissions:
   contents: read
   actions: read
@@ -36,9 +36,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: python -m pip install oss2==2.19.1 aliyun-python-sdk-core==2.16.1
+      - run: python -m pip install numpy==2.3.5 oss2==2.19.1 aliyun-python-sdk-core==2.16.1
       - name: Unit tests and mandatory real provider SDK compatibility
-        run: python -m unittest -q test_oss_inventory_retention integration_oss_sdk test_forecast_worm
+        run: python -m unittest -q test_oss_inventory_retention test_evidence_capacity_regressions integration_oss_sdk test_forecast_worm
   retain:
     needs: tests
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && (github.event_name != 'workflow_run' || (github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.event != 'pull_request' && github.event.workflow_run.repository.full_name == github.repository))

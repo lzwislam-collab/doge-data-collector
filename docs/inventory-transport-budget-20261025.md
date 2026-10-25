@@ -1,0 +1,5 @@
+# Inventory container transport repair — 2026-10-25
+
+Run 40197520251/job121181669339 failed before any download or OSS write: artifact12581914557 is 1410368543 bytes, SHA d6974f86bfffe7365e6d43f90e6b9cfea194c380acf493100c3959084c48a1d2, while the engineering container budget was 1073741824 bytes. Provenance and digest binding had already passed. This is a container capacity rejection, not evidence corruption.
+
+Increase only the outer ZIP transport/extraction budget to a bounded 4 GiB. Preserve the frozen 256 MiB stored object and shard limits, streamed 1 MiB reads, declared size and SHA verification, exact immutable object keys, historical receipts, and fail-closed provenance. No expired pre-target evidence is repaired or promoted. Tests reproduce rejection of the actual published metadata before implementation and retain corruption, oversize, path escape and partial cleanup coverage. Include capacity regressions in OSS CI and full Linux regression/integrity CI. A merge does not verify OSS custody; require actual staged artifact hash verification, per-object pinned-version readback and authentic new receipt before reporting storage success.
