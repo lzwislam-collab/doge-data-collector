@@ -1,0 +1,175 @@
+{
+  "schema": "PR75_C20AE26_OFFLINE_REVIEW_V1",
+  "reviewed_commit": "c20ae26979c6fb453a2dce0ffc6eb1ffbeccaf7a",
+  "scope": [
+    "PR75 provenance compatibility",
+    "double-failure cleanup and exception chains",
+    "all three offline acceptance tools' evidence publication",
+    "ZIP/capacity and frozen boundary regression"
+  ],
+  "linux_status": "PENDING_BY_USER_INSTRUCTION",
+  "production_operations_performed": false,
+  "new_findings": [
+    {
+      "priority": "P2",
+      "id": "LINUX-TOOL-EVIDENCE-OVERWRITE",
+      "fact": "offline_linux_inventory_checks.py used direct final-path write_text after tests, allowing an existing evidence file to be replaced and lacking the shared durable exclusive-publication path.",
+      "reproduction": "A new test with an existing evidence file reached the test runner instead of rejecting the output. It failed before the fix and passes after it.",
+      "impact": "Linux offline acceptance evidence output only; no evidence of actual Linux execution, historical overwrite or production incident.",
+      "fix": "After the unchanged Linux platform gate, reject existing/linked output before tests. Publish through shared write_evidence_json (temporary complete write+fsync, exclusive os.link).",
+      "acceptance": [
+        "Existing evidence rejected before test execution and bytes unchanged.",
+        "Preflight-to-publication race preserves competing evidence.",
+        "fsync+cleanup double failure groups both errors without a final success report.",
+        "Non-Linux still cannot publish Linux acceptance evidence."
+      ],
+      "production_logic_changed": false
+    }
+  ],
+  "new_test_methods": 9,
+  "source_compatibility": {
+    "frozen_producer_executed_on_synthetic_fixture": true,
+    "actual_cloud_operations": false,
+    "marker_generation": "Unmodified pit_retention_preparation.record_artifact",
+    "large_exact_ids": [
+      9007199254740992,
+      9007199254740996
+    ],
+    "events": [
+      "schedule",
+      "workflow_dispatch"
+    ],
+    "checks": [
+      "decimal-string producer IDs retain exact integer identity through stage and prepare_upload_inventory",
+      "bare/prefixed SHA256 digest inputs",
+      "optional artifact head fields absent remain compatible",
+      "previously verified skip does not query unused malformed locators and reports no fresh readback"
+    ]
+  },
+  "double_failure_checks": [
+    "exclusive publication collision plus temporary unlink denial retains both exceptions and foreign bytes",
+    "receipt replace plus unlink denial preserves old receipt and original exception chain",
+    "prior 11 source/failure regressions retained"
+  ],
+  "exclusive_publication_race": "Two threads rendezvous immediately before the real os.link; exactly one complete JSON winner, one FileExistsError loser, no private temporary residue.",
+  "linux_control_flow_tests": "Tests patch platform only to exercise negative paths with existing evidence or a synthetic FAILED result (testsRun=0, wasSuccessful=False). These are unit tests on Windows, never real Linux acceptance.",
+  "independent_review": "Separate read-only reviewer confirmed P2 output overwrite and minimal fix; no other reproducible blocker found.",
+  "inherited_capacity_evidence": {
+    "full_pressure_repeated_this_review": false,
+    "reason": "Production inventory consumer and both capacity stress tools are byte-identical to c20ae26; only Linux evidence output wiring changed.",
+    "reference_commit": "8b27c4b735796bdb8600753ab2f01e0c0cfe8016",
+    "reference_path": "docs/audits/pr75_3bf886b_reaudit_20261025.json",
+    "resource_transport_gib": 21,
+    "resource_expanded_gib": 20,
+    "consumer_allocated_gib": 41,
+    "synthetic_source_gib": 16,
+    "limits": "Synthetic resource bytes are not semantic inventory; separate STORE synthetic inventory passed frozen verifier. No assertion of production or Linux/cloud performance."
+  },
+  "unchanged_git_blobs": {
+    "oss_inventory_retention.py": "20f86b0263bb2c8f65a122fa7852e84069e0bb74",
+    "offline_inventory_stress.py": "daef3b8ec4d7401009099e8e74e580be9e6ce6a4",
+    "offline_inventory_boundary.py": "4ab122becc9638dfb3b94b3d110fd19a8679e2c6"
+  },
+  "remaining": [
+    {
+      "priority": "P2",
+      "issue": "Finite consumer budgets cannot cover theoretically unbounded frozen-producer metadata.",
+      "acceptance": "Stay fail-closed outside declared supported domain; frozen protocol unchanged."
+    },
+    {
+      "priority": "P2",
+      "issue": "Actual cloud disk/runtime, provider upload/readback and natural scheduler not verified.",
+      "acceptance": "Separate future authorized online acceptance; no manual/offline inference."
+    },
+    {
+      "priority": "P2",
+      "issue": "Witness discovery still has explicit date/run/attempt/job bounds and cannot prove deleted evidence completeness.",
+      "acceptance": "Reject unstable or over-limit scope; do not claim exhaustive historical coverage."
+    },
+    {
+      "priority": "P3",
+      "issue": "Real Linux symlink/runtime verification pending.",
+      "acceptance": "Actual Linux execution with zero required platform skips; no platform mock counts."
+    },
+    {
+      "priority": "P3",
+      "issue": "OS-denied deletion may leave reported residue. Hard-kill, arbitrary hostile concurrency, directory crash durability and cross-file/cloud transactions not guaranteed.",
+      "acceptance": "Keep failures visible and never claim residual files erased or crash-safe global transactions."
+    }
+  ],
+  "conclusion": "Known evidence-overwrite defect fixed in tested scope; no new P0/P1. Keep draft; Linux and cloud verification incomplete, no unconditional production merge recommendation.",
+  "checked_at_utc": "2026-10-25T00:43:35.799106+00:00",
+  "checked_at_jst": "2026-10-25T09:43:35.799106+09:00",
+  "regression": {
+    "total": 302,
+    "passed": 300,
+    "skipped": [
+      [
+        "test_latest_symlink_cannot_overwrite_outside_file (test_pit_retention_preparation.PreparationTests.test_latest_symlink_cannot_overwrite_outside_file)",
+        "platform cannot create symlinks; Linux CI must exercise this test"
+      ],
+      [
+        "test_output_directory_symlink_cannot_redirect_package_writes (test_pit_retention_preparation.PreparationTests.test_output_directory_symlink_cannot_redirect_package_writes)",
+        "platform cannot create symlinks; Linux CI must exercise this test"
+      ]
+    ],
+    "failures": 0,
+    "errors": 0,
+    "network_blocked": true,
+    "modules": [
+      "test_inventory_transactions",
+      "test_inventory_capacity",
+      "test_pr75_reaudit",
+      "test_minimal_audit_fixes",
+      "test_plus_shadow",
+      "test_oss_inventory_retention",
+      "test_report_cohort_regressions",
+      "test_plus_report_refresh",
+      "test_plus_scorecard",
+      "test_report_custody",
+      "test_report_evidence",
+      "test_pit_retention_preparation",
+      "test_pit_retention_daily",
+      "test_learned_shadow_v1",
+      "test_phase2_forward_v2",
+      "test_phase2_forward_runtime_v2",
+      "test_forecast_worm",
+      "integration_oss_sdk",
+      "test_pr75_offline_completion",
+      "test_pr75_final_boundaries",
+      "test_pr75_cleanup_closure",
+      "test_pr75_source_boundary",
+      "test_pr75_c20_review"
+    ],
+    "elapsed_seconds": 15.813,
+    "frozen_manifests": [
+      "config/e1_forward_registration_v1.json",
+      "config/learned_shadow_runtime_v1.json",
+      "config/phase2_forward_registration_v1.json",
+      "config/phase2_forward_registration_v2.json",
+      "config/phase3_registration_v1.json"
+    ],
+    "frozen_unique_files": 60,
+    "all_frozen_hashes_match": true,
+    "binary_exact_hash_files": [
+      "research/phase2_v2/5bba9522aa1fa9fb55a432fe0bf9706a9300476915628727d67bdbbd373f987a/model_archive.zip"
+    ],
+    "frozen_producer_raw_unchanged": true
+  },
+  "optimized_new_test_run": {
+    "python_flags": [
+      "-B",
+      "-O"
+    ],
+    "tests": 9,
+    "failures": 0,
+    "errors": 0,
+    "skips": 0
+  },
+  "freeze_scope_note": "Expanded check of five explicitly listed config sha256_lf maps: 60 unique files, text LF normalized and binary model ZIP exact bytes. This replaces use of an unexplained aggregate count in current reporting; prior versioned audit files remain unchanged.",
+  "local_harness_note": "First regression itself passed 302 tests/2 skips, but unversioned ad-hoc evidence serialization failed on unittest objects; corrected to string IDs and reran successfully. Partial local output excluded from published evidence.",
+  "modified_source_sha256": {
+    "offline_linux_inventory_checks.py": "9747c515fc704fa56f5f1510a0e31f38536fa4cfebad9228886410bd1e57c7ee",
+    "test_pr75_c20_review.py": "1bcbae97bfb698e37467cc89769cd7c24b8ee91d41133e9cc04ad711fb7f12d0"
+  }
+}
