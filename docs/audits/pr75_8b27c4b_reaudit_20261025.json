@@ -1,0 +1,202 @@
+{
+  "schema": "PR75_8B27C4B_OFFLINE_REVIEW_V1",
+  "reviewed_commit": "8b27c4b735796bdb8600753ab2f01e0c0cfe8016",
+  "checked_at_utc": "2026-10-25T00:08:11Z",
+  "linux_status": "PENDING_BY_USER_INSTRUCTION",
+  "production_operations_performed": false,
+  "new_finding": {
+    "priority": "P3",
+    "fact": "Malformed numeric marker IDs could be truncated; nested run IDs could compare equal as floats; supplied artifact head metadata was not cross-checked.",
+    "observed_production_incident": false,
+    "fix": "Require exact positive integer/decimal-string marker locators, exact integer nested run ID, valid run SHA and consistency of optional supplied artifact SHA/branch; reject pull_request_target.",
+    "compatibility": "Positive integer and decimal string locators including leading zeros pass; absent optional artifact head fields remain supported.",
+    "acceptance": "Malformed cases reject before download; malformed marker IDs reject before API; matching ordinary sources pass stage and upload preparation."
+  },
+  "new_test_methods": 11,
+  "review_focus": [
+    "failure cleanup and exception chains",
+    "exclusive durable offline evidence publication",
+    "source identifier binding",
+    "outer/inner ZIP limits and frozen boundaries"
+  ],
+  "unchanged_resource_functions": {
+    "download_artifact": true,
+    "extract_artifact": true,
+    "inventory_capacity": true,
+    "artifact_capacity": true,
+    "artifact_directory_preflight": true,
+    "validate_staged_packages": true,
+    "disk_budget": true,
+    "read_bounded": true,
+    "validate_inventory_references": true,
+    "verify_single_inventory": true,
+    "publish_inventory": true,
+    "prepare_upload_inventory": true,
+    "write_json_atomic": true,
+    "upload_inventory": true,
+    "upload_one": true,
+    "check_bucket": true,
+    "github_response": true
+  },
+  "inherited_full_pressure": {
+    "commit": "8b27c4b735796bdb8600753ab2f01e0c0cfe8016",
+    "evidence": "docs/audits/pr75_3bf886b_reaudit_20261025.json",
+    "repeated_this_review": false,
+    "reason": "Resource tools and 17 relevant resource/publication/cleanup functions unchanged; only stage metadata guards changed.",
+    "resource_transport_gib": 21,
+    "resource_expanded_gib": 20,
+    "resource_consumer_gib": 41,
+    "reserve_mib": 256,
+    "synthetic_inventory_source_gib": 16,
+    "limitations": "Resource payload placeholders are not semantic inventory; separate STORE synthetic inventory accepted by frozen verifier. No absolute maximum for frozen producer metadata."
+  },
+  "remaining": [
+    "Linux symlink execution pending (2 tests).",
+    "Real cloud capacity, upload/readback and natural scheduling not exercised.",
+    "Finite consumer budgets do not accept unbounded frozen producer metadata.",
+    "OS-denied deletion can retain explicitly reported residue; hard-kill cleanup and arbitrary hostile concurrent mutation are not guaranteed.",
+    "No comprehensive review of production model accuracy, external market sources, Sheets/E1 or deleted evidence."
+  ],
+  "conclusion": "No new known blocking defect in tested PR scope after hardening. Keep draft; Linux and online acceptance incomplete.",
+  "tests": {
+    "total": 293,
+    "passed": 291,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 2,
+    "skipped_tests": [
+      [
+        "test_latest_symlink_cannot_overwrite_outside_file (test_pit_retention_preparation.PreparationTests.test_latest_symlink_cannot_overwrite_outside_file)",
+        "platform cannot create symlinks; Linux CI must exercise this test"
+      ],
+      [
+        "test_output_directory_symlink_cannot_redirect_package_writes (test_pit_retention_preparation.PreparationTests.test_output_directory_symlink_cannot_redirect_package_writes)",
+        "platform cannot create symlinks; Linux CI must exercise this test"
+      ]
+    ],
+    "network_blocked": true,
+    "modules": [
+      "test_inventory_transactions",
+      "test_inventory_capacity",
+      "test_pr75_reaudit",
+      "test_minimal_audit_fixes",
+      "test_plus_shadow",
+      "test_oss_inventory_retention",
+      "test_report_cohort_regressions",
+      "test_plus_report_refresh",
+      "test_plus_scorecard",
+      "test_report_custody",
+      "test_report_evidence",
+      "test_pit_retention_preparation",
+      "test_pit_retention_daily",
+      "test_learned_shadow_v1",
+      "test_phase2_forward_v2",
+      "test_phase2_forward_runtime_v2",
+      "test_forecast_worm",
+      "integration_oss_sdk",
+      "test_pr75_offline_completion",
+      "test_pr75_final_boundaries",
+      "test_pr75_cleanup_closure",
+      "test_pr75_source_boundary"
+    ],
+    "frozen_union_files": 33,
+    "all_frozen_hashes_match": true,
+    "frozen_producer_unchanged": true
+  },
+  "fresh_resource_smoke": {
+    "schema": "OFFLINE_RESOURCE_BOUNDARY_V1",
+    "full": false,
+    "platform": "win32",
+    "python_version": "3.12.14",
+    "synthetic_only": true,
+    "network_blocked": true,
+    "semantic_inventory_test": false,
+    "frozen_verifier_executed": false,
+    "zip_member_payloads_are_synthetic_resource_bytes": true,
+    "transport_and_extraction_passed": true,
+    "outer_crc_checked_during_extraction": true,
+    "temporary_files_cleaned": true,
+    "capacity": {
+      "archive_bytes": 8388608,
+      "expanded_bytes": 4194304,
+      "zip_containers": 2,
+      "metadata_files": 2,
+      "entry_count": 4,
+      "disk_reserve_bytes": 268435456,
+      "peak_additional_disk_bytes": 281018368,
+      "transport_cap_bytes": 22548578304,
+      "expanded_cap_bytes": 21474836480,
+      "basis": "declared ZIP sizes, checked before extraction; includes simultaneous archive and extracted bytes",
+      "frozen_producer_has_finite_container_maximum": false
+    },
+    "observation": {
+      "consumer_allocated_bytes": 12582912,
+      "fixture_allocated_bytes": 0,
+      "peak_process_rss_bytes": 36159488
+    },
+    "elapsed_seconds": 0.031,
+    "limitations": [
+      "No claim that zero-filled inner ZIP/JSON files are valid inventory",
+      "Tests consumer transport/extraction resource budgets only; synthetic inventory accepted by the frozen verifier has separate evidence",
+      "Windows measurements do not establish Linux symlink behavior or cloud runner capacity",
+      "File allocation and RSS are process/private-file observations, not entire OS/volume maxima"
+    ]
+  },
+  "fresh_inventory_smoke": {
+    "schema": "OFFLINE_INVENTORY_CAPACITY_STRESS_V1",
+    "platform": "win32",
+    "linux_runtime": false,
+    "linux_symlink_tests_verified": false,
+    "python_version": "3.12.14",
+    "os_release": "11",
+    "synthetic_only": true,
+    "frozen_verifier_passed": true,
+    "shards": 64,
+    "raw_source_bytes": 67108864,
+    "artifact_bytes": 67170878,
+    "fixture_allocated_bytes": 12648448,
+    "capacity": {
+      "archive_bytes": 67170878,
+      "expanded_bytes": 67155924,
+      "zip_containers": 64,
+      "metadata_files": 2,
+      "entry_count": 66,
+      "disk_reserve_bytes": 268435456,
+      "peak_additional_disk_bytes": 402762258,
+      "transport_cap_bytes": 22548578304,
+      "expanded_cap_bytes": 21474836480,
+      "basis": "declared ZIP sizes, checked before extraction; includes simultaneous archive and extracted bytes",
+      "frozen_producer_has_finite_container_maximum": false
+    },
+    "observations": [
+      {
+        "phase": "download_verified",
+        "allocated_private_bytes": 79819861,
+        "peak_process_rss_bytes": 42024960
+      },
+      {
+        "phase": "expanded_archive_still_present",
+        "allocated_private_bytes": 146975785,
+        "peak_process_rss_bytes": 42024960
+      },
+      {
+        "phase": "frozen_verifier_passed",
+        "allocated_private_bytes": 79805947,
+        "peak_process_rss_bytes": 42258432
+      }
+    ],
+    "elapsed_seconds": 2.406,
+    "limitations": [
+      "STORE synthetic ZIPs accepted by the unchanged frozen verifier; not real production artifacts",
+      "No finite maximum frozen-producer container size; this proves the tested consumer domain only"
+    ]
+  },
+  "unchanged_resource_tool_sha256": {
+    "offline_inventory_stress.py": "7e0a95e00e662e643dd6d10100e8b109d9312e8d107615d84781839ac440f0d6",
+    "offline_inventory_boundary.py": "294175c301f0bd10b0075cf85732f929d266f0e4463b0fe2a44e175d581a2dee"
+  },
+  "source_sha256": {
+    "oss_inventory_retention.py": "2652725fdeee3c12dafb2e32b699a603dd394852162c89df9634dafd11794b0c",
+    "test_pr75_source_boundary.py": "d8ebdf82381b2447cc72944545911cc0daba6ed381fea45207128439cb9b6ea0"
+  }
+}

@@ -380,6 +380,13 @@ def download_artifact(artifact,destination):
         if created:destination.unlink(missing_ok=True)
         raise
 
+def source_identifier(value):
+    """Keep integer locators exact; never truncate floats or treat bool as an ID."""
+    if type(value) is str and value.isdecimal():value=int(value)
+    if type(value) is not int or value<=0:raise ValueError('invalid source identifier')
+    return value
+
+
 def stage(root,force=False):
     root=reject_link_ancestors(root).resolve();base=root/'data/pit_retention_preparation_v1'
     prior=read_inventory_json(base/'latest.json');marker=read_inventory_json(base/'artifact_publication.json')
@@ -396,12 +403,19 @@ def stage(root,force=False):
             'fresh_object_readback_performed':False,'previous_receipt':str(previous.relative_to(root)),
             'independent_custodian_verified':False})
         return False
-    artifact=github('/actions/artifacts/'+str(int(marker['artifact_id'])))
-    run=github('/actions/runs/'+str(int(marker['run_id'])))
-    if (type(artifact.get('id')) is not int or artifact['id']!=int(marker['artifact_id'])
-        or type(run.get('id')) is not int or run['id']!=int(marker['run_id'])
-        or artifact.get('expired') is not False or artifact['workflow_run']['id']!=int(marker['run_id']) or
-        run['head_branch']!='main' or run['event']=='pull_request' or run['repository']['full_name']!='lzwislam-collab/doge-data-collector' or
+    artifact_id=source_identifier(marker.get('artifact_id'));run_id=source_identifier(marker.get('run_id'))
+    artifact=github('/actions/artifacts/'+str(artifact_id))
+    run=github('/actions/runs/'+str(run_id))
+    embedded=artifact.get('workflow_run')
+    if not isinstance(embedded,dict):raise ValueError('source artifact run identity missing')
+    if (type(artifact.get('id')) is not int or artifact['id']!=artifact_id
+        or type(run.get('id')) is not int or run['id']!=run_id
+        or artifact.get('expired') is not False
+        or type(embedded.get('id')) is not int or embedded['id']!=run_id
+        or not isinstance(run.get('head_sha'),str) or not re.fullmatch('[a-f0-9]{40}',run['head_sha'])
+        or embedded.get('head_sha',run['head_sha'])!=run['head_sha']
+        or embedded.get('head_branch',run.get('head_branch'))!=run.get('head_branch') or
+        run['head_branch']!='main' or run['event'] in ('pull_request','pull_request_target') or run['repository']['full_name']!='lzwislam-collab/doge-data-collector' or
         run['path']!='.github/workflows/okx_hourly_extreme_history.yml' or
         artifact.get('digest','').removeprefix('sha256:')!=marker['artifact_archive_sha256']):
         raise ValueError('source artifact provenance mismatch')
