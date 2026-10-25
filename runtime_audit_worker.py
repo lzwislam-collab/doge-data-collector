@@ -64,8 +64,13 @@ class Auditor:
         self.root = Path(root)
         self.process = None
         self.directory = None
+        self.inputs = None
 
     def poll(self):
+        # An issuer/target watcher can change inputs while a read-only audit is
+        # running. Never spend the next ticks waiting for an obsolete snapshot.
+        if self.process is not None and self.inputs != fingerprint(self.root):
+            self.close()
         if self.process is not None:
             if self.process.poll() is None:
                 if time.monotonic()-self.started > 600:
@@ -84,6 +89,7 @@ class Auditor:
         head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=self.root).decode().strip()
         self.directory = tempfile.TemporaryDirectory(prefix='doge-audit-result-')
         self.started = time.monotonic()
+        self.inputs = fingerprint(self.root)
         self.process = subprocess.Popen([sys.executable, str(Path(__file__).resolve()),
             str(self.root), head, str(Path(self.directory.name)/'result.json')],
             cwd=self.root, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,

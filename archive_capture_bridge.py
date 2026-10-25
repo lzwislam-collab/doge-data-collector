@@ -89,7 +89,7 @@ def start(root, snapshot, control):
     trusted()
     control.mkdir(exist_ok=False)
     freeze(root,snapshot)
-    # All PIT publication/Git writes are already complete at this point.
+    # Diagnostics/Git writes are complete; PIT publication waits until drain.
     # Upload actions only read the independent snapshot; the child is now the
     # sole producer. Its GITHUB_OUTPUT must not alter the upload step outputs.
     env = dict(os.environ, GITHUB_OUTPUT=str(control/'runtime.outputs'))
@@ -97,13 +97,16 @@ def start(root, snapshot, control):
         process = subprocess.Popen([sys.executable,str(Path(__file__).resolve()),'worker',
             '--control',str(control)],cwd=root,env=env,stdout=log,stderr=log,start_new_session=True)
     with (control/'started.json').open('x',encoding='utf-8') as stream:
-        json.dump({'pid':process.pid,'started_at_utc':datetime.now(timezone.utc).isoformat()},stream)
+        json.dump({'pid':process.pid,'started_at_utc':datetime.now(timezone.utc).isoformat(),
+                   'qualified_stop_required':os.environ.get('DOGE_ARCHIVE_QUALIFIED_DRAIN')=='1'},stream)
 
 
 def worker(root, control):
     trusted()
-    code = subprocess.call([sys.executable,str(root/'runtime_deadline_service.py'),
-        '--duration-seconds','600','--stop-file',str(control/'stop')],cwd=root)
+    args = [sys.executable,str(root/'runtime_deadline_service.py'),
+        '--duration-seconds','600','--stop-file',str(control/'stop')]
+    if os.environ.get('DOGE_ARCHIVE_QUALIFIED_DRAIN') == '1': args.append('--require-qualified-stop')
+    code = subprocess.call(args,cwd=root)
     atomic_json(control/'completed.json',{'exit_code':code,'ended_at_utc':datetime.now(timezone.utc).isoformat()})
 
 
@@ -111,7 +114,9 @@ def stop(root, snapshot, control):
     trusted()
     if not (control/'started.json').exists(): raise ValueError('archive capture was not started')
     (control/'stop').touch(exist_ok=True)
-    deadline = time.monotonic()+180
+    started = json.loads((control/'started.json').read_text(encoding='utf-8'))
+    required = started.get('qualified_stop_required') is True
+    deadline = time.monotonic()+(420 if required else 180)
     while not (control/'completed.json').exists():
         if time.monotonic() >= deadline: raise TimeoutError('archive capture has not drained; no success claimed')
         time.sleep(1)
@@ -120,7 +125,14 @@ def stop(root, snapshot, control):
     verify(snapshot)
     outputs = (control/'runtime.outputs').read_text(encoding='utf-8').splitlines()
     if not outputs or outputs[-1] != 'fatal=false': raise ValueError('archive capture final publication unsafe')
+    formal = {}
+    if required:
+        formal = json.loads((root/'data/runtime_deadline_v1/latest.json').read_text(encoding='utf-8'))
+        if formal.get('qualified_stop_satisfied') is not True:
+            raise ValueError('archive capture ended without a new formally qualified book')
     receipt = dict(result, status='verified', snapshot_manifest_sha256=digest(snapshot/'manifest.json'),
+                   qualified_stop_required=required,qualified_stop_satisfied=formal.get('qualified_stop_satisfied'),
+                   last_qualified_book_sha256=formal.get('last_qualified_book_sha256'),
                    historical_backfill=False,economic_acceptance_passed=False)
     path = root/'data/runtime_deadline_v1'/('archive_bridge_'+uuid.uuid4().hex+'.json')
     with path.open('x',encoding='utf-8') as stream: json.dump(receipt,stream)
