@@ -7,6 +7,7 @@
 ## 目录和边界
 
 - `run.py`：唯一验收入口，执行下述两个阶段；不安装依赖，不访问生产服务。
+- `launch.sh`：推荐启动包装器，先校验包，再调用入口；独占保存 stdout/stderr 与实际退出码，包含 Python 启动、目录和 JSON 发布失败。
 - `manifest.json`：固定原测试 ID、原严格工具以及仓库根目录 Python 源码、配置、60 个冻结文件的哈希。
 - `requirements.txt`：预置依赖说明，当前不执行安装。
 - `PREPARED.json`：仅记录准备和静态检查状态，不包含验收成功声明。
@@ -23,7 +24,9 @@
 |系统|真实 Linux；`sys.platform`、内核系统名均须为 Linux；Windows 模拟不接受|
 |Python|CPython **3.12.14**，用 `-I -B -X utf8`，不能使用 `-O`|
 |第三方依赖|Linux 原生 **NumPy 2.3.5**，已安装在所选解释器/venv 的 site-packages|
+|原生运行库|解释器需具备 zlib/ZIP 压缩支持；NumPy 二进制须匹配 CPU 架构、Linux libc 和 CPython 3.12 ABI，所需动态库须已离线备齐|
 |Git|预先可用的 Git，本地检出有可读 HEAD；运行时不 fetch|
+|命令工具|POSIX `/bin/sh`、`sha256sum` 和 `cat`；包装器用 `sh` 调用，不依赖可执行位或 Bash|
 |文件系统|允许创建真实文件和目录符号链接；证据输出支持同目录硬链接、写入与 fsync|
 |网络|预先离线/隔离的运行环境；不需要任何云凭据。运行器另阻断测试进程的连接、DNS 和 datagram 发送|
 |空间|原源码/冻结资产之外，建议至少 1 GiB 可写余量；本包不执行 16/41 GiB 容量压力测试|
@@ -54,17 +57,17 @@
 将包解压/保存到匹配检出的 `offline_acceptance/pr75_linux/`。以下路径都是占位示例，使用已经存在的离线环境；不要在当前 Windows 会话照抄执行。
 
 ```sh
-set -eu
-cd /absolute/path/to/doge-data-collector
-sha256sum -c offline_acceptance/pr75_linux/SHA256SUMS
-
-/absolute/path/to/prepared-venv/bin/python -I -B -X utf8 \
-  offline_acceptance/pr75_linux/run.py \
-  --repo /absolute/path/to/doge-data-collector \
-  --output-dir /absolute/path/to/existing-evidence-parent/pr75-linux-run-001
+sh /absolute/path/to/doge-data-collector/offline_acceptance/pr75_linux/launch.sh \
+  /absolute/path/to/prepared-venv/bin/python \
+  /absolute/path/to/doge-data-collector \
+  /absolute/path/to/existing-evidence-parent/pr75-linux-run-001
 ```
 
 输出的父目录必须已存在；`pr75-linux-run-001` 必须不存在，且位于仓库之外。再次使用同一输出目录会拒绝执行，绝不覆盖旧证据。失败输出保留供检查；不要通过删除旧证据或自动重跑来获得 PASS。
+
+三个参数均须替换为绝对路径，路径及其父目录须为普通目录，不使用符号链接。包装器可从任意当前目录调用，运行器会进入指定仓库并在结束时恢复目录。仓库须包含这个版本的完整验收包，不能用另一个检出的入口验证此检出。包文件统一 LF；复制时不要转换行尾，校验不符必须停止。
+
+包装器在输出目录旁另生成 `pr75-linux-run-001.launcher.log` 和 `pr75-linux-run-001.exit-code.txt`。三处路径均须不存在；标准输出、标准错误和退出码独立于 JSON 证据保留。若父目录不可写、磁盘已满、进程被硬杀等导致这些文件也无法保存，只能依据终端错误判失败，不能保证不可写介质上有完整证据。
 
 运行器对源码清单和包自身做前后核验，发生异常时仍尝试后核验并记录异常；禁止 Python bytecode 写入，记录实际 Git HEAD、解释器、NumPy、系统和内核。测试进程的网络阻断不等于已经验证内核网络 namespace；`kernel_network_isolation_verified` 明确为 false，系统离线条件应由运行环境本身提供。
 
@@ -76,6 +79,7 @@ sha256sum -c offline_acceptance/pr75_linux/SHA256SUMS
 |`five-tests.log` / `five-tests.json`|原 5 项的日志、实际执行/通过 ID、失败、错误与跳过详情|
 |`strict-inventory.log` / `strict-inventory.json`|原严格 Linux 工具的日志与原生报告|
 |`summary.json`|本包最终结论、时间、前后输入哈希、两阶段状态及异常详情|
+|输出目录旁的 `.launcher.log` / `.exit-code.txt`|启动包装器保存的完整标准输出/错误与整体退出码；用于保留初始化或 JSON 发布失败证据|
 |`evidence-sha256.json`|实际生成的上述日志/JSON 的 SHA256，包含 summary 本身|
 |`temporary/`|私有合成测试临时区；通常测试结束后为空，保留外层目录|
 
@@ -91,7 +95,9 @@ JSON 先在同目录完整写入、flush/fsync，再用 `os.link` 独占发布�
 2. 原 5 项实际 ID、通过 ID均与上表完全一致，恰好 5 项；失败、错误、跳过均为 0。
 3. 原严格工具报告 `tests_run=4`、`linux_verified=true`；失败、错误、跳过均为 0，工具无异常退出。
 4. 运行前后源码、配置、包自身和 60 个冻结文件核验一致；实际执行总数为 9、唯一 ID 数为 7。
+   除 LF 规范化身份校验外，同一次执行前后还核对源文件与冻结文件的原始字节 SHA256，行尾变化也不能放行；测试临时区有残留则不通过。
 5. `summary.json` 为 `status=PASS` 且 `linux_verified=true`，证据文件完整并与哈希表一致，整个运行器退出码为 **0**。
+   包装器的 `.exit-code.txt` 同样必须为 0；JSON 发布或清理失败，即使已有 PASS 字段，也以整体非零退出为失败。
 
 只看 PASS 字段、退出码、部分测试日志或 Windows mock 中任意一项都不够。任何 skip、缺件、依赖不符、改动输入、取消、异常或输出失败均不能关闭 Linux 待验。
 

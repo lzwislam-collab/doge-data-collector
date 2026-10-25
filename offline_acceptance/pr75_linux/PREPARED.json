@@ -1,8 +1,8 @@
 {
   "schema": "PR75_LINUX_PREPARATION_V1",
   "status": "NOT_RUN",
-  "prepared_at_utc": "2026-10-25T05:16:44.135101+00:00",
-  "prepared_against": "44c278fd4942f431a0f58c63ceedab0afe5078be",
+  "prepared_at_utc": "2026-10-25T08:09:44.168832+00:00",
+  "prepared_against": "b7d71268fe8f867d777c6b30d31b322749109b07",
   "acceptance_executed": false,
   "environment_installed": false,
   "linux_pending": 5,
@@ -12,19 +12,79 @@
     "planned_executions": 9,
     "unique_test_ids": 7,
     "source_sha256_lf_count": 293,
-    "source_matches_remote_parent": true,
     "frozen_hashes_matched": 60,
-    "independent_static_review": "no blocking findings; no execution"
+    "import_time_modules": [
+      "evidence_append_guard",
+      "factor_evaluation_v1",
+      "forward_execution_evidence",
+      "learned_shadow_bundle",
+      "learned_shadow_v1",
+      "offline_inventory_stress",
+      "offline_linux_inventory_checks",
+      "oss_inventory_retention",
+      "phase1_research",
+      "phase1_research_audit",
+      "phase2_factor_library",
+      "phase2_forward_runtime_v2",
+      "phase2_forward_v2",
+      "phase2_models_v2",
+      "phase2_research",
+      "phase3_batches",
+      "phase3_independent",
+      "phase3_lifecycle",
+      "phase3_runtime",
+      "pit_retention_preparation",
+      "prediction_release_control",
+      "test_inventory_capacity",
+      "test_phase2_research",
+      "test_pit_retention_preparation",
+      "test_prediction_release_control",
+      "user_managed_retention_v2"
+    ],
+    "third_party_imports": [
+      "numpy"
+    ],
+    "shell_failure_control_text_review": true,
+    "independent_static_review": "no blocking or important findings; no execution"
   },
+  "repairs": [
+    {
+      "issue": "Initialization hashed manifest outside error handler",
+      "repair": "Move bundle reads/checksums under recorded preflight; launcher captures earlier failures"
+    },
+    {
+      "issue": "No saved startup stderr/exit code",
+      "repair": "POSIX launcher uses exclusive logs and exit record; checksum/cd failures explicitly stop"
+    },
+    {
+      "issue": "Current directory and runner/repository could differ",
+      "repair": "Bind bundle path to repository; use contextlib.chdir"
+    },
+    {
+      "issue": "Package checksums only external; normalized identity could miss line-ending mutation",
+      "repair": "Verify checksum inventory internally; compare raw pre/post hashes too"
+    },
+    {
+      "issue": "Interrupted phases lost partial executed IDs",
+      "repair": "Keep five-test progress in summary and strict IDs in finally"
+    },
+    {
+      "issue": "Temporary cleanup residue not an explicit overall gate",
+      "repair": "Record residue and require empty temporary directory"
+    }
+  ],
   "files_sha256": {
-    "run.py": "8a1898ca0989f4e4db8944f126c11f85f3bcf1ebe975257588ec8f8822e19c5a",
-    "README.zh-CN.md": "a7690b9598337ecb8e7d84d4727d64ac0882bebbb8751ed824f5772b14c235ee",
+    "run.py": "ef74293552c5f008098589b32faf76593f947e724c4d2407872a20b6bb75020b",
+    "launch.sh": "bd8a7744eaca21af9cb51ec1b48bf388133a585490002a24310f10631d868b76",
+    "manifest.json": "a8cd7fefdb0b1887d77292d34f3d4773e22af348b1e961dd0c038c81118b3d45",
     "requirements.txt": "f17d5d1eaaab27c16cb92ade04c41bfe8196f09e3be952827643671916d82efd",
-    "manifest.json": "a8cd7fefdb0b1887d77292d34f3d4773e22af348b1e961dd0c038c81118b3d45"
+    "README.zh-CN.md": "af0736eea41e63363d151965f3b8f7036896783f658a86b9fcaed79936aa5096"
   },
   "limitations": [
-    "No Linux execution or runtime validation performed",
-    "Requires matching offline repository with frozen assets and pre-provisioned native Linux dependencies",
-    "Preparation cannot close pending tests or authorize production operations"
+    "No runner, launcher or test execution/import performed",
+    "Shell reviewed as text; native Linux shell/runtime verification pending",
+    "Requires matching offline repository/frozen assets and pre-provisioned native NumPy dependencies",
+    "Unwritable media or hard kill cannot guarantee evidence persistence",
+    "All five Linux tests remain pending"
   ]
 }

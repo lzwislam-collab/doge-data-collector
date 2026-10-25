@@ -23,6 +23,22 @@ FIVE = [
     "test_prediction_release_control.Release.test_release_namespace_parent_symlink_rejected",
 ]
 
+BUNDLE_FILES = ("run.py", "launch.sh", "manifest.json", "requirements.txt", "README.zh-CN.md", "PREPARED.json", "SHA256SUMS")
+
+
+def verify_bundle(bundle):
+    expected_names = {"offline_acceptance/pr75_linux/" + name for name in BUNDLE_FILES if name != "SHA256SUMS"}
+    recorded = {}
+    for line in (bundle / "SHA256SUMS").read_text(encoding="utf-8").splitlines():
+        digest, name = line.split("  ", 1)
+        if name not in expected_names or name in recorded or len(digest) != 64:
+            raise ValueError("invalid/duplicate package checksum entry")
+        recorded[name] = digest
+        if sha256(reject_links(bundle / Path(name).name)) != digest:
+            raise ValueError("package checksum mismatch: " + name)
+    if set(recorded) != expected_names:
+        raise ValueError("incomplete package checksum list")
+
 
 def sha256(path):
     value = hashlib.sha256()
@@ -74,6 +90,7 @@ def check_inputs(repo, manifest):
             raise ValueError("unsafe manifest path")
         path = reject_links(repo / relative)
         raw = path.read_bytes()
+        observed["raw:" + name] = hashlib.sha256(raw).hexdigest()
         observed[name] = hashlib.sha256(raw.replace(b"\r\n", b"\n")).hexdigest()
         if observed[name] != expected:
             raise ValueError("source/config digest mismatch: " + name)
@@ -83,6 +100,7 @@ def check_inputs(repo, manifest):
             raise ValueError("unsafe frozen path")
         path = reject_links(repo / relative)
         raw = path.read_bytes()
+        observed["raw-frozen:" + name] = hashlib.sha256(raw).hexdigest()
         if name not in manifest["frozen_binary_exact"]:
             raw = raw.replace(b"\r\n", b"\n")
         actual = hashlib.sha256(raw).hexdigest()
@@ -93,10 +111,12 @@ def check_inputs(repo, manifest):
 
 
 class RecordedResult(unittest.TextTestResult):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, progress, **kwargs):
         super().__init__(*args, **kwargs)
         self.executed = []
         self.passed = []
+        progress["started_ids"] = self.executed
+        progress["passed_ids"] = self.passed
 
     def startTest(self, test):
         self.executed.append(test.id())
@@ -120,6 +140,7 @@ def network_guard():
 
 
 def execute(repo, output, manifest, report):
+    report["phase"] = "environment_preflight"
     if sys.implementation.name != "cpython" or platform.python_version() != "3.12.14":
         raise RuntimeError("pre-provisioned CPython 3.12.14 required")
     if not sys.flags.isolated or not sys.dont_write_bytecode or not sys.flags.utf8_mode or sys.flags.optimize:
@@ -147,9 +168,12 @@ def execute(repo, output, manifest, report):
     report["real_symlink_probe"] = True
     with network_guard():
         report["python_network_guard"] = True
+        report["phase"] = "five_original_tests"
+        report["five_progress"] = {}
         with (output / "five-tests.log").open("x", encoding="utf-8") as log:
             with contextlib.redirect_stdout(log), contextlib.redirect_stderr(log):
-                result = unittest.TextTestRunner(stream=log, verbosity=2, resultclass=RecordedResult).run(
+                result = unittest.TextTestRunner(stream=log, verbosity=2, resultclass=lambda *a, **kw: RecordedResult(
+                    *a, progress=report["five_progress"], **kw)).run(
                     unittest.defaultTestLoader.loadTestsFromNames(FIVE))
         five = {"tests_run": result.testsRun, "executed": result.executed, "passed": result.passed,
                 "failures": [[str(t), trace] for t, trace in result.failures],
@@ -159,6 +183,7 @@ def execute(repo, output, manifest, report):
                             and result.executed == FIVE and result.passed == FIVE)
         publish(output / "five-tests.json", five)
         report["five_tests_verified"] = five["verified"]
+        report["phase"] = "strict_inventory_tool"
         import offline_linux_inventory_checks as strict
         strict_error = None
         strict_executed = []
@@ -168,17 +193,18 @@ def execute(repo, output, manifest, report):
             strict_executed.append(test.id())
             return original_start(result, test)
 
-        with (output / "strict-inventory.log").open("x", encoding="utf-8") as log:
-            with contextlib.redirect_stdout(log), contextlib.redirect_stderr(log):
-                try:
+        try:
+            with (output / "strict-inventory.log").open("x", encoding="utf-8") as log:
+                with contextlib.redirect_stdout(log), contextlib.redirect_stderr(log):
                     with patch.object(unittest.TextTestResult, "startTest", observe_start), patch.object(
                         sys, "argv", ["offline_linux_inventory_checks.py", "--output", str(output / "strict-inventory.json")]
                     ):
                         strict.main()
-                except SystemExit as error:
-                    strict_error = str(error)
-        report["strict_tool_error"] = strict_error
-        report["strict_executed_ids"] = strict_executed
+        except SystemExit as error:
+            strict_error = str(error)
+        finally:
+            report["strict_tool_error"] = strict_error
+            report["strict_executed_ids"] = strict_executed
         strict_result = json.loads((output / "strict-inventory.json").read_bytes())
         report["strict_tool_verified"] = (strict_error is None and strict_result.get("linux_verified") is True
                                           and strict_result.get("platform", "").startswith("linux")
@@ -187,6 +213,7 @@ def execute(repo, output, manifest, report):
                                           and all(strict_result.get(name) == 0 for name in ("failures", "errors", "skipped")))
         report["observed_total_executions"] = len(result.executed) + len(strict_executed)
         report["observed_unique_tests"] = len(set(result.executed + strict_executed))
+        report["phase"] = "tests_completed"
 
 
 def main():
@@ -205,7 +232,6 @@ def main():
     bundle = Path(__file__).absolute().parent
     report = {"schema": "PR75_LINUX_OFFLINE_ACCEPTANCE_V1", "status": "NOT_VERIFIED", "linux_verified": False,
               "started_at_utc": datetime.now(timezone.utc).isoformat(), "repository": str(repo),
-              "bundle_runner_sha256": sha256(Path(__file__)), "manifest_sha256": sha256(bundle / "manifest.json"),
               "expected_five_tests": FIVE, "expected_strict_executions": 4,
               "expected_total_executions": 9, "expected_unique_tests": 7,
               "python_network_guard": False, "kernel_network_isolation_verified": False,
@@ -215,12 +241,16 @@ def main():
     original_tempdir = tempfile.tempdir
     tempfile.tempdir = str(output / "temporary")
     try:
-        report["bundle_before"] = {name: sha256(bundle / name) for name in (
-            "run.py", "manifest.json", "requirements.txt", "README.zh-CN.md", "PREPARED.json", "SHA256SUMS")}
+        report["phase"] = "bundle_preflight"
+        if reject_links(bundle) != repo / "offline_acceptance/pr75_linux":
+            raise ValueError("runner must belong to the specified repository")
+        report["bundle_before"] = {name: sha256(reject_links(bundle / name)) for name in BUNDLE_FILES}
+        verify_bundle(bundle)
+        report["bundle_checksums_verified"] = True
         manifest = json.loads((bundle / "manifest.json").read_bytes())
         if manifest.get("schema") != "PR75_LINUX_SOURCE_MANIFEST_V1" or manifest.get("five_tests") != FIVE:
             raise ValueError("wrong package manifest/test set")
-        with patch.dict(os.environ, {"GIT_NO_LAZY_FETCH": "1", "GIT_TERMINAL_PROMPT": "0"}):
+        with contextlib.chdir(repo), patch.dict(os.environ, {"GIT_NO_LAZY_FETCH": "1", "GIT_TERMINAL_PROMPT": "0"}):
             execute(repo, output, manifest, report)
     except BaseException as error:
         report["error_type"] = type(error).__name__
@@ -237,13 +267,20 @@ def main():
                 report["input_postcheck_error"] = {"type": type(error).__name__, "error": str(error)}
         if "bundle_before" in report:
             try:
-                report["bundle_after"] = {name: sha256(bundle / name) for name in report["bundle_before"]}
+                report["bundle_after"] = {name: sha256(reject_links(bundle / name)) for name in report["bundle_before"]}
                 report["bundle_unchanged"] = report["bundle_before"] == report["bundle_after"]
             except BaseException as error:
                 report["bundle_unchanged"] = False
                 report["bundle_postcheck_error"] = {"type": type(error).__name__, "error": str(error)}
+        try:
+            report["temporary_residue"] = sorted(str(p.relative_to(output)) for p in (output / "temporary").iterdir())
+            report["temporary_clean"] = not report["temporary_residue"]
+        except BaseException as error:
+            report["temporary_clean"] = False
+            report["temporary_inspection_error"] = {"type": type(error).__name__, "error": str(error)}
     report["linux_verified"] = ("error_type" not in report and all(report.get(name) is True for name in (
-        "five_tests_verified", "strict_tool_verified", "inputs_unchanged", "bundle_unchanged", "real_symlink_probe"))
+        "five_tests_verified", "strict_tool_verified", "inputs_unchanged", "bundle_unchanged", "real_symlink_probe",
+        "bundle_checksums_verified", "python_network_guard", "temporary_clean"))
         and report.get("observed_total_executions") == 9 and report.get("observed_unique_tests") == 7)
     if report["linux_verified"]:
         report["status"] = "PASS"
