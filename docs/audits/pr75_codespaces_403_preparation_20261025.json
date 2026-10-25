@@ -1,0 +1,120 @@
+{
+  "schema": "PR75_CODESPACES_403_DIAGNOSIS_PUBLICATION_V1",
+  "synchronized_at_utc": "2026-10-25T11:01:52Z",
+  "publication_parent": "1442c451e68066d79dd506ab25e8c5a3f32c5cb6",
+  "scope_zh": "仅同步已经完成的只读诊断、原始查询凭据、最小权限和未来准备步骤；本次不重新诊断、不改授权、不创建或启动实例、不执行准备命令或测试。",
+  "diagnosis_zh": {
+    "confirmed": "本机Git凭据为有效OAuth token，身份lzwislam-collab，范围gist, repo, workflow；缺少Codespaces接口要求的codespace。这是已证实、足以解释拒绝的授权缺口。",
+    "counter_evidence": "同一凭据读取仓库返回HTTP200且admin=true，因此403正文Must have admin rights to Repository不能直接解释为缺少仓库管理员权限。API剩余4998，未见限流耗尽。",
+    "uncertainty": "没有修改授权并复试，不能证明补齐scope后不存在其他账户/策略/额度限制；不能把403或权限不足时的404当作零实例。",
+    "credential_boundary": "诊断的是本机Git凭据，不假定与GitHub连接器凭据相同。更改其他工具的认证不保证本机Git凭据同步改变。"
+  },
+  "original_receipts": {
+    "codespaces-403-diagnostic.json": {
+      "sha256": "1b7cb247858a233cf39db445bcffb7964408fe298705a2438b7eca992bd9afd2",
+      "utf8_content": "{\r\n  \"checked_at_utc\": \"2026-10-25T10:58:53.065269+00:00\",\r\n  \"credential_source\": \"local configured Git credential helper (same route as prior discovery), not assumed identical to GitHub connector credential\",\r\n  \"credential_kind\": \"OAuth token\",\r\n  \"method\": \"GET only\",\r\n  \"responses\": [\r\n    {\r\n      \"endpoint\": \"/user\",\r\n      \"http_status\": 200,\r\n      \"headers\": {\r\n        \"x-oauth-scopes\": \"gist, repo, workflow\",\r\n        \"x-accepted-oauth-scopes\": \"\",\r\n        \"x-ratelimit-limit\": \"5000\",\r\n        \"x-ratelimit-remaining\": \"4992\",\r\n        \"x-ratelimit-reset\": \"1792929488\",\r\n        \"x-github-request-id\": \"1236:1FFD63:D330D8:158275D:6ADDE0EB\"\r\n      },\r\n      \"body\": {\r\n        \"login\": \"lzwislam-collab\",\r\n        \"id\": 332072792\r\n      }\r\n    },\r\n    {\r\n      \"endpoint\": \"/user/codespaces?per_page=1\",\r\n      \"http_status\": 403,\r\n      \"headers\": {\r\n        \"x-oauth-scopes\": \"gist, repo, workflow\",\r\n        \"x-accepted-oauth-scopes\": \"codespace\",\r\n        \"x-ratelimit-limit\": \"5000\",\r\n        \"x-ratelimit-remaining\": \"4998\",\r\n        \"x-ratelimit-reset\": \"1792929150\",\r\n        \"x-github-request-id\": \"1237:278AA4:D3BA78:158BE4B:6ADDE0EB\"\r\n      },\r\n      \"body\": {\r\n        \"message\": \"Must have admin rights to Repository.\",\r\n        \"documentation_url\": \"https://docs.github.com/rest/codespaces/codespaces#list-codespaces-for-the-authenticated-user\",\r\n        \"status\": \"403\"\r\n      }\r\n    },\r\n    {\r\n      \"endpoint\": \"/repos/lzwislam-collab/doge-data-collector/codespaces?per_page=1\",\r\n      \"http_status\": 404,\r\n      \"headers\": {\r\n        \"x-oauth-scopes\": \"gist, repo, workflow\",\r\n        \"x-accepted-oauth-scopes\": \"codespace\",\r\n        \"x-ratelimit-limit\": \"5000\",\r\n        \"x-ratelimit-remaining\": \"4997\",\r\n        \"x-ratelimit-reset\": \"1792929150\",\r\n        \"x-github-request-id\": \"123A:2694A4:D33647:157FD32:6ADDE0EC\"\r\n      },\r\n      \"body\": {\r\n        \"message\": \"Not Found\",\r\n        \"documentation_url\": \"https://docs.github.com/rest/codespaces/codespaces#list-codespaces-in-a-repository-for-the-authenticated-user\",\r\n        \"status\": \"404\"\r\n      }\r\n    }\r\n  ]\r\n}\r\n"
+    },
+    "codespaces-repo-rights.json": {
+      "sha256": "866019f47089a90f3c30177c7f13128121cb10e519aacc1ecbb797ba22332e51",
+      "utf8_content": "{\r\n  \"http_status\": 200,\r\n  \"full_name\": \"lzwislam-collab/doge-data-collector\",\r\n  \"permissions\": {\r\n    \"admin\": true,\r\n    \"maintain\": true,\r\n    \"push\": true,\r\n    \"triage\": true,\r\n    \"pull\": true\r\n  },\r\n  \"owner_type\": \"User\",\r\n  \"oauth_scopes\": \"gist, repo, workflow\",\r\n  \"request_id\": \"3143:218269:D31E47:157D120:6ADDE118\"\r\n}\r\n"
+    }
+  },
+  "receipt_encoding_zh": "utf8_content保留原始本地文件的精确UTF-8文本与换行；SHA256针对该字符串重新编码后的字节，不针对外层JSON。未包含令牌或Authorization头。",
+  "minimum_permissions": [
+    {
+      "operation": "查询现有Codespaces",
+      "fine_grained": "只选目标仓库，Codespaces: Read-only",
+      "oauth_classic": "codespace scope；范围较宽，不称为最小细粒度授权"
+    },
+    {
+      "operation": "读取及下载artifact",
+      "fine_grained": "Actions: Read-only",
+      "note": "不需要Actions写权限或执行workflow"
+    },
+    {
+      "operation": "读取源码",
+      "fine_grained": "非公开/认证读取时Contents: Read-only",
+      "note": "当前公开源码可匿名读取"
+    },
+    {
+      "operation": "进入已运行实例终端",
+      "requirement": "实例所有者/授权使用者的执行通道；API列表只读权限本身不授予终端执行权",
+      "note": "本阶段不进入实例，不授予生命周期写权限，不启动或创建"
+    }
+  ],
+  "environment_zh": {
+    "runtime": "隔离且已启动的Linux实例；尽量匹配生产Ubuntu24.04与Python3.11，记录精确版本。",
+    "tools": "Git、Python zlib、磁盘/内存监测能力及完整时间/退出码记录；不需要OSS凭据。",
+    "disk": "固定artifact额外处理预算3107519696字节（约2.894GiB），另计源码、依赖、缓存；至少10GiB空闲仅为建议余量，不是已测最低值。",
+    "cpu_ram": "最低云端CPU/RAM尚未实测；本地151.86MiB RSS不可当作云端最低内存保证。",
+    "equivalence": "Codespaces验收只证明对应Codespaces实例配置；不自动替代GitHub Actions目标runner承载验收。"
+  },
+  "preparation_steps_zh": [
+    "确认GitHub登录账户lzwislam-collab。",
+    "未来由用户在Settings > Developer settings > Personal access tokens > Fine-grained tokens准备短有效期、仅目标仓库的只读令牌；本次未执行授权更改。",
+    "在本机安全输入框输入令牌，运行随附GET-only PowerShell查询；不把令牌发送到聊天或写入仓库。",
+    "HTTP200只表明列表访问恢复；记录名称/状态/规格。若total_count超过100需继续GET分页；数量0仅表示该账户在本仓库的可见Codespaces为0。",
+    "暂不创建、启动或打开停止中的实例；若仍403，保留新错误再诊断，不自动扩权。",
+    "环境权限具备后再独立验收固定artifact的完整下载、27分片/7672对象、冻结边界与资源/时长；本阶段不执行。"
+  ],
+  "preparation_powershell_not_executed": "$secure = Read-Host '输入细粒度PAT' -AsSecureString\n$headers = @{\n  Authorization = 'Bearer ' + [Net.NetworkCredential]::new('', $secure).Password\n  Accept = 'application/vnd.github+json'\n  'User-Agent' = 'Codespaces-readonly-check'\n}\ntry {\n  $base = 'https://api.github.com'\n  (Invoke-RestMethod \"$base/user\" -Headers $headers).login\n  $r = Invoke-RestMethod `\n    \"$base/repos/lzwislam-collab/doge-data-collector/codespaces?per_page=100\" `\n    -Headers $headers\n  $r | Select-Object total_count\n  $r.codespaces | Select-Object name, state, machine\n}\nfinally {\n  $headers.Clear()\n  Remove-Variable secure, headers -ErrorAction SilentlyContinue\n}",
+  "official_references_used_in_prior_diagnosis": [
+    "https://docs.github.com/en/rest/codespaces/codespaces#list-codespaces-for-the-authenticated-user",
+    "https://docs.github.com/en/rest/actions/artifacts#download-an-artifact",
+    "https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens"
+  ],
+  "production_readiness_checklist": [
+    {
+      "item": 1,
+      "name_zh": "云端承载",
+      "status": "PENDING",
+      "detail_zh": "本次明确权限缺口；没有云端磁盘/内存峰值或完整处理时长，未关闭待验。"
+    },
+    {
+      "item": 2,
+      "name_zh": "固定真实库存离线兼容性",
+      "status": "PASS_FOR_ARTIFACT_12581914557",
+      "detail_zh": "27分片、7672对象已通过；证据在pr75_artifact_12581914557_offline_acceptance_20261025.json。"
+    },
+    {
+      "item": 3,
+      "name_zh": "最新库存OSS存证及固定版本回读",
+      "status": "PENDING"
+    },
+    {
+      "item": 4,
+      "name_zh": "自然调度整链",
+      "status": "PENDING"
+    },
+    {
+      "item": 5,
+      "name_zh": "真实见证及API失败分类",
+      "status": "PARTIAL_OFFLINE_VERIFIED"
+    },
+    {
+      "item": 6,
+      "name_zh": "失败恢复与运维",
+      "status": "PARTIAL_OFFLINE_VERIFIED"
+    },
+    {
+      "item": 7,
+      "name_zh": "发布版本与冻结绑定",
+      "status": "PARTIAL_NOT_DEPLOYED"
+    }
+  ],
+  "publication_operations": {
+    "audit_files_added": 1,
+    "auth_changed": false,
+    "instances_created": false,
+    "instances_started": false,
+    "preparation_commands_executed": false,
+    "tests_executed": false,
+    "production_tasks_executed": false,
+    "oss_uploaded": false,
+    "new_triggers": false,
+    "merged": false,
+    "deployed": false,
+    "frozen_model_protocol_history_changed": false
+  },
+  "closure_policy_zh": "PR保持草稿；本次仅归档，不因审计文档提交重新机械复审。"
+}
