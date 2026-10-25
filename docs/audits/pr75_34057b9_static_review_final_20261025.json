@@ -1,0 +1,102 @@
+{
+  "schema": "PR75_INDEPENDENT_STATIC_REVIEW_FINAL_V1",
+  "synchronized_at_utc": "2026-10-25T08:42:51Z",
+  "reviewed_commit": "34057b960b7d12f353c5aae60669e207e0dc598a",
+  "scope": "Synchronize the already-completed independent static review of 34057b9; audit records only. No runner, launcher or tests executed or imported, and no environment installed.",
+  "review_result": {
+    "new_confirmed_defects": 0,
+    "new_code_fix_required": false,
+    "conclusion": "No new confirmed inconsistency or important omission within reviewed static scope. Five Linux cases remain pending actual execution.",
+    "audit_commit_consistency": {
+      "parent": "274574995990bb787aeea04acf54b8c54c94b19b",
+      "actual_changed_paths": [
+        {
+          "path": "docs/audits/pr75_2745749_static_review_final_20261025.json",
+          "status": "added",
+          "blob_sha1": "08105896ba64d576bbe5e9db348773d3b07462e0"
+        },
+        {
+          "path": "docs/audits/pr75_originals_recovered_final_20261025.json",
+          "status": "modified",
+          "blob_sha1": "1b7fa215ac077b12cf65a963634cde60217b717d"
+        }
+      ],
+      "audit_records_only": true,
+      "acceptance_package_unchanged": true,
+      "previous_acceptance_fields_preserved": true,
+      "final_record_change": "Only latest_independent_static_review was added at 34057b9; prior historical evidence remained byte-content-equivalent as parsed JSON."
+    },
+    "failure_evidence": "Each of five required stage files must be a readable regular file with no symlink path. Missing/link/read errors are explicitly recorded and required_evidence_complete blocks PASS. Summary/index publication errors produce nonzero overall exit; launcher captures stdout/stderr and process status after path preflight. Preflight errors before logging are terminal stderr/nonzero, as documented.",
+    "zero_skip": "Exact original five executed/passed IDs and strict four executed IDs; 9 executions/7 unique tests, zero failures/errors/skips. Input and bundle pre/post stability, clean temporary area, complete evidence, PASS/Linux flags, valid evidence hashes and overall exit 0 all required."
+  },
+  "existing_static_evidence": {
+    "reviewed_files_pinned_to_github_blobs": 9,
+    "blob_mismatches": 0,
+    "package_sha256sums": "matched",
+    "source_config_hashes_matched": 293,
+    "frozen_hashes_matched": 60,
+    "python_syntax": "AST parse only; no import/execution",
+    "independent_reviewer": "Read-only audit-record/code consistency review found no provable inconsistency or important omission; no Git invocation or package/test execution in that review.",
+    "file_blobs": {
+      "offline_acceptance/pr75_linux/launch.sh": "1e9a54d2b83873784be1f99fc31fb80a75e7f278",
+      "offline_acceptance/pr75_linux/manifest.json": "121fdd9d42d91ce60b104088b7c0f073b1b17116",
+      "offline_acceptance/pr75_linux/PREPARED.json": "3359527de5034557815f9c21996838cac08d4aed",
+      "offline_acceptance/pr75_linux/README.zh-CN.md": "7197ca1e93d83d9d2ef174067230478ef580e7cd",
+      "offline_acceptance/pr75_linux/requirements.txt": "8698a64f1bbfd17df45c86b439dba180c633a2a4",
+      "offline_acceptance/pr75_linux/run.py": "30022f40e777b107e4036c73970aee66fca40068",
+      "offline_acceptance/pr75_linux/SHA256SUMS": "4f1a263153831ec8bc578b5b406cc27d83d77aab",
+      "docs/audits/pr75_2745749_static_review_final_20261025.json": "08105896ba64d576bbe5e9db348773d3b07462e0",
+      "docs/audits/pr75_originals_recovered_final_20261025.json": "1b7fa215ac077b12cf65a963634cde60217b717d"
+    }
+  },
+  "historical_acceptance": {
+    "distinct_tests": 1319,
+    "passed": 1314,
+    "failures": 0,
+    "errors": 0,
+    "pending_linux": 5,
+    "basis": "Previously consolidated full discovery and targeted verification; no fresh runtime or full-suite claim."
+  },
+  "linux": {
+    "status": "PENDING_NOT_RUN",
+    "actual_execution_verified": false,
+    "tests": [
+      {
+        "test": "test_output_symlink_rejected (test_phase2_research.Phase2ResearchTests.test_output_symlink_rejected)",
+        "previous_skip_reason": "symlink privilege unavailable"
+      },
+      {
+        "test": "test_symlink_model_cannot_pass_manifest_verification (test_phase2_research.Phase2ResearchTests.test_symlink_model_cannot_pass_manifest_verification)",
+        "previous_skip_reason": "symlink privilege unavailable"
+      },
+      {
+        "test": "test_latest_symlink_cannot_overwrite_outside_file (test_pit_retention_preparation.PreparationTests.test_latest_symlink_cannot_overwrite_outside_file)",
+        "previous_skip_reason": "platform cannot create symlinks; Linux CI must exercise this test"
+      },
+      {
+        "test": "test_output_directory_symlink_cannot_redirect_package_writes (test_pit_retention_preparation.PreparationTests.test_output_directory_symlink_cannot_redirect_package_writes)",
+        "previous_skip_reason": "platform cannot create symlinks; Linux CI must exercise this test"
+      },
+      {
+        "test": "test_release_namespace_parent_symlink_rejected (test_prediction_release_control.Release.test_release_namespace_parent_symlink_rejected)",
+        "previous_skip_reason": "platform cannot create directory symlink"
+      }
+    ],
+    "closure_criteria": "Native Linux: all original five and unchanged strict four, zero failures/errors/skips, 9 executions/7 unique IDs, required evidence intact and complete, matching pre/post hashes and overall exit 0."
+  },
+  "prior_review_record": "docs/audits/pr75_2745749_static_review_final_20261025.json",
+  "limitations": [
+    "Static review is not runtime verification or a guarantee of first-run success.",
+    "Hard kill, unwritable media and previously declared concurrency/crash/persistence bounds remain.",
+    "Cloud disk/runtime, provider upload/readback and natural scheduling remain outside this offline review."
+  ],
+  "synchronization": {
+    "audit_records_only": true,
+    "tests_executed": false,
+    "runner_or_launcher_executed": false,
+    "environment_installed": false,
+    "keep_draft": true,
+    "merge_deploy_rerun_new_triggers": false,
+    "code_package_models_protocols_original_history_changed": false
+  }
+}
