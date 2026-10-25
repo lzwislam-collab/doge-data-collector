@@ -32,6 +32,15 @@
       "repair": "Original historical receipts validated locally and retained untouched. Publish line-preserving privacy-safe test-ID/status projections and passing-log-only JSON, with both original and published SHA256. Publish portable 1319-ID matrix, exact source/status lines and independent freeze/AST reconciliation.",
       "acceptance": "1319 unique final PASS identities; original private receipts and public projections cross-checked independently. Public receipt hashes and exact ID/status lines validate, with explicit original/published digest mapping.",
       "receipt": "docs/audits/pr75_24b424c_review_20261025/identity-matrix.json"
+    },
+    {
+      "id": "P3-AUDIT-ENTRY-PATH",
+      "priority": "P3",
+      "kind": "audit_reproducer_path",
+      "status": "CLOSED",
+      "evidence": "The working harness derived ../repository from its local review folder; copying it under docs/audits would make that implicit path invalid.",
+      "repair": "Published reproducer accepts explicit --repo/--output-dir, refuses output inside source and existing output, requires isolated bytecode-disabled UTF8 optimized Python. Original executed harness and receipts retained unchanged.",
+      "validation": "Offline AST parse and --help only; no redundant test rerun for this documentation-entry adaptation."
     }
   ],
   "linux_evidence": {

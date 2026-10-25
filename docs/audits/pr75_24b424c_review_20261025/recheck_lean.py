@@ -1,11 +1,18 @@
 """Targeted offline receipt repair; never alters tested source or old evidence."""
-import ast,contextlib,hashlib,json,os,socket,sys,unittest
+import argparse,ast,contextlib,hashlib,json,os,socket,sys,unittest
 from datetime import datetime,timezone
 from pathlib import Path
 from unittest.mock import patch
 
-out=Path(__file__).resolve().parent
-repo=out.parent/'repository'
+parser=argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--repo',type=Path,required=True)
+parser.add_argument('--output-dir',type=Path,required=True)
+args=parser.parse_args()
+repo=args.repo.absolute()
+out=args.output_dir.absolute()
+if out.is_relative_to(repo) or repo.is_relative_to(out):raise ValueError('output must be outside source checkout')
+if sys.flags.optimize!=1 or not sys.dont_write_bytecode or not sys.flags.isolated or not sys.flags.utf8_mode:raise RuntimeError('use -I -B -X utf8 -O')
+out.mkdir(exist_ok=False)
 manifest=json.loads((repo/'offline_acceptance/pr75_linux/manifest.json').read_bytes())
 
 def check():
