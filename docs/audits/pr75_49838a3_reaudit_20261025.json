@@ -1,0 +1,160 @@
+{
+  "schema": "PR75_49838A3_OFFLINE_REVIEW_V1",
+  "reviewed_commit": "49838a3e7d7066771b983f3a274ca8b375e2fe5a",
+  "checked_at_utc": "2026-10-25T00:48:24Z",
+  "checked_at_jst": "2026-10-25T09:48:24+09:00",
+  "scope": [
+    "Linux offline tool evidence destination and exclusive durable publication",
+    "Frozen producer source binding compatibility and force/skip paths",
+    "Concurrent writers and double-failure cleanup",
+    "Relevant witness/404/ZIP/capacity/freeze regression"
+  ],
+  "new_confirmed_defects": [],
+  "production_or_tool_source_changes": false,
+  "new_test_module": "test_pr75_498_review.py",
+  "new_test_methods": 5,
+  "optimized_test_run": {
+    "flags": [
+      "-B",
+      "-O"
+    ],
+    "tests": 5,
+    "passed": 5,
+    "skips": 0,
+    "failures": 0,
+    "errors": 0
+  },
+  "new_checks": [
+    {
+      "behavior": "Linux tool failed/error/skipped/incomplete synthetic results always write linux_verified=false and exit nonzero.",
+      "limit": "Platform mock and synthetic test results are Windows unit tests, not actual Linux acceptance."
+    },
+    {
+      "behavior": "Runner cancellation publishes neither final nor private report."
+    },
+    {
+      "behavior": "Two simultaneous writers: one fsync failure plus private unlink denial retains both errors and only its own residue; successful writer's complete final report remains intact."
+    },
+    {
+      "behavior": "Retry after successful publication followed by cleanup failure rejects existing destination and preserves original report."
+    },
+    {
+      "behavior": "force=True revalidates source despite a previous verified receipt; wrong nested run ID rejects before download, old receipt unchanged."
+    }
+  ],
+  "independent_review": {
+    "method": "Separate read-only reviewer inspected Linux evidence publication, source types/identity and failure paths; 36 independent targeted tests passed.",
+    "result": "No new reproducible defect found."
+  },
+  "linux_status": "PENDING_BY_USER_INSTRUCTION",
+  "production_operations_performed": false,
+  "inherited_full_pressure": {
+    "repeated_this_review": false,
+    "reason": "Inventory consumer and all three offline tools are byte-identical to reviewed commit; this round adds tests and evidence only.",
+    "commit": "8b27c4b735796bdb8600753ab2f01e0c0cfe8016",
+    "path": "docs/audits/pr75_3bf886b_reaudit_20261025.json",
+    "transport_gib": 21,
+    "expanded_gib": 20,
+    "consumer_allocated_gib": 41,
+    "synthetic_source_gib": 16,
+    "limitations": "Synthetic bytes and inventory; not Linux/cloud/production measurements. Finite consumer budget is not absolute frozen-producer maximum."
+  },
+  "remaining": [
+    {
+      "priority": "P2",
+      "issue": "Finite budgets cannot cover theoretically unbounded frozen-producer metadata.",
+      "acceptance": "Keep explicit support domain and reject over-limit payloads; no frozen-protocol change."
+    },
+    {
+      "priority": "P2",
+      "issue": "Actual cloud disk/runtime/provider upload-readback/natural scheduling not tested.",
+      "acceptance": "Future authorized online acceptance; no offline/manual inference."
+    },
+    {
+      "priority": "P2",
+      "issue": "Witness discovery still has explicit date/run/attempt/job bounds; deleted evidence completeness cannot be proven.",
+      "acceptance": "Over-limit or unstable discovery must fail closed."
+    },
+    {
+      "priority": "P3",
+      "issue": "Actual Linux symlink/runtime verification remains pending.",
+      "acceptance": "Actual Linux execution with no required test skips; mocks never count."
+    },
+    {
+      "priority": "P3",
+      "issue": "OS-denied deletion can leave reported residue; hard-kill, arbitrary hostile concurrent mutation, directory crash durability and cross-file/cloud transactions not guaranteed.",
+      "acceptance": "Preserve failures and accurate residue reporting; do not claim global crash-safe transactions."
+    }
+  ],
+  "not_checked": [
+    "actual Linux execution",
+    "real provider or production artifact operations",
+    "full system/model/returns/external market/Sheets/E1 audit beyond PR",
+    "new full physical capacity stress"
+  ],
+  "conclusion": "No new known code blocker in tested PR scope; tests/evidence added only. Keep draft; Linux/cloud gaps prevent unconditional production merge recommendation.",
+  "regression": {
+    "total": 307,
+    "passed": 305,
+    "skipped": [
+      [
+        "test_latest_symlink_cannot_overwrite_outside_file (test_pit_retention_preparation.PreparationTests.test_latest_symlink_cannot_overwrite_outside_file)",
+        "platform cannot create symlinks; Linux CI must exercise this test"
+      ],
+      [
+        "test_output_directory_symlink_cannot_redirect_package_writes (test_pit_retention_preparation.PreparationTests.test_output_directory_symlink_cannot_redirect_package_writes)",
+        "platform cannot create symlinks; Linux CI must exercise this test"
+      ]
+    ],
+    "failures": 0,
+    "errors": 0,
+    "network_blocked": true,
+    "modules": [
+      "test_inventory_transactions",
+      "test_inventory_capacity",
+      "test_pr75_reaudit",
+      "test_minimal_audit_fixes",
+      "test_plus_shadow",
+      "test_oss_inventory_retention",
+      "test_report_cohort_regressions",
+      "test_plus_report_refresh",
+      "test_plus_scorecard",
+      "test_report_custody",
+      "test_report_evidence",
+      "test_pit_retention_preparation",
+      "test_pit_retention_daily",
+      "test_learned_shadow_v1",
+      "test_phase2_forward_v2",
+      "test_phase2_forward_runtime_v2",
+      "test_forecast_worm",
+      "integration_oss_sdk",
+      "test_pr75_offline_completion",
+      "test_pr75_final_boundaries",
+      "test_pr75_cleanup_closure",
+      "test_pr75_source_boundary",
+      "test_pr75_c20_review",
+      "test_pr75_498_review"
+    ],
+    "elapsed_seconds": 16.156,
+    "frozen_manifests": [
+      "config/e1_forward_registration_v1.json",
+      "config/learned_shadow_runtime_v1.json",
+      "config/phase2_forward_registration_v1.json",
+      "config/phase2_forward_registration_v2.json",
+      "config/phase3_registration_v1.json"
+    ],
+    "frozen_unique_files": 60,
+    "all_frozen_hashes_match": true,
+    "binary_exact_hash_files": [
+      "research/phase2_v2/5bba9522aa1fa9fb55a432fe0bf9706a9300476915628727d67bdbbd373f987a/model_archive.zip"
+    ],
+    "frozen_producer_raw_unchanged": true,
+    "unchanged_source_git_blobs": {
+      "oss_inventory_retention.py": "20f86b0263bb2c8f65a122fa7852e84069e0bb74",
+      "offline_inventory_stress.py": "daef3b8ec4d7401009099e8e74e580be9e6ce6a4",
+      "offline_inventory_boundary.py": "4ab122becc9638dfb3b94b3d110fd19a8679e2c6",
+      "offline_linux_inventory_checks.py": "dd99b47b822d9415cbfa2a989153d7d078b13722"
+    }
+  },
+  "new_test_sha256": "c2dc65c67b471184a7ba2b62df455a0f72ece5414cb4bdfa0709ae36ba9ffa22"
+}
