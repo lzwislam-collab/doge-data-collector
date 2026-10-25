@@ -134,7 +134,21 @@ def save_receipt(root, receipt):
         os.fsync(stream.fileno())
 
 
-def run(root, adapter, duration_seconds=2400, clock=None, sleep=None, stop_file=None):
+def qualified_capture(row, book):
+    """Additional shutdown gate; frozen capture/validation remains authoritative."""
+    try:
+        captured = utc(row['captured_at_utc'])
+        if not 0 <= (captured-utc(row['quote_utc'])).total_seconds() <= 30: return False
+        return any(x.get('source_verified') is True and x.get('paired_audit_verified') is True
+                   and x.get('source_error') is None and x.get('observed_public_utc')
+                   and utc(row['quote_utc']) > utc(x['observed_public_utc'])
+                   and utc(book['requested_at_utc']) >= utc(x['observed_public_utc'])
+                   and utc(row['quote_utc']) < utc(x['target_utc']) for x in row['source_items'])
+    except (KeyError, ValueError, TypeError): return False
+
+
+def run(root, adapter, duration_seconds=2400, clock=None, sleep=None, stop_file=None,
+        require_qualified_stop=False):
     if type(duration_seconds) not in (int, float) or not 0 < duration_seconds <= 3000:
         raise ValueError('bounded runtime duration required')
     clock = clock or (lambda: datetime.now(timezone.utc))
@@ -145,7 +159,10 @@ def run(root, adapter, duration_seconds=2400, clock=None, sleep=None, stop_file=
     count = errors = 0
     maximum = 0
     fatal = False
-    while utc(clock()) < end and not (stop_file and Path(stop_file).exists()):
+    if require_qualified_stop and not stop_file: raise ValueError('qualified stop requires a stop file')
+    def stop_requested(): return bool(stop_file and Path(stop_file).exists())
+    while utc(clock()) < end:
+        if stop_requested() and (not require_qualified_stop or adapter.can_stop()): break
         before = utc(clock())
         receipt = cycle(adapter, state, clock)
         elapsed = (utc(clock()) - before).total_seconds()
@@ -165,6 +182,10 @@ def run(root, adapter, duration_seconds=2400, clock=None, sleep=None, stop_file=
               'status': 'CAPTURE_LOOP_COMPLETED' if not errors and maximum <= 300 else 'DEGRADED',
               'economic_acceptance_passed': False, 'historical_gaps_repaired': False,
               'real_orders_authorized': False, 'new_economic_cohort_activated': False}
+    if require_qualified_stop:
+        result['qualified_stop_satisfied'] = bool(stop_requested() and adapter.can_stop() and not fatal)
+        result['last_qualified_book_sha256'] = getattr(adapter,'last_qualified_book',{}).get('book_sha256')
+        if not result['qualified_stop_satisfied']: result['status'] = 'DEGRADED'
     path = Path(root)/BASE/'latest.json'
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(result, indent=2, allow_nan=False)+'\n', encoding='utf-8')
@@ -181,6 +202,7 @@ class LiveAdapter:
         self.core_witness_pending = False
         from runtime_audit_worker import Auditor
         self.auditor = Auditor(self.root)
+        self.last_qualified_book = {}
 
     def command(self, *args, env=None):
         result = subprocess.run(args, cwd=self.root, env=dict(os.environ, **(env or {})),
@@ -209,6 +231,7 @@ class LiveAdapter:
             self.python('feature_ablation.py', 'prepare')
             self.python('minimal_market_forward.py', 'prepare')
         elif name == 'issue':
+            self.last_qualified_book = {}
             self.python('paired_forward_cohort.py', 'issue')
             self.python('minimal_market_forward.py', 'bind')
             self.python('feature_ablation.py', 'bind')
@@ -219,8 +242,15 @@ class LiveAdapter:
             # calling it an eligible formal event or retrofitting it later.
             mode = 'capture' if self.source_ready() else 'smoke'
             self.python('p2_paired_execution_v3_1.py', mode)
+            self.last_qualified_book = {}
+            if mode == 'capture':
+                import p2_paired_execution_v3_1 as engine
+                events = engine.read_events(self.root)
+                if events:
+                    book = next(engine.event_books(self.root, [events[-1]]))
+                    if qualified_capture(events[-1], book): self.last_qualified_book = events[-1]
             return {'status': 'command_completed', 'stage': name, 'mode': mode,
-                    'formal_eligibility': mode == 'capture'}
+                    'formal_eligibility': bool(self.last_qualified_book)}
         elif name == 'publish':
             import publish_forward_evidence as publisher
             import paired_forward_cohort as pair
@@ -292,6 +322,13 @@ class LiveAdapter:
                 and audit['input_registry_sha256'] == hashlib.sha256(
                     (self.root/'data/direction_v42/forward_registry.csv').read_bytes()).hexdigest())
 
+    def can_stop(self):
+        if not self.last_qualified_book or not self.source_ready(): return False
+        import p2_paired_execution_v3_1 as engine
+        events = engine.read_events(self.root)
+        return bool(events and events[-1]['book_sha256'] == self.last_qualified_book['book_sha256']
+                    and qualified_capture(events[-1], next(engine.event_books(self.root, [events[-1]]))))
+
 
 def validate_p2(root):
     import p2_paired_execution_v3_1 as engine
@@ -324,6 +361,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--duration-seconds', type=int, default=2400)
     parser.add_argument('--stop-file', type=Path)
+    parser.add_argument('--require-qualified-stop', action='store_true')
     args = parser.parse_args()
     root = Path(__file__).resolve().parent
     adapter = LiveAdapter(root)
@@ -331,7 +369,8 @@ def main():
         adapter.python('forward_validation_v2.py', '--integrity-only')
         adapter.command('git', 'config', 'user.name', 'github-actions[bot]')
         adapter.command('git', 'config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com')
-        result = run(root, adapter, args.duration_seconds, stop_file=args.stop_file)
+        result = run(root, adapter, args.duration_seconds, stop_file=args.stop_file,
+                     require_qualified_stop=args.require_qualified_stop)
     except Exception as exc:
         result = {'fatal': True, 'status': 'DEGRADED', 'error': type(exc).__name__+': '+str(exc)[:500],
                   'observed_at_utc': datetime.now(timezone.utc).isoformat(), 'economic_acceptance_passed': False}

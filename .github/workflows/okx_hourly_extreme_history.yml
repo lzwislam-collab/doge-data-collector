@@ -101,6 +101,8 @@ jobs:
   hourly-history:
     runs-on: ubuntu-24.04
     timeout-minutes: 65 # 40m serial deadline service + existing research/archive tail + margin
+    env:
+      DOGE_ARCHIVE_QUALIFIED_DRAIN: '1'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -511,7 +513,7 @@ jobs:
       - name: Drain archive capture before any subsequent writer or alert
         id: archive_bridge_stop
         if: always() && steps.archive_bridge_start.outcome == 'success'
-        timeout-minutes: 4
+        timeout-minutes: 9
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python archive_capture_bridge.py stop --snapshot archive-snapshot --control "$RUNNER_TEMP/doge-archive-bridge-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
