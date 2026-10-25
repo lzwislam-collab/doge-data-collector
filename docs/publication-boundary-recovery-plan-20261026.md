@@ -1,0 +1,9 @@
+# Recover optional hourly publication after the deadline service
+
+Production run 40226014248 prepared source bars at 19:58:31 UTC, then invoked publication at 19:58:55. The unchanged 90-second boundary guard correctly rejected the optional source. Core evidence published and read back, but the sticky early failure made the entire run fail at 20:52:43 despite the later valid publication budget.
+
+Keep early core publication immediate and retain its failure receipt. After the existing single-writer deadline service has stopped successfully, make one bounded fresh-source recovery attempt, only when early source publication failed. Re-fetch remote registry and reject unpublished originals before any recovery. Refresh actual confirmed bars, invoke the unchanged source freshness and 90-second guard, use the existing validated publisher, and require exact remote source readback and no newly published originals. Never re-issue forecasts or repair scores.
+
+Recovery defaults false. Only a completed verified recovery may resolve the optional-source tail failure; absent outputs, exceptions, stale bars, insufficient budget, failed refresh or remote mismatch still fail visibly. Preserve a separate atomic receipt and original early failure. No new triggers, concurrency groups, protocol changes, history rewrites or deadline extensions.
+
+Validate with real temporary Git remotes and controlled clocks/source responses: near-boundary early rejection followed by fresh valid recovery, insufficient recovery budget, stale/failed refresh, missing original publication, source readback mismatch, publisher failure, output isolation and receipt persistence. Then full Linux regression, full-history frozen integrity and independent review before merge. Actual production recovery remains an acceptance requirement after deployment.
