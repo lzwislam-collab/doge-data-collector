@@ -73,6 +73,10 @@ sh /absolute/path/to/doge-data-collector/offline_acceptance/pr75_linux/launch.sh
 
 ## 证据输出
 
+包装器在创建日志前先检查仓库/输出的物理路径和包含关系，拒绝 `.`、`..`、重复或尾随斜杠、链接祖先，以及仓库内输出。此类参数或路径预检错误仅向终端 stderr 报告并非零退出，不创建证据；这避免错误参数污染仓库。通过该预检后才创建启动日志。
+
+最终汇总逐一检查 5 个必需阶段证据文件：缺失、链接或不可读均记录在 `evidence_collection_errors`，使 `required_evidence_complete=false`，禁止 PASS；索引只保留成功读取文件的哈希，不再静默省略缺件并放行。预检失败时阶段文件缺失属于明确的失败状态，不会被当成跳过或成功。
+
 |文件|用途|
 |---|---|
 |`environment.json`|完成环境核对后的解释器、NumPy、Git HEAD、系统和内核信息|

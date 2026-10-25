@@ -1,8 +1,8 @@
 {
   "schema": "PR75_LINUX_PREPARATION_V1",
   "status": "NOT_RUN",
-  "prepared_at_utc": "2026-10-25T08:09:44.168832+00:00",
-  "prepared_against": "b7d71268fe8f867d777c6b30d31b322749109b07",
+  "prepared_at_utc": "2026-10-25T08:14:18.072885+00:00",
+  "prepared_against": "d5bc10c0c940417bcb9fc4bcc97623ffffc24fe0",
   "acceptance_executed": false,
   "environment_installed": false,
   "linux_pending": 5,
@@ -45,7 +45,16 @@
       "numpy"
     ],
     "shell_failure_control_text_review": true,
-    "independent_static_review": "no blocking or important findings; no execution"
+    "independent_static_review": "no blocking or important findings; no execution",
+    "d5bc10c_independent_static_review": {
+      "python_ast_parse": true,
+      "launcher_path_validation_precedes_writes": true,
+      "required_evidence_gate": true,
+      "zero_skip_gate_retained": true,
+      "source_files": 293,
+      "frozen_hashes_matched": 60,
+      "execution_performed": false
+    }
   },
   "repairs": [
     {
@@ -71,14 +80,24 @@
     {
       "issue": "Temporary cleanup residue not an explicit overall gate",
       "repair": "Record residue and require empty temporary directory"
+    },
+    {
+      "priority": "P1",
+      "issue": "Launcher created sibling log before rejecting repository-contained or linked output",
+      "repair": "Canonical/physical path and containment preflight before all output redirects; invalid path exits without writes"
+    },
+    {
+      "priority": "P2",
+      "issue": "Final index silently omitted missing required evidence",
+      "repair": "Collect per-file missing/link/read errors and require complete five-file evidence before PASS; partial failure index preserved"
     }
   ],
   "files_sha256": {
-    "run.py": "ef74293552c5f008098589b32faf76593f947e724c4d2407872a20b6bb75020b",
-    "launch.sh": "bd8a7744eaca21af9cb51ec1b48bf388133a585490002a24310f10631d868b76",
+    "run.py": "c6a3a7449464719c6c2b6140ec307b3c94d8dc53b8272f9037397bd50a565947",
+    "launch.sh": "d1163f7320439e7043b4d61cea12af25ebbdbf41c1d8daf937980eedf6f70b7e",
     "manifest.json": "a8cd7fefdb0b1887d77292d34f3d4773e22af348b1e961dd0c038c81118b3d45",
     "requirements.txt": "f17d5d1eaaab27c16cb92ade04c41bfe8196f09e3be952827643671916d82efd",
-    "README.zh-CN.md": "af0736eea41e63363d151965f3b8f7036896783f658a86b9fcaed79936aa5096"
+    "README.zh-CN.md": "dfb6b6ae085d1b02f17185cda36977d992cd853bff5b8aa2457edb6a639ced29"
   },
   "limitations": [
     "No runner, launcher or test execution/import performed",

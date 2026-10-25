@@ -278,16 +278,28 @@ def main():
         except BaseException as error:
             report["temporary_clean"] = False
             report["temporary_inspection_error"] = {"type": type(error).__name__, "error": str(error)}
+    names = ["environment.json", "five-tests.log", "five-tests.json", "strict-inventory.log", "strict-inventory.json"]
+    evidence_hashes = {}
+    report["evidence_collection_errors"] = []
+    for name in names:
+        try:
+            path = reject_links(output / name)
+            if not path.is_file():
+                raise FileNotFoundError("required evidence missing: " + name)
+            evidence_hashes[name] = sha256(path)
+        except BaseException as error:
+            report["evidence_collection_errors"].append({"file": name, "type": type(error).__name__, "error": str(error)})
+    report["required_evidence_complete"] = not report["evidence_collection_errors"]
     report["linux_verified"] = ("error_type" not in report and all(report.get(name) is True for name in (
         "five_tests_verified", "strict_tool_verified", "inputs_unchanged", "bundle_unchanged", "real_symlink_probe",
-        "bundle_checksums_verified", "python_network_guard", "temporary_clean"))
+        "bundle_checksums_verified", "python_network_guard", "temporary_clean", "required_evidence_complete"))
         and report.get("observed_total_executions") == 9 and report.get("observed_unique_tests") == 7)
     if report["linux_verified"]:
         report["status"] = "PASS"
     report["finished_at_utc"] = datetime.now(timezone.utc).isoformat()
     publish(output / "summary.json", report)
-    names = ["environment.json", "five-tests.log", "five-tests.json", "strict-inventory.log", "strict-inventory.json", "summary.json"]
-    publish(output / "evidence-sha256.json", {name: sha256(output / name) for name in names if (output / name).is_file()})
+    evidence_hashes["summary.json"] = sha256(reject_links(output / "summary.json"))
+    publish(output / "evidence-sha256.json", evidence_hashes)
     print(json.dumps({"status": report["status"], "output": str(output)}))
     return 0 if report["status"] == "PASS" else 1
 

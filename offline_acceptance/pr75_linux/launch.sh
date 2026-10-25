@@ -12,6 +12,24 @@ output=$3
 for value in "$python" "$repo" "$output"; do
     case "$value" in /*) ;; *) printf '%s\n' 'all three paths must be absolute' >&2; exit 2 ;; esac
 done
+# Validate before creating even launcher logs: no writes inside the checkout.
+for value in "$repo" "$output"; do
+    case "$value" in
+        /|*/|*//*|*/./*|*/.|*/../*|*/..)
+            printf '%s\n' 'repository/output paths must be canonical absolute paths' >&2
+            exit 2 ;;
+    esac
+done
+physical_repo=$(cd -P "$repo" && pwd -P) || exit "$?"
+parent=${output%/*}
+if [ -z "$parent" ]; then parent=/; fi
+physical_parent=$(cd -P "$parent" && pwd -P) || exit "$?"
+if [ "$physical_repo" != "$repo" ] || [ "$physical_parent" != "$parent" ]; then
+    printf '%s\n' 'repository/output ancestors must not contain symbolic links' >&2
+    exit 2
+fi
+case "$output" in "$repo"|"$repo"/*) printf '%s\n' 'output must be outside repository' >&2; exit 2 ;; esac
+case "$repo" in "$output"/*) printf '%s\n' 'output must not contain repository' >&2; exit 2 ;; esac
 console=${output}.launcher.log
 status=${output}.exit-code.txt
 for path in "$output" "$console" "$status"; do
