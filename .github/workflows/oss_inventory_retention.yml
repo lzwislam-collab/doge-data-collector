@@ -69,7 +69,7 @@ jobs:
           fi
       - name: Install provider SDK for actual upload
         if: steps.inventory.outputs.ready == 'true'
-        run: python -m pip install numpy==2.3.5 oss2==2.19.1
+        run: python -m pip install oss2==2.19.1
       - name: Obtain short-lived main-branch identity
         if: steps.inventory.outputs.ready == 'true'
         id: aliyun
@@ -125,7 +125,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: python -m pip install numpy==2.3.5 oss2==2.19.1 aliyun-python-sdk-core==2.16.1
+      - run: python -m pip install oss2==2.19.1 aliyun-python-sdk-core==2.16.1
       - name: Obtain short-lived main identity for per-event custody
         id: aliyun
         uses: aliyun/configure-aliyun-credentials-action@1e5248c8d5d93a8781ac344a68e19a43341e79e6
