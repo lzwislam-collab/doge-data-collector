@@ -1,0 +1,22 @@
+[
+  "-accel",
+  "tcg,thread=multi",
+  "-cpu",
+  "max",
+  "-smp",
+  "2",
+  "-m",
+  "2048",
+  "-drive",
+  "file=test-disk.qcow2,format=qcow2,if=virtio",
+  "-drive",
+  "file=fat:ro:payload,format=raw,if=virtio,readonly=on",
+  "-display",
+  "none",
+  "-serial",
+  "tcp:127.0.0.1:45675,server=on,wait=off",
+  "-monitor",
+  "none",
+  "-nic",
+  "none"
+]

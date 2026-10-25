@@ -1,9 +1,9 @@
 {
   "schema": "PR75_ORIGINALS_RECOVERED_FINAL_ACCEPTANCE_V1",
-  "synchronized_at_utc": "2026-10-25T05:02:30.420034+00:00",
-  "synchronized_at_jst": "2026-10-25T14:02:30.420034+09:00",
-  "parent_commit": "560e825e0c1cb342a736403440289e5d399946d7",
-  "scope": "Publish already-completed exact-original recovery and four-test evidence only; no test rerun or mechanical review during synchronization.",
+  "synchronized_at_utc": "2026-10-25T09:25:30Z",
+  "synchronized_at_jst": "2026-10-25T18:25:30.000+09:00",
+  "parent_commit": "ac75d638daf85dc4c7540892786b54b5d5f3fcdf",
+  "scope": "Current final acceptance: original recovery and historical evidence preserved; five Linux cases closed by native Linux offline runtime. No production acceptance inferred.",
   "supersedes_current_error_status_in": "docs/audits/pr75_remaining_inputs_runtime_20261025.json",
   "recovery": {
     "read_only_github_retrieval": true,
@@ -112,49 +112,29 @@
   },
   "final_acceptance_summary": {
     "distinct_discovered_tests": 1319,
-    "passed": 1314,
+    "passed": 1319,
     "failures": 0,
     "errors": 0,
-    "skipped_pending_linux": 5,
-    "basis": "Consolidated prior full-discovery run, targeted test fixes, 16 cached-dependency cases, and the four recovered-original cases. Not a claim of a fresh full-suite rerun.",
+    "skipped_pending_linux": 0,
+    "basis": "Previous consolidated 1314 passes plus these five newly completed Linux cases. This turn ran only 9 executions/7 unique tests; not a fresh full-suite rerun. Strict tool overlap/additional already-covered cases are not added to the 1319 denominator.",
     "four_previous_errors": "CLOSED: all four original tests passed, no failures/errors/skips.",
     "sixteen_previous_dependency_skips": "CLOSED: existing cached pinned dependencies loaded, original tests passed.",
-    "only_remaining_items_in_this_offline_acceptance_set": "Five real symlink cases pending actual Linux execution."
+    "only_remaining_items_in_this_offline_acceptance_set": "None. Linux 5+strict4 passed; 9 executions/7 unique this turn, not full discovery rerun."
   },
-  "pending_linux_tests": [
-    {
-      "test": "test_output_symlink_rejected (test_phase2_research.Phase2ResearchTests.test_output_symlink_rejected)",
-      "previous_skip_reason": "symlink privilege unavailable"
-    },
-    {
-      "test": "test_symlink_model_cannot_pass_manifest_verification (test_phase2_research.Phase2ResearchTests.test_symlink_model_cannot_pass_manifest_verification)",
-      "previous_skip_reason": "symlink privilege unavailable"
-    },
-    {
-      "test": "test_latest_symlink_cannot_overwrite_outside_file (test_pit_retention_preparation.PreparationTests.test_latest_symlink_cannot_overwrite_outside_file)",
-      "previous_skip_reason": "platform cannot create symlinks; Linux CI must exercise this test"
-    },
-    {
-      "test": "test_output_directory_symlink_cannot_redirect_package_writes (test_pit_retention_preparation.PreparationTests.test_output_directory_symlink_cannot_redirect_package_writes)",
-      "previous_skip_reason": "platform cannot create symlinks; Linux CI must exercise this test"
-    },
-    {
-      "test": "test_release_namespace_parent_symlink_rejected (test_prediction_release_control.Release.test_release_namespace_parent_symlink_rejected)",
-      "previous_skip_reason": "platform cannot create directory symlink"
-    }
-  ],
-  "linux_acceptance": "Actual Linux runtime with real file/directory symlinks: all five named original tests and unchanged strict Linux tool pass without required skips. Windows mocks/junction/hardlink substitutions do not count.",
+  "pending_linux_tests": [],
+  "linux_acceptance": "PASS 2026-10-25T09:18:59.712624+00:00; original five and unchanged strict four, zero failure/error/skip, 9 executions/7 unique, stable input/package hashes, complete evidence, clean temporary area, overall exit0.",
   "preserved_limits": "This closes the recorded offline errors, not actual cloud disk/runtime, production upload/readback or natural scheduling verification. Prior declared finite-capacity/history-discovery/crash-consistency limits remain unchanged.",
   "synchronization_restrictions": {
     "audit_records_only": true,
     "raw_originals_committed": false,
     "code_models_protocols_original_history_changed": false,
-    "new_tests_or_test_reruns": false,
+    "offline_runtime_tests_executed_before_publication": true,
+    "tests_rerun_during_publication": false,
     "merge_deployment_production_reruns_new_triggers": false,
     "keep_pr_draft": true,
-    "linux_actual_verification": false
+    "linux_actual_verification": true
   },
-  "conclusion": "Recorded offline acceptance has zero remaining errors; only five Linux symlink cases remain pending. Keep draft; do not infer Linux or production/cloud acceptance.",
+  "conclusion": "All five Linux pending cases closed by actual offline runtime. Consolidated 1319 passed, zero failure/error/pending; historical results plus targeted run, not full-suite rerun. Keep draft; no production/cloud acceptance inferred.",
   "latest_independent_static_review": {
     "synchronized_at_utc": "2026-10-25T08:54:57Z",
     "reviewed_commit": "071f69bdd25875aa2f3033c7cc8ab140e84df225",
@@ -211,5 +191,75 @@
       "prior_review_record": "docs/audits/pr75_34057b9_static_review_final_20261025.json",
       "conclusion": "32f04ed audit-only changes match recorded evidence; no new confirmed issue. Historical 1314 passes/0 failures/0 errors/5 Linux pending retained; no runtime acceptance added."
     }
-  ]
+  ],
+  "historical_pre_linux_runtime_state": {
+    "synchronized_at_utc": "2026-10-25T05:02:30.420034+00:00",
+    "synchronized_at_jst": "2026-10-25T14:02:30.420034+09:00",
+    "parent_commit": "560e825e0c1cb342a736403440289e5d399946d7",
+    "scope": "Publish already-completed exact-original recovery and four-test evidence only; no test rerun or mechanical review during synchronization.",
+    "final_acceptance_summary": {
+      "distinct_discovered_tests": 1319,
+      "passed": 1314,
+      "failures": 0,
+      "errors": 0,
+      "skipped_pending_linux": 5,
+      "basis": "Consolidated prior full-discovery run, targeted test fixes, 16 cached-dependency cases, and the four recovered-original cases. Not a claim of a fresh full-suite rerun.",
+      "four_previous_errors": "CLOSED: all four original tests passed, no failures/errors/skips.",
+      "sixteen_previous_dependency_skips": "CLOSED: existing cached pinned dependencies loaded, original tests passed.",
+      "only_remaining_items_in_this_offline_acceptance_set": "Five real symlink cases pending actual Linux execution."
+    },
+    "pending_linux_tests": [
+      {
+        "test": "test_output_symlink_rejected (test_phase2_research.Phase2ResearchTests.test_output_symlink_rejected)",
+        "previous_skip_reason": "symlink privilege unavailable"
+      },
+      {
+        "test": "test_symlink_model_cannot_pass_manifest_verification (test_phase2_research.Phase2ResearchTests.test_symlink_model_cannot_pass_manifest_verification)",
+        "previous_skip_reason": "symlink privilege unavailable"
+      },
+      {
+        "test": "test_latest_symlink_cannot_overwrite_outside_file (test_pit_retention_preparation.PreparationTests.test_latest_symlink_cannot_overwrite_outside_file)",
+        "previous_skip_reason": "platform cannot create symlinks; Linux CI must exercise this test"
+      },
+      {
+        "test": "test_output_directory_symlink_cannot_redirect_package_writes (test_pit_retention_preparation.PreparationTests.test_output_directory_symlink_cannot_redirect_package_writes)",
+        "previous_skip_reason": "platform cannot create symlinks; Linux CI must exercise this test"
+      },
+      {
+        "test": "test_release_namespace_parent_symlink_rejected (test_prediction_release_control.Release.test_release_namespace_parent_symlink_rejected)",
+        "previous_skip_reason": "platform cannot create directory symlink"
+      }
+    ],
+    "linux_acceptance": "Actual Linux runtime with real file/directory symlinks: all five named original tests and unchanged strict Linux tool pass without required skips. Windows mocks/junction/hardlink substitutions do not count.",
+    "synchronization_restrictions": {
+      "audit_records_only": true,
+      "raw_originals_committed": false,
+      "code_models_protocols_original_history_changed": false,
+      "new_tests_or_test_reruns": false,
+      "merge_deployment_production_reruns_new_triggers": false,
+      "keep_pr_draft": true,
+      "linux_actual_verification": false
+    },
+    "conclusion": "Recorded offline acceptance has zero remaining errors; only five Linux symlink cases remain pending. Keep draft; do not infer Linux or production/cloud acceptance.",
+    "source_commit": "ac75d638daf85dc4c7540892786b54b5d5f3fcdf",
+    "notice": "Historical 1314-pass/5-pending state preserved; current status governed by latest_linux_runtime_acceptance."
+  },
+  "latest_linux_runtime_acceptance": {
+    "record": "docs/audits/pr75_linux_acceptance_closed_20261025.json",
+    "evidence_directory": "docs/audits/pr75_linux_runtime_20261025",
+    "tested_commit": "ac75d638daf85dc4c7540892786b54b5d5f3fcdf",
+    "status": "PASS",
+    "finished_at_utc": "2026-10-25T09:18:59.712624+00:00",
+    "tests_run": 9,
+    "unique_tests": 7,
+    "original_pending_cases_closed": 5,
+    "pending_linux_count": 0,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "launcher_exit_code": 0,
+    "runner_kernel_network_isolation_verified": false,
+    "independent_network_evidence": "QEMU -nic none plus guest only lo; original runner field not relabeled.",
+    "independent_review": "All 6 evidence hashes and 706 input-hash entries matched; evidence supports closure."
+  }
 }
