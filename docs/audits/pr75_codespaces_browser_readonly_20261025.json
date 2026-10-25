@@ -1,0 +1,75 @@
+{
+  "schema": "PR75_CODESPACES_BROWSER_LOOKUP_PUBLICATION_V1",
+  "synchronized_at_utc": "2026-10-25T11:06:39Z",
+  "publication_parent": "b15daa2c53fa3e857f272c1b175636c1ef52c9da",
+  "scope_zh": "仅同步已完成的网页登录只读查询和既有证据；本次不重新查询网页/API、不测试、不机械复审。",
+  "conclusion_zh": "现有网页登录会话可直接读取Codespaces列表，账户lzwislam-collab显示All 0：本次可见账户范围内没有Codespace，也没有已运行实例。只读查询路径可用，但原本机Git API凭据权限未改，403没有被修复。",
+  "prior_observation_time_note_zh": "查询发生在上一轮工作，完成结果已于2026-10-25T11:05:43Z汇报；该时刻是此前汇报时点，不冒称页面抓取的精确时间。当前时间仅为证据同步时点。",
+  "original_receipt": {
+    "name": "codespaces-browser-readonly-result.json",
+    "sha256": "ebfe0e3fe0f956e175fae06defa371f0d7e146612700273c7d26b633f58e312f",
+    "utf8_content": "{\n  \"schema\": \"PR75_CODESPACES_EXISTING_SESSION_READONLY_V1\",\n  \"source\": \"https://github.com/codespaces\",\n  \"method\": \"Read rendered browser accessibility state in existing authenticated GitHub session; verify identity from user menu.\",\n  \"authenticated_account\": \"lzwislam-collab\",\n  \"visible_list_label\": \"All 0\",\n  \"visible_codespaces\": 0,\n  \"visible_running_codespaces\": 0,\n  \"conclusion\": \"Existing browser session permits read-only lookup without changing OAuth scopes. No visible Codespace exists under this account; no already-running instance available through this route.\",\n  \"api_credential_status\": \"Unchanged: prior local Git OAuth credential lacks codespace scope. Browser success is not a repair of that credential.\",\n  \"authentication_interaction\": \"A GitHub Mobile sudo confirmation request was initiated while checking the token settings route. It was not used to change permissions or issue credentials; the settings tab was closed after ordinary Codespaces page lookup succeeded.\",\n  \"operations\": {\n    \"authorization_changed\": false,\n    \"new_token_generated\": false,\n    \"codespace_created\": false,\n    \"codespace_started\": false,\n    \"remote_test_executed\": false,\n    \"production_task_executed\": false,\n    \"repository_or_pr_modified\": false,\n    \"oss_upload\": false,\n    \"new_trigger\": false,\n    \"frozen_model_protocol_history_modified\": false\n  },\n  \"remaining\": \"Cloud capacity acceptance requires an accessible running isolated cloud runtime; none is visible here. No creation/start performed. OSS custody and natural scheduling remain pending.\"\n}\n",
+    "representation": "Exact original UTF-8 text with original newlines. SHA256 is over the utf8_content encoded as UTF-8, not the enclosing JSON."
+  },
+  "evidence_scope_zh": "这是既有登录会话下的网页可见状态记录及账户菜单核对，不是Codespaces API成功响应，也不是云端资源的全局盘点；不得推断其他账户/云厂商没有实例。原始证据operations描述上轮查询操作，不指本轮审计发布。",
+  "authorization_zh": {
+    "changed": false,
+    "new_token_generated": false,
+    "api_scope_repaired": false,
+    "description": "此前本机Git OAuth范围仍缺codespace；未扩权。网页读取利用原有登录权限。曾发起的GitHub Mobile确认请求未用于权限更改或令牌生成，设置页已关闭。"
+  },
+  "production_readiness_checklist": [
+    {
+      "item": 1,
+      "name_zh": "云端承载",
+      "status": "PENDING_NO_VISIBLE_RUNNING_INSTANCE",
+      "detail_zh": "已恢复网页登录只读查询，All 0；没有进行云端磁盘/内存/完整处理时长验收。"
+    },
+    {
+      "item": 2,
+      "name_zh": "固定真实库存离线兼容性",
+      "status": "PASS_FOR_ARTIFACT_12581914557",
+      "detail_zh": "27分片、7672对象已通过，既有Windows离线证据保持。"
+    },
+    {
+      "item": 3,
+      "name_zh": "最新库存OSS存证与版本回读",
+      "status": "PENDING"
+    },
+    {
+      "item": 4,
+      "name_zh": "自然调度整链",
+      "status": "PENDING"
+    },
+    {
+      "item": 5,
+      "name_zh": "真实见证及API失败分类",
+      "status": "PARTIAL_OFFLINE_VERIFIED"
+    },
+    {
+      "item": 6,
+      "name_zh": "失败恢复与运维",
+      "status": "PARTIAL_OFFLINE_VERIFIED"
+    },
+    {
+      "item": 7,
+      "name_zh": "发布版本与冻结绑定",
+      "status": "PARTIAL_NOT_DEPLOYED"
+    }
+  ],
+  "missing_zh": "仍缺可连接、已运行的隔离云端执行环境及与目标部署对应的资源/依赖配置；本次不创建或启动实例，也不以本地Linux/Windows测量替代云端证据。",
+  "publication_operations": {
+    "audit_files_added": 1,
+    "auth_changed": false,
+    "instances_created": false,
+    "instances_started": false,
+    "tests_executed": false,
+    "production_tasks_executed": false,
+    "oss_upload": false,
+    "new_triggers": false,
+    "merged": false,
+    "deployed": false,
+    "frozen_model_protocol_history_changed": false
+  },
+  "closure_policy_zh": "PR继续保持草稿；仅同步审计记录，不因文档提交再开启机械复审。"
+}
