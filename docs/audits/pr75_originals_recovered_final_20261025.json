@@ -1,7 +1,7 @@
 {
   "schema": "PR75_ORIGINALS_RECOVERED_FINAL_ACCEPTANCE_V1",
-  "synchronized_at_utc": "2026-10-25T09:25:30Z",
-  "synchronized_at_jst": "2026-10-25T18:25:30.000+09:00",
+  "synchronized_at_utc": "2026-10-25T09:53:38Z",
+  "synchronized_at_jst": "2026-10-25T18:53:38.000+09:00",
   "parent_commit": "ac75d638daf85dc4c7540892786b54b5d5f3fcdf",
   "scope": "Current final acceptance: original recovery and historical evidence preserved; five Linux cases closed by native Linux offline runtime. No production acceptance inferred.",
   "supersedes_current_error_status_in": "docs/audits/pr75_remaining_inputs_runtime_20261025.json",
@@ -116,7 +116,7 @@
     "failures": 0,
     "errors": 0,
     "skipped_pending_linux": 0,
-    "basis": "Previous consolidated 1314 passes plus these five newly completed Linux cases. This turn ran only 9 executions/7 unique tests; not a fresh full-suite rerun. Strict tool overlap/additional already-covered cases are not added to the 1319 denominator.",
+    "basis": "1292 historical passes + 16 dependency closures + 4 recovered-original closures + 5 native Linux closures + 2 lean failures now closed by new targeted recheck = 1319. Per-ID original receipt matrix plus new targeted lean receipt; not a fresh full-suite/Linux run.",
     "four_previous_errors": "CLOSED: all four original tests passed, no failures/errors/skips.",
     "sixteen_previous_dependency_skips": "CLOSED: existing cached pinned dependencies loaded, original tests passed.",
     "only_remaining_items_in_this_offline_acceptance_set": "None. Linux 5+strict4 passed; 9 executions/7 unique this turn, not full discovery rerun."
@@ -134,7 +134,7 @@
     "keep_pr_draft": true,
     "linux_actual_verification": true
   },
-  "conclusion": "All five Linux pending cases closed by actual offline runtime. Consolidated 1319 passed, zero failure/error/pending; historical results plus targeted run, not full-suite rerun. Keep draft; no production/cloud acceptance inferred.",
+  "conclusion": "Independent comprehensive review confirms five native Linux closures and reconciles 1319 unique identities to raw receipts. Two audit-provenance gaps repaired with original archives plus NEW 12-case optimized lean receipt; not full-suite rerun. No remaining confirmed P0/P1/P2 blocker within PR offline scope; keep draft and do not infer production/cloud readiness.",
   "latest_independent_static_review": {
     "synchronized_at_utc": "2026-10-25T08:54:57Z",
     "reviewed_commit": "071f69bdd25875aa2f3033c7cc8ab140e84df225",
@@ -261,5 +261,26 @@
     "runner_kernel_network_isolation_verified": false,
     "independent_network_evidence": "QEMU -nic none plus guest only lo; original runner field not relabeled.",
     "independent_review": "All 6 evidence hashes and 706 input-hash entries matched; evidence supports closure."
+  },
+  "latest_independent_comprehensive_review": {
+    "record": "docs/audits/pr75_24b424c_independent_review_20261025.json",
+    "reviewed_commit": "24b424c05d5f8066556e01d9c05b438a1fc42f37",
+    "checked_at_utc": "2026-10-25T09:51:25Z",
+    "merge_eligible_in_reviewed_scope": true,
+    "closed_evidence_gaps": 2,
+    "current_targeted_offline_tests": 12,
+    "passed": 12,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "distinct_consolidated_ids": 1319,
+    "pending_linux": 0,
+    "matrix": "docs/audits/pr75_24b424c_review_20261025/identity-matrix.json",
+    "production_code_changed": false
+  },
+  "receipt_publication_privacy": {
+    "manifest": "docs/audits/pr75_24b424c_review_20261025/receipt-publication.json",
+    "public_historical_receipts": "ID/status projections with preserved line references, not raw host/trace data.",
+    "originals": "Verified locally and left unchanged; both original and public SHA256 recorded."
   }
 }

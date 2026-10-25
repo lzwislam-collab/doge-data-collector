@@ -1,0 +1,126 @@
+{
+  "schema": "PR75_INDEPENDENT_COMPREHENSIVE_REVIEW_V1",
+  "reviewed_commit": "24b424c05d5f8066556e01d9c05b438a1fc42f37",
+  "checked_at_utc": "2026-10-25T09:51:25Z",
+  "scope": "Independent review of native Linux execution evidence, five-case closure, per-ID consolidated acceptance and frozen boundary. Current round ran only the original 12-case lean module offline on Windows with -O to repair a specific receipt gap; no Linux/production/full-suite rerun.",
+  "conclusion": {
+    "merge_eligible_for_reviewed_pr_scope": true,
+    "reason": "Linux closure is supported, current test identity set reconciles exactly, frozen boundaries unchanged; two audit-provenance gaps repaired below. No remaining confirmed P0/P1/P2 blocker in reviewed offline scope.",
+    "pr_remains_draft": true,
+    "not_merged": true,
+    "production_deployment_readiness_not_inferred": true
+  },
+  "findings": [
+    {
+      "id": "P2-RECEIPT-LEAN",
+      "priority": "P2",
+      "kind": "evidence_gap",
+      "status": "CLOSED_BY_NEW_TARGETED_RECEIPT",
+      "evidence": "Historical full log has two lean failures; prior audit said 12 optimized tests passed, but original corresponding raw optimized log was not found. closure-utf8-recheck log is a different 12-case module set and was explicitly rejected as substitute.",
+      "impact": "Two consolidated PASS identities previously depended on an audit assertion rather than an independently traceable raw passing receipt.",
+      "repair": "New original test_lean_version_gate module recheck with -I -B -X utf8 -O, no network, 12/12 pass and no failure/error/skip; preserve exact IDs, log and pre/post input hashes. Do not claim recovery of the missing historical log.",
+      "acceptance": "Two failed IDs exactly cited in new passing log; expected/executed/passed all 12 IDs identical; source/config and 60 frozen input raw hashes unchanged.",
+      "receipt": "docs/audits/pr75_24b424c_review_20261025/lean-offline-recheck.json"
+    },
+    {
+      "id": "P2-CONSOLIDATED-PROVENANCE",
+      "priority": "P2",
+      "kind": "evidence_gap",
+      "status": "CLOSED_BY_LOCAL_ORIGINAL_VERIFICATION_AND_PUBLIC_PROJECTIONS",
+      "evidence": "Prior GitHub audit carried summary counts and failing/skipped details; full historical 1319 raw log and full per-ID consolidation were only local.",
+      "impact": "Readers could not mechanically verify all 1319 unique identities, de-duplication and final status using PR contents alone.",
+      "repair": "Original historical receipts validated locally and retained untouched. Publish line-preserving privacy-safe test-ID/status projections and passing-log-only JSON, with both original and published SHA256. Publish portable 1319-ID matrix, exact source/status lines and independent freeze/AST reconciliation.",
+      "acceptance": "1319 unique final PASS identities; original private receipts and public projections cross-checked independently. Public receipt hashes and exact ID/status lines validate, with explicit original/published digest mapping.",
+      "receipt": "docs/audits/pr75_24b424c_review_20261025/identity-matrix.json"
+    }
+  ],
+  "linux_evidence": {
+    "status": "PASS_CONFIRMED",
+    "original_pending_cases_closed": 5,
+    "new_linux_tests_this_review": 0,
+    "original_run_executions": 9,
+    "unique_tests": 7,
+    "original_failures": 0,
+    "original_errors": 0,
+    "original_skips": 0,
+    "launcher_exit_code": 0,
+    "core_remote_evidence_files_matched_raw_export": 7,
+    "evidence_hashes_recomputed": 6,
+    "original_export_sha256": "0cdb7c43e73a20b2ad5b2d760acfbdebd741ea91ce1a639dbc5c4847e4ebbc72",
+    "proof": "Unmocked real symlink creation in original tests; creation inability would skip and is rejected. Genuine QEMU/Linux boot/run/export/shutdown transcript and read-only ext4; exact original source files/runner at ac75. VM -nic none and guest only lo independently support offline isolation.",
+    "runner_kernel_network_isolation_verified": false,
+    "raw_runner_report_not_rewritten": true,
+    "evidence_directory": "docs/audits/pr75_linux_runtime_20261025"
+  },
+  "current_targeted_recheck": {
+    "receipt": "docs/audits/pr75_24b424c_review_20261025/lean-offline-recheck.json",
+    "platform": "win32",
+    "python_optimization": 1,
+    "tests_run": 12,
+    "passed": 12,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "expected_executed_passed_ids_match": true,
+    "inputs_unchanged": true,
+    "started_at_utc": "2026-10-25T09:44:18.488083+00:00",
+    "finished_at_utc": "2026-10-25T09:44:18.858088+00:00"
+  },
+  "consolidated_acceptance": {
+    "distinct_ids": 1319,
+    "passed": 1319,
+    "failures": 0,
+    "errors": 0,
+    "pending_linux": 0,
+    "unresolved_receipt_gaps": 0,
+    "formula": "1292 historical passes + 16 dependency closures + 4 recovered-original closures + 5 native Linux closures + 2 lean failures now closed by new targeted recheck = 1319.",
+    "not_a_fresh_full_suite_run": true,
+    "not_all_tests_run_on_linux": true,
+    "separate_integration_sdk_not_added": true,
+    "matrix": "docs/audits/pr75_24b424c_review_20261025/identity-matrix.json"
+  },
+  "freeze_boundary": {
+    "registered_maps": 5,
+    "unique_registered_frozen_files": 60,
+    "all_hashes_match": true,
+    "source_config_inputs": 293,
+    "input_hash_entries_in_original_linux_before_after": 706,
+    "changed_registered_frozen_files_in_full_pr": [],
+    "changed_config_data_research_system_workflow_paths_in_full_pr": [],
+    "full_pr_changed_files": 52,
+    "current_test_ids_match_historical_set": true,
+    "test_ids_added": [],
+    "test_ids_missing": [],
+    "scope_note": "60 means union of five explicit registration maps; 293 means source/config input set. Neither is a claim that every historical asset has been hash-registered.",
+    "receipt": "docs/audits/pr75_24b424c_review_20261025/freeze-and-identities.json"
+  },
+  "remaining": [
+    {
+      "priority": "P3",
+      "kind": "trust_boundary",
+      "detail": "Internally consistent local execution, logs and hashes are not third-party signature, hardware remote attestation or independent WORM custody."
+    },
+    {
+      "priority": "P3",
+      "kind": "historical_provenance_limit",
+      "detail": "Original older optimized lean log remains unrecovered; two identities now supported by fresh raw passing receipt, with historical missing-log note preserved."
+    },
+    {
+      "priority": "P3",
+      "kind": "coverage_limit",
+      "detail": "No new full-suite Linux run, production natural scheduling, cloud upload/readback or physical 16/41 GiB capacity run. Prior resource/crash/concurrency limits remain unchanged."
+    },
+    {
+      "priority": "P3",
+      "kind": "public_receipt_privacy_scope",
+      "detail": "GitHub carries privacy-safe historical ID/status projections, not original host stack traces. Original receipts were independently verified locally; original and projection digests are both recorded."
+    }
+  ],
+  "changes": "Audit records, original receipts, evidence matrix and audit recheck reproducer only. No production source, workflow, model, protocol or original historical data edits; no merge/deploy/production run/new triggers.",
+  "publication_privacy": {
+    "raw_failure_log_upload_rejected": true,
+    "reason": "Automatic approval review rejected raw historical failure log due to local host paths and trace details.",
+    "safe_alternative": "No raw retry. Publish test-ID/status-only projections preserving cited line positions; record both original/published SHA256. Original failure logs remain local unchanged.",
+    "projection_manifest": "docs/audits/pr75_24b424c_review_20261025/receipt-publication.json"
+  }
+}
