@@ -134,7 +134,7 @@ def save_receipt(root, receipt):
         os.fsync(stream.fileno())
 
 
-def run(root, adapter, duration_seconds=2400, clock=None, sleep=None):
+def run(root, adapter, duration_seconds=2400, clock=None, sleep=None, stop_file=None):
     if type(duration_seconds) not in (int, float) or not 0 < duration_seconds <= 3000:
         raise ValueError('bounded runtime duration required')
     clock = clock or (lambda: datetime.now(timezone.utc))
@@ -145,7 +145,7 @@ def run(root, adapter, duration_seconds=2400, clock=None, sleep=None):
     count = errors = 0
     maximum = 0
     fatal = False
-    while utc(clock()) < end:
+    while utc(clock()) < end and not (stop_file and Path(stop_file).exists()):
         before = utc(clock())
         receipt = cycle(adapter, state, clock)
         elapsed = (utc(clock()) - before).total_seconds()
@@ -323,6 +323,7 @@ def finish(root, adapter, result):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--duration-seconds', type=int, default=2400)
+    parser.add_argument('--stop-file', type=Path)
     args = parser.parse_args()
     root = Path(__file__).resolve().parent
     adapter = LiveAdapter(root)
@@ -330,7 +331,7 @@ def main():
         adapter.python('forward_validation_v2.py', '--integrity-only')
         adapter.command('git', 'config', 'user.name', 'github-actions[bot]')
         adapter.command('git', 'config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com')
-        result = run(root, adapter, args.duration_seconds)
+        result = run(root, adapter, args.duration_seconds, stop_file=args.stop_file)
     except Exception as exc:
         result = {'fatal': True, 'status': 'DEGRADED', 'error': type(exc).__name__+': '+str(exc)[:500],
                   'observed_at_utc': datetime.now(timezone.utc).isoformat(), 'economic_acceptance_passed': False}
