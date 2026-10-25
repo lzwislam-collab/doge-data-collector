@@ -40,12 +40,17 @@ def cycle(adapter, state, clock):
            'historical_backfill': False, 'economic_acceptance_passed': False}
 
     def action(name):
+        before = utc(clock())
         try:
             result = adapter.action(name)
-            out['actions'].append({'stage': name, 'result': result})
+            out['actions'].append({'stage': name, 'result': result,
+                                   'started_at_utc': before.isoformat(),
+                                   'seconds': (utc(clock())-before).total_seconds()})
             return True
         except Exception as exc:
-            out['errors'].append({'stage': name, 'error': type(exc).__name__ + ': ' + str(exc)[:500]})
+            out['errors'].append({'stage': name, 'error': type(exc).__name__ + ': ' + str(exc)[:500],
+                                  'started_at_utc': before.isoformat(),
+                                  'seconds': (utc(clock())-before).total_seconds()})
             return False
 
     def publish():
@@ -97,7 +102,8 @@ def cycle(adapter, state, clock):
         if not action('source_audit'):
             publish()
             return out
-        state['source_audited_at'] = utc(clock())
+        if out['actions'][-1]['result'].get('status') != 'pending':
+            state['source_audited_at'] = utc(clock())
     # New issues invalidate cached registry/source audits even within 5 minutes.
     elif out['issuance'] == 'ATTEMPT_COMPLETED':
         if not action('source_audit'):
@@ -173,6 +179,8 @@ class LiveAdapter:
         self.root = Path(root)
         self.last_witness_head = None
         self.core_witness_pending = False
+        from runtime_audit_worker import Auditor
+        self.auditor = Auditor(self.root)
 
     def command(self, *args, env=None):
         result = subprocess.run(args, cwd=self.root, env=dict(os.environ, **(env or {})),
@@ -205,11 +213,14 @@ class LiveAdapter:
             self.python('minimal_market_forward.py', 'bind')
             self.python('feature_ablation.py', 'bind')
         elif name == 'source_audit':
-            self.python('forward_validation_v2.py')
-            self.python('p0_operational_audit.py')
-            self.python('paired_cohort_audit.py')
+            return self.auditor.poll()
         elif name == 'book':
-            self.python('p2_paired_execution_v3_1.py', 'capture')
+            # Preserve raw depth during initial/mismatched audit waits without
+            # calling it an eligible formal event or retrofitting it later.
+            mode = 'capture' if self.source_ready() else 'smoke'
+            self.python('p2_paired_execution_v3_1.py', mode)
+            return {'status': 'command_completed', 'stage': name, 'mode': mode,
+                    'formal_eligibility': mode == 'capture'}
         elif name == 'publish':
             import publish_forward_evidence as publisher
             import paired_forward_cohort as pair
@@ -268,6 +279,19 @@ class LiveAdapter:
             raise ValueError('unknown runtime action')
         return {'status': 'command_completed', 'stage': name}
 
+    def source_ready(self):
+        now = datetime.now(timezone.utc)
+        try:
+            operations = json.loads((self.root/'data/p0_operations/latest.json').read_text(encoding='utf-8'))
+            audit = json.loads((self.root/'data/paired_forward_v1/audit_latest.json').read_text(encoding='utf-8'))
+        except FileNotFoundError:
+            return False
+        return (operations.get('status') == audit.get('status') == 'ok'
+                and 0 <= (now-utc(operations['audited_at_utc'])).total_seconds() <= 900
+                and 0 <= (now-utc(audit['evaluated_at_utc'])).total_seconds() <= 900
+                and audit['input_registry_sha256'] == hashlib.sha256(
+                    (self.root/'data/direction_v42/forward_registry.csv').read_bytes()).hexdigest())
+
 
 def validate_p2(root):
     import p2_paired_execution_v3_1 as engine
@@ -310,6 +334,7 @@ def main():
     except Exception as exc:
         result = {'fatal': True, 'status': 'DEGRADED', 'error': type(exc).__name__+': '+str(exc)[:500],
                   'observed_at_utc': datetime.now(timezone.utc).isoformat(), 'economic_acceptance_passed': False}
+    adapter.auditor.close()
     result = finish(root, adapter, result)
     print(json.dumps(result))
     return 0 if result['status'] == 'CAPTURE_LOOP_COMPLETED' else 1
