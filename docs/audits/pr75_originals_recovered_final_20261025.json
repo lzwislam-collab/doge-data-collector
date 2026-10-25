@@ -1,0 +1,158 @@
+{
+  "schema": "PR75_ORIGINALS_RECOVERED_FINAL_ACCEPTANCE_V1",
+  "synchronized_at_utc": "2026-10-25T05:02:30.420034+00:00",
+  "synchronized_at_jst": "2026-10-25T14:02:30.420034+09:00",
+  "parent_commit": "560e825e0c1cb342a736403440289e5d399946d7",
+  "scope": "Publish already-completed exact-original recovery and four-test evidence only; no test rerun or mechanical review during synchronization.",
+  "supersedes_current_error_status_in": "docs/audits/pr75_remaining_inputs_runtime_20261025.json",
+  "recovery": {
+    "read_only_github_retrieval": true,
+    "base_commit": "545d018be0e1a7290cd5ff7982c80f244135836f",
+    "originals": [
+      {
+        "path": "data/hourly_research/ohlc.csv",
+        "bytes": 10947336,
+        "git_blob_sha1": "b3c2cf81c7ca4f6349729187317157f78e02e225",
+        "sha256": "66a1d0d4310a8566e8c9b71ce48c8d5c5ec0a0c6cae9dbb4fb35a1e6766cc61f",
+        "original_source_path_still_absent": true
+      },
+      {
+        "path": "data/p2_paired_execution_v3_1/latest.json",
+        "bytes": 28222,
+        "git_blob_sha1": "2b610911350c189a73253c33b1dde629011189f7",
+        "sha256": "dfb49679020fb1d8dd3559cbf71fe145f1ce5812a084d5ed4917a2d77479baab",
+        "original_source_path_still_absent": true
+      }
+    ],
+    "source_locations": [
+      {
+        "path": "data/hourly_research/ohlc.csv",
+        "method": "Read-only HTTPS GET at pinned commit after GitHub connector transport errors",
+        "url": "https://raw.githubusercontent.com/lzwislam-collab/doge-data-collector/545d018be0e1a7290cd5ff7982c80f244135836f/data/hourly_research/ohlc.csv",
+        "http_status": 200
+      },
+      {
+        "path": "data/p2_paired_execution_v3_1/latest.json",
+        "method": "GitHub fetch_blob read by exact known SHA",
+        "url": "https://api.github.com/repos/lzwislam-collab/doge-data-collector/git/blobs/2b610911350c189a73253c33b1dde629011189f7"
+      }
+    ],
+    "written_only_to_isolated_fixture": true,
+    "raw_originals_in_this_commit": false,
+    "no_original_csv_or_json_contents_embedded_in_this_record": true
+  },
+  "four_tests_completed": {
+    "schema": "PR75_GITHUB_EXACT_ORIGINALS_FOUR_TESTS_V1",
+    "checked_at_utc": "2026-10-25T05:00:08.863829+00:00",
+    "checked_at_jst": "2026-10-25T14:00:08.863829+09:00",
+    "source_code_revision": "560e825e0c1cb342a736403440289e5d399946d7",
+    "fixture_git_head": "545d018be0e1a7290cd5ff7982c80f244135836f",
+    "retrieval_scope": "Read-only GitHub original fetches; exact hash verification before write to isolated fixture only.",
+    "originals": [
+      {
+        "path": "data/hourly_research/ohlc.csv",
+        "bytes": 10947336,
+        "git_blob_sha1": "b3c2cf81c7ca4f6349729187317157f78e02e225",
+        "sha256": "66a1d0d4310a8566e8c9b71ce48c8d5c5ec0a0c6cae9dbb4fb35a1e6766cc61f",
+        "original_source_path_still_absent": true
+      },
+      {
+        "path": "data/p2_paired_execution_v3_1/latest.json",
+        "bytes": 28222,
+        "git_blob_sha1": "2b610911350c189a73253c33b1dde629011189f7",
+        "sha256": "dfb49679020fb1d8dd3559cbf71fe145f1ce5812a084d5ed4917a2d77479baab",
+        "original_source_path_still_absent": true
+      }
+    ],
+    "names": [
+      "test_e1_report.E1ReportTests.test_e1_failure_preserves_original_report_and_does_not_claim_verification",
+      "test_e1_report.E1ReportTests.test_snapshot_adds_independent_panel_without_changing_r2_statistics",
+      "test_forward_readiness.Readiness.test_history_receipt_before_close_and_nonfinite_volume_rejected",
+      "test_p2_economic_acceptance.EconomicAcceptanceTests.test_existing_immature_report_remains_wait_without_new_fields"
+    ],
+    "run": 4,
+    "successes": [
+      "test_e1_failure_preserves_original_report_and_does_not_claim_verification (test_e1_report.E1ReportTests.test_e1_failure_preserves_original_report_and_does_not_claim_verification)",
+      "test_snapshot_adds_independent_panel_without_changing_r2_statistics (test_e1_report.E1ReportTests.test_snapshot_adds_independent_panel_without_changing_r2_statistics)",
+      "test_history_receipt_before_close_and_nonfinite_volume_rejected (test_forward_readiness.Readiness.test_history_receipt_before_close_and_nonfinite_volume_rejected)",
+      "test_existing_immature_report_remains_wait_without_new_fields (test_p2_economic_acceptance.EconomicAcceptanceTests.test_existing_immature_report_remains_wait_without_new_fields)"
+    ],
+    "failures": [],
+    "errors": [],
+    "skipped": [],
+    "elapsed_seconds": 53.094,
+    "test_network_blocked": true,
+    "git_lazy_fetch_disabled": true,
+    "frozen_unique_files": 60,
+    "frozen_both_source_and_fixture_match": true,
+    "source_history_data_modified": false,
+    "code_or_models_modified": false,
+    "linux_status": "PENDING_BY_USER_INSTRUCTION",
+    "workflow_runs_triggers_merge_deployment": false,
+    "github_writes_performed": false
+  },
+  "raw_four_test_log": "test_e1_failure_preserves_original_report_and_does_not_claim_verification (test_e1_report.E1ReportTests.test_e1_failure_preserves_original_report_and_does_not_claim_verification) ... ok\ntest_snapshot_adds_independent_panel_without_changing_r2_statistics (test_e1_report.E1ReportTests.test_snapshot_adds_independent_panel_without_changing_r2_statistics) ... ok\ntest_history_receipt_before_close_and_nonfinite_volume_rejected (test_forward_readiness.Readiness.test_history_receipt_before_close_and_nonfinite_volume_rejected) ... ok\ntest_existing_immature_report_remains_wait_without_new_fields (test_p2_economic_acceptance.EconomicAcceptanceTests.test_existing_immature_report_remains_wait_without_new_fields) ... ok\n\n----------------------------------------------------------------------\nRan 4 tests in 52.629s\n\nOK\n",
+  "evidence_sha256": {
+    "four_test_report": "2c43b895687d9ff1ee35afcf93ebef1f4b3edfda57bb196271c03aa86ac10590",
+    "four_test_log": "5c47842df1b69cf53ebd44008560264232fbba0f2885b2db67c14dc5fa3ffa21",
+    "csv_recovery_receipt": "24a23b3be9bc6f9666195cbae53bed9d0ba1d3e810800d75d4ae59b9759200fb",
+    "pre_sync_read_only_pr_state": "7ee529b0f889b833386c459ebe4c887865b6fc51e936afaf664e03e7dbf7018d"
+  },
+  "pre_sync_pr_state": {
+    "checked_at_utc": "2026-10-25T05:00:47.345574+00:00",
+    "checked_at_jst": "2026-10-25T14:00:47.345574+09:00",
+    "method": "Read-only GitHub REST GET fallback after connector transport errors",
+    "head": "560e825e0c1cb342a736403440289e5d399946d7",
+    "draft": true,
+    "merged": false,
+    "expected_head_unchanged": true,
+    "head_actions_runs": 0,
+    "branch_actions_runs": 0,
+    "github_writes_performed": false
+  },
+  "final_acceptance_summary": {
+    "distinct_discovered_tests": 1319,
+    "passed": 1314,
+    "failures": 0,
+    "errors": 0,
+    "skipped_pending_linux": 5,
+    "basis": "Consolidated prior full-discovery run, targeted test fixes, 16 cached-dependency cases, and the four recovered-original cases. Not a claim of a fresh full-suite rerun.",
+    "four_previous_errors": "CLOSED: all four original tests passed, no failures/errors/skips.",
+    "sixteen_previous_dependency_skips": "CLOSED: existing cached pinned dependencies loaded, original tests passed.",
+    "only_remaining_items_in_this_offline_acceptance_set": "Five real symlink cases pending actual Linux execution."
+  },
+  "pending_linux_tests": [
+    {
+      "test": "test_output_symlink_rejected (test_phase2_research.Phase2ResearchTests.test_output_symlink_rejected)",
+      "previous_skip_reason": "symlink privilege unavailable"
+    },
+    {
+      "test": "test_symlink_model_cannot_pass_manifest_verification (test_phase2_research.Phase2ResearchTests.test_symlink_model_cannot_pass_manifest_verification)",
+      "previous_skip_reason": "symlink privilege unavailable"
+    },
+    {
+      "test": "test_latest_symlink_cannot_overwrite_outside_file (test_pit_retention_preparation.PreparationTests.test_latest_symlink_cannot_overwrite_outside_file)",
+      "previous_skip_reason": "platform cannot create symlinks; Linux CI must exercise this test"
+    },
+    {
+      "test": "test_output_directory_symlink_cannot_redirect_package_writes (test_pit_retention_preparation.PreparationTests.test_output_directory_symlink_cannot_redirect_package_writes)",
+      "previous_skip_reason": "platform cannot create symlinks; Linux CI must exercise this test"
+    },
+    {
+      "test": "test_release_namespace_parent_symlink_rejected (test_prediction_release_control.Release.test_release_namespace_parent_symlink_rejected)",
+      "previous_skip_reason": "platform cannot create directory symlink"
+    }
+  ],
+  "linux_acceptance": "Actual Linux runtime with real file/directory symlinks: all five named original tests and unchanged strict Linux tool pass without required skips. Windows mocks/junction/hardlink substitutions do not count.",
+  "preserved_limits": "This closes the recorded offline errors, not actual cloud disk/runtime, production upload/readback or natural scheduling verification. Prior declared finite-capacity/history-discovery/crash-consistency limits remain unchanged.",
+  "synchronization_restrictions": {
+    "audit_records_only": true,
+    "raw_originals_committed": false,
+    "code_models_protocols_original_history_changed": false,
+    "new_tests_or_test_reruns": false,
+    "merge_deployment_production_reruns_new_triggers": false,
+    "keep_pr_draft": true,
+    "linux_actual_verification": false
+  },
+  "conclusion": "Recorded offline acceptance has zero remaining errors; only five Linux symlink cases remain pending. Keep draft; do not infer Linux or production/cloud acceptance."
+}
