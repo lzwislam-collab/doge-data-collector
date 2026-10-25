@@ -1,0 +1,100 @@
+{
+  "schema": "PR75_B859248_FINAL_CLOSURE_V1",
+  "reviewed_commit": "b859248489ebbb9a5c9ede8ca7633a7f734ec020",
+  "publication_scope": "Publish already-completed review and existing offline evidence only; no new test execution or mechanical re-review.",
+  "conclusion_zh": "复审收口：离线修复范围内未发现新的可证实阻塞项，可以合并；依用户要求仍保持草稿，不执行合并或部署。",
+  "final_counts": {
+    "unique_tests": 1319,
+    "evidence_references": 1355,
+    "projection_pairs": 3,
+    "cli_checks": 5,
+    "frozen_assets": 60,
+    "pending_linux_from_original_five": 0
+  },
+  "evidence": {
+    "result_sha256": "5717073f7b3c65c5d811579f54f7ec5276f173fa02ec28e7c77bfc31df77fbf9",
+    "result": {
+      "reviewed_commit": "b859248489ebbb9a5c9ede8ca7633a7f734ec020",
+      "status": "PASS",
+      "unique_ids": 1319,
+      "references_checked_against_originals_and_public": 1355,
+      "projection_pairs": 3,
+      "entry_blob": "15b6b00dc9fce3fa4579d3ec3be5e5324fc79bc4",
+      "actual_cli_rejection_cases": [
+        {
+          "name": "same",
+          "exit_nonzero": true,
+          "source_unchanged": true
+        },
+        {
+          "name": "child",
+          "exit_nonzero": true,
+          "source_unchanged": true
+        },
+        {
+          "name": "ancestor",
+          "exit_nonzero": true,
+          "source_unchanged": true
+        },
+        {
+          "name": "dotdot",
+          "exit_nonzero": true,
+          "source_unchanged": true
+        },
+        {
+          "name": "existing-output",
+          "exit_nonzero": true,
+          "old_bytes_preserved": true
+        }
+      ],
+      "frozen_assets": 60,
+      "new_full_suite_run": false,
+      "new_linux_run": false,
+      "production_changed": false,
+      "limits": [
+        "Public readers without originals cannot independently prove redaction derivation; local originals checked here.",
+        "No claim of hostile concurrent directory replacement resistance."
+      ]
+    },
+    "remote_bindings": [
+      {
+        "path": "docs/audits/pr75_24b424c_review_20261025/identity-matrix.json",
+        "blob": "ce47f206ad1020a82a736e8a88f11ec194b70956"
+      },
+      {
+        "path": "docs/audits/pr75_24b424c_review_20261025/receipt-publication.json",
+        "blob": "6d5a6fc631a05fd47710b22135315f109a229ffc"
+      },
+      {
+        "path": "docs/audits/pr75_24b424c_review_20261025/receipts/full-discovery.public.log",
+        "blob": "aa2d34a94de58c42f65b65d5077b54091b3c6ec1"
+      },
+      {
+        "path": "docs/audits/pr75_24b424c_review_20261025/receipts/remaining-25.public.log",
+        "blob": "465b86d919119a015bc739b4c0146339414ae0a5"
+      },
+      {
+        "path": "docs/audits/pr75_24b424c_review_20261025/receipts/recovered-log.public.json",
+        "blob": "b13cec596a63a236184fcfa27e5cef416a8c5378"
+      }
+    ],
+    "bindings_sha256": "ed4b40b9643c16d2ba60d980a2e7f843bb3b2144dbdc3cf1a860673889e8c178",
+    "verifier_sha256": "0f15d66df41d0d1242d4494ea8303cb749f0cc94cc668db011493b6fc6e8edba"
+  },
+  "verification_procedure": [
+    "Check distinct identities and complete historical status chains against both original and public matrices.",
+    "Verify each receipt SHA256, exact test ID, terminal status and cited line; check embedded four-test log.",
+    "Check three original/public hash mappings and line counts; retained originals checked locally.",
+    "Invoke pinned entry blob for same/child/ancestor/dotdot/existing-output cases; require nonzero exit and unchanged source/existing bytes.",
+    "Compare 60 registered frozen asset hashes; verify five pinned remote Git blobs against local checked evidence."
+  ],
+  "evidence_representation": "Embedded result and remote bindings retain parsed original content. SHA256 values refer to original local file bytes, not reserialized embedded objects. Private originals and verifier retained locally; no raw diagnostic publication.",
+  "remaining_limits_zh": [
+    "1319为累计逐项证据汇总，不是本次全仓或全仓Linux重跑。",
+    "公开投影可核测试身份、状态、引用行号与文件哈希；没有原件的第三方无法独立证明删减诊断的内容或推导过程。",
+    "不承诺抵抗恶意并发替换目录。",
+    "未新增生产自然调度、真实云端上传回读或物理容量极值验收。"
+  ],
+  "change_boundary": "Audit record only; no frozen model, protocol, history, workflow, production task or trigger changes.",
+  "closure_policy_zh": "本次为最终收口记录；仅代码变化、新测试失败或新实质证据才重新打开审查。文档收口提交本身不触发机械复审。"
+}

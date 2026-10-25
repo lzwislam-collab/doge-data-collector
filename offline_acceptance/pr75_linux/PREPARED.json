@@ -1,0 +1,109 @@
+{
+  "schema": "PR75_LINUX_PREPARATION_V1",
+  "status": "NOT_RUN",
+  "prepared_at_utc": "2026-10-25T08:14:18.072885+00:00",
+  "prepared_against": "d5bc10c0c940417bcb9fc4bcc97623ffffc24fe0",
+  "acceptance_executed": false,
+  "environment_installed": false,
+  "linux_pending": 5,
+  "static_checks": {
+    "runner_ast_parse": true,
+    "original_test_ids_exist": true,
+    "planned_executions": 9,
+    "unique_test_ids": 7,
+    "source_sha256_lf_count": 293,
+    "frozen_hashes_matched": 60,
+    "import_time_modules": [
+      "evidence_append_guard",
+      "factor_evaluation_v1",
+      "forward_execution_evidence",
+      "learned_shadow_bundle",
+      "learned_shadow_v1",
+      "offline_inventory_stress",
+      "offline_linux_inventory_checks",
+      "oss_inventory_retention",
+      "phase1_research",
+      "phase1_research_audit",
+      "phase2_factor_library",
+      "phase2_forward_runtime_v2",
+      "phase2_forward_v2",
+      "phase2_models_v2",
+      "phase2_research",
+      "phase3_batches",
+      "phase3_independent",
+      "phase3_lifecycle",
+      "phase3_runtime",
+      "pit_retention_preparation",
+      "prediction_release_control",
+      "test_inventory_capacity",
+      "test_phase2_research",
+      "test_pit_retention_preparation",
+      "test_prediction_release_control",
+      "user_managed_retention_v2"
+    ],
+    "third_party_imports": [
+      "numpy"
+    ],
+    "shell_failure_control_text_review": true,
+    "independent_static_review": "no blocking or important findings; no execution",
+    "d5bc10c_independent_static_review": {
+      "python_ast_parse": true,
+      "launcher_path_validation_precedes_writes": true,
+      "required_evidence_gate": true,
+      "zero_skip_gate_retained": true,
+      "source_files": 293,
+      "frozen_hashes_matched": 60,
+      "execution_performed": false
+    }
+  },
+  "repairs": [
+    {
+      "issue": "Initialization hashed manifest outside error handler",
+      "repair": "Move bundle reads/checksums under recorded preflight; launcher captures earlier failures"
+    },
+    {
+      "issue": "No saved startup stderr/exit code",
+      "repair": "POSIX launcher uses exclusive logs and exit record; checksum/cd failures explicitly stop"
+    },
+    {
+      "issue": "Current directory and runner/repository could differ",
+      "repair": "Bind bundle path to repository; use contextlib.chdir"
+    },
+    {
+      "issue": "Package checksums only external; normalized identity could miss line-ending mutation",
+      "repair": "Verify checksum inventory internally; compare raw pre/post hashes too"
+    },
+    {
+      "issue": "Interrupted phases lost partial executed IDs",
+      "repair": "Keep five-test progress in summary and strict IDs in finally"
+    },
+    {
+      "issue": "Temporary cleanup residue not an explicit overall gate",
+      "repair": "Record residue and require empty temporary directory"
+    },
+    {
+      "priority": "P1",
+      "issue": "Launcher created sibling log before rejecting repository-contained or linked output",
+      "repair": "Canonical/physical path and containment preflight before all output redirects; invalid path exits without writes"
+    },
+    {
+      "priority": "P2",
+      "issue": "Final index silently omitted missing required evidence",
+      "repair": "Collect per-file missing/link/read errors and require complete five-file evidence before PASS; partial failure index preserved"
+    }
+  ],
+  "files_sha256": {
+    "run.py": "c6a3a7449464719c6c2b6140ec307b3c94d8dc53b8272f9037397bd50a565947",
+    "launch.sh": "d1163f7320439e7043b4d61cea12af25ebbdbf41c1d8daf937980eedf6f70b7e",
+    "manifest.json": "a8cd7fefdb0b1887d77292d34f3d4773e22af348b1e961dd0c038c81118b3d45",
+    "requirements.txt": "f17d5d1eaaab27c16cb92ade04c41bfe8196f09e3be952827643671916d82efd",
+    "README.zh-CN.md": "dfb6b6ae085d1b02f17185cda36977d992cd853bff5b8aa2457edb6a639ced29"
+  },
+  "limitations": [
+    "No runner, launcher or test execution/import performed",
+    "Shell reviewed as text; native Linux shell/runtime verification pending",
+    "Requires matching offline repository/frozen assets and pre-provisioned native NumPy dependencies",
+    "Unwritable media or hard kill cannot guarantee evidence persistence",
+    "All five Linux tests remain pending"
+  ]
+}

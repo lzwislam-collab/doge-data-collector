@@ -1,0 +1,100 @@
+{
+  "schema": "PR75_INDEPENDENT_STATIC_REVIEW_FINAL_V1",
+  "synchronized_at_utc": "2026-10-25T08:54:57Z",
+  "reviewed_commit": "071f69bdd25875aa2f3033c7cc8ab140e84df225",
+  "scope": "Publish already-completed independent static review of 071f69b. Audit records only; no runner/launcher/test execution or import, no environment installation.",
+  "review_result": {
+    "new_confirmed_defects": 0,
+    "new_code_fix_required": false,
+    "conclusion": "No new provable mismatch or important omission within static review coverage; five Linux cases remain pending actual execution.",
+    "audit_consistency": {
+      "actual_changed_paths": [
+        {
+          "path": "docs/audits/pr75_32f04ed_static_review_final_20261025.json",
+          "status": "added",
+          "blob_sha1": "c42db4e4401b45e14f137fd5ff2bdb7be26b101c"
+        },
+        {
+          "path": "docs/audits/pr75_originals_recovered_final_20261025.json",
+          "status": "modified",
+          "blob_sha1": "f14922439ff52c167f1c353825412d39be9f95c7"
+        }
+      ],
+      "parent": "32f04ed5becb0e21ede69dde77434ad3bea33b4a",
+      "historical_acceptance_preserved": true,
+      "previous_review_history_preserved": true,
+      "latest_index_correctly_targets": "32f04ed5becb0e21ede69dde77434ad3bea33b4a",
+      "prior_record_diff_claims_compared_to_reviewed_32f04ed_commit": true,
+      "acceptance_package_unchanged": true
+    },
+    "failure_evidence": "Missing, symlinked or unreadable required stage evidence records errors and blocks PASS. Summary/index publication failure causes nonzero overall exit; launcher preserves output/status after path preflight. Invalid path preflight errors remain terminal stderr/nonzero without writes.",
+    "zero_skip": "Original five exact executed/passed IDs plus strict four exact executed IDs, 9 executions/7 unique tests, zero failures/errors/skips; complete evidence, stable input/package pre/post hashes, clean temporary area, PASS/Linux flags, valid evidence hashes and overall exit zero required jointly."
+  },
+  "existing_static_evidence": {
+    "package_blobs_matched": 7,
+    "package_sha256sums": "matched",
+    "source_config_hashes_matched": 293,
+    "frozen_hashes_matched": 60,
+    "python_syntax": "AST parsed only",
+    "independent_remote_review": "Independent reviewer read the two records at pinned 071f69b via GitHub connector and found no provable inconsistency or important omission; no Git/runtime/test execution or installation.",
+    "package_git_blobs": {
+      "offline_acceptance/pr75_linux/PREPARED.json": "3359527de5034557815f9c21996838cac08d4aed",
+      "offline_acceptance/pr75_linux/README.zh-CN.md": "7197ca1e93d83d9d2ef174067230478ef580e7cd",
+      "offline_acceptance/pr75_linux/SHA256SUMS": "4f1a263153831ec8bc578b5b406cc27d83d77aab",
+      "offline_acceptance/pr75_linux/launch.sh": "1e9a54d2b83873784be1f99fc31fb80a75e7f278",
+      "offline_acceptance/pr75_linux/manifest.json": "121fdd9d42d91ce60b104088b7c0f073b1b17116",
+      "offline_acceptance/pr75_linux/requirements.txt": "8698a64f1bbfd17df45c86b439dba180c633a2a4",
+      "offline_acceptance/pr75_linux/run.py": "30022f40e777b107e4036c73970aee66fca40068"
+    }
+  },
+  "historical_acceptance": {
+    "distinct_tests": 1319,
+    "passed": 1314,
+    "failures": 0,
+    "errors": 0,
+    "pending_linux": 5,
+    "basis": "Consolidated prior runtime evidence, unchanged; no fresh runtime/full-suite result."
+  },
+  "linux": {
+    "status": "PENDING_NOT_RUN",
+    "actual_execution_verified": false,
+    "tests": [
+      {
+        "test": "test_output_symlink_rejected (test_phase2_research.Phase2ResearchTests.test_output_symlink_rejected)",
+        "previous_skip_reason": "symlink privilege unavailable"
+      },
+      {
+        "test": "test_symlink_model_cannot_pass_manifest_verification (test_phase2_research.Phase2ResearchTests.test_symlink_model_cannot_pass_manifest_verification)",
+        "previous_skip_reason": "symlink privilege unavailable"
+      },
+      {
+        "test": "test_latest_symlink_cannot_overwrite_outside_file (test_pit_retention_preparation.PreparationTests.test_latest_symlink_cannot_overwrite_outside_file)",
+        "previous_skip_reason": "platform cannot create symlinks; Linux CI must exercise this test"
+      },
+      {
+        "test": "test_output_directory_symlink_cannot_redirect_package_writes (test_pit_retention_preparation.PreparationTests.test_output_directory_symlink_cannot_redirect_package_writes)",
+        "previous_skip_reason": "platform cannot create symlinks; Linux CI must exercise this test"
+      },
+      {
+        "test": "test_release_namespace_parent_symlink_rejected (test_prediction_release_control.Release.test_release_namespace_parent_symlink_rejected)",
+        "previous_skip_reason": "platform cannot create directory symlink"
+      }
+    ],
+    "closure_criteria": "Native Linux: all original five and unchanged strict four, zero failures/errors/skips, 9 executions/7 unique IDs, required evidence intact and complete, matching pre/post hashes and overall exit 0."
+  },
+  "prior_review_record": "docs/audits/pr75_32f04ed_static_review_final_20261025.json",
+  "limitations": [
+    "Static review is not runtime verification or a guarantee of first-run success.",
+    "Hard kill, unwritable media and previously declared concurrency/crash/persistence bounds remain.",
+    "Cloud disk/runtime, provider upload/readback and natural scheduling remain outside this offline review."
+  ],
+  "synchronization": {
+    "audit_records_only": true,
+    "tests_executed": false,
+    "runner_or_launcher_executed": false,
+    "environment_installed": false,
+    "keep_draft": true,
+    "merge_deploy_rerun_new_triggers": false,
+    "code_package_models_protocols_original_history_changed": false
+  }
+}

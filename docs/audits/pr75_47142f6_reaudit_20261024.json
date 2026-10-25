@@ -1,0 +1,187 @@
+{
+  "schema": "PR75_47142F6_INDEPENDENT_REAUDIT_V1",
+  "reviewed_commit": "47142f6957cb764d61c823620bc61125de16acb2",
+  "checked_at_utc": "2026-10-24T11:58:57.637320+00:00",
+  "offline_only": true,
+  "production_actions_performed": false,
+  "tests": {
+    "total": 230,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 2,
+    "network_blocked": true,
+    "frozen_union_files": 33,
+    "frozen_producer_unchanged": true,
+    "passed": 228,
+    "modules": [
+      "test_inventory_transactions",
+      "test_inventory_capacity",
+      "test_pr75_reaudit",
+      "test_minimal_audit_fixes",
+      "test_plus_shadow",
+      "test_oss_inventory_retention",
+      "test_report_cohort_regressions",
+      "test_plus_report_refresh",
+      "test_plus_scorecard",
+      "test_report_custody",
+      "test_report_evidence",
+      "test_pit_retention_preparation",
+      "test_pit_retention_daily",
+      "test_learned_shadow_v1",
+      "test_phase2_forward_v2",
+      "test_phase2_forward_runtime_v2",
+      "test_forecast_worm",
+      "integration_oss_sdk"
+    ]
+  },
+  "fixed_findings": [
+    {
+      "id": "P1-UPLOAD-PRECHECK",
+      "problem": "Standalone upload did not enforce consumer capacity/reference budgets before SDK identity and frozen verification",
+      "fix": "Recompute staged capacity, bounded metadata reads, canonical referenced types and sizes, frozen verification before SDK/provider entry",
+      "acceptance": "Corrupt, stale, overbudget and wrong-type fixtures rejected before identity; successful local fake upload writes complete matching receipts"
+    },
+    {
+      "id": "P1-REFERENCE-TYPE",
+      "problem": "ZIP referenced with JSON suffix bypassed inner ZIP preflight",
+      "fix": "Require unchanged producer canonical digest/path/type and bounded index parts",
+      "acceptance": "Mislabeled referenced shard is rejected before frozen ZIP parsing"
+    },
+    {
+      "id": "P2-PUBLICATION-ROLLBACK",
+      "problem": "Git or report error after directory publication could leave partial staging",
+      "fix": "Prepare Git metadata/report privately; rollback same-volume published directory if report replace fails",
+      "acceptance": "Git/write/replace OSError and cancellation preserve old source and leave no stage/temp; retry succeeds"
+    },
+    {
+      "id": "P2-CANCEL-CLEANUP",
+      "problem": "KeyboardInterrupt bypassed Exception cleanup for downloads/extraction",
+      "fix": "Cleanup owned created files/directories on BaseException",
+      "acceptance": "Injected cancellation removes archive and extracted files/directories"
+    },
+    {
+      "id": "P2-PERSISTENT-RECEIPT",
+      "problem": "Direct receipt writes could truncate an earlier verified receipt",
+      "fix": "Same-directory temporary complete write, flush/fsync, atomic replace; authoritative SHA receipt first; safe failure reporter",
+      "acceptance": "Replacement error or cancellation keeps old bytes and no temporary residue; success produces complete JSON"
+    },
+    {
+      "id": "P2-PATH-BUDGET",
+      "problem": "Member cap alone did not bound implicit directory depth",
+      "fix": "Consumer path depth 8, UTF-8 path bytes 1024, staged traversal node budget; bounded and no-link historical receipt reads",
+      "acceptance": "Overdepth archive rejected before directory creation; linked previous receipt cannot cause successful skip"
+    },
+    {
+      "id": "P3-TEST-ENCODING",
+      "problem": "HTML test used Windows default GBK to read UTF-8 output",
+      "fix": "Explicit UTF-8 in test only",
+      "acceptance": "Full suite passes without forced PYTHONUTF8"
+    }
+  ],
+  "capacity": {
+    "transport_cap_bytes": 22548578304,
+    "expanded_cap_bytes": 21474836480,
+    "reserve_bytes": 268435456,
+    "theoretical_peak_bytes": 44291850240,
+    "consumer_support_domain_only": true,
+    "finite_frozen_producer_container_maximum": false,
+    "source_upper_bound_bytes": 17179869184,
+    "twenty_gib_physical_expansion_tested": false
+  },
+  "remaining": [
+    {
+      "priority": "P2",
+      "issue": "Finite consumer budgets cannot cover unbounded frozen producer metadata",
+      "acceptance": "Explicit reject for unsupported input; protocol remains unchanged; representative real inventory/runner resources require separate authorized online acceptance"
+    },
+    {
+      "priority": "P2",
+      "issue": "20 GiB expansion/41.25 GiB peak are arithmetic boundary tests, not physical full-budget test",
+      "acceptance": "Keep claim scoped; synthetic stress separately measures 64x256 MiB sources"
+    },
+    {
+      "priority": "P2",
+      "issue": "Real cloud disk capacity, provider upload/readback, online timeouts and natural scheduling not tested",
+      "acceptance": "Separate authorized online acceptance; no inferred success from offline or manual reads"
+    },
+    {
+      "priority": "P3",
+      "issue": "Linux real symlink checks pending by user instruction",
+      "acceptance": "Existing strict Linux harness reports all required tests pass, zero skips, on available offline Linux"
+    },
+    {
+      "priority": "P3",
+      "issue": "Hard termination, host crash, concurrent directory mutation, filesystem metadata/reservations and multi-file/provider transaction are outside offline atomicity guarantee",
+      "acceptance": "Do not claim kill/crash/concurrent adversary or cross-file/cloud rollback; per-file complete replacement and ordinary exception/cancellation covered"
+    }
+  ],
+  "freeze": {
+    "active_union_files": 33,
+    "all_hashes_match": true,
+    "producer_byte_identical_to_base": true,
+    "models_protocol_history_workflows_changed": false
+  },
+  "previous_evidence_preserved": "docs/audits/pr75_capacity_offline_20261024.json",
+  "independent_read_only_reviewer": "No remaining definite code defect after atomic receipt fix; Linux pending",
+  "merge_conclusion": "Code and tested offline domain have no known remaining blocker. Full cross-platform/online acceptance incomplete; keep draft and do not merge.",
+  "file_sha256": {
+    "oss_inventory_retention.py": "7d9ade0d4adc1171aa97fc4aac3b63c5043fd85dc6f92b9076afdb8bfd236804",
+    "test_plus_shadow.py": "5eac1b6657d513ae3c6a9e21fbfaaae79d1fd5c3e02d7c192a7cce2033620cce",
+    "test_inventory_transactions.py": "25b653c99c38f2e4baf287b6bb176be83a2c672d81377e3d28c7f35c9a1e4e66",
+    "offline_inventory_stress.py": "54a443a7b27f8dbd4f23beeff0c24093c827b83032e86e149f221a5cab1023a7",
+    "offline_linux_inventory_checks.py": "9cec92230da5f375c18b22368f852b466651553eba1c0b6980de397b3bbf70f2",
+    "test_inventory_capacity.py": "0635eb1bde30b1aba85d55eca172d86f8f2352a05f0fd85838bb40dd5dfbcfde",
+    "plus_shadow.py": "27149b5140f1be2c9f745537f64db0af0b8bebe3c435aecd7a1c740a51486557"
+  },
+  "final_code_full_stress": {
+    "schema": "OFFLINE_INVENTORY_CAPACITY_STRESS_V1",
+    "platform": "win32",
+    "linux_runtime": false,
+    "linux_symlink_tests_verified": false,
+    "python_version": "3.12.14",
+    "os_release": "11",
+    "synthetic_only": true,
+    "frozen_verifier_passed": true,
+    "shards": 64,
+    "raw_source_bytes": 17179869184,
+    "artifact_bytes": 17179932002,
+    "fixture_allocated_bytes": 12648448,
+    "capacity": {
+      "archive_bytes": 17179932002,
+      "expanded_bytes": 17179916372,
+      "zip_containers": 64,
+      "metadata_files": 2,
+      "entry_count": 66,
+      "disk_reserve_bytes": 268435456,
+      "peak_additional_disk_bytes": 34628283830,
+      "transport_cap_bytes": 22548578304,
+      "expanded_cap_bytes": 21474836480,
+      "basis": "declared ZIP sizes, checked before extraction; includes simultaneous archive and extracted bytes",
+      "frozen_producer_has_finite_container_maximum": false
+    },
+    "observations": [
+      {
+        "phase": "download_verified",
+        "allocated_private_bytes": 17192580985,
+        "peak_process_rss_bytes": 39235584
+      },
+      {
+        "phase": "expanded_archive_still_present",
+        "allocated_private_bytes": 34372497357,
+        "peak_process_rss_bytes": 39235584
+      },
+      {
+        "phase": "frozen_verifier_passed",
+        "allocated_private_bytes": 17192566403,
+        "peak_process_rss_bytes": 568266752
+      }
+    ],
+    "elapsed_seconds": 147.219,
+    "limitations": [
+      "STORE synthetic ZIPs accepted by the unchanged frozen verifier; not real production artifacts",
+      "No finite maximum frozen-producer container size; this proves the tested consumer domain only"
+    ]
+  },
+  "stress_exit_code": 0,
+  "stress_temporary_files_cleaned": true
+}

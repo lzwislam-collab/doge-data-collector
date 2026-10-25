@@ -1,0 +1,160 @@
+{
+  "schema": "PR75_LINUX_RUNTIME_ACCEPTANCE_V1",
+  "status": "PASS",
+  "tested_commit": "ac75d638daf85dc4c7540892786b54b5d5f3fcdf",
+  "started_at_utc": "2026-10-25T09:18:56.340206+00:00",
+  "finished_at_utc": "2026-10-25T09:18:59.712624+00:00",
+  "finished_at_jst": "2026-10-25T18:18:59.712624+09:00",
+  "elapsed_seconds": 3.372418,
+  "original_five": {
+    "tests_run": 5,
+    "passed": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "exact_passed_ids": [
+      "test_phase2_research.Phase2ResearchTests.test_output_symlink_rejected",
+      "test_phase2_research.Phase2ResearchTests.test_symlink_model_cannot_pass_manifest_verification",
+      "test_pit_retention_preparation.PreparationTests.test_latest_symlink_cannot_overwrite_outside_file",
+      "test_pit_retention_preparation.PreparationTests.test_output_directory_symlink_cannot_redirect_package_writes",
+      "test_prediction_release_control.Release.test_release_namespace_parent_symlink_rejected"
+    ]
+  },
+  "unchanged_strict_tool": {
+    "schema": "OFFLINE_LINUX_INVENTORY_CHECKS_V1",
+    "platform": "linux",
+    "kernel": "6.1.0-54-amd64",
+    "tests_run": 4,
+    "skipped": 0,
+    "failures": 0,
+    "errors": 0,
+    "linux_verified": true
+  },
+  "total_executions": 9,
+  "unique_tests": 7,
+  "launcher_exit_code": 0,
+  "input_hash_entries_pre_post_equal": 706,
+  "source_config_files": 293,
+  "frozen_files": 60,
+  "input_raw_and_normalized_hashes_unchanged": true,
+  "bundle_unchanged": true,
+  "temporary_clean": true,
+  "required_evidence_complete": true,
+  "environment": {
+    "platform": "linux",
+    "system": "Linux",
+    "kernel": "6.1.0-54-amd64",
+    "python_version": "3.12.14",
+    "python_executable": "/opt/python/bin/python3",
+    "numpy_version": "2.3.5",
+    "numpy_path": "/opt/python/lib/python3.12/site-packages/numpy/__init__.py",
+    "git_version": "git version 2.39.5",
+    "git_head": "ac75d638daf85dc4c7540892786b54b5d5f3fcdf"
+  },
+  "isolation": {
+    "method": "Full-system QEMU VM with -nic none; guest reports only lo and source repository read-only ext4 bind mount",
+    "runner_kernel_network_isolation_verified": false,
+    "independent_vm_and_guest_evidence": "offline-vm-args.json and pr75-environment.txt",
+    "original_runner_result_unmodified": true,
+    "note": "The runner did not verify a kernel network namespace. Separate VM configuration and guest output establish absence of virtual network devices; do not relabel the original false field."
+  },
+  "independent_evidence_review": "Read-only independent reviewer verified original five exact passed IDs, strict four, all 6 evidence hashes, exit0, 706 pre/post hash entries, read-only ext4 and no NIC. No test rerun.",
+  "preparation": {
+    "environment_downloads_performed": true,
+    "runtime_prepared_locally": true,
+    "system_wsl_docker_installation_or_reboot": false,
+    "download_sources": {
+      "qemu": "https://qemu.weilnetz.de/w64/2026/qemu-w64-setup-20260811.exe",
+      "debian": "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-nocloud-amd64.qcow2",
+      "python": "https://github.com/astral-sh/python-build-standalone/releases/download/20260901/cpython-3.12.14%2B20260901-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz",
+      "numpy": "https://pypi.org/pypi/numpy/2.3.5/json",
+      "git": "https://deb.debian.org/debian/pool/main/g/git/git_2.39.5-0%2Bdeb12u3_amd64.deb"
+    },
+    "verified_downloads": "QEMU and Debian published SHA512; Python GitHub release SHA256; NumPy PyPI SHA256; Git Debian official Packages.xz SHA256",
+    "assets": {
+      "qemu-installer.exe": {
+        "sha256": "f98a8aeb5f7faea9765b6dee28316c266cd179d80354a2fed8e50176f9a2e59f",
+        "bytes": 206615928
+      },
+      "debian-base.qcow2": {
+        "sha256": "a5a153ca5629737c7a287a9db7c5496d54d346a0324e19643f01086660dd526d",
+        "bytes": 422117376
+      },
+      "python-linux.tar.gz": {
+        "sha256": "72748da13197c1fb161e3afeef20a6a385ff24f2165e6e2758e47008e7faba4c",
+        "bytes": 34143368
+      },
+      "numpy-linux.whl": {
+        "sha256": "0d8163f43acde9a73c2a33605353a4f1bc4798745a8b1d73183b28e5b435ae28",
+        "bytes": 16606086
+      },
+      "payload/git.deb": {
+        "sha256": "637a85ddd6247fab13bdd0592f2f39aff04ce4dbf0655d3ab553ac359a38ce6f",
+        "bytes": 7264380
+      },
+      "payload/repository-selected.tar.gz": {
+        "sha256": "d88e780fac7bbc7f0f36dfa6853ca005c0530e9f4b6b3a1d748282b527ce68c5",
+        "bytes": 93919663
+      }
+    },
+    "selected_source_transfer": "347 original files: all pinned source/config and frozen manifest assets, package and genuine Git metadata; unused historical data excluded. Pinned input hashes verify content, original source/history never modified.",
+    "preparation_incidents": [
+      "Initial package-manager network preparation was unavailable and interrupted before any acceptance execution; Git then prepared from verified official Debian package offline.",
+      "First offline VM start rejected read-only FAT drive flags; fixed only VM launch readonly=on before any acceptance execution.",
+      "Large full-checkout transfer was abandoned in favor of manifest-complete selected transfer; not used by acceptance."
+    ],
+    "acceptance_attempts": 1,
+    "vm_powered_off_after_evidence_export": true
+  },
+  "evidence": {
+    "directory": "docs/audits/pr75_linux_runtime_20261025",
+    "original_guest_export_sha256": "0cdb7c43e73a20b2ad5b2d760acfbdebd741ea91ce1a639dbc5c4847e4ebbc72",
+    "original_evidence_index": {
+      "environment.json": "c4bf5f8f785613c94162c6808f11b652e14c68c5d864a67e2f38370d23e2ac54",
+      "five-tests.log": "501ae1b70888fb2aee416600c45c976bfcd032abb08d352fdbb4d07ceed3efeb",
+      "five-tests.json": "a69cba1a58aed35184f886bc1cdef0cf388dad566a82e32ace2f09012ad958cd",
+      "strict-inventory.log": "d96bdf683b2693c8c7db9d6d42a988da0124242793427fe0653bbb1386acd3a5",
+      "strict-inventory.json": "54ee95b3032038cddc03a538176b58ea150e9ae378d4cb2b5046abe30c0ad08d",
+      "summary.json": "3a2d6d00a6382638ba65cd2f995613c5346bdb617873cee44fcb419e14b4fb11"
+    },
+    "original_runner_summary_preserved": true
+  },
+  "consolidated_acceptance": {
+    "distinct_tests": 1319,
+    "passed": 1319,
+    "failures": 0,
+    "errors": 0,
+    "pending_linux": 0,
+    "basis": "Previous consolidated 1314 passes plus these five newly completed Linux cases. This turn ran only 9 executions/7 unique tests; not a fresh full-suite rerun. Strict tool overlap/additional already-covered cases are not added to the 1319 denominator."
+  },
+  "repairs_needed_in_tested_code": false,
+  "restrictions": {
+    "pr_remains_draft": true,
+    "merged": false,
+    "deployed": false,
+    "production_tasks_rerun": false,
+    "new_production_triggers": false,
+    "frozen_models_protocols_history_changed": false
+  },
+  "remaining_limits": [
+    "No remaining failure/error/skip in this targeted Linux acceptance.",
+    "Full repository test discovery was not rerun in Linux; consolidated historical result retains earlier evidence scope.",
+    "No new production scheduling, cloud provider upload/readback or physical 16/41 GiB capacity verification.",
+    "Prior declared hard-kill, malicious-concurrency, crash-persistence and resource bounds are not expanded by this run."
+  ],
+  "synchronized_at_utc": "2026-10-25T09:25:30Z",
+  "subsequent_independent_review": {
+    "record": "docs/audits/pr75_24b424c_independent_review_20261025.json",
+    "checked_at_utc": "2026-10-25T09:51:25Z",
+    "linux_original_evidence_preserved": true,
+    "native_linux_closure_confirmed": true,
+    "aggregation_provenance_supplemented_by": "docs/audits/pr75_24b424c_review_20261025/identity-matrix.json",
+    "new_lean_targeted_receipt": "docs/audits/pr75_24b424c_review_20261025/lean-offline-recheck.json",
+    "note": "Two formerly audit-asserted lean repairs now have fresh raw receipt; original missing-log history retained. No new Linux run or change to original runner report."
+  },
+  "receipt_publication_privacy": {
+    "manifest": "docs/audits/pr75_24b424c_review_20261025/receipt-publication.json",
+    "public_historical_receipts": "ID/status projections with preserved line references, not raw host/trace data.",
+    "originals": "Verified locally and left unchanged; both original and public SHA256 recorded."
+  }
+}

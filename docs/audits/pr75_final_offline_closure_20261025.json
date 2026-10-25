@@ -1,0 +1,335 @@
+{
+  "schema": "PR75_FINAL_OFFLINE_CLOSURE_SUMMARY_V1",
+  "reviewed_commit": "ff33cd600b58d2853d15d157156ecee942e2e4d8",
+  "checked_at_utc": "2026-10-25T01:03:53.392748+00:00",
+  "scope_correction": "Earlier 307-test reports covered selected PR-related modules, not all repository tests. This round ran all unittest-discoverable test*.py files plus the separately named integration_oss_sdk case.",
+  "new_fix": {
+    "priority": "P3",
+    "kind": "Windows negative-test injection compatibility",
+    "file": "test_lean_version_gate.py",
+    "root_cause": "Two mocks compared str(Path) with slash-delimited suffixes; on Windows backslashes prevented the negative injection, causing two assertion failures.",
+    "change": "Use Path.as_posix() in two suffix checks; retain mutation injection and assertRaises.",
+    "red_observed_in_full_discovery": true,
+    "post_fix_optimized_module_tests": 12,
+    "post_fix_module_passed": 12,
+    "production_gate_or_protocol_changed": false,
+    "test_file_not_in_five_frozen_maps": true
+  },
+  "full_run_before_test_only_fix": {
+    "schema": "PR75_FINAL_OFFLINE_CLOSURE_V1",
+    "reviewed_commit": "ff33cd600b58d2853d15d157156ecee942e2e4d8",
+    "checked_at_utc": "2026-10-25T01:01:46.512107+00:00",
+    "fixture": "C:\\Users\\lzwis\\.codex\\.chatgpt-projects\\g-p-6abbcaea551c8191860ef46a58b88c09\\pr75-final-local-fixture-v2-20261025",
+    "discovered": 1319,
+    "run": 1319,
+    "successes": 1292,
+    "failures": [
+      [
+        "test_frozen_protocol_drift_detected (test_lean_version_gate.VersionBoundary.test_frozen_protocol_drift_detected)",
+        "Traceback (most recent call last):\n  File \"C:\\Users\\lzwis\\.codex\\.chatgpt-projects\\g-p-6abbcaea551c8191860ef46a58b88c09\\pr75-final-local-fixture-v2-20261025\\test_lean_version_gate.py\", line 126, in test_frozen_protocol_drift_detected\n    with self.assertRaises(gate.VersionIsolationError):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: VersionIsolationError not raised\n"
+      ],
+      [
+        "test_unknown_or_extra_lean_output_directory_is_not_accepted (test_lean_version_gate.VersionBoundary.test_unknown_or_extra_lean_output_directory_is_not_accepted)",
+        "Traceback (most recent call last):\n  File \"C:\\Users\\lzwis\\.codex\\.chatgpt-projects\\g-p-6abbcaea551c8191860ef46a58b88c09\\pr75-final-local-fixture-v2-20261025\\test_lean_version_gate.py\", line 136, in test_unknown_or_extra_lean_output_directory_is_not_accepted\n    with self.assertRaises(gate.VersionIsolationError):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: VersionIsolationError not raised\n"
+      ]
+    ],
+    "errors": [
+      [
+        "test_e1_failure_preserves_original_report_and_does_not_claim_verification (test_e1_report.E1ReportTests.test_e1_failure_preserves_original_report_and_does_not_claim_verification)",
+        "Traceback (most recent call last):\n  File \"C:\\Users\\lzwis\\.codex\\.chatgpt-projects\\g-p-6abbcaea551c8191860ef46a58b88c09\\pr75-final-local-fixture-v2-20261025\\test_e1_report.py\", line 22, in test_e1_failure_preserves_original_report_and_does_not_claim_verification\n    value=self.snapshot(error=TimeoutError('private remote detail'))\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\lzwis\\.codex\\.chatgpt-projects\\g-p-6abbcaea551c8191860ef46a58b88c09\\pr75-final-local-fixture-v2-20261025\\test_e1_report.py\", line 13, in snapshot\n    with patch.dict(sys.modules,{'e1_forward':types.SimpleNamespace(panel=external)}):return report.snapshot(online=False)\n                                                                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\lzwis\\.codex\\.chatgpt-projects\\g-p-6abbcaea551c8191860ef46a58b88c09\\pr75-final-local-fixture-v2-20261025\\plus_shadow.py\", line 309, in snapshot\n    now=datetime.now(timezone.utc);p,package,files=legacy.bundle.guard();rp,model,_,rfiles=r2.guard()\n                                                                                           ^^^^^^^^^^\n  File \"C:\\Users\\lzwis\\.codex\\.chatgpt-projects\\g-p-6abbcaea551c8191860ef46a58b88c09\\pr75-final-local-fixture-v2-20261025\\phase2_forward_runtime_v2.py\", line 59, in guard\n    guard_history(ROOT)\n  File \"C:\\Users\\lzwis\\.codex\\.chatgpt-projects\\g-p-6abbcaea551c8191860ef46a58b88c09\\pr75-final-local-fixture-v2-20261025\\phase2_forward_runtime_v2.py\", line 63, in guard_history\n    names=subprocess.check_output(['git','-c','safe.directory=*','log','--format=','--name-only','--',f.BASE],cwd=root,text=True).splitlines()\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\lzwis\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\Lib\\subprocess.py\", line 466, in check_output\n    return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\lzwis\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\Lib\\subprocess.py\", line 571, in run\n    raise CalledProcessError(retcode, process.args,\nsubprocess.CalledProcessError: Command '['git', '-c', 'safe.directory=*', 'log', '--format=', '--name-only', '--', 'data/phase2_forward_v2']' returned non-zero exit status 128.\n"
+      ],
+      [
+        "test_snapshot_adds_independent_panel_without_changing_r2_statistics (test_e1_report.E1ReportTests.test_snapshot_adds_independent_panel_without_changing_r2_statistics)",
+        "Traceback (most recent call last):\n  File \"C:\\Users\\lzwis\\.codex\\.chatgpt-projects\\g-p-6abbcaea551c8191860ef46a58b88c09\\pr75-final-local-fixture-v2-20261025\\test_e1_report.py\", line 15, in test_snapshot_adds_independent_panel_without_changing_r2_statistics\n    value=self.snapshot(self.panel())\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\lzwis\\.codex\\.chatgpt-projects\\g-p-6abbcaea551c8191860ef46a58b88c09\\pr75-final-local-fixture-v2-20261025\\test_e1_report.py\", line 13, in snapshot\n    with patch.dict(sys.modules,{'e1_forward':types.SimpleNamespace(panel=external)}):return report.snapshot(online=False)\n                                                                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\lzwis\\.codex\\.chatgpt-projects\\g-p-6abbcaea551c8191860ef46a58b88c09\\pr75-final-local-fixture-v2-20261025\\plus_shadow.py\", line 309, in snapshot\n    now=datetime.now(timezone.utc);p,package,files=legacy.bundle.guard();rp,model,_,rfiles=r2.guard()\n                                                                                           ^^^^^^^^^^\n  File \"C:\\Users\\lzwis\\.codex\\.chatgpt-projects\\g-p-6abbcaea551c8191860ef46a58b88c09\\pr75-final-local-fixture-v2-20261025\\phase2_forward_runtime_v2.py\", line 59, in guard\n    guard_history(ROOT)\n  File \"C:\\Users\\lzwis\\.codex\\.chatgpt-projects\\g-p-6abbcaea551c8191860ef46a58b88c09\\pr75-final-local-fixture-v2-20261025\\phase2_forward_runtime_v2.py\", line 63, in guard_history\n    names=subprocess.check_output(['git','-c','safe.directory=*','log','--format=','--name-only','--',f.BASE],cwd=root,text=True).splitlines()\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\lzwis\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\Lib\\subprocess.py\", line 466, in check_output\n    return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\lzwis\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\Lib\\subprocess.py\", line 571, in run\n    raise CalledProcessError(retcode, process.args,\nsubprocess.CalledProcessError: Command '['git', '-c', 'safe.directory=*', 'log', '--format=', '--name-only', '--', 'data/phase2_forward_v2']' returned non-zero exit status 128.\n"
+      ],
+      [
+        "test_history_receipt_before_close_and_nonfinite_volume_rejected (test_forward_readiness.Readiness.test_history_receipt_before_close_and_nonfinite_volume_rejected)",
+        "Traceback (most recent call last):\n  File \"C:\\Users\\lzwis\\.codex\\.chatgpt-projects\\g-p-6abbcaea551c8191860ef46a58b88c09\\pr75-final-local-fixture-v2-20261025\\test_forward_readiness.py\", line 14, in test_history_receipt_before_close_and_nonfinite_volume_rejected\n    raw=(a.ROOT/a.r.SOURCE).read_bytes();rows=list(csv.DictReader(io.StringIO(raw.decode('utf-8-sig'))))\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\lzwis\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\Lib\\pathlib.py\", line 1019, in read_bytes\n    with self.open(mode='rb') as f:\n         ^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\lzwis\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\Lib\\pathlib.py\", line 1013, in open\n    return io.open(self, mode, buffering, encoding, errors, newline)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nFileNotFoundError: [Errno 2] No such file or directory: 'C:\\\\Users\\\\lzwis\\\\.codex\\\\.chatgpt-projects\\\\g-p-6abbcaea551c8191860ef46a58b88c09\\\\pr75-final-local-fixture-v2-20261025\\\\data\\\\hourly_research\\\\ohlc.csv'\n"
+      ],
+      [
+        "test_existing_immature_report_remains_wait_without_new_fields (test_p2_economic_acceptance.EconomicAcceptanceTests.test_existing_immature_report_remains_wait_without_new_fields)",
+        "Traceback (most recent call last):\n  File \"C:\\Users\\lzwis\\.codex\\.chatgpt-projects\\g-p-6abbcaea551c8191860ef46a58b88c09\\pr75-final-local-fixture-v2-20261025\\test_p2_economic_acceptance.py\", line 116, in test_existing_immature_report_remains_wait_without_new_fields\n    report=json.loads((root/'data/p2_paired_execution_v3_1/latest.json').read_text(encoding='utf-8'))\n                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\lzwis\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\Lib\\pathlib.py\", line 1027, in read_text\n    with self.open(mode='r', encoding=encoding, errors=errors) as f:\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\lzwis\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\Lib\\pathlib.py\", line 1013, in open\n    return io.open(self, mode, buffering, encoding, errors, newline)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nFileNotFoundError: [Errno 2] No such file or directory: 'C:\\\\Users\\\\lzwis\\\\.codex\\\\.chatgpt-projects\\\\g-p-6abbcaea551c8191860ef46a58b88c09\\\\pr75-final-local-fixture-v2-20261025\\\\data\\\\p2_paired_execution_v3_1\\\\latest.json'\n"
+      ]
+    ],
+    "skipped": [
+      [
+        "test_optional_sdk_supports_conditional_upload_contract (test_evidence_readiness_v2.Retention.test_optional_sdk_supports_conditional_upload_contract)",
+        "optional upload SDK not installed locally"
+      ],
+      [
+        "test_output_symlink_rejected (test_phase2_research.Phase2ResearchTests.test_output_symlink_rejected)",
+        "symlink privilege unavailable"
+      ],
+      [
+        "test_symlink_model_cannot_pass_manifest_verification (test_phase2_research.Phase2ResearchTests.test_symlink_model_cannot_pass_manifest_verification)",
+        "symlink privilege unavailable"
+      ],
+      [
+        "test_88_fixed_candidates_and_budget (test_phase2_v2.V2Tests.test_88_fixed_candidates_and_budget)",
+        "V2 pinned training runtime not installed"
+      ],
+      [
+        "test_all_probabilities_and_variants_have_same_events (test_phase2_v2.V2Tests.test_all_probabilities_and_variants_have_same_events)",
+        "V2 pinned training runtime not installed"
+      ],
+      [
+        "test_budget_rejected_before_fitting (test_phase2_v2.V2Tests.test_budget_rejected_before_fitting)",
+        "V2 pinned training runtime not installed"
+      ],
+      [
+        "test_calibration_does_not_change_base_model (test_phase2_v2.V2Tests.test_calibration_does_not_change_base_model)",
+        "V2 pinned training runtime not installed"
+      ],
+      [
+        "test_future_draft_ignores_test_scores (test_phase2_v2.V2Tests.test_future_draft_ignores_test_scores)",
+        "V2 pinned training runtime not installed"
+      ],
+      [
+        "test_future_draft_verification_requires_semantics_not_only_manifest_hash (test_phase2_v2.V2Tests.test_future_draft_verification_requires_semantics_not_only_manifest_hash)",
+        "V2 pinned training runtime not installed"
+      ],
+      [
+        "test_invalid_fractional_training_label_is_rejected (test_phase2_v2.V2Tests.test_invalid_fractional_training_label_is_rejected)",
+        "V2 pinned training runtime not installed"
+      ],
+      [
+        "test_missing_receipts_stay_wait (test_phase2_v2.V2Tests.test_missing_receipts_stay_wait)",
+        "V2 pinned training runtime not installed"
+      ],
+      [
+        "test_probability_metrics_include_logloss_and_same_event_baseline (test_phase2_v2.V2Tests.test_probability_metrics_include_logloss_and_same_event_baseline)",
+        "V2 pinned training runtime not installed"
+      ],
+      [
+        "test_purged_inner_split (test_phase2_v2.V2Tests.test_purged_inner_split)",
+        "V2 pinned training runtime not installed"
+      ],
+      [
+        "test_single_class_tree_is_valid_constant_model (test_phase2_v2.V2Tests.test_single_class_tree_is_valid_constant_model)",
+        "V2 pinned training runtime not installed"
+      ],
+      [
+        "test_test_mutation_does_not_change_model_calibration_or_choice (test_phase2_v2.V2Tests.test_test_mutation_does_not_change_model_calibration_or_choice)",
+        "V2 pinned training runtime not installed"
+      ],
+      [
+        "test_tree_float32_input_is_compared_to_exact_double_threshold (test_phase2_v2.V2Tests.test_tree_float32_input_is_compared_to_exact_double_threshold)",
+        "V2 pinned training runtime not installed"
+      ],
+      [
+        "test_tree_json_matches_official_sklearn_probability (test_phase2_v2.V2Tests.test_tree_json_matches_official_sklearn_probability)",
+        "V2 pinned training runtime not installed"
+      ],
+      [
+        "test_weak_or_missing_regime_cannot_enter_future_draft (test_phase2_v2.V2Tests.test_weak_or_missing_regime_cannot_enter_future_draft)",
+        "V2 pinned training runtime not installed"
+      ],
+      [
+        "test_latest_symlink_cannot_overwrite_outside_file (test_pit_retention_preparation.PreparationTests.test_latest_symlink_cannot_overwrite_outside_file)",
+        "platform cannot create symlinks; Linux CI must exercise this test"
+      ],
+      [
+        "test_output_directory_symlink_cannot_redirect_package_writes (test_pit_retention_preparation.PreparationTests.test_output_directory_symlink_cannot_redirect_package_writes)",
+        "platform cannot create symlinks; Linux CI must exercise this test"
+      ],
+      [
+        "test_release_namespace_parent_symlink_rejected (test_prediction_release_control.Release.test_release_namespace_parent_symlink_rejected)",
+        "platform cannot create directory symlink"
+      ]
+    ],
+    "python_utf8_mode": 1,
+    "parent_network_blocked": true,
+    "git_lazy_fetch_disabled": true,
+    "elapsed_seconds": 120.922,
+    "frozen_unique_files": 60,
+    "frozen_hashes_match": true,
+    "source_checkout_models_protocols_history_changed": false
+  },
+  "consolidated_final_unique_test_status": {
+    "discovered": 1319,
+    "executed": 1319,
+    "passed": 1294,
+    "assertion_failures": 0,
+    "errors": 4,
+    "skipped": 21,
+    "basis": "Full 1319-case fixture run had 1292 passes, 2 assertion failures, 4 errors, 21 skips; both failures then passed in the 12-case optimized affected-module recheck. This is consolidated full+targeted evidence, not a claim of a new all-green full run."
+  },
+  "separate_cached_sdk_test": {
+    "tests": 1,
+    "passed": 1,
+    "network_blocked": true
+  },
+  "encoding_recheck": {
+    "initial_default_encoding_errors": 12,
+    "python_X_utf8_recheck_passed": 12,
+    "source_changed": false
+  },
+  "material_setup": {
+    "isolated_fixture_only": true,
+    "copied_immutable_originals": 30,
+    "copied_paths_and_git_blobs": [
+      {
+        "path": "data/stage5/feature_ablation_v1_protocol.json",
+        "git_blob": "389af904f41c6727389849aee03b3e42f81a0343"
+      },
+      {
+        "path": "data/stage5/forward_validation_protocol.json",
+        "git_blob": "541d33221fde851354ced0281b7fd0c4be715da5"
+      },
+      {
+        "path": "data/stage5/forward_validation_protocol_v2.json",
+        "git_blob": "79478022e4c33da8f3e08af8e049e668d06cdb7b"
+      },
+      {
+        "path": "data/stage5/forward_validation_v2/protocol_witness.json",
+        "git_blob": "49080c7c120c97759f9b63d39f3e00c6cc70b302"
+      },
+      {
+        "path": "data/stage5/latest.json",
+        "git_blob": "c7d44568a61fc98ed7f0a6d130cc6a67285ba8ae"
+      },
+      {
+        "path": "data/stage5/minimal_market_forward_v1_protocol.json",
+        "git_blob": "540ffb72f7ae79e5233dacdedd830a9cc399faac"
+      },
+      {
+        "path": "data/stage5/minute_evaluation_protocol.json",
+        "git_blob": "35f6729f6eacdebae4060effe1347719d581ab94"
+      },
+      {
+        "path": "data/stage5/p1_adaptive_v2/snapshots/26854b12733b326514f554ff2e7b5747a6e15997f08df2139a1d5806f89d4594.json",
+        "git_blob": "90095ae391300d127df663139348130fb99a67d5"
+      },
+      {
+        "path": "data/stage5/p1_adaptive_v2/snapshots/2cf1851aa7752d62cf493707f89fd9f488ff7f0c2bdd595503b80a80bf52c512.json",
+        "git_blob": "dad2a76854d7a34efbe068087a9500707ec25fa5"
+      },
+      {
+        "path": "data/stage5/p1_adaptive_v2/snapshots/582a498697ad605be7060b34e8d209b0fd0b88adb0a840830ae0d23b821db613.json",
+        "git_blob": "f4d38215dc3810b041511db145fefa7c420a2460"
+      },
+      {
+        "path": "data/stage5/p1_adaptive_v2/snapshots/5adca39a825aa8c9d5e518d28113ca3cedcf6cff8aefdffeec73f19068b0f709.json",
+        "git_blob": "bd1f69973b4497af306843d7a8589ffa4b941de5"
+      },
+      {
+        "path": "data/stage5/p1_adaptive_v2/snapshots/660d567c351f1db4a80f87e5b48e1b81c7af581329290b4ebf87b444d273c759.json",
+        "git_blob": "824df478ca3162b5310664ab193024e0453d0a1e"
+      },
+      {
+        "path": "data/stage5/p1_adaptive_v2/snapshots/760558595126be29c07c492cc0697f85ace16e5be03f2204b42beb8362a92338.json",
+        "git_blob": "67ee2f37ab123ada0d19d7277e5d0ec47d3dd308"
+      },
+      {
+        "path": "data/stage5/p1_adaptive_v2/snapshots/b902a58e9f7cad31e97bcd3448c1ed54e51b2dc1b498d126802ba5491f3d380e.json",
+        "git_blob": "cf69c3f667ef828d635c8e00c8eea7365a29521b"
+      },
+      {
+        "path": "data/stage5/p1_adaptive_v2/snapshots/f980b96889c81dfbd5b545a237c6ec32e8f0cc5863c9863c2cec9d738e3cd1ce.json",
+        "git_blob": "14d488308e5b2779a67715a0ac8c973fec9beae9"
+      },
+      {
+        "path": "data/stage5/p1_adaptive_v2_protocol.json",
+        "git_blob": "9d93c956c495c13b2d27ba5687a56554277335d1"
+      },
+      {
+        "path": "data/stage5/p1_model_league_protocol.json",
+        "git_blob": "874cd8f2401147011d66e510ffd6a7b3880afa56"
+      },
+      {
+        "path": "data/stage5/p1_regime_forward_v1_protocol.json",
+        "git_blob": "9ae790244a796294120f5a43d5f31a80b38e42df"
+      },
+      {
+        "path": "data/stage5/p2_locked_forward_v1_protocol.json",
+        "git_blob": "5b21d763014b5afb27d3b8a4289b282813d9d0b4"
+      },
+      {
+        "path": "data/stage5/p2_paired_execution_v2_protocol.json",
+        "git_blob": "c7b91ba7f4b2387396eeb0a0a1bfbadcb33c4b24"
+      },
+      {
+        "path": "data/stage5/p2_paired_execution_v3_1_protocol.json",
+        "git_blob": "52ea527c7ee67cb7b7d43bb3f96e50cdf2053928"
+      },
+      {
+        "path": "data/stage5/p2_paired_execution_v3_protocol.json",
+        "git_blob": "066dc83e133070d7e4a6d6e1f12617fe37d8a091"
+      },
+      {
+        "path": "data/stage5/p2_spot_paper_protocol.json",
+        "git_blob": "5d7b611a93987f87ee901eedb30e54302bff2893"
+      },
+      {
+        "path": "data/stage5/paired_selection_v1_protocol.json",
+        "git_blob": "d3bd2614f43329eb5ea275e948c1ac8f3d0ba7ce"
+      },
+      {
+        "path": "data/stage5/pre_registration.json",
+        "git_blob": "9d2671df7cec81a7ca7165bf35e3d25444de653d"
+      },
+      {
+        "path": "data/stage5/spot_plus/evolution_latest.json",
+        "git_blob": "24cd055649e54b6e612f8f4710c5a3ed77a4134c"
+      },
+      {
+        "path": "data/stage5/spot_plus/evolution_log.csv",
+        "git_blob": "3c21fc0806cf169442ac4804960deaa3d4f1b298"
+      },
+      {
+        "path": "data/stage5/spot_plus/latest.json",
+        "git_blob": "50cca2e5df50f45c5be2f291f9f64f1c8eb335d1"
+      },
+      {
+        "path": "data/stage5/spot_plus/legacy36_map.csv",
+        "git_blob": "17c682f144c8f9538d4985007d4ff0d4069a611e"
+      },
+      {
+        "path": "data/stage5/three_risk_gates_protocol.json",
+        "git_blob": "107a786c770c6e30592fd1c74ebcc5ebc07e2780"
+      }
+    ],
+    "source_checkout_data_changed": false,
+    "no_approximate_or_synthetic_replacement_for_missing_history": true,
+    "network_fetch_performed": false,
+    "limits": "Local Git clone without fetching could not complete due to unavailable promisor objects. Isolated fixture uses only locally available objects and hash-matching original input files; incomplete exact inputs remain errors."
+  },
+  "independent_review": "Separate read-only reviewer found no new production defect or mandatory extra boundary in Linux publication/source binding/concurrent cleanup, and approved both test-only path corrections.",
+  "remaining_findings": [
+    {
+      "priority": "P2",
+      "kind": "unclosed validation evidence",
+      "tests": [
+        "test_e1_failure_preserves_original_report_and_does_not_claim_verification (test_e1_report.E1ReportTests.test_e1_failure_preserves_original_report_and_does_not_claim_verification)",
+        "test_snapshot_adds_independent_panel_without_changing_r2_statistics (test_e1_report.E1ReportTests.test_snapshot_adds_independent_panel_without_changing_r2_statistics)",
+        "test_history_receipt_before_close_and_nonfinite_volume_rejected (test_forward_readiness.Readiness.test_history_receipt_before_close_and_nonfinite_volume_rejected)",
+        "test_existing_immature_report_remains_wait_without_new_fields (test_p2_economic_acceptance.EconomicAcceptanceTests.test_existing_immature_report_remains_wait_without_new_fields)"
+      ],
+      "reason": "Two E1 cases lack usable exact Git history; readiness case lacks exact hourly OHLC; economic acceptance case lacks exact latest.json. These remain errors, not skips or proven production defects.",
+      "acceptance": "Exact immutable local fixture/history inputs must be available and the four cases pass. No fabricated inputs, gate bypass or historical edits."
+    },
+    {
+      "priority": "P3",
+      "kind": "platform/runtime verification gaps",
+      "count": 21,
+      "breakdown": {
+        "V2_pinned_training_runtime": 15,
+        "symlink_platform_privileges": 5,
+        "optional_upload_SDK": 1
+      },
+      "acceptance": "Real required platform/runtime executes affected tests without skipping; Windows platform mocks never count as Linux acceptance."
+    }
+  ],
+  "other_declared_limits": [
+    "Finite inventory consumer budget cannot cover unbounded frozen producer metadata.",
+    "Actual cloud disk/runtime, artifact download, OSS upload/readback and natural scheduler unverified.",
+    "Witness date/run/attempt/job bounds and deleted evidence completeness remain limits.",
+    "OS-denied cleanup residue, hard kills, arbitrary hostile concurrent mutation, directory crash durability and cross-file/cloud transactions not guaranteed."
+  ],
+  "production_source_changes": false,
+  "models_protocol_history_workflows_changed": false,
+  "full_physical_stress_repeated": false,
+  "inherited_full_pressure_reference": "8b27c4b735796bdb8600753ab2f01e0c0cfe8016:docs/audits/pr75_3bf886b_reaudit_20261025.json",
+  "conclusion": "PR focus has no known new reproducible production defect. All discoverable Python cases were attempted in final isolated fixture, but repository acceptance is NOT fully green (4 errors,21 skips). Keep draft; no unconditional merge recommendation. Close repetitive audit of unchanged code; only revisit when exact missing inputs/platform or new code/evidence changes.",
+  "modified_test_sha256": "c291c87baff156b226c5f19f9815b1d8be342cf703bed628d3dd2d576a76d1c7"
+}

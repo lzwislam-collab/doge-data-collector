@@ -1,0 +1,39 @@
+{
+  "schema": "PR75_A78F6BB_INDEPENDENT_REVIEW_V1",
+  "reviewed_commit": "a78f6bb972d76314904353553b3857db28307f27",
+  "fix_commit": "3c3b28ea29913178276f04d9247459ba61bb979a",
+  "completed_utc": "2026-10-25T10:14:29.471757+00:00",
+  "findings": [
+    {
+      "priority": "P2",
+      "status": "FIXED",
+      "component": "audit-only recheck_lean.py",
+      "cause": "Path.absolute does not canonicalize parent traversal or symlink aliases; lexical containment check could allow source-contained output",
+      "fix": "Resolve existing source strictly and output with existing ancestors before containment check and mkdir",
+      "regression": "Temporary parent-traversal case bypasses original lexical predicate; resolved predicate rejects, no source directory written"
+    }
+  ],
+  "checks": {
+    "matrix_unique_ids": 1319,
+    "evidence_references": 1355,
+    "all_final_pass": true,
+    "each_reference": "receipt SHA256, test ID, status and line references verified offline; embedded JSON log included",
+    "frozen_registered_files": 60,
+    "frozen_mismatches": 0,
+    "new_lean_tests": 12,
+    "failures": 0,
+    "errors": 0,
+    "skips": 0,
+    "input_hash_entries": 353,
+    "inputs_unchanged": true,
+    "python_optimization": 1,
+    "log_sha256": "6c39e711da42ab115ff7b52b6293cdf5eaf453e275157308ac4d01b382f04816"
+  },
+  "limits": [
+    "Consolidated 1319 is not a new full-suite execution",
+    "Public projections preserve ID/status/line binding but do not allow independent reconstruction of removed diagnostics; original hash alone is not a proof of projection derivation",
+    "No new Linux run or production scheduling/provider/capacity verification",
+    "Resolved path preflight does not claim protection against hostile concurrent replacement of ancestors"
+  ],
+  "merge_assessment": "Eligible within offline fix scope; keep draft, no merge/deploy/production rerun/triggers; model/protocol/history unchanged"
+}

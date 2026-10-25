@@ -4,6 +4,7 @@ from urllib.error import HTTPError
 from urllib.parse import quote
 from datetime import datetime,timedelta,timezone
 from pathlib import Path
+from collections import OrderedDict
 import learned_shadow_runtime as legacy
 import phase2_forward_runtime_v2 as r2
 import phase2_forward_v2 as f
@@ -17,6 +18,9 @@ import e1_report
 ROOT=Path(__file__).resolve().parent
 JAPAN=timezone(timedelta(hours=9))
 
+class ReportPinnedPathAbsent(ValueError):
+ """A nonmatching candidate, never substitute bytes for a missing object."""
+
 class ReportEvidenceReadError(RuntimeError):
  def __init__(self,diagnostic):
   self.diagnostic=diagnostic
@@ -26,28 +30,61 @@ class ReportEvidenceReader:
  """A missing path in a verified Git tree is a mismatch, never a witness."""
  def __init__(self,root,read_at):
   self.root=root;self.read_at=read_at;self.diagnostics=[]
+  self.cache=OrderedDict();self.cache_bytes=0
  def __call__(self,head,path):
   # Validate before constructing diagnostics; do not expose arbitrary error URLs.
   if not re.fullmatch('[a-f0-9]{40}',head) or not re.fullmatch('[A-Za-z0-9_./-]+',path) or path.startswith('/') or '..' in path.split('/'):
    raise ValueError('invalid pinned report evidence address')
-  try:return self.read_at(head,path)
+  key=(head,path)
+  if key in self.cache:
+   self.cache.move_to_end(key)
+   if self.cache[key] is None:raise ReportPinnedPathAbsent(head+':'+path)
+   return self.cache[key]
+  empty=False
+  try:
+   raw=self.read_at(head,path)
+   if not isinstance(raw,bytes):raise OSError('non-byte pinned evidence')
+   if raw==b'':
+    empty=True;raise OSError('empty pinned read requires local proof')
+   return self.remember(key,raw)
   except (OSError,TimeoutError) as exc:
    status=exc.code if isinstance(exc,HTTPError) else None
-   diagnostic={'operation':'r2_pinned_evidence_read','commit':head,'path':path,
+   diagnostic={'operation':'report_pinned_evidence_read','commit':head,'path':path,
     'observed_at_utc':datetime.now(timezone.utc).isoformat(),'report_run_id':os.environ.get('GITHUB_RUN_ID'),'job':os.environ.get('GITHUB_JOB'),
     'url':'https://raw.githubusercontent.com/'+f.old.REPO+'/'+head+'/'+quote(path,safe='/'),
     'http_status':status,'error_type':type(exc).__name__,'classification':'REMOTE_EVIDENCE_UNAVAILABLE'}
-   if status==404:
+   if status==404 or empty:
     command=['git','--literal-pathspecs','-c','safe.directory=*']
-    tree=subprocess.run([*command,'cat-file','-e',head+'^{tree}'],cwd=self.root,capture_output=True)
-    if tree.returncode==0:
-     entries=subprocess.run([*command,'ls-tree','-z','--full-tree',head,'--',path],cwd=self.root,capture_output=True)
-     if entries.returncode==0 and entries.stdout==b'':
-      diagnostic['classification']='PINNED_PATH_ABSENT'
-      self.diagnostics.append(diagnostic);print(json.dumps(diagnostic,sort_keys=True),file=sys.stderr)
-      return b''
+    diagnostic['classification']='PINNED_TREE_UNAVAILABLE'
+    try:
+     tree=subprocess.run([*command,'cat-file','-e',head+'^{tree}'],cwd=self.root,capture_output=True,env={**os.environ,'GIT_NO_LAZY_FETCH':'1','GIT_TERMINAL_PROMPT':'0'})
+     if tree.returncode==0:
+      entries=subprocess.run([*command,'ls-tree','-z','--full-tree',head,'--',path],cwd=self.root,capture_output=True,env={**os.environ,'GIT_NO_LAZY_FETCH':'1','GIT_TERMINAL_PROMPT':'0'})
+      if entries.returncode==0:
+       if entries.stdout==b'':
+        diagnostic['classification']='PINNED_PATH_ABSENT'
+        self.diagnostics.append(diagnostic);print(json.dumps(diagnostic,sort_keys=True),file=sys.stderr)
+        self.remember(key,None)
+        raise ReportPinnedPathAbsent(head+':'+path)
+       diagnostic['classification']='PINNED_PATH_PRESENT_REMOTE_UNAVAILABLE'
+       if empty:
+        size=subprocess.run([*command,'cat-file','-s',head+':'+path],cwd=self.root,capture_output=True,env={**os.environ,'GIT_NO_LAZY_FETCH':'1','GIT_TERMINAL_PROMPT':'0'})
+        if size.returncode==0 and size.stdout.strip()==b'0':
+         kind=subprocess.run([*command,'cat-file','-t',head+':'+path],cwd=self.root,capture_output=True,env={**os.environ,'GIT_NO_LAZY_FETCH':'1','GIT_TERMINAL_PROMPT':'0'})
+         if kind.returncode==0 and kind.stdout.strip()==b'blob':return self.remember(key,b'')
+    except OSError:
+     pass
    self.diagnostics.append(diagnostic);print(json.dumps(diagnostic,sort_keys=True),file=sys.stderr)
    raise ReportEvidenceReadError(diagnostic) from exc
+
+ def remember(self,key,raw):
+  # Bound report-local cache by bytes and entries; failures are never cached.
+  size=0 if raw is None else len(raw)
+  if size>64*1024*1024:return raw
+  while self.cache and (len(self.cache)>=512 or self.cache_bytes+size>64*1024*1024):
+   _,old=self.cache.popitem(last=False);self.cache_bytes-=0 if old is None else len(old)
+  self.cache[key]=raw;self.cache_bytes+=size
+  return raw
 
 def report_r2_verifiers(reader):
  # Rebind only these read-only functions' dependencies. The frozen function
@@ -99,6 +136,106 @@ def forecast_row(track,h,e,s,prediction_verified,score_verified,now):
  row.update(score_verified=True,status='SCORED_PUBLICLY_VERIFIED',active_forecast=False)
  return row
 
+def report_witness_runs(api,workflow,start_day,end_day,extra_ids=()):
+ """Require two stable complete scans; never turn uncertain discovery into absence."""
+ if workflow not in ('learned_shadow_v1.yml','phase2_forward_audit_v2.yml'):raise ValueError('unsupported witness workflow')
+ first=datetime.fromisoformat(start_day).date();last=datetime.fromisoformat(end_day).date()
+ if not 0<=(last-first).days<=366:raise ValueError('incomplete witness discovery: invalid date range')
+ found={}
+ def scan(day):
+  daily={};total=None
+  for page in range(1,11):
+   result=api('/actions/workflows/'+workflow+'/runs?per_page=100&page='+str(page)+'&created='+day)
+   count=result.get('total_count');rows=result.get('workflow_runs')
+   if type(count) is not int or not 0<=count<=1000 or not isinstance(rows,list) or len(rows)>100 or total is not None and total!=count:
+    raise ValueError('incomplete witness discovery: capped or changing daily results')
+   total=count
+   for run in rows:
+    rid=run.get('id');created=run.get('created_at');head=run.get('head_sha');attempt=run.get('run_attempt',1)
+    if (type(rid) is not int or rid<=0 or rid in daily or not isinstance(created,str)
+        or f.utc(created).date().isoformat()!=day or not isinstance(head,str) or not re.fullmatch('[a-f0-9]{40}',head)
+        or type(attempt) is not int or not 1<=attempt<=100):raise ValueError('incomplete witness discovery: malformed/duplicate run')
+    daily[rid]=run
+   if len(rows)<100:break
+  if len(daily)!=total:raise ValueError('incomplete witness discovery: missing daily pages')
+  return daily
+ for offset in range((last-first).days+1):
+  day=(first+timedelta(days=offset)).isoformat();one=scan(day);two=scan(day)
+  identity=lambda rows:{rid:(r['head_sha'],r['created_at'],r.get('run_attempt',1)) for rid,r in rows.items()}
+  if identity(one)!=identity(two):raise ValueError('incomplete witness discovery: unstable daily membership')
+  found.update(two)
+ for rid in extra_ids:
+  if type(rid) is not int or rid<=0:raise ValueError('invalid witness locator')
+ for rid in sorted(set(extra_ids)-set(found)):
+  run=api('/actions/runs/'+str(rid))
+  if run.get('id')!=rid:raise ValueError('witness locator mismatch')
+  found[rid]=run
+ return list(found.values())
+
+def report_attempts(api,run):
+ attempt=run.get('run_attempt',1)
+ if type(attempt) is not int or not 1<=attempt<=100:raise ValueError('incomplete witness discovery: attempt cap/schema')
+ answer=[]
+ for number in range(1,attempt+1):
+  item=run if number==attempt else api('/actions/runs/'+str(run['id'])+'/attempts/'+str(number))
+  if (item.get('id')!=run['id'] or item.get('run_attempt',1)!=number
+      or any(item.get(k)!=run.get(k) for k in ('head_sha','created_at','path','head_branch','event'))
+      or item.get('repository',{}).get('full_name')!=run.get('repository',{}).get('full_name')):
+   raise ValueError('incomplete witness discovery: attempt identity mismatch')
+  answer.append(item)
+ return answer
+
+def report_witness_window(events,p,now,track,api=None):
+ start=min(f.utc(e['issued_at_utc']) for e in events)-timedelta(days=1)
+ if api is not None:
+  # A rerun retains the original run creation time. Discover the workflow's
+  # oldest retained run, rather than assume every witness was created near issue.
+  workflow='phase2_forward_audit_v2.yml' if track=='r2' else 'learned_shadow_v1.yml'
+  prefix='/actions/workflows/'+workflow+'/runs?per_page=1&page='
+  snapshots=[]
+  for _ in range(2):
+   latest=api(prefix+'1');count=latest.get('total_count')
+   if type(count) is not int or count<=0:raise ValueError('incomplete witness history floor')
+   oldest=latest if count==1 else api(prefix+str(count))
+   rows=oldest.get('workflow_runs')
+   if oldest.get('total_count')!=count or not isinstance(rows,list) or len(rows)!=1:raise ValueError('incomplete witness history floor')
+   value=f.utc(rows[0]['created_at']);snapshots.append((count,rows[0]['id'],value))
+  if snapshots[0]!=snapshots[1]:raise ValueError('incomplete witness history floor: unstable')
+  start=min(start,snapshots[0][2])
+ deadline=f.deadline if track=='r2' else legacy.shadow.target_deadline
+ end=min(now,max(deadline(e,p) for e in events))
+ return start.date().isoformat(),end.date().isoformat()
+
+def report_audit_jobs(api,runs):
+ answer=[]
+ for run in [attempt for run in runs for attempt in report_attempts(api,run)]:
+  if (run.get('repository',{}).get('full_name')!=f.old.REPO or run.get('path','').split('@')[0]!=f.WORKFLOW
+      or run.get('head_branch')!='main' or run.get('event') not in ('push','workflow_dispatch','workflow_run')
+      or run.get('status')!='completed' or run.get('conclusion')!='success'
+      or run.get('event')=='workflow_run' and run.get('pull_requests')):continue
+  jobs=[];total=None
+  for page in range(1,11):
+   result=api('/actions/runs/'+str(run['id'])+'/attempts/'+str(run.get('run_attempt',1))+'/jobs?per_page=100&page='+str(page))
+   count=result.get('total_count');rows=result.get('jobs')
+   if type(count) is not int or not 0<=count<=1000 or not isinstance(rows,list) or len(rows)>100 or total is not None and total!=count:
+    raise ValueError('incomplete witness job discovery')
+   total=count;known={job['id'] for job in jobs}
+   for job in rows:
+    jid=job.get('id')
+    if (type(jid) is not int or jid<=0 or jid in known or job.get('run_id')!=run['id']
+        or job.get('run_attempt')!=run.get('run_attempt',1) or not isinstance(job.get('name'),str)):
+     raise ValueError('incomplete witness job identity/schema')
+    known.add(jid)
+    if job['name']=='audit' and job.get('status')=='completed' and job.get('conclusion')=='success':
+     try:
+      if f.utc(job['started_at'])>f.utc(job['completed_at']):raise ValueError('job time reversal')
+     except (KeyError,TypeError,ValueError):raise ValueError('incomplete witness job timestamps')
+    jobs.append(job)
+   if len(rows)<100:break
+  if len({job['id'] for job in jobs})!=total:raise ValueError('incomplete witness job discovery')
+  answer.extend({**run,'audit_job':job} for job in jobs if job['name']=='audit')
+ return answer
+
 def original_proofs(p,package,files,events,scores,now,online):
  if not online or not events:return {},{}
  bindings=legacy.read_bindings(ROOT);ids=[]
@@ -107,9 +244,15 @@ def original_proofs(p,package,files,events,scores,now,online):
   if receipt.exists():ids.extend(json.loads(receipt.read_bytes())['witness_run_ids'])
   for kind in ('prediction','target'):
    if e['event_id']+'_'+kind in bindings:ids.append(bindings[e['event_id']+'_'+kind]['run_id'])
- runs=legacy.runs_from_server(ids)
- _,pred_rows,pred_rejected=legacy.shadow.verified_rows(p,package,events,[],files,runs,legacy.read_at,now)
- _,score_rows,rejected=legacy.shadow.verified_rows(p,package,events,scores,files,runs,legacy.read_at,now)
+ ids.append(38482045946)
+ locator=ROOT/legacy.BASE/'runtime_registration.json'
+ if locator.exists():ids.append(json.loads(locator.read_bytes())['run_id'])
+ start,end=report_witness_window(events,p,now,'original18',legacy.bundle.api)
+ runs=report_witness_runs(legacy.bundle.api,'learned_shadow_v1.yml',start,end,ids)
+ runs=[attempt for run in runs for attempt in report_attempts(legacy.bundle.api,run)]
+ reader=ReportEvidenceReader(ROOT,legacy.read_at)
+ _,pred_rows,pred_rejected=legacy.shadow.verified_rows(p,package,events,[],files,runs,reader,now)
+ _,score_rows,rejected=legacy.shadow.verified_rows(p,package,events,scores,files,runs,reader,now)
  pred={q['event_id'] for values in pred_rows.values() for q in values if q['group']=='full'}
  scored={q['event_id'] for values in score_rows.values() for q in values if q['group']=='full' and q['y'] is not None}
  return {e['event_id']:(e['event_id'] in pred,e['event_id'] in scored) for e in events},{**pred_rejected,**rejected}
@@ -123,7 +266,9 @@ def r2_proofs(p,files,events,scores,now,online):
    if path.exists():ids.append(json.loads(path.read_bytes())['run_id'])
  reader=ReportEvidenceReader(ROOT,r2.read_at)
  publication,provenance=report_r2_verifiers(reader)
- runs=r2.runs_server(ids);scored,rejected=publication(p,events,scores,files,runs);good={q['event_id'] for q in scored if q['formal_eligible']}
+ start,end=report_witness_window(events,p,now,'r2',r2.frozen.api)
+ runs=report_audit_jobs(r2.frozen.api,report_witness_runs(r2.frozen.api,'phase2_forward_audit_v2.yml',start,end,ids))
+ scored,rejected=publication(p,events,scores,files,runs);good={q['event_id'] for q in scored if q['formal_eligible']}
  proofs={}
  for e in events:
   try:

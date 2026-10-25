@@ -1,0 +1,86 @@
+{
+  "schema": "PR75_INDEPENDENT_STATIC_REVIEW_FINAL_V1",
+  "synchronized_at_utc": "2026-10-25T08:37:46Z",
+  "reviewed_commit": "274574995990bb787aeea04acf54b8c54c94b19b",
+  "scope": "Synchronize the already-completed independent static review of 2745749; audit records only, no new review/test execution during synchronization.",
+  "review_result": {
+    "new_confirmed_defects": 0,
+    "new_fix_commit_required_by_review": false,
+    "conclusion": "Within reviewed static scope no new confirmed blocking or important issue; Linux execution remains unverified.",
+    "path_preflight": "Launcher validates canonical physical repository/output paths and containment before any log creation. Invalid/linked/inside-repository paths fail before writes.",
+    "failure_evidence": "Required stage evidence is checked individually; missing, linked or unreadable evidence is recorded and blocks PASS. Publication errors produce nonzero overall exit; launcher stderr/exit code supplement JSON.",
+    "zero_skip": "Original five exact executed/passed IDs and unchanged strict tool four exact IDs; 9 executions and 7 unique tests; zero failures/errors/skips, input/bundle stability, clean temporary area, complete evidence and overall exit zero are jointly required."
+  },
+  "existing_static_evidence": {
+    "package_files_compared_to_pinned_github_blobs": 7,
+    "package_blob_mismatches": 0,
+    "package_sha256sums": "matched",
+    "source_config_hashes_matched": 293,
+    "frozen_hashes_matched": 60,
+    "python_syntax": "AST parsed only; runner/tests not imported or executed",
+    "independent_read_only_review": "No blocking or important issues found in reviewed files. Root agent independently bound all seven local files to pinned remote blob IDs.",
+    "reviewer_version_caveat": "Reviewer checkout HEAD was an older base and the requested object absent locally; root verified all seven package files against pinned GitHub blob IDs. A read-only Git object query attempted lazy fetch and failed; no successful object recovery or runtime acceptance is claimed."
+  },
+  "package_git_blobs": {
+    "offline_acceptance/pr75_linux/PREPARED.json": "3359527de5034557815f9c21996838cac08d4aed",
+    "offline_acceptance/pr75_linux/README.zh-CN.md": "7197ca1e93d83d9d2ef174067230478ef580e7cd",
+    "offline_acceptance/pr75_linux/SHA256SUMS": "4f1a263153831ec8bc578b5b406cc27d83d77aab",
+    "offline_acceptance/pr75_linux/launch.sh": "1e9a54d2b83873784be1f99fc31fb80a75e7f278",
+    "offline_acceptance/pr75_linux/manifest.json": "121fdd9d42d91ce60b104088b7c0f073b1b17116",
+    "offline_acceptance/pr75_linux/requirements.txt": "8698a64f1bbfd17df45c86b439dba180c633a2a4",
+    "offline_acceptance/pr75_linux/run.py": "30022f40e777b107e4036c73970aee66fca40068"
+  },
+  "historical_acceptance": {
+    "distinct_tests": 1319,
+    "passed": 1314,
+    "failures": 0,
+    "errors": 0,
+    "pending_linux": 5,
+    "basis": "Prior consolidated full discovery plus targeted verification. Not rerun during static review or synchronization.",
+    "source_record": "docs/audits/pr75_originals_recovered_final_20261025.json"
+  },
+  "linux": {
+    "status": "PENDING_NOT_RUN",
+    "actual_execution_verified": false,
+    "tests": [
+      {
+        "test": "test_output_symlink_rejected (test_phase2_research.Phase2ResearchTests.test_output_symlink_rejected)",
+        "previous_skip_reason": "symlink privilege unavailable"
+      },
+      {
+        "test": "test_symlink_model_cannot_pass_manifest_verification (test_phase2_research.Phase2ResearchTests.test_symlink_model_cannot_pass_manifest_verification)",
+        "previous_skip_reason": "symlink privilege unavailable"
+      },
+      {
+        "test": "test_latest_symlink_cannot_overwrite_outside_file (test_pit_retention_preparation.PreparationTests.test_latest_symlink_cannot_overwrite_outside_file)",
+        "previous_skip_reason": "platform cannot create symlinks; Linux CI must exercise this test"
+      },
+      {
+        "test": "test_output_directory_symlink_cannot_redirect_package_writes (test_pit_retention_preparation.PreparationTests.test_output_directory_symlink_cannot_redirect_package_writes)",
+        "previous_skip_reason": "platform cannot create symlinks; Linux CI must exercise this test"
+      },
+      {
+        "test": "test_release_namespace_parent_symlink_rejected (test_prediction_release_control.Release.test_release_namespace_parent_symlink_rejected)",
+        "previous_skip_reason": "platform cannot create directory symlink"
+      }
+    ],
+    "closure_criteria": "Native Linux: all original five and unchanged strict four, zero failures/errors/skips, 9 executions/7 unique IDs, required evidence intact and complete, matching pre/post hashes and overall exit 0."
+  },
+  "limitations": [
+    "Static review is not runtime verification or a guarantee of first-run success.",
+    "Hard kill, unwritable media and previously declared concurrency/crash/persistence bounds remain.",
+    "Cloud disk/runtime, provider upload/readback and natural scheduling remain outside this offline review."
+  ],
+  "synchronization": {
+    "audit_records_only": true,
+    "tests_executed": false,
+    "runner_or_launcher_executed": false,
+    "environment_installed": false,
+    "keep_draft": true,
+    "merged": false,
+    "deployed": false,
+    "production_rerun": false,
+    "new_triggers": false,
+    "frozen_models_protocols_original_history_changed": false
+  }
+}
