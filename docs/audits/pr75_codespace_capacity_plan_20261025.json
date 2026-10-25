@@ -1,0 +1,160 @@
+{
+  "schema": "PR75_CODESPACE_CAPACITY_PLAN_V1",
+  "status": "PLANNED_NOT_CREATED_NOT_STARTED",
+  "synchronized_at_utc": "2026-10-25T11:10:44Z",
+  "publication_parent": "c3971936b716dc7e7108123c857ee6c631a044e7",
+  "scope_zh": "仅同步上一轮已给出的规格、估算、最小权限与执行方案；本次不重新查询价格或环境、不运行测试、不改授权、不创建或启动实例。",
+  "target": {
+    "artifact_id": 12581914557,
+    "archive_bytes": 1410368543,
+    "archive_sha256": "d6974f86bfffe7365e6d43f90e6b9cfea194c380acf493100c3959084c48a1d2",
+    "expected_parts": 27,
+    "expected_unique_objects": 7672,
+    "tested_implementation_commit": "8c7278b5021fec6490e8fd22b447dfc225ec3f4e",
+    "code_git_blobs": {
+      "oss_inventory_retention.py": "20f86b0263bb2c8f65a122fa7852e84069e0bb74",
+      "pit_retention_preparation.py": "6a5128c829c3568ddd9ea14d5f213469bb939c6e"
+    },
+    "frozen_registered_assets": 60
+  },
+  "minimum_proposed_spec": {
+    "cpus": 2,
+    "memory_gb": 8,
+    "storage_gb": 32,
+    "description_zh": "独立空白Codespace，默认Linux镜像；这是官方最低规格档位的拟选配置，不是已实测证明的最低硬件需求。",
+    "runtime_zh": "尽量匹配生产Ubuntu24.04、Python3.11，记录实际精确版本。",
+    "tools_zh": "Git、Python zlib、GNU time、磁盘和内存采样工具；本次消费校验不需OSS SDK。",
+    "additional_processing_budget_bytes": 3107519696,
+    "recommended_free_space_gib": 10,
+    "storage_note_zh": "预算之外另计源码、依赖、缓存和证据；10GiB是建议余量。只验证本包，不覆盖41.25GiB全支持边界。",
+    "isolation_zh": "不加载项目自动启动脚本、不配置prebuild；只读获取固定源码及冻结资产的隔离副本，输出写仓库外私有目录。"
+  },
+  "cost_estimate": {
+    "currency": "USD",
+    "price_reference_date": "2026-10-25",
+    "compute_per_hour": 0.18,
+    "storage_per_gb_month": 0.07,
+    "expected_active_minutes": [
+      15,
+      30
+    ],
+    "expected_compute_cost": [
+      0.045,
+      0.09
+    ],
+    "conservative_expected_total_rounded": [
+      0.05,
+      0.1
+    ],
+    "one_hour_compute": 0.18,
+    "one_hour_storage_if_32_gb_all_billable_approx": 0.0031,
+    "proposed_one_hour_budget_approx": 0.2,
+    "conditions_zh": [
+      "未核验账户剩余免费额度，不假定抵扣；报价不含税。",
+      "按最多1小时做预算准备，不是已授权消费或严格账单上限。",
+      "存储按实际计费量和存续时间计算，32GB全计费只是保守算例。",
+      "关闭浏览器不停止实例；停止后存储仍计费，直到删除。证据导出后明确停止，保留/删除安排须明确。",
+      "本次未增加付款方式、修改额度或提交创建操作。"
+    ]
+  },
+  "minimum_permissions": {
+    "preferred_zh": "创建、连接、停止优先走已有GitHub网页登录；不为本方案扩大原Git OAuth范围。",
+    "compute_zh": "账户有Codespaces使用资格及足够额度或可用付款条件；需进入测试实例终端的授权。",
+    "artifact_download": "Target repository Actions: Read-only",
+    "source_read_zh": "公开源码可匿名读取；需要认证读取时Contents: Read-only。",
+    "not_required_zh": [
+      "OSS权限或凭据",
+      "生产Actions写入/执行权限",
+      "目标生产仓库写入",
+      "Secrets写权限"
+    ],
+    "api_alternative_zh": "仅若未来改用API创建：相关创建仓库Codespaces: Write；API启动/停止需Codespaces lifecycle admin: Write。空白实例创建仓库与目标artifact仓库的授权范围应分别对应，不提前申请。"
+  },
+  "execution_plan": [
+    {
+      "step": 1,
+      "action_zh": "未来授权后创建独立空白环境，记录规格/镜像/内核/Python/资源限制；拉取固定commit实现与冻结清单，不跟随main。"
+    },
+    {
+      "step": 2,
+      "action_zh": "真实流式下载固定artifact，核对1410368543字节及完整SHA256；保存元数据和来源。"
+    },
+    {
+      "step": 3,
+      "action_zh": "执行PR容量预检、外层CRC展开、内层ZIP限制、分片和对象哈希，以及未修改冻结校验器；要求27分片、7672唯一对象、60登记冻结资产前后不变。"
+    },
+    {
+      "step": 4,
+      "action_zh": "分别记录环境准备、下载、展开、校验和完整墙钟时间；采样同时存在文件的逻辑/分配占用，记录进程树或cgroup内存峰值、退出码及OOM/磁盘异常；快照与时间序列峰值区分。"
+    },
+    {
+      "step": 5,
+      "action_zh": "零失败/错误/必要跳过，无OOM或磁盘耗尽；下载及校验落在目标15分钟job预算内并报告剩余时间。此条件不证明加入OSS上传回读后的完整job也可在15分钟内完成。平台实例创建时间单独记录，不伪装生产job时间。"
+    },
+    {
+      "step": 6,
+      "action_zh": "导出环境、输入摘要、逐分片结果、冻结前后哈希、资源/时长/退出码证据后明确停止实例；不推送库存或改生产仓库；后续保留/删除依授权处理。"
+    }
+  ],
+  "acceptance_scope_zh": "最多证明选定Codespace配置对固定artifact的云端承载。不能自动替代GitHub Actions目标runner承载、OSS存证或自然调度验收。",
+  "production_readiness_checklist": [
+    {
+      "item": 1,
+      "name_zh": "云端承载",
+      "status": "PENDING_PLAN_ONLY",
+      "detail_zh": "规格和执行方案已准备，未创建/启动，尚无云端测量。"
+    },
+    {
+      "item": 2,
+      "name_zh": "固定真实库存离线兼容性",
+      "status": "PASS_FOR_ARTIFACT_12581914557",
+      "detail_zh": "27分片、7672对象Windows离线通过证据保持。"
+    },
+    {
+      "item": 3,
+      "name_zh": "最新库存OSS存证及固定版本回读",
+      "status": "PENDING"
+    },
+    {
+      "item": 4,
+      "name_zh": "自然调度整链",
+      "status": "PENDING"
+    },
+    {
+      "item": 5,
+      "name_zh": "真实见证及API失败分类",
+      "status": "PARTIAL_OFFLINE_VERIFIED"
+    },
+    {
+      "item": 6,
+      "name_zh": "失败恢复与运维",
+      "status": "PARTIAL_OFFLINE_VERIFIED"
+    },
+    {
+      "item": 7,
+      "name_zh": "发布版本与冻结绑定",
+      "status": "PARTIAL_NOT_DEPLOYED"
+    }
+  ],
+  "official_sources_consulted_in_previous_turn": [
+    "https://docs.github.com/en/codespaces/about-codespaces/what-are-codespaces",
+    "https://docs.github.com/en/billing/concepts/product-billing/github-codespaces",
+    "https://docs.github.com/en/codespaces/about-codespaces/understanding-the-codespace-lifecycle",
+    "https://docs.github.com/en/rest/codespaces/codespaces",
+    "https://docs.github.com/en/rest/actions/artifacts#download-an-artifact"
+  ],
+  "publication_operations": {
+    "audit_files_added": 1,
+    "auth_changed": false,
+    "instances_created": false,
+    "instances_started": false,
+    "tests_executed": false,
+    "production_runs": false,
+    "oss_upload": false,
+    "new_triggers": false,
+    "merged": false,
+    "deployed": false,
+    "frozen_models_protocols_history_changed": false
+  },
+  "closure_policy_zh": "PR保持草稿；只同步计划，不因审计提交再次机械复审。"
+}
