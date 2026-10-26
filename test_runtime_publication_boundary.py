@@ -176,6 +176,30 @@ class PublicationBoundary(unittest.TestCase):
         self.assertNotIn('fatal=false', self.output.read_text())
 
 
+    def test_legacy_required_run_failure_remains_unsafe_at_finish(self):
+        from test_runtime_deadline_service import Adapter, Clock
+        clock = Clock()
+        adapter = Adapter(clock)
+        adapter.can_stop = lambda: False
+        stop = self.base/'stop'
+        stop.touch()
+        result = runtime.run(self.root, adapter, 1, clock, clock.sleep,
+                             stop_file=stop, require_qualified_stop=True)
+        self.assertFalse(result['qualified_stop_satisfied'])
+        result = runtime.finish(self.root, self.adapter, result)
+        self.assertTrue(result['fatal'])
+        self.assertNotIn('fatal=false', self.output.read_text())
+        self.assertEqual(self.git('--git-dir', str(self.remote), 'rev-parse',
+                                  'refs/heads/main').stdout.strip(), self.initial)
+
+    def test_legacy_qualified_success_is_persisted_and_remains_clean(self):
+        result = self.result()
+        result['qualified_stop_satisfied'] = True
+        result = runtime.finish(self.root, self.adapter, result)
+        self.assertFalse(result['fatal'])
+        self.assertEqual(self.git('status', '--porcelain', '--untracked-files=no').stdout, '')
+        self.assertTrue(self.output.read_text().endswith('fatal=false\n'))
+
 if __name__ == '__main__':
     def no_network(*args, **kwargs):
         raise AssertionError('network forbidden in offline PR83 fixtures')

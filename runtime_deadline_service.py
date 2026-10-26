@@ -354,6 +354,11 @@ def finish(root, adapter, result):
     # Missing output is unsafe in the workflow too. Start unsafe before any
     # disk/network work; explicitly clear only after final receipt persistence.
     output(True)
+    # Older run() results only contain the satisfied field when stop was required.
+    required = result.get('qualified_stop_required', 'qualified_stop_satisfied' in result)
+    if required is True and result.get('qualified_stop_satisfied') is not True:
+        result.update(fatal=True, status='DEGRADED',
+                      fatal_reason='REQUIRED_QUALIFIED_STOP_NOT_SATISFIED')
     path = Path(root)/BASE/'latest.json'
     path.parent.mkdir(parents=True, exist_ok=True)
     # Publish the complete final receipt, including any foreground budget.
