@@ -1,0 +1,214 @@
+{
+  "schema": "pr75-isolated-pit-receipt-publication-fix-v1",
+  "verified_at_utc": "2026-10-26T01:28:58.132496+00:00",
+  "parent_pr_head": "2ae20c8c7d2b7ed363562cc2bf9108876c0dad1a",
+  "problem": "Source collector worktree contains live unstaged changes; original marker commit followed by pull --rebase fails five times. Old published marker then disagrees with new prepared inventory; downstream binding guard correctly rejects it.",
+  "fix": [
+    "Replace only existing marker publishing shell block with validated isolated publisher; record-artifact remains first.",
+    "Validate local exact bundle/shards with existing verify_inventory_bundle, run ID, artifact output format, producer SHA and receipt flags.",
+    "Fetch latest main into a temporary detached worktree with its own complete index; check out only latest.json and producer source, not inventory payloads.",
+    "Compare remote preparation/source binding and producer digest before staging only artifact_publication.json.",
+    "Normal non-force push with bounded fresh-base retries; conflicting same-bundle receipts fail closed; exact already-published bytes are idempotent.",
+    "Read back committed marker from remote and always remove owned temporary worktree; leave source HEAD/index/dirty/untracked files untouched.",
+    "Add new regression module to existing regression command only; no trigger, schedule, permissions or concurrency changes."
+  ],
+  "verification": {
+    "platform": "Windows",
+    "python": "3.12.14",
+    "git": "git version 2.53.0.windows.3",
+    "scope": "Offline local temporary bare remotes only; no GitHub pushes or OSS operations during tests",
+    "run": 38,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 2,
+    "new_publisher_tests": 14,
+    "rows": [
+      {
+        "id": "test_pit_receipt_publish.ReceiptPublicationTests.test_corrupt_local_bundle_rejected",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_receipt_publish.ReceiptPublicationTests.test_different_artifact_for_same_bundle_cannot_overwrite",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_receipt_publish.ReceiptPublicationTests.test_dirty_source_publishes_only_marker_without_touching_source",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_receipt_publish.ReceiptPublicationTests.test_failed_push_cleans_worktree_preserves_original_error",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_receipt_publish.ReceiptPublicationTests.test_idempotent_exact_marker",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_receipt_publish.ReceiptPublicationTests.test_invalid_artifact_output_and_false_retention_claim_rejected",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_receipt_publish.ReceiptPublicationTests.test_legacy_pull_reproduces_unstaged_changes_failure",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_receipt_publish.ReceiptPublicationTests.test_marker_digest_mismatch_rejected",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_receipt_publish.ReceiptPublicationTests.test_non_fast_forward_retries_on_fresh_tree",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_receipt_publish.ReceiptPublicationTests.test_private_checkout_does_not_materialize_inventory_or_unrelated_files",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_receipt_publish.ReceiptPublicationTests.test_remote_implementation_change_rejected",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_receipt_publish.ReceiptPublicationTests.test_remote_latest_mismatch_rejected",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_receipt_publish.ReceiptPublicationTests.test_wrong_run_rejected",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_receipt_publish.WorkflowContractTests.test_existing_step_uses_validated_record_then_isolated_publisher",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_retention_preparation.ExternalTests.test_denial_is_not_treated_as_success",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_retention_preparation.ExternalTests.test_formatted_and_padded_locked_index_cannot_certify_shards",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_retention_preparation.ExternalTests.test_invalid_target_clock_never_leaves_partial_success",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_retention_preparation.ExternalTests.test_late_timestamp_is_not_backdated_to_pre_target_evidence",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_retention_preparation.ExternalTests.test_locked_index_alone_cannot_certify_unread_shards",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_retention_preparation.ExternalTests.test_object_existing_before_target_does_not_prove_a_later_lock_existed",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_retention_preparation.ExternalTests.test_pinned_readback_compliance_duration_and_distinct_owner_required",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_retention_preparation.ExternalTests.test_same_account_invalid_duration_and_null_version_fail_before_network",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_retention_preparation.ExternalTests.test_wrong_hash_short_governance_version_owner_and_identity_fail",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_retention_preparation.PreparationTests.test_actual_first_receipt_blocks_historical_date_and_late_revision",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_retention_preparation.PreparationTests.test_bundle_contains_exact_bytes_and_no_external_verification_claim",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_retention_preparation.PreparationTests.test_bundle_rejects_hash_mismatch_escape_empty_and_secret_paths",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_retention_preparation.PreparationTests.test_equal_receipt_revision_is_not_an_independent_version",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_retention_preparation.PreparationTests.test_input_is_not_mutated_and_timezone_is_required",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_retention_preparation.PreparationTests.test_invalid_age_limits_fail_closed",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_retention_preparation.PreparationTests.test_large_inventory_shards_preserve_exact_objects_and_caps",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_retention_preparation.PreparationTests.test_latest_symlink_cannot_overwrite_outside_file",
+        "status": "SKIP",
+        "reason": "platform cannot create symlinks; Linux CI must exercise this test"
+      },
+      {
+        "id": "test_pit_retention_preparation.PreparationTests.test_no_config_does_not_contact_external_clients",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_retention_preparation.PreparationTests.test_output_directory_symlink_cannot_redirect_package_writes",
+        "status": "SKIP",
+        "reason": "platform cannot create symlinks; Linux CI must exercise this test"
+      },
+      {
+        "id": "test_pit_retention_preparation.PreparationTests.test_path_escape_and_symlink_rejected",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_retention_preparation.PreparationTests.test_raw_tamper_duplicate_revision_and_chain_mutation_rejected",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_retention_preparation.PreparationTests.test_revision_cannot_move_receipt_clock_backwards",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_retention_preparation.PreparationTests.test_single_object_over_cap_is_not_silently_admitted",
+        "status": "PASS"
+      },
+      {
+        "id": "test_pit_retention_preparation.PreparationTests.test_stale_observation_is_removed_without_zero_substitution",
+        "status": "PASS"
+      }
+    ]
+  },
+  "command": "python -m unittest -v test_pit_receipt_publish test_pit_retention_preparation",
+  "test_log": "test_corrupt_local_bundle_rejected (test_pit_receipt_publish.ReceiptPublicationTests.test_corrupt_local_bundle_rejected) ... ok\ntest_different_artifact_for_same_bundle_cannot_overwrite (test_pit_receipt_publish.ReceiptPublicationTests.test_different_artifact_for_same_bundle_cannot_overwrite) ... ok\ntest_dirty_source_publishes_only_marker_without_touching_source (test_pit_receipt_publish.ReceiptPublicationTests.test_dirty_source_publishes_only_marker_without_touching_source) ... ok\ntest_failed_push_cleans_worktree_preserves_original_error (test_pit_receipt_publish.ReceiptPublicationTests.test_failed_push_cleans_worktree_preserves_original_error) ... ok\ntest_idempotent_exact_marker (test_pit_receipt_publish.ReceiptPublicationTests.test_idempotent_exact_marker) ... ok\ntest_invalid_artifact_output_and_false_retention_claim_rejected (test_pit_receipt_publish.ReceiptPublicationTests.test_invalid_artifact_output_and_false_retention_claim_rejected) ... ok\ntest_legacy_pull_reproduces_unstaged_changes_failure (test_pit_receipt_publish.ReceiptPublicationTests.test_legacy_pull_reproduces_unstaged_changes_failure) ... ok\ntest_marker_digest_mismatch_rejected (test_pit_receipt_publish.ReceiptPublicationTests.test_marker_digest_mismatch_rejected) ... ok\ntest_non_fast_forward_retries_on_fresh_tree (test_pit_receipt_publish.ReceiptPublicationTests.test_non_fast_forward_retries_on_fresh_tree) ... ok\ntest_private_checkout_does_not_materialize_inventory_or_unrelated_files (test_pit_receipt_publish.ReceiptPublicationTests.test_private_checkout_does_not_materialize_inventory_or_unrelated_files) ... ok\ntest_remote_implementation_change_rejected (test_pit_receipt_publish.ReceiptPublicationTests.test_remote_implementation_change_rejected) ... ok\ntest_remote_latest_mismatch_rejected (test_pit_receipt_publish.ReceiptPublicationTests.test_remote_latest_mismatch_rejected) ... ok\ntest_wrong_run_rejected (test_pit_receipt_publish.ReceiptPublicationTests.test_wrong_run_rejected) ... ok\ntest_existing_step_uses_validated_record_then_isolated_publisher (test_pit_receipt_publish.WorkflowContractTests.test_existing_step_uses_validated_record_then_isolated_publisher) ... ok\ntest_denial_is_not_treated_as_success (test_pit_retention_preparation.ExternalTests.test_denial_is_not_treated_as_success) ... ok\ntest_formatted_and_padded_locked_index_cannot_certify_shards (test_pit_retention_preparation.ExternalTests.test_formatted_and_padded_locked_index_cannot_certify_shards) ... ok\ntest_invalid_target_clock_never_leaves_partial_success (test_pit_retention_preparation.ExternalTests.test_invalid_target_clock_never_leaves_partial_success) ... ok\ntest_late_timestamp_is_not_backdated_to_pre_target_evidence (test_pit_retention_preparation.ExternalTests.test_late_timestamp_is_not_backdated_to_pre_target_evidence) ... ok\ntest_locked_index_alone_cannot_certify_unread_shards (test_pit_retention_preparation.ExternalTests.test_locked_index_alone_cannot_certify_unread_shards) ... ok\ntest_object_existing_before_target_does_not_prove_a_later_lock_existed (test_pit_retention_preparation.ExternalTests.test_object_existing_before_target_does_not_prove_a_later_lock_existed) ... ok\ntest_pinned_readback_compliance_duration_and_distinct_owner_required (test_pit_retention_preparation.ExternalTests.test_pinned_readback_compliance_duration_and_distinct_owner_required) ... ok\ntest_same_account_invalid_duration_and_null_version_fail_before_network (test_pit_retention_preparation.ExternalTests.test_same_account_invalid_duration_and_null_version_fail_before_network) ... ok\ntest_wrong_hash_short_governance_version_owner_and_identity_fail (test_pit_retention_preparation.ExternalTests.test_wrong_hash_short_governance_version_owner_and_identity_fail) ... ok\ntest_actual_first_receipt_blocks_historical_date_and_late_revision (test_pit_retention_preparation.PreparationTests.test_actual_first_receipt_blocks_historical_date_and_late_revision) ... ok\ntest_bundle_contains_exact_bytes_and_no_external_verification_claim (test_pit_retention_preparation.PreparationTests.test_bundle_contains_exact_bytes_and_no_external_verification_claim) ... ok\ntest_bundle_rejects_hash_mismatch_escape_empty_and_secret_paths (test_pit_retention_preparation.PreparationTests.test_bundle_rejects_hash_mismatch_escape_empty_and_secret_paths) ... ok\ntest_equal_receipt_revision_is_not_an_independent_version (test_pit_retention_preparation.PreparationTests.test_equal_receipt_revision_is_not_an_independent_version) ... ok\ntest_input_is_not_mutated_and_timezone_is_required (test_pit_retention_preparation.PreparationTests.test_input_is_not_mutated_and_timezone_is_required) ... ok\ntest_invalid_age_limits_fail_closed (test_pit_retention_preparation.PreparationTests.test_invalid_age_limits_fail_closed) ... ok\ntest_large_inventory_shards_preserve_exact_objects_and_caps (test_pit_retention_preparation.PreparationTests.test_large_inventory_shards_preserve_exact_objects_and_caps) ... ok\ntest_latest_symlink_cannot_overwrite_outside_file (test_pit_retention_preparation.PreparationTests.test_latest_symlink_cannot_overwrite_outside_file) ... skipped 'platform cannot create symlinks; Linux CI must exercise this test'\ntest_no_config_does_not_contact_external_clients (test_pit_retention_preparation.PreparationTests.test_no_config_does_not_contact_external_clients) ... ok\ntest_output_directory_symlink_cannot_redirect_package_writes (test_pit_retention_preparation.PreparationTests.test_output_directory_symlink_cannot_redirect_package_writes) ... skipped 'platform cannot create symlinks; Linux CI must exercise this test'\ntest_path_escape_and_symlink_rejected (test_pit_retention_preparation.PreparationTests.test_path_escape_and_symlink_rejected) ... ok\ntest_raw_tamper_duplicate_revision_and_chain_mutation_rejected (test_pit_retention_preparation.PreparationTests.test_raw_tamper_duplicate_revision_and_chain_mutation_rejected) ... ok\ntest_revision_cannot_move_receipt_clock_backwards (test_pit_retention_preparation.PreparationTests.test_revision_cannot_move_receipt_clock_backwards) ... ok\ntest_single_object_over_cap_is_not_silently_admitted (test_pit_retention_preparation.PreparationTests.test_single_object_over_cap_is_not_silently_admitted) ... ok\ntest_stale_observation_is_removed_without_zero_substitution (test_pit_retention_preparation.PreparationTests.test_stale_observation_is_removed_without_zero_substitution) ... ok\n\n----------------------------------------------------------------------\nRan 38 tests in 19.298s\n\nOK (skipped=2)\n",
+  "test_log_sha256": "23a0e46dffab1666002574bb0574324976029c8e81eb01e2db62e51b65b00df1",
+  "source_files": {
+    "pit_receipt_publish.py": {
+      "bytes": 6293,
+      "sha256": "d151ffcea7945da7b475412edf00d8d012634dedc24f08c22de69e80ff67d727"
+    },
+    "test_pit_receipt_publish.py": {
+      "bytes": 8926,
+      "sha256": "0d8b9978179abe9f290984250c528751f0677068fc168215e39cf375bdef251c"
+    },
+    ".github/workflows/okx_hourly_extreme_history.yml": {
+      "bytes": 29225,
+      "sha256": "bf346716da5e456d288222f77c5f94b2d22f08c7ad67c7a5178f012be25419d6"
+    }
+  },
+  "workflow_diff": "--- before\n+++ after\n@@ -229,7 +229,7 @@\n       - name: Test hourly point-in-time registry causal restrictions after time-sensitive evidence capture\n         id: regression\n         continue-on-error: true\n-        run: python -m unittest -v test_crash_forward_watch test_crash_v42_score test_direction_forward_v42 test_stage5_minute_shadow test_stage5_error_review test_spot_plus_quote_watch test_forward_validation test_quote_evidence_v2 test_forward_validation_v2 test_workflow_operational_order test_p0_operations test_publish_forward_evidence test_forward_diagnostics test_p0_open_target_guard test_paired_selection_v1 test_paired_forward_cohort test_paired_cohort_audit\n+        run: python -m unittest -v test_crash_forward_watch test_crash_v42_score test_direction_forward_v42 test_stage5_minute_shadow test_stage5_error_review test_spot_plus_quote_watch test_forward_validation test_quote_evidence_v2 test_forward_validation_v2 test_workflow_operational_order test_p0_operations test_publish_forward_evidence test_forward_diagnostics test_p0_open_target_guard test_paired_selection_v1 test_paired_forward_cohort test_paired_cohort_audit test_pit_receipt_publish\n       - name: Reconcile strict rolling seven-day issuance and target evidence\n         id: operations\n         if: always() && steps.validation.outcome == 'success'\n@@ -481,16 +481,7 @@\n           PIT_ARTIFACT_DIGEST: ${{ steps.pit_artifact.outputs.artifact-digest }}\n         run: |\n           python pit_retention_preparation.py record-artifact --artifact-id \"$PIT_ARTIFACT_ID\" --artifact-digest \"$PIT_ARTIFACT_DIGEST\" --run-id \"$GITHUB_RUN_ID\"\n-          git add -f data/pit_retention_preparation_v1/artifact_publication.json\n-          if ! git diff --cached --quiet; then\n-            git commit -m 'audit: record completed daily PIT package artifact'\n-            for attempt in 1 2 3 4 5; do\n-              if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi\n-              git rebase --abort || true\n-              [ \"$attempt\" -lt 5 ] || exit 1\n-              sleep 4\n-            done\n-          fi\n+          python pit_receipt_publish.py --run-id \"$GITHUB_RUN_ID\"\n       - name: Fail visibly on PIT preparation or package artifact error after saving core evidence\n         if: always() && (steps.pit_preparation.outcome == 'failure' || steps.pit_artifact.outcome == 'failure' || steps.pit_publication.outcome == 'failure')\n         run: exit 1\n",
+  "unchanged": [
+    "pit_retention_preparation.py exact PR base bytes",
+    "oss_inventory_retention.py including source/digest guard",
+    "frozen models/protocols/all history and stored receipts",
+    "workflow on/permissions/concurrency header"
+  ],
+  "remaining_acceptance": [
+    "Linux-specific symlink behavior: two preexisting preparation tests skipped on this Windows environment; no claim of a new Linux run.",
+    "No production deployment or natural run of this fix; actual production permission/config/publication completion remain unverified.",
+    "Existing mismatched new bundle marker is not repaired remotely by this code submission; no rerun, new receipt write or OSS upload performed.",
+    "Formal pre-target custody and1H/24H/7D accepted scores remain pending; historical missed deadlines unchanged; shadow counts excluded.",
+    "Cloud Shell original-instance independent terminal receipt and prior release/rollback gaps unchanged."
+  ],
+  "boundaries": "Offline local Git remotes only during testing; publish code/tests/evidence to draft PR75 with [skip ci]. No merge, deploy, rerun, OSS upload or new trigger."
+}

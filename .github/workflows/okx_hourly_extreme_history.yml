@@ -229,7 +229,7 @@ jobs:
       - name: Test hourly point-in-time registry causal restrictions after time-sensitive evidence capture
         id: regression
         continue-on-error: true
-        run: python -m unittest -v test_crash_forward_watch test_crash_v42_score test_direction_forward_v42 test_stage5_minute_shadow test_stage5_error_review test_spot_plus_quote_watch test_forward_validation test_quote_evidence_v2 test_forward_validation_v2 test_workflow_operational_order test_p0_operations test_publish_forward_evidence test_forward_diagnostics test_p0_open_target_guard test_paired_selection_v1 test_paired_forward_cohort test_paired_cohort_audit
+        run: python -m unittest -v test_crash_forward_watch test_crash_v42_score test_direction_forward_v42 test_stage5_minute_shadow test_stage5_error_review test_spot_plus_quote_watch test_forward_validation test_quote_evidence_v2 test_forward_validation_v2 test_workflow_operational_order test_p0_operations test_publish_forward_evidence test_forward_diagnostics test_p0_open_target_guard test_paired_selection_v1 test_paired_forward_cohort test_paired_cohort_audit test_pit_receipt_publish
       - name: Reconcile strict rolling seven-day issuance and target evidence
         id: operations
         if: always() && steps.validation.outcome == 'success'
@@ -481,16 +481,7 @@ jobs:
           PIT_ARTIFACT_DIGEST: ${{ steps.pit_artifact.outputs.artifact-digest }}
         run: |
           python pit_retention_preparation.py record-artifact --artifact-id "$PIT_ARTIFACT_ID" --artifact-digest "$PIT_ARTIFACT_DIGEST" --run-id "$GITHUB_RUN_ID"
-          git add -f data/pit_retention_preparation_v1/artifact_publication.json
-          if ! git diff --cached --quiet; then
-            git commit -m 'audit: record completed daily PIT package artifact'
-            for attempt in 1 2 3 4 5; do
-              if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
-              git rebase --abort || true
-              [ "$attempt" -lt 5 ] || exit 1
-              sleep 4
-            done
-          fi
+          python pit_receipt_publish.py --run-id "$GITHUB_RUN_ID"
       - name: Fail visibly on PIT preparation or package artifact error after saving core evidence
         if: always() && (steps.pit_preparation.outcome == 'failure' || steps.pit_artifact.outcome == 'failure' || steps.pit_publication.outcome == 'failure')
         run: exit 1
@@ -534,3 +525,4 @@ jobs:
             const notify = require('./.github/scripts/p0_alert.cjs');
             const result = await notify({github, context, report, failed:process.env.JOB_FAILED === 'true'});
             core.info(JSON.stringify(result));
+
