@@ -535,16 +535,7 @@ jobs:
           PIT_ARTIFACT_DIGEST: ${{ steps.pit_artifact.outputs.artifact-digest }}
         run: |
           python pit_retention_preparation.py record-artifact --artifact-id "$PIT_ARTIFACT_ID" --artifact-digest "$PIT_ARTIFACT_DIGEST" --run-id "$GITHUB_RUN_ID"
-          git add -f data/pit_retention_preparation_v1/artifact_publication.json
-          if ! git diff --cached --quiet; then
-            git commit -m 'audit: record completed daily PIT package artifact'
-            for attempt in 1 2 3 4 5; do
-              if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
-              git rebase --abort || true
-              [ "$attempt" -lt 5 ] || exit 1
-              sleep 4
-            done
-          fi
+          python pit_artifact_publication.py
       - name: Preserve capture receipts produced during archive upload
         if: always() && steps.archive_bridge_start.outcome == 'success'
         uses: actions/upload-artifact@v4
