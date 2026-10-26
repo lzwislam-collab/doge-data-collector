@@ -19,7 +19,10 @@ class HourlyTimeoutRecovery(unittest.TestCase):
         self.assertGreaterEqual(minutes*60,508+max(120,int(pit.group(1))*60))
         # First-daily run 39701702728 took 952s including both archives.
         self.assertGreaterEqual(minutes*60,952+120)
-        self.assertLessEqual(minutes,18)
+        service=re.search(r'runtime_deadline_service.py --duration-seconds (\d+)',text)
+        self.assertIsNotNone(service)
+        self.assertGreaterEqual(minutes*60,int(service.group(1))+952+120)
+        self.assertLessEqual(minutes,65)
 
     def test_existing_single_schedule_and_serialization_are_preserved(self):
         text=WORKFLOW.read_text(encoding='utf8')
