@@ -104,6 +104,24 @@ function qltCredentials_(p,s,starting){
  const now=Date.now();if(nearest-now<=(starting?24*3600000:QLT1.reserveBody))throw new Error('QLT1_CREDENTIAL_EXPIRING');
  if(!starting&&nearest-now<=24*3600000&&!s.expiry_warning_sent){s.expiry_warning_sent=true;qltSave_(p,s);if(!qltNotify_(p,s,'CREDENTIAL_EXPIRING_WITHIN_24H',true))throw new Error('QLT1_NOTIFICATION_FAILED');}
 }
+// Diagnostic spans may nest. They never replace the legacy admission clock or
+// platform execution duration, and contain no property names, values or bodies.
+function qltTime_(timing,key,work){
+ if(!timing)return work();
+ const start=Date.now();try{return work();}finally{timing.spans_ms[key]=(timing.spans_ms[key]||0)+Math.max(0,Date.now()-start);}
+}
+function qltTimedProperties_(raw,timing){return {
+ getProperty:key=>qltTime_(timing,'property_get',()=>raw.getProperty(key)),
+ setProperty:(key,value)=>qltTime_(timing,'property_set',()=>raw.setProperty(key,value))
+};}
+function qltEndpoint_(url,method){
+ if(method==='post')return 'DISPATCH';
+ if(url.includes('/contents/'))return 'PINNED_SCORES';
+ if(url.endsWith('/branches/main'))return 'MAIN_REF';
+ if(url.endsWith('/forward_registry.csv'))return 'REGISTRY';
+ if(url.endsWith('/forward_scores.csv'))return 'SCORES';
+ return url.includes('/runs?')?'RUN_LIST':'RUN';
+}
 function qltRequest_(p,s,r,url,method,payload){
  const raw='https://raw.githubusercontent.com/'+QLT1.repo+'/main/data/direction_v42/';
  const api='https://api.github.com/repos/'+QLT1.repo+'/actions/';
@@ -122,17 +140,26 @@ function qltRequest_(p,s,r,url,method,payload){
  const options={method:method,headers:headers,muteHttpExceptions:true,followRedirects:false};
  if(method==='post'){options.contentType='application/json';options.payload=JSON.stringify(payload);}
  r.fetch_calls++;if(method==='post')r.dispatch_calls++;
- const response=UrlFetchApp.fetch(url,options),code=response.getResponseCode();r.request_ms.push(Date.now()-now);
- if(method==='get'&&code!==200)throw new Error('QLT1_READ_HTTP_'+code);
- const all=response.getAllHeaders();
- for(const key of Object.keys(all)){if(key.toLowerCase()==='x-ratelimit-remaining'&&Number.isFinite(Number(all[key]))){r.api_remaining=Number(all[key]);if(method==='get'&&r.api_remaining<100)throw new Error('QLT1_API_QUOTA_LOW');}}
- return {code:code,text:response.getContentText('UTF-8')};
+ const timing=r.timing?{endpoint:qltEndpoint_(url,method),method:method,spans_ms:{},completed:false}:null;
+ try{
+  const response=qltTime_(timing,'fetch',()=>UrlFetchApp.fetch(url,options));
+  const code=qltTime_(timing,'response_code',()=>response.getResponseCode());r.request_ms.push(Date.now()-now);
+  if(timing)timing.status=code;
+  if(method==='get'&&code!==200)throw new Error('QLT1_READ_HTTP_'+code);
+  const all=qltTime_(timing,'headers',()=>response.getAllHeaders());
+  for(const key of Object.keys(all)){if(key.toLowerCase()==='x-ratelimit-remaining'&&Number.isFinite(Number(all[key]))){r.api_remaining=Number(all[key]);if(method==='get'&&r.api_remaining<100)throw new Error('QLT1_API_QUOTA_LOW');}}
+  const text=qltTime_(timing,'text',()=>response.getContentText('UTF-8'));
+  if(timing)timing.completed=true;
+  return {code:code,text:text};
+ }finally{if(timing)r.timing.requests.push(timing);}
 }
 function qltHash_(id){return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,id,Utilities.Charset.UTF_8).map(b=>(b&255).toString(16).padStart(2,'0')).join('');}
 function qltRead_(p,s,r){
  const raw='https://raw.githubusercontent.com/'+QLT1.repo+'/main/data/direction_v42/';
- const data={registry:quoteRescueLiveCsv_(qltRequest_(p,s,r,raw+'forward_registry.csv','get').text,['forecast_id','issued_at_utc','target_utc']),
-  scores:quoteRescueLiveCsv_(qltRequest_(p,s,r,raw+'forward_scores.csv','get').text,['forecast_id','status']),runs:[]};
+ const registryText=qltRequest_(p,s,r,raw+'forward_registry.csv','get').text;
+ const registry=qltTime_(r.timing,'registry_parse',()=>quoteRescueLiveCsv_(registryText,['forecast_id','issued_at_utc','target_utc']));
+ const scoresText=qltRequest_(p,s,r,raw+'forward_scores.csv','get').text;
+ const data={registry:registry,scores:qltTime_(r.timing,'scores_parse',()=>quoteRescueLiveCsv_(scoresText,['forecast_id','status'])),runs:[]};
  if(data.scores.some(row=>!['scored','unscorable_missing_target_quote'].includes(row.status)))throw new Error('QLT1_SCORE_STATUS');
  return data;
 }
@@ -140,22 +167,25 @@ function qltPinnedScores_(p,s,r){
  const root='https://api.github.com/repos/'+QLT1.repo+'/';
  const branchText=qltRequest_(p,s,r,root+'branches/main','get').text;
  if(branchText.length>65536)throw new Error('QLT1_BRANCH_SCHEMA');
- const branch=JSON.parse(branchText);
+ const branch=qltTime_(r.timing,'branch_parse',()=>JSON.parse(branchText));
  if(!branch||branch.name!=='main'||!branch.commit||!(/^[a-f0-9]{40}$/).test(branch.commit.sha||''))throw new Error('QLT1_BRANCH_SCHEMA');
  r.score_ref=branch.commit.sha;
  const body=qltRequest_(p,s,r,root+'contents/data/direction_v42/forward_scores.csv?ref='+r.score_ref,'get').text;
  if(body.length>1500000)throw new Error('QLT1_SCORE_CONTENT_SCHEMA');
- const obj=JSON.parse(body);
+ const obj=qltTime_(r.timing,'pinned_content_parse',()=>JSON.parse(body));
+ const bytes=qltTime_(r.timing,'pinned_integrity',()=>{
  if(!obj||obj.type!=='file'||obj.path!=='data/direction_v42/forward_scores.csv'||obj.encoding!=='base64'
   ||!Number.isSafeInteger(obj.size)||obj.size<1||obj.size>1000000||!(/^[a-f0-9]{40}$/).test(obj.sha||'')
   ||typeof obj.content!=='string'||!(/^[A-Za-z0-9+/=\s]+$/).test(obj.content))throw new Error('QLT1_SCORE_CONTENT_SCHEMA');
- const bytes=Utilities.base64Decode(obj.content);
- if(bytes.length!==obj.size)throw new Error('QLT1_SCORE_CONTENT_SIZE');
- const header=Utilities.newBlob('blob '+bytes.length+'\0').getBytes();
- const hash=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_1,header.concat(bytes)).map(b=>(b&255).toString(16).padStart(2,'0')).join('');
+ const decoded=Utilities.base64Decode(obj.content);
+ if(decoded.length!==obj.size)throw new Error('QLT1_SCORE_CONTENT_SIZE');
+ const header=Utilities.newBlob('blob '+decoded.length+'\0').getBytes();
+ const hash=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_1,header.concat(decoded)).map(b=>(b&255).toString(16).padStart(2,'0')).join('');
  if(hash!==obj.sha)throw new Error('QLT1_SCORE_CONTENT_HASH');
+ return decoded;
+ });
  r.score_blob_sha=obj.sha;
- return quoteRescueLiveCsv_(Utilities.newBlob(bytes).getDataAsString('UTF-8'),['forecast_id','status','observed_at_utc','target_quote_utc']);
+ return qltTime_(r.timing,'pinned_scores_parse',()=>quoteRescueLiveCsv_(Utilities.newBlob(bytes).getDataAsString('UTF-8'),['forecast_id','status','observed_at_utc','target_quote_utc']));
 }
 function qltScoreReason_(matches,target){
  if(!matches.length)return 'MISSING';if(matches.length!==1)return 'DUPLICATE';
@@ -167,7 +197,8 @@ function qltScoreReason_(matches,target){
 }
 function qltMonitorRun_(p,s,r){
  const active=s.inflight;
- const run=JSON.parse(qltRequest_(p,s,r,'https://api.github.com/repos/'+QLT1.repo+'/actions/runs/'+active.id,'get').text);
+ const runText=qltRequest_(p,s,r,'https://api.github.com/repos/'+QLT1.repo+'/actions/runs/'+active.id,'get').text;
+ const run=qltTime_(r.timing,'run_parse',()=>JSON.parse(runText));
  if(run.id!==active.id||run.path!=='.github/workflows/quote_only_rescue.yml'||run.event!=='workflow_dispatch'||run.head_branch!=='main'
   ||!Number.isFinite(Date.parse(run.created_at))||Date.parse(run.created_at)<active.requested_ms-2000)throw new Error('QLT1_RUN_IDENTITY');
  if(run.status!=='completed'){
@@ -189,14 +220,15 @@ function qltMonitorRun_(p,s,r){
 function qltPoll_(p,s,r){
  if(s.inflight){qltMonitorRun_(p,s,r);return;}
  const data=qltRead_(p,s,r);
- let now=Date.now(),verdict=quoteRescueLiveDecide_(data,now);
+ let now=Date.now(),verdict=qltTime_(r.timing,'decision',()=>quoteRescueLiveDecide_(data,now));
  if(verdict.decision==='SKIP_INCONSISTENT_READ')throw new Error('QLT1_INCONSISTENT_READ');
  if(verdict.decision==='REQUEST_QUOTE_ONLY_WORKFLOW'){
   // Empty runs above is only a candidate probe, never dispatch permission.
   // No-target polls need no run-list I/O; candidates must pass the real guard.
-  data.runs=JSON.parse(qltRequest_(p,s,r,'https://api.github.com/repos/'+QLT1.repo+'/actions/runs?branch=main&per_page=30','get').text).workflow_runs;
+  const runsText=qltRequest_(p,s,r,'https://api.github.com/repos/'+QLT1.repo+'/actions/runs?branch=main&per_page=30','get').text;
+  data.runs=qltTime_(r.timing,'actions_parse',()=>JSON.parse(runsText)).workflow_runs;
   if(!Array.isArray(data.runs))throw new Error('QLT1_RUN_SCHEMA');
-  now=Date.now();verdict=quoteRescueLiveDecide_(data,now);
+  now=Date.now();verdict=qltTime_(r.timing,'decision',()=>quoteRescueLiveDecide_(data,now));
  }
  s.phase='RUNNING';s.decision=verdict.decision;
  if(verdict.decision!=='REQUEST_QUOTE_ONLY_WORKFLOW')return;
@@ -210,21 +242,30 @@ function qltPoll_(p,s,r){
  if(s.attempted.length>32)throw new Error('QLT1_ATTEMPT_LIMIT');
  s.phase='DISPATCH_RESERVED';qltHour_(s,now)[2]++;s.dispatch_reserved_ms=now;
  r.witness_deadline_ms=Math.min(...targets.map(t=>t.target_ms+20*60000));
- qltSave_(p,s);
+ qltTime_(r.timing,'dispatch_save',()=>qltSave_(p,s));
  const response=qltRequest_(p,s,r,'https://api.github.com/repos/'+QLT1.repo+'/actions/workflows/quote_only_rescue.yml/dispatches','post',
   {ref:'main',inputs:{expected_ids_json:JSON.stringify(due)}});
- let id=null;if(response.code===200){try{id=JSON.parse(response.text).workflow_run_id;}catch(e){/* Untrusted body never logged. */}}
+ let id=null;if(response.code===200){try{id=qltTime_(r.timing,'dispatch_parse',()=>JSON.parse(response.text)).workflow_run_id;}catch(e){/* Untrusted body never logged. */}}
  if(!Number.isSafeInteger(id)||id<=0)throw new Error('QLT1_DISPATCH_UNKNOWN');
  s.inflight={id:id,requested_ms:now,targets:targets};s.phase='WAIT_RUN';s.decision='DISPATCH_ACCEPTED_AWAIT_RUN';
 }
 function qltExecute_(event,isWatch){
+ const entry=Date.now();
  if(!event||!event.triggerUid)throw new Error('QLT1_TIMED_EVENT_REQUIRED');
- const lock=LockService.getScriptLock();if(!lock.tryLock(0))return;
- const p=PropertiesService.getScriptProperties(),started=Date.now();let s=null,admitted=false,reserveHour=null;
- const r={kind:'LONGTERM',caller_revision:'PINNED_SCORE_20261016',watchdog:isWatch,started_at_utc:new Date(started).toISOString(),fetch_calls:0,dispatch_calls:0,request_ms:[],reserved_fetch:0,deadline_ms:started+QLT1.reserveBody};
+ const timing={revision:'PHASE_TIMING_20261017',entry_at_utc:new Date(entry).toISOString(),spans_ms:{},requests:[]};
+ let lock;const acquired=qltTime_(timing,'lock',()=>{lock=LockService.getScriptLock();return lock.tryLock(0);});
+ if(!acquired){
+  timing.measured_to_log_ms=Date.now()-entry;
+  try{console.log(JSON.stringify({kind:'LONGTERM_LOCK_BUSY',caller_revision:'PINNED_SCORE_20261016',watchdog:isWatch,decision:'LOCK_BUSY',fetch_calls:0,dispatch_calls:0,timing:timing}));}catch(e){/* Diagnostic logging cannot change a busy callback's zero-work return. */}
+  return;
+ }
+ const raw=qltTime_(timing,'properties_handle',()=>PropertiesService.getScriptProperties()),started=Date.now();
+ const p=qltTimedProperties_(raw,timing);let s=null,admitted=false,reserveHour=null;
+ timing.legacy_started_offset_ms=started-entry;
+ const r={kind:'LONGTERM',caller_revision:'PINNED_SCORE_20261016',watchdog:isWatch,started_at_utc:new Date(started).toISOString(),fetch_calls:0,dispatch_calls:0,request_ms:[],reserved_fetch:0,deadline_ms:started+QLT1.reserveBody,timing:timing};
  try{
   if(p.getProperty('QLT1_FAILURE_LATCH')){try{qltDelete_();}catch(e){r.trigger_cleanup_error=true;}r.decision='QLT1_FAILURE_LATCHED';return;}
-  s=qltLoad_(p);
+  s=qltTime_(timing,'state_load',()=>qltLoad_(p));
   const recovery=p.getProperty('QLT1_SCORE_RECOVERY_20261016');
   if(recovery){let saved=null;try{saved=JSON.parse(recovery);}catch(e){/* Reject incomplete or corrupt recovery metadata. */}
    if(!saved||saved.phase!=='COMPLETE')throw new Error('QLT1_RECOVERY_INTERRUPTED');}
@@ -236,8 +277,8 @@ function qltExecute_(event,isWatch){
   // Keep another full execution available for the one-shot stop/emergency
   // notice, including when normal poll admission is denied.
   if(qltTotal_(s,1)+r.reserved_fetch>QLT1.maxFetch||qltTotal_(s,3)+2*QLT1.reserveBody>QLT1.maxBody)throw new Error('QLT1_ROLLING_BUDGET');
-  reserveHour=row[0];row[1]+=r.reserved_fetch;row[3]+=QLT1.reserveBody;s.reserved_body_ms=QLT1.reserveBody;s.phase='POLL_RESERVED';s.last_clock_ms=started;qltSave_(p,s);admitted=true;
-  qltCredentials_(p,s,false);
+  reserveHour=row[0];row[1]+=r.reserved_fetch;row[3]+=QLT1.reserveBody;s.reserved_body_ms=QLT1.reserveBody;s.phase='POLL_RESERVED';s.last_clock_ms=started;qltTime_(timing,'admission_save',()=>qltSave_(p,s));admitted=true;
+  qltTime_(timing,'credentials',()=>qltCredentials_(p,s,false));
   if(isWatch){
    if(!qltOwned_().some(t=>t.getHandlerFunction()===QLT1.handler)||started-s.last_poll_ms>QLT1.staleMs)throw new Error('QLT1_MAIN_TIMER_STALE');
    s.phase=s.inflight?'WAIT_RUN':'RUNNING';s.decision='HEALTHY';
@@ -250,10 +291,11 @@ function qltExecute_(event,isWatch){
   r.elapsed_ms=Date.now()-started;
   if(s){
    if(admitted){const row=s.budget.find(b=>b[0]===reserveHour);if(row){row[1]-=r.reserved_fetch-r.fetch_calls;row[3]+=Math.max(r.elapsed_ms,isWatch?1000:3000)-QLT1.reserveBody;}s.reserved_body_ms=0;}
-   try{qltSave_(p,s);}catch(e){r.persistence_error=true;qltLatchFailure_(p,s,'QLT1_PERSISTENCE_ERROR');}
+   try{qltTime_(timing,'final_save',()=>qltSave_(p,s));}catch(e){r.persistence_error=true;qltLatchFailure_(p,s,'QLT1_PERSISTENCE_ERROR');}
    r.phase=s.phase;r.decision=s.decision;r.run_id=s.inflight?s.inflight.id:s.last_completed_run_id||null;
    r.budget_fetch=qltTotal_(s,1);r.budget_dispatch=qltTotal_(s,2);r.budget_body_ms=qltTotal_(s,3);
   }
+  timing.measured_to_log_ms=Date.now()-entry;
   console.log(JSON.stringify(r));lock.releaseLock();
  }
 }
