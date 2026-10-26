@@ -362,6 +362,7 @@ def main():
     parser.add_argument('--duration-seconds', type=int, default=2400)
     parser.add_argument('--stop-file', type=Path)
     parser.add_argument('--require-qualified-stop', action='store_true')
+    parser.add_argument('--archive-reserve-seconds', type=int)
     args = parser.parse_args()
     root = Path(__file__).resolve().parent
     adapter = LiveAdapter(root)
@@ -369,8 +370,18 @@ def main():
         adapter.python('forward_validation_v2.py', '--integrity-only')
         adapter.command('git', 'config', 'user.name', 'github-actions[bot]')
         adapter.command('git', 'config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com')
-        result = run(root, adapter, args.duration_seconds, stop_file=args.stop_file,
+        duration = args.duration_seconds
+        budget = None
+        if args.archive_reserve_seconds is not None:
+            if args.stop_file or args.require_qualified_stop:
+                raise ValueError('archive reserve applies only to foreground service')
+            from archive_window_budget import from_root
+            budget = from_root(root, datetime.now(timezone.utc), duration, args.archive_reserve_seconds)
+            duration = budget['duration_seconds']
+            print(json.dumps({'archive_window_budget': budget}), flush=True)
+        result = run(root, adapter, duration, stop_file=args.stop_file,
                      require_qualified_stop=args.require_qualified_stop)
+        if budget is not None: result['archive_window_budget'] = budget
     except Exception as exc:
         result = {'fatal': True, 'status': 'DEGRADED', 'error': type(exc).__name__+': '+str(exc)[:500],
                   'observed_at_utc': datetime.now(timezone.utc).isoformat(), 'economic_acceptance_passed': False}
