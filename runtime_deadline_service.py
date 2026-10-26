@@ -285,8 +285,17 @@ class LiveAdapter:
             if publication.get('status') != 'verified_remote_readback':
                 raise ValueError('core publication not verified')
             publication.update(pair_error=None, paired_verified_files=sum(p.startswith(pair.BASE+'/') for p in expected))
-            (self.root/pair.BASE/'publication_latest.json').write_text(json.dumps(publication)+'\n', encoding='utf-8')
-            self.public_head = publication['remote_head']
+            receipt_path = pair.BASE+'/publication_latest.json'
+            (self.root/receipt_path).write_text(json.dumps(publication)+'\n', encoding='utf-8')
+            # This receipt describes the first verified data publication. Persist
+            # it in a descendant commit, then stop writing tracked files.
+            expected[receipt_path] = (self.root/receipt_path).read_bytes()
+            self.command('git', 'add', '-f', '--', receipt_path)
+            receipt_publication = publisher.publish(self.root, validate=validate)
+            if (receipt_publication.get('status') != 'verified_remote_readback'
+                    or not publisher.verify_readback(self.root, 'FETCH_HEAD', expected)):
+                raise ValueError('runtime publication receipt remote readback mismatch')
+            self.public_head = receipt_publication['remote_head']
             return {'status': 'verified_remote_readback', 'head': self.public_head}
         elif name == 'witness':
             from urllib.request import Request, urlopen
@@ -345,14 +354,22 @@ def finish(root, adapter, result):
     # Missing output is unsafe in the workflow too. Start unsafe before any
     # disk/network work; explicitly clear only after final receipt persistence.
     output(True)
+    # Older run() results only contain the satisfied field when stop was required.
+    required = result.get('qualified_stop_required', 'qualified_stop_satisfied' in result)
+    if required is True and result.get('qualified_stop_satisfied') is not True:
+        result.update(fatal=True, status='DEGRADED',
+                      fatal_reason='REQUIRED_QUALIFIED_STOP_NOT_SATISFIED')
+    path = Path(root)/BASE/'latest.json'
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # Publish the complete final receipt, including any foreground budget.
+    # A successful publication must not be followed by another tracked write.
+    path.write_text(json.dumps(result, indent=2)+'\n', encoding='utf-8')
     if not result.get('fatal'):
         try:
             adapter.action('publish')
         except Exception as exc:
             result.update(fatal=True, status='DEGRADED', final_publication_error=type(exc).__name__+': '+str(exc)[:500])
-    path = Path(root)/BASE/'latest.json'
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(result, indent=2)+'\n', encoding='utf-8')
+            path.write_text(json.dumps(result, indent=2)+'\n', encoding='utf-8')
     output(bool(result.get('fatal')))
     return result
 
