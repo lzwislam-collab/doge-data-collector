@@ -183,9 +183,12 @@ def run(root, adapter, duration_seconds=2400, clock=None, sleep=None, stop_file=
               'economic_acceptance_passed': False, 'historical_gaps_repaired': False,
               'real_orders_authorized': False, 'new_economic_cohort_activated': False}
     if require_qualified_stop:
+        result['qualified_stop_required'] = True
         result['qualified_stop_satisfied'] = bool(stop_requested() and adapter.can_stop() and not fatal)
         result['last_qualified_book_sha256'] = getattr(adapter,'last_qualified_book',{}).get('book_sha256')
-        if not result['qualified_stop_satisfied']: result['status'] = 'DEGRADED'
+        if not result['qualified_stop_satisfied']:
+            result.update(fatal=True, status='DEGRADED',
+                          fatal_reason='REQUIRED_QUALIFIED_STOP_NOT_SATISFIED')
     path = Path(root)/BASE/'latest.json'
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(result, indent=2, allow_nan=False)+'\n', encoding='utf-8')
@@ -243,14 +246,22 @@ class LiveAdapter:
             mode = 'capture' if self.source_ready() else 'smoke'
             self.python('p2_paired_execution_v3_1.py', mode)
             self.last_qualified_book = {}
+            source_count = None
+            context = 'AUDIT_NOT_READY'
             if mode == 'capture':
                 import p2_paired_execution_v3_1 as engine
                 events = engine.read_events(self.root)
+                context = 'NO_FORMAL_CAPTURE_EVENT'
                 if events:
+                    source_count = len(events[-1]['source_items'])
+                    context = 'RESERVED_SOURCE_NOT_QUALIFIED' if source_count else 'NO_RESERVED_SOURCE_CONTEXT'
                     book = next(engine.event_books(self.root, [events[-1]]))
-                    if qualified_capture(events[-1], book): self.last_qualified_book = events[-1]
+                    if qualified_capture(events[-1], book):
+                        self.last_qualified_book = events[-1]
+                        context = 'QUALIFIED_FORMAL_BOOK'
             return {'status': 'command_completed', 'stage': name, 'mode': mode,
-                    'formal_eligibility': bool(self.last_qualified_book)}
+                    'formal_eligibility': bool(self.last_qualified_book),
+                    'source_context_status': context, 'reserved_source_count': source_count}
         elif name == 'publish':
             import publish_forward_evidence as publisher
             import paired_forward_cohort as pair
