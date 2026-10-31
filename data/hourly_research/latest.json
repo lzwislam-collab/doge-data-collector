@@ -1,58 +1,60 @@
 {
   "schema_version": 1,
   "status": "ok",
-  "research_only": true,
-  "mode": "BOUNDED_PRE_PUBLICATION_REFRESH",
-  "started_utc": "2026-10-31T17:45:08.621238+00:00",
+  "started_utc": "2026-10-31T18:01:29.675141+00:00",
+  "source": "OKX public history-candles, 1H, confirm=1",
+  "intended_oldest_utc": "2023-10-01T00:00:00+00:00",
   "page_budget_per_symbol": 0,
-  "inserted": 0,
+  "research_only": true,
+  "no_pre_event_real_time_alert_claim": true,
   "errors": [],
   "per_symbol": {
     "DOGE-USDT": {
+      "new_rows": 1,
       "backfill_pages": 0,
-      "latest_confirmed_start_utc": "2026-10-31T16:00:00+00:00"
+      "latest_confirmed_start_utc": "2026-10-31T17:00:00+00:00"
     },
     "BTC-USDT": {
+      "new_rows": 1,
       "backfill_pages": 0,
-      "latest_confirmed_start_utc": "2026-10-31T16:00:00+00:00"
+      "latest_confirmed_start_utc": "2026-10-31T17:00:00+00:00"
     },
     "ETH-USDT": {
+      "new_rows": 1,
       "backfill_pages": 0,
-      "latest_confirmed_start_utc": "2026-10-31T16:00:00+00:00"
+      "latest_confirmed_start_utc": "2026-10-31T17:00:00+00:00"
     }
   },
+  "inserted": 3,
   "archive_complete": true,
-  "intended_oldest_utc": "2023-10-01T00:00:00+00:00",
-  "source": "OKX public history-candles, 1H, confirm=1",
-  "no_pre_event_real_time_alert_claim": true,
   "quality": {
     "symbols": {
       "DOGE-USDT": {
-        "hours": 27095,
+        "hours": 27096,
         "earliest_utc": "2023-09-28T18:00:00+00:00",
-        "last_confirmed_start_utc": "2026-10-31T16:00:00+00:00",
+        "last_confirmed_start_utc": "2026-10-31T17:00:00+00:00",
         "missing_hours_between_endpoints": 0
       },
       "BTC-USDT": {
-        "hours": 27095,
+        "hours": 27096,
         "earliest_utc": "2023-09-28T18:00:00+00:00",
-        "last_confirmed_start_utc": "2026-10-31T16:00:00+00:00",
+        "last_confirmed_start_utc": "2026-10-31T17:00:00+00:00",
         "missing_hours_between_endpoints": 0
       },
       "ETH-USDT": {
-        "hours": 27095,
+        "hours": 27096,
         "earliest_utc": "2023-09-28T18:00:00+00:00",
-        "last_confirmed_start_utc": "2026-10-31T16:00:00+00:00",
+        "last_confirmed_start_utc": "2026-10-31T17:00:00+00:00",
         "missing_hours_between_endpoints": 0
       }
     },
     "duplicate_keys": 0
   },
-  "freshness_checked_at_utc": "2026-10-31T17:45:09.360000+00:00",
-  "required_closed_start_utc": "2026-10-31T16:00:00+00:00",
   "limitations": [
-    "Current OHLCV freshness is not original prediction/publication proof",
-    "Original ingestion times and historical OHLCV are preserved; no historical PIT claim"
+    "Historical OHLCV retrieved today is not proof signals existed at candle time",
+    "Cross-source first_ingested_utc cannot be backdated to historical candle opening",
+    "One-hour crashes are rare; no predictive claim until prespecified out-of-sample validation",
+    "Historic provider data may have retention limits"
   ],
-  "ended_utc": "2026-10-31T17:45:09.730057+00:00"
+  "ended_utc": "2026-10-31T18:01:31.364741+00:00"
 }
