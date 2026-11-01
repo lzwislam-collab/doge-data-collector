@@ -8,6 +8,7 @@ import csv
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -17,6 +18,51 @@ from pathlib import Path
 
 BASE = 'data/runtime_deadline_v1'
 REPO = 'lzwislam-collab/doge-data-collector'
+
+
+def diagnostic_text(value, limit=1000):
+    """Bounded, best-effort redaction; never add argv or an environment dump."""
+    if len(value) > 16384 or (isinstance(value, str)
+                            and len(value.encode('utf-8', errors='replace')) > 16384):
+        return '[omitted: diagnostic input exceeds limit]'
+    text = value.decode('utf-8', errors='replace') if isinstance(value, bytes) else value
+    secrets = {v for k, v in os.environ.items() if v and re.search(
+        r'token|secret|password|passwd|credential|authorization|private.?key|access.?key', k, re.I)}
+    # Exception summaries may repr() argv; captured output may contain JSON.
+    secrets |= {form for v in secrets for form in
+                (repr(v)[1:-1], json.dumps(v)[1:-1], json.dumps(v, ensure_ascii=False)[1:-1])}
+    for secret in sorted(secrets, key=len, reverse=True):
+        text = text.replace(secret, '[REDACTED]')
+    text = re.sub(r'-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?(?:-----END [A-Z0-9 ]*PRIVATE KEY-----|$)',
+                  '[REDACTED]', text, flags=re.S)
+    # Hide the whole URL, including userinfo, path, query and fragment. Also
+    # handle JSON-escaped slashes rather than trying to identify every SAS key.
+    text = re.sub(r'''\b[a-z][a-z0-9+.-]*:(?:\\?/){2}[^\s<>]+''',
+                  '[REDACTED]', text, flags=re.I)
+    text = re.sub(r'\b(?:github_pat_[A-Za-z0-9_]+|gh[pousr]_[A-Za-z0-9_]{20,}|AKIA[A-Z0-9]{16})\b',
+                  '[REDACTED]', text)
+    text = re.sub(r'''(\b(?:authorization|proxy-authorization|cookie|set-cookie|password|passwd|pwd|(?:[a-z0-9]+[_-])*(?:token|secret|signature|credentials?|api[_-]?key|access[_-]?key|session[_-]?key)|sig)\b[\\"']*\s*[:=]\s*)[^\r\n]+''',
+                  r'\1[REDACTED]', text, flags=re.I)
+    text = re.sub(r'\b(?:bearer|basic)\s+\S+', '[REDACTED]', text, flags=re.I)
+    marker = '[truncated]'
+    return text if len(text) <= limit else text[:limit-len(marker)] + marker
+
+
+def exception_details(exc):
+    """Add only subprocess metadata already present; diagnostics cannot raise."""
+    prefix = type(exc).__name__ + ': '
+    try:
+        result = {'error': prefix + diagnostic_text(str(exc), 500)}
+        if isinstance(exc, subprocess.CalledProcessError):
+            if type(exc.returncode) is int:
+                result['returncode'] = exc.returncode
+            for name in ('stdout', 'stderr'):
+                value = getattr(exc, name, None)
+                if isinstance(value, (str, bytes)):
+                    result[name] = diagnostic_text(value)
+        return result
+    except Exception:
+        return {'error': prefix + '[diagnostic unavailable]'}
 
 
 def utc(value):
@@ -48,7 +94,7 @@ def cycle(adapter, state, clock):
                                    'seconds': (utc(clock())-before).total_seconds()})
             return True
         except Exception as exc:
-            out['errors'].append({'stage': name, 'error': type(exc).__name__ + ': ' + str(exc)[:500],
+            out['errors'].append({'stage': name, **exception_details(exc),
                                   'started_at_utc': before.isoformat(),
                                   'seconds': (utc(clock())-before).total_seconds()})
             return False
@@ -368,7 +414,9 @@ def finish(root, adapter, result):
         try:
             adapter.action('publish')
         except Exception as exc:
-            result.update(fatal=True, status='DEGRADED', final_publication_error=type(exc).__name__+': '+str(exc)[:500])
+            details = exception_details(exc)
+            result.update(fatal=True, status='DEGRADED', final_publication_error=details.pop('error'))
+            if details: result['final_publication_diagnostics'] = details
             path.write_text(json.dumps(result, indent=2)+'\n', encoding='utf-8')
     output(bool(result.get('fatal')))
     return result
@@ -400,7 +448,7 @@ def main():
                      require_qualified_stop=args.require_qualified_stop)
         if budget is not None: result['archive_window_budget'] = budget
     except Exception as exc:
-        result = {'fatal': True, 'status': 'DEGRADED', 'error': type(exc).__name__+': '+str(exc)[:500],
+        result = {'fatal': True, 'status': 'DEGRADED', **exception_details(exc),
                   'observed_at_utc': datetime.now(timezone.utc).isoformat(), 'economic_acceptance_passed': False}
     adapter.auditor.close()
     result = finish(root, adapter, result)
