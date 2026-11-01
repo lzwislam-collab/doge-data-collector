@@ -1,38 +1,40 @@
 {
-  "anchor": "2026-10-30",
-  "generated_at_utc": "2026-10-31T21:41:24.063571+00:00",
+  "anchor": "2026-10-31",
+  "generated_at_utc": "2026-11-01T06:42:46.139836+00:00",
   "plus": {
     "engineering_forward": {
       "counts": {
-        "events": 28,
-        "matured_fixed_denominator": 130,
-        "qualified_recent": 4,
+        "events": 29,
+        "matured_fixed_denominator": 135,
+        "qualified_recent": 3,
         "scores": 28
       },
       "effective_from_utc": "2026-10-21T00:00:00+00:00",
-      "event_count": 28,
+      "event_count": 29,
       "gaps": {
         "expired_missing_score": 0,
-        "missing_issuance": 103
+        "missing_issuance": 107
       },
       "latest": {
         "direction": "DOWN",
-        "event_id": "1793476800_formal",
-        "issued_at_utc": "2026-10-31T20:09:24.236570+00:00",
+        "event_id": "1793512800_formal",
+        "issued_at_utc": "2026-11-01T06:26:15.570347+00:00",
         "prediction_verified": true,
-        "probability_up": 0.469022984415,
-        "score_present": true,
-        "score_verified": true,
-        "target_utc": "2026-10-31T21:09:24.236570+00:00"
+        "probability_up": 0.460808265951,
+        "score_present": false,
+        "score_verified": false,
+        "target_utc": "2026-11-01T07:26:15.570347+00:00"
       },
       "original_r2_cohort_modified": false,
       "protocol_id": "DOGE_E1_FORWARD_20261021",
       "qualification_scope": "latest four events only; no full E1 statistical acceptance",
-      "qualified_count": 4,
+      "qualified_count": 3,
       "real_orders_authorized": false,
       "registered": true,
       "registration_run_id": 39517600583,
-      "rejected": {},
+      "rejected": {
+        "1793512800_formal": "MISSING_REAL_TARGET"
+      },
       "score_count": 28,
       "statistical_gate_passed": false,
       "status": "ENGINEERING_ONLY_NOT_PERFORMANCE_ACCEPTED",
@@ -41,9 +43,9 @@
     "execution_binding": {
       "artifact_readback_status": "WAIT_EXTERNAL_ARTIFACT_READBACK",
       "report_run_attempt": "1",
-      "report_run_id": "41244637894",
+      "report_run_id": "41281811321",
       "scheduled_daily_execution_verified": false,
-      "source_commit": "a4fbe0d86a3875f4e6a1e22d74183a671e6fa61a"
+      "source_commit": "99c88fd5eca21a5ac79f0c97c835dd2d1b5039af"
     },
     "external_immutable_retention_verified": false,
     "forecasts": [
@@ -162,8 +164,8 @@
         "track": "r2"
       }
     ],
-    "generated_at_japan": "2026-11-01T06:41:24.537516+09:00",
-    "generated_at_utc": "2026-10-31T21:41:24.537516+00:00",
+    "generated_at_japan": "2026-11-01T15:42:46.530071+09:00",
+    "generated_at_utc": "2026-11-01T06:42:46.530071+00:00",
     "issuance_performed": false,
     "journal_counts": {
       "original18_events": 50,
@@ -346,9 +348,11 @@
     ],
     "runtime_gaps": {
       "original18": {
-        "issue": [],
+        "issue": [
+          1
+        ],
         "matured_missing_issuance": {
-          "1": 143,
+          "1": 148,
           "24": 12
         },
         "score": []
@@ -356,9 +360,9 @@
       "r2": {
         "canary_issued": 1,
         "formal_issued": 12,
-        "formal_scheduled": 143,
+        "formal_scheduled": 148,
         "formal_scores_local": 8,
-        "matured_missing_issuance": 131,
+        "matured_missing_issuance": 135,
         "matured_missing_targets": 4,
         "promotion_authorized": false,
         "validated_70pct": false
@@ -366,19 +370,19 @@
     },
     "schema": "DOGE_PLUS_SHADOW_V1",
     "scorecard": {
-      "as_of_utc": "2026-10-31T21:41:24.537516+00:00",
+      "as_of_utc": "2026-11-01T06:42:46.530071+00:00",
       "cohorts": [
         {
-          "accuracy_fixed": 0.11052631578947368,
+          "accuracy_fixed": 0.1076923076923077,
           "calibration_verified": false,
-          "coverage": 0.21052631578947367,
+          "coverage": 0.20512820512820512,
           "denominator_rule": "all planned slots after final possible target deadline; missing/unverified earns no hit; pending excluded",
           "duplicate_count": 0,
-          "fixed_denominator": 190,
+          "fixed_denominator": 195,
           "hits": 21,
           "horizon_hours": 1,
           "missing_evaluation": 7,
-          "missing_issuance": 143,
+          "missing_issuance": 148,
           "model_identity": "c93004aadc669c074f51a4cb6411769c3d84d388b31773d1251823b1d45ccad3",
           "protocol_id": "DOGE_LEARNED_SHADOW_V1_20261016",
           "qualified_scored": 40,
@@ -7005,7 +7009,7 @@
               "effective_utc": "2026-10-16T00:00:00+00:00",
               "event_id": null,
               "horizon_hours": 1,
-              "in_fixed_denominator": false,
+              "in_fixed_denominator": true,
               "latest_same_event": {
                 "accuracy": null,
                 "baselines": {},
@@ -7024,10 +7028,155 @@
               "slot_utc": "2026-10-31T20:00:00+00:00",
               "status": "MISSING_ISSUANCE",
               "track": "original18"
+            },
+            {
+              "active_forecast": false,
+              "actual_direction": null,
+              "baseline_scope": "same-event frozen replay, not original production issuance",
+              "calibration_verified": false,
+              "direction": null,
+              "effective_utc": "2026-10-16T00:00:00+00:00",
+              "event_id": null,
+              "horizon_hours": 1,
+              "in_fixed_denominator": true,
+              "latest_same_event": {
+                "accuracy": null,
+                "baselines": {},
+                "brier": null,
+                "net_return": null,
+                "sample_count": 0,
+                "stress_net_return": null
+              },
+              "local_score_present": false,
+              "planned_event_id": "1793484000_1",
+              "prediction_verified": false,
+              "probability_up": null,
+              "real_orders_authorized": false,
+              "sample_scope": "latest event only; not full-cohort accuracy",
+              "score_verified": false,
+              "slot_utc": "2026-10-31T22:00:00+00:00",
+              "status": "MISSING_ISSUANCE",
+              "track": "original18"
+            },
+            {
+              "active_forecast": false,
+              "actual_direction": null,
+              "baseline_scope": "same-event frozen replay, not original production issuance",
+              "calibration_verified": false,
+              "direction": null,
+              "effective_utc": "2026-10-16T00:00:00+00:00",
+              "event_id": null,
+              "horizon_hours": 1,
+              "in_fixed_denominator": true,
+              "latest_same_event": {
+                "accuracy": null,
+                "baselines": {},
+                "brier": null,
+                "net_return": null,
+                "sample_count": 0,
+                "stress_net_return": null
+              },
+              "local_score_present": false,
+              "planned_event_id": "1793491200_1",
+              "prediction_verified": false,
+              "probability_up": null,
+              "real_orders_authorized": false,
+              "sample_scope": "latest event only; not full-cohort accuracy",
+              "score_verified": false,
+              "slot_utc": "2026-11-01T00:00:00+00:00",
+              "status": "MISSING_ISSUANCE",
+              "track": "original18"
+            },
+            {
+              "active_forecast": false,
+              "actual_direction": null,
+              "baseline_scope": "same-event frozen replay, not original production issuance",
+              "calibration_verified": false,
+              "direction": null,
+              "effective_utc": "2026-10-16T00:00:00+00:00",
+              "event_id": null,
+              "horizon_hours": 1,
+              "in_fixed_denominator": true,
+              "latest_same_event": {
+                "accuracy": null,
+                "baselines": {},
+                "brier": null,
+                "net_return": null,
+                "sample_count": 0,
+                "stress_net_return": null
+              },
+              "local_score_present": false,
+              "planned_event_id": "1793498400_1",
+              "prediction_verified": false,
+              "probability_up": null,
+              "real_orders_authorized": false,
+              "sample_scope": "latest event only; not full-cohort accuracy",
+              "score_verified": false,
+              "slot_utc": "2026-11-01T02:00:00+00:00",
+              "status": "MISSING_ISSUANCE",
+              "track": "original18"
+            },
+            {
+              "active_forecast": false,
+              "actual_direction": null,
+              "baseline_scope": "same-event frozen replay, not original production issuance",
+              "calibration_verified": false,
+              "direction": null,
+              "effective_utc": "2026-10-16T00:00:00+00:00",
+              "event_id": null,
+              "horizon_hours": 1,
+              "in_fixed_denominator": true,
+              "latest_same_event": {
+                "accuracy": null,
+                "baselines": {},
+                "brier": null,
+                "net_return": null,
+                "sample_count": 0,
+                "stress_net_return": null
+              },
+              "local_score_present": false,
+              "planned_event_id": "1793505600_1",
+              "prediction_verified": false,
+              "probability_up": null,
+              "real_orders_authorized": false,
+              "sample_scope": "latest event only; not full-cohort accuracy",
+              "score_verified": false,
+              "slot_utc": "2026-11-01T04:00:00+00:00",
+              "status": "MISSING_ISSUANCE",
+              "track": "original18"
+            },
+            {
+              "active_forecast": false,
+              "actual_direction": null,
+              "baseline_scope": "same-event frozen replay, not original production issuance",
+              "calibration_verified": false,
+              "direction": null,
+              "effective_utc": "2026-10-16T00:00:00+00:00",
+              "event_id": null,
+              "horizon_hours": 1,
+              "in_fixed_denominator": false,
+              "latest_same_event": {
+                "accuracy": null,
+                "baselines": {},
+                "brier": null,
+                "net_return": null,
+                "sample_count": 0,
+                "stress_net_return": null
+              },
+              "local_score_present": false,
+              "planned_event_id": "1793512800_1",
+              "prediction_verified": false,
+              "probability_up": null,
+              "real_orders_authorized": false,
+              "sample_scope": "latest event only; not full-cohort accuracy",
+              "score_verified": false,
+              "slot_utc": "2026-11-01T06:00:00+00:00",
+              "status": "WAIT_ISSUE_WINDOW",
+              "track": "original18"
             }
           ],
           "scope": "original18 full candidate only",
-          "score_label": "21/190",
+          "score_label": "21/195",
           "statistical_promotion_authorized": false,
           "timestamp_errors": 0,
           "track": "original18",
@@ -7599,16 +7748,16 @@
           "unverified_issuance": 0
         },
         {
-          "accuracy_fixed": 0.02112676056338028,
+          "accuracy_fixed": 0.02040816326530612,
           "calibration_verified": false,
-          "coverage": 0.035211267605633804,
+          "coverage": 0.034013605442176874,
           "denominator_rule": "all planned slots after final possible target deadline; missing/unverified earns no hit; pending excluded",
           "duplicate_count": 0,
-          "fixed_denominator": 142,
+          "fixed_denominator": 147,
           "hits": 3,
           "horizon_hours": 1,
           "missing_evaluation": 6,
-          "missing_issuance": 130,
+          "missing_issuance": 135,
           "model_identity": "0843d2e836f0d94cd46e66644460f1a543aef460e51ad884394a5880dadf3baf",
           "protocol_id": "DOGE_V2_FROZEN120_20261020_R2",
           "qualified_scored": 5,
@@ -12006,7 +12155,7 @@
               "effective_utc": "2026-10-20T00:00:00Z",
               "event_id": null,
               "horizon_hours": 1,
-              "in_fixed_denominator": false,
+              "in_fixed_denominator": true,
               "latest_same_event": {
                 "accuracy": null,
                 "baselines": {},
@@ -12025,10 +12174,155 @@
               "slot_utc": "2026-10-31T20:00:00+00:00",
               "status": "MISSING_ISSUANCE",
               "track": "r2"
+            },
+            {
+              "active_forecast": false,
+              "actual_direction": null,
+              "baseline_scope": "same-event frozen replay, not original production issuance",
+              "calibration_verified": false,
+              "direction": null,
+              "effective_utc": "2026-10-20T00:00:00Z",
+              "event_id": null,
+              "horizon_hours": 1,
+              "in_fixed_denominator": true,
+              "latest_same_event": {
+                "accuracy": null,
+                "baselines": {},
+                "brier": null,
+                "net_return": null,
+                "sample_count": 0,
+                "stress_net_return": null
+              },
+              "local_score_present": false,
+              "planned_event_id": "1793484000_formal",
+              "prediction_verified": false,
+              "probability_up": null,
+              "real_orders_authorized": false,
+              "sample_scope": "latest event only; not full-cohort accuracy",
+              "score_verified": false,
+              "slot_utc": "2026-10-31T22:00:00+00:00",
+              "status": "MISSING_ISSUANCE",
+              "track": "r2"
+            },
+            {
+              "active_forecast": false,
+              "actual_direction": null,
+              "baseline_scope": "same-event frozen replay, not original production issuance",
+              "calibration_verified": false,
+              "direction": null,
+              "effective_utc": "2026-10-20T00:00:00Z",
+              "event_id": null,
+              "horizon_hours": 1,
+              "in_fixed_denominator": true,
+              "latest_same_event": {
+                "accuracy": null,
+                "baselines": {},
+                "brier": null,
+                "net_return": null,
+                "sample_count": 0,
+                "stress_net_return": null
+              },
+              "local_score_present": false,
+              "planned_event_id": "1793491200_formal",
+              "prediction_verified": false,
+              "probability_up": null,
+              "real_orders_authorized": false,
+              "sample_scope": "latest event only; not full-cohort accuracy",
+              "score_verified": false,
+              "slot_utc": "2026-11-01T00:00:00+00:00",
+              "status": "MISSING_ISSUANCE",
+              "track": "r2"
+            },
+            {
+              "active_forecast": false,
+              "actual_direction": null,
+              "baseline_scope": "same-event frozen replay, not original production issuance",
+              "calibration_verified": false,
+              "direction": null,
+              "effective_utc": "2026-10-20T00:00:00Z",
+              "event_id": null,
+              "horizon_hours": 1,
+              "in_fixed_denominator": true,
+              "latest_same_event": {
+                "accuracy": null,
+                "baselines": {},
+                "brier": null,
+                "net_return": null,
+                "sample_count": 0,
+                "stress_net_return": null
+              },
+              "local_score_present": false,
+              "planned_event_id": "1793498400_formal",
+              "prediction_verified": false,
+              "probability_up": null,
+              "real_orders_authorized": false,
+              "sample_scope": "latest event only; not full-cohort accuracy",
+              "score_verified": false,
+              "slot_utc": "2026-11-01T02:00:00+00:00",
+              "status": "MISSING_ISSUANCE",
+              "track": "r2"
+            },
+            {
+              "active_forecast": false,
+              "actual_direction": null,
+              "baseline_scope": "same-event frozen replay, not original production issuance",
+              "calibration_verified": false,
+              "direction": null,
+              "effective_utc": "2026-10-20T00:00:00Z",
+              "event_id": null,
+              "horizon_hours": 1,
+              "in_fixed_denominator": true,
+              "latest_same_event": {
+                "accuracy": null,
+                "baselines": {},
+                "brier": null,
+                "net_return": null,
+                "sample_count": 0,
+                "stress_net_return": null
+              },
+              "local_score_present": false,
+              "planned_event_id": "1793505600_formal",
+              "prediction_verified": false,
+              "probability_up": null,
+              "real_orders_authorized": false,
+              "sample_scope": "latest event only; not full-cohort accuracy",
+              "score_verified": false,
+              "slot_utc": "2026-11-01T04:00:00+00:00",
+              "status": "MISSING_ISSUANCE",
+              "track": "r2"
+            },
+            {
+              "active_forecast": false,
+              "actual_direction": null,
+              "baseline_scope": "same-event frozen replay, not original production issuance",
+              "calibration_verified": false,
+              "direction": null,
+              "effective_utc": "2026-10-20T00:00:00Z",
+              "event_id": null,
+              "horizon_hours": 1,
+              "in_fixed_denominator": false,
+              "latest_same_event": {
+                "accuracy": null,
+                "baselines": {},
+                "brier": null,
+                "net_return": null,
+                "sample_count": 0,
+                "stress_net_return": null
+              },
+              "local_score_present": false,
+              "planned_event_id": "1793512800_formal",
+              "prediction_verified": false,
+              "probability_up": null,
+              "real_orders_authorized": false,
+              "sample_scope": "latest event only; not full-cohort accuracy",
+              "score_verified": false,
+              "slot_utc": "2026-11-01T06:00:00+00:00",
+              "status": "WAIT_ISSUE_WINDOW",
+              "track": "r2"
             }
           ],
           "scope": "R2 selected candidate only",
-          "score_label": "3/142",
+          "score_label": "3/147",
           "statistical_promotion_authorized": false,
           "timestamp_errors": 0,
           "track": "r2",
@@ -12039,23 +12333,23 @@
       "legacy_and_canary_excluded": true,
       "network_audit_covers_all_recorded_formal_events": true,
       "schema": "DOGE_PLUS_COMPLETE_SCORECARD_V1",
-      "source_commit": "a4fbe0d86a3875f4e6a1e22d74183a671e6fa61a",
+      "source_commit": "99c88fd5eca21a5ac79f0c97c835dd2d1b5039af",
       "validated_70pct": false
     },
     "source": {
       "asset_rows": {
-        "BTC-USDT": 27099,
-        "DOGE-USDT": 27099,
-        "ETH-USDT": 27099
+        "BTC-USDT": 27108,
+        "DOGE-USDT": 27108,
+        "ETH-USDT": 27108
       },
       "frame_errors": [],
       "latest73_ready": true,
-      "latest_closed_utc": "2026-10-31T21:00:00+00:00",
-      "rows": 81297
+      "latest_closed_utc": "2026-11-01T06:00:00+00:00",
+      "rows": 81324
     },
-    "source_commit": "a4fbe0d86a3875f4e6a1e22d74183a671e6fa61a",
+    "source_commit": "99c88fd5eca21a5ac79f0c97c835dd2d1b5039af",
     "source_path": "data/hourly_research/ohlc.csv",
-    "source_sha256": "6150c92bb0dfe480a60cda3a2fb34bd8011864a50e59ae805fc03df06f9adcd7",
+    "source_sha256": "216d2ce963ddb9c31966f278ff4601bd5a624f0edce379d2d29530647909a990",
     "status": "SHADOW_REPORT_READY",
     "validated_70pct": false,
     "version_isolation": {
@@ -12483,8 +12777,9 @@
     "verified_global_liquidations": false
   },
   "quality": {
-    "audited_at_utc": "2026-10-31T21:41:24.063571+00:00",
+    "audited_at_utc": "2026-11-01T06:42:46.139836+00:00",
     "critical_failures": [
+      "market",
       "onchain",
       "liquidations_okx",
       "liquidity",
@@ -12510,106 +12805,107 @@
     "schema_version": 4,
     "sources": {
       "binance_liquidations_optional": {
-        "age_hours": 397.617,
+        "age_hours": 406.639,
         "age_limit_hours": 8,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
-        "error": "stale/clock-skewed: 397.62 h",
+        "error": "stale/clock-skewed: 406.64 h",
         "required": false,
         "source_file": "data/binance_liquidations/latest.json",
         "source_status": "partial",
         "state": "stale_or_failed"
       },
       "bybit_liquidations_optional": {
-        "age_hours": 397.617,
+        "age_hours": 406.64,
         "age_limit_hours": 8,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
-        "error": "stale/clock-skewed: 397.62 h",
+        "error": "stale/clock-skewed: 406.64 h",
         "required": false,
         "source_file": "data/bybit_liquidations/latest.json",
         "source_status": "partial",
         "state": "stale_or_failed"
       },
       "etf": {
-        "age_hours": 399.605,
+        "age_hours": 408.628,
         "age_limit_hours": 96,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
-        "error": "stale/clock-skewed: 399.61 h",
+        "error": "stale/clock-skewed: 408.63 h",
         "required": true,
         "source_file": "data/etf/latest.json",
         "source_status": "ok",
         "state": "stale_or_failed"
       },
       "hourly_research": {
-        "candle_start_age_hours": 1.69,
+        "candle_start_age_hours": 1.713,
         "historical_backfill_complete": true,
-        "last_candle_utc": "2026-10-31T20:00:00+00:00",
+        "last_candle_utc": "2026-11-01T05:00:00+00:00",
         "required": false,
         "state": "ok_coverage_limited"
       },
       "liquidations_okx": {
-        "age_hours": 397.616,
+        "age_hours": 406.639,
         "age_limit_hours": 3,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
-        "error": "stale/clock-skewed: 397.62 h",
+        "error": "stale/clock-skewed: 406.64 h",
         "required": true,
         "source_file": "data/liquidations/latest.json",
         "source_status": "ok",
         "state": "stale_or_failed"
       },
       "liquidity": {
-        "age_hours": 397.927,
+        "age_hours": 406.949,
         "age_limit_hours": 3,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
-        "error": "stale/clock-skewed: 397.93 h",
+        "error": "stale/clock-skewed: 406.95 h",
         "required": true,
         "source_file": "data/liquidity/latest.json",
         "source_status": "ok",
         "state": "stale_or_failed"
       },
       "macro": {
-        "age_hours": 401.701,
+        "age_hours": 410.724,
         "age_limit_hours": 48,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
-        "error": "stale/clock-skewed: 401.7 h",
+        "error": "stale/clock-skewed: 410.72 h",
         "required": true,
         "source_file": "data/macro/latest.json",
         "source_status": "ok",
         "state": "stale_or_failed"
       },
       "market": {
-        "age_hours": 0.237,
+        "age_hours": 5.69,
         "age_limit_hours": 3,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
+        "error": "stale/clock-skewed: 5.69 h",
         "required": true,
         "source_file": "data/latest.json",
         "source_status": "ok",
-        "state": "ok"
+        "state": "stale_or_failed"
       },
       "okx_por_balances_optional": {
-        "age_hours": 398.065,
+        "age_hours": 407.088,
         "age_limit_hours": 4,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
-        "error": "stale/clock-skewed: 398.06 h",
+        "error": "stale/clock-skewed: 407.09 h",
         "required": false,
         "source_file": "data/okx_address_balances/latest.json",
         "source_status": "ok",
         "state": "stale_or_failed"
       },
       "onchain": {
-        "age_hours": 403.819,
+        "age_hours": 412.842,
         "age_limit_hours": 36,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
-        "error": "stale/clock-skewed: 403.82 h",
+        "error": "stale/clock-skewed: 412.84 h",
         "required": true,
         "source_file": "data/onchain/latest.json",
         "source_status": "ok",
         "state": "stale_or_failed"
       },
       "onchain_daily_activity": {
-        "age_hours": 403.622,
+        "age_hours": 412.645,
         "age_limit_hours": 36,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
-        "error": "stale/clock-skewed: 403.62 h",
+        "error": "stale/clock-skewed: 412.64 h",
         "required": false,
         "source_file": "data/onchain/metrics_latest.json",
         "source_status": "ok",
@@ -12864,20 +13160,20 @@
         "state": "ok"
       },
       "whale_confirmed_blocks": {
-        "age_hours": 395.155,
+        "age_hours": 404.178,
         "age_limit_hours": 2,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
-        "error": "stale/clock-skewed: 395.15 h",
+        "error": "stale/clock-skewed: 404.18 h",
         "required": true,
         "source_file": "data/whales_blocks/latest.json",
         "source_status": "ok",
         "state": "stale_or_failed"
       },
       "whale_sse_optional": {
-        "age_hours": 397.617,
+        "age_hours": 406.64,
         "age_limit_hours": 8,
         "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
-        "error": "stale/clock-skewed: 397.62 h",
+        "error": "stale/clock-skewed: 406.64 h",
         "required": false,
         "source_file": "data/whales/latest.json",
         "source_status": "partial",
@@ -12895,6 +13191,7 @@
   "state": {
     "auxiliary_blockers_preserved": [],
     "critical_failures": [
+      "market",
       "onchain",
       "liquidations_okx",
       "liquidity",
@@ -12906,7 +13203,7 @@
     "market_quality_scope": "DEGRADED",
     "overall": "DEGRADED_NO_VALIDATED_EDGE",
     "prediction_edge_validated": false,
-    "quality_audited_at_utc": "2026-10-31T21:41:24.063571+00:00",
+    "quality_audited_at_utc": "2026-11-01T06:42:46.139836+00:00",
     "quality_current_status": "blocked",
     "quality_max_age_hours": 2
   }
