@@ -1,13 +1,13 @@
 # DOGE 前瞻验证与现货纸面收益
 
-截止 UTC：2026-11-04T19:10:57.825635+00:00
+截止 UTC：2026-11-05T07:28:15.378413+00:00
 
 运行状态：ok；90%覆盖率、70%准确率与经济优势均须单独验收。
 
 |期限|正式到期|有效原始报价|报价覆盖率|发行覆盖率|验收|
 |---|---:|---:|---:|---:|---|
-|1h|377|262|69.49602122015915|66.2|COVERAGE_FAILED|
-|24h|23|12|52.17391304347826|100.0|COVERAGE_FAILED|
+|1h|382|263|68.84816753926701|65.69|COVERAGE_FAILED|
+|24h|24|12|50.0|100.0|COVERAGE_FAILED|
 
 所有基准使用同一组正式预测和同一报价；缺失仍进入覆盖率分母。
 逐模型准确率、配对胜负、首次提交凭据和输入哈希见 JSON。
@@ -54,7 +54,7 @@
   "drawdown_between_checkpoints_unmeasured": true,
   "strategy_rule": "24h first UTC-day forecast; UP long then liquidate, DOWN cash; cash between intervals; stop at first missing or overlapping interval",
   "effective_from_utc": "2026-10-12T00:00:00+00:00",
-  "registered_daily_intervals": 24,
+  "registered_daily_intervals": 25,
   "missing_issuance_days": 0
 }
 
