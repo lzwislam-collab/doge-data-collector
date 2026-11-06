@@ -28,9 +28,9 @@ ROOT = Path(__file__).resolve().parents[2]
 INPUT = '04b83739c1105c4fa7222cd14c8567abac2d9b8d'
 TREE = 'c3c25654fbfb6fe18548671e5003353cd183c8bc'
 ORACLE = 'f0831c7d38581543f84a85639c6d69a7305ff382'
-FINAL = 'da20c7710a4e7ec0792cc4701399181632cb00ef'
-CODE_SHA = 'cbb7b0ac125e7344ad9d7f2ab6d973fbf87afcbcaeeda5bbdc1e999557d54f45'
-TEST_SHA = 'c22be8fd713dba2f09171c211ea07b5715ac4238de05bd61c53ca11e725263d6'
+FINAL = 'f4e292609719cc323c923d989388cdcfba810e01'
+CODE_SHA = 'df1bc81b8da79e2d7c77f21fd0c52016d8bdcde8fb9485a3749b38937ce1eebb'
+TEST_SHA = '680272d41a1d9302268486cf7caf2440d6300468bd87fa9b63f3f328be843c77'
 MANIFEST_SHA = 'e35417b4f3652aadc45665b41d300a6c70175a811f0ed947ce82bf2edc35ffdb'
 ABSOLUTE = 1793970000.0  # 2026-11-06T13:00:00Z; checked independently below.
 
@@ -200,6 +200,7 @@ def function_worker(args):
             rows = old.read_rows(Path(args.root)/name, columns)
             trace.clear()
             before = total_count
+            report['current_table'] = name
             save(target, report)
             started = time.monotonic()
             with patch.object(subprocess, 'Popen', side_effect=spawn), patch.object(active, 'git', observed_git), patch.object(new._HistoryBatch, 'read_blob', observed_reader):
@@ -246,22 +247,40 @@ def platform_worker(args):
     with tempfile.TemporaryDirectory() as temp:
         root = Path(temp)
         git(root, 'init', '-q')
-        reader = new._HistoryBatch(root, timeout=.1, command=[sys.executable, '-c', 'import time;time.sleep(30)'])
+        (root/'ledger.csv').write_bytes(b'forecast_id,value\na,1\n')
+        git(root, 'add', 'ledger.csv')
+        git(root, '-c', 'user.name=Compatibility Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'local reader fixture')
+        batch_class = new._HistoryBatch
+        def stalled(current_root):
+            return batch_class(current_root, timeout=.1, command=[sys.executable, '-c', 'import time;time.sleep(30)'])
         try:
-            with reader:
-                reader.read_blob('a'*40+':ledger.csv')
-        except TimeoutError as exc:
+            with patch.object(new, '_HistoryBatch', side_effect=stalled):
+                new.history_receipts(root, 'ledger.csv', ['forecast_id', 'value'], {'a': {'forecast_id': 'a', 'value': '1'}})
+        except new.HistoryReadError as exc:
             actual_timeout = exc
+            if not isinstance(exc.__cause__, TimeoutError):
+                raise ValueError('Original local timeout cause lost')
         else:
-            raise ValueError('Expected reader timeout not observed')
+            raise ValueError('Expected reader-local failure not observed')
         attempts = []
         delays = []
         def fail(*a):
             attempts.append(len(attempts)+1)
             raise actual_timeout
         outcome = retry.capture('direction', root=root, collect=fail, sleep=delays.append)
-        if outcome['status'] != 'failed' or len(attempts) != 3 or delays != [2, 4]:
-            raise ValueError('Unexpected existing TimeoutError retry behavior')
+        save(Path(args.out)/'caller-progress.json', dict(stage='local_reader', actual_type=type(actual_timeout).__name__, cause_type=type(actual_timeout.__cause__).__name__, attempts=attempts, delays=delays, outcome=outcome))
+        if outcome['status'] != 'failed' or len(attempts) != 1 or delays:
+            raise ValueError('Local reader failure incorrectly retried')
+        import urllib.error
+        network_attempts = []
+        network_delays = []
+        def network_fail(*a):
+            network_attempts.append(1)
+            raise urllib.error.URLError('non-production injected network failure')
+        network_outcome = retry.capture('direction', root=root, collect=network_fail, sleep=network_delays.append)
+        save(Path(args.out)/'caller-progress.json', dict(stage='network', local=outcome, network=network_outcome, attempts=len(network_attempts), delays=network_delays))
+        if len(network_attempts) != 3 or network_delays != [2, 4] or network_outcome['status'] != 'failed':
+            raise ValueError('True network retry policy changed')
         (root/'ledger.csv').write_bytes(b'forecast_id,value\na,\xff\n')
         git(root, 'add', 'ledger.csv')
         git(root, '-c', 'user.name=Compatibility Fixture', '-c', 'user.email=fixture@example.invalid',
@@ -279,13 +298,14 @@ def platform_worker(args):
                 raise captured
             captured_outcome = retry.capture('direction', root=root, collect=reject_utf8,
                                             sleep=lambda n: (_ for _ in ()).throw(ValueError('Unexpected UTF8 retry')))
+            save(Path(args.out)/('utf8-caller-'+name+'.json'), dict(stage='utf8_caller', actual_type=type(captured).__name__, message=str(captured), outcome=captured_outcome))
             if captured_outcome['status'] != 'failed' or captured_outcome['attempts'] != 1:
                 raise ValueError('Invalid UTF8 failure propagation changed')
             utf8_outcomes[name] = dict(actual_exception=type(captured).__name__, caller=captured_outcome)
     save(Path(args.out)/'platform-result.json', dict(status='PASS for safety tests only', code=identity,
          tests=result.testsRun, skipped=[x[1] for x in result.skipped], frozen_gate=protection,
-         exception_contract='FAIL: known reader TimeoutError enters existing transient retry; no business fix made',
-         timeout_compatibility=dict(actual_type=type(actual_timeout).__name__, caller_outcome=outcome,
+         exception_contract='PASS for tested local-reader/network classification; not whole production contract',
+         timeout_compatibility=dict(actual_type=type(actual_timeout).__name__, original_cause=type(actual_timeout.__cause__).__name__, caller_outcome=outcome, network_outcome=network_outcome, network_attempts=len(network_attempts), network_delays=network_delays,
               attempts=attempts, simulated_sleep_seconds=delays, network_calls=0,
               scope='Actual reader timeout raised by injected non-network collect; unchanged watched state; not a real capture'),
          utf8_results='platform-equivalence.jsonl', full_rescue_executed=False))
@@ -455,17 +475,27 @@ def controller(args):
              transport_parents=git(ROOT, 'show', '-s', '--format=%P', 'HEAD', deadline=prep_deadline),
              code=identities(), prep_started_monotonic=started, complete_job_limit=900,
              prep_limit=180, ABBA_group_limit=600, hard_UTC_cutoff='2026-11-06T13:00:00Z',
-             cache='Warm cache: complete input checkout, object verification/fsck, platform fixtures precede ABBA. No cache flush, no actual-input function prewarm, fresh Python workers; fixed old,new,new,old order.'))
+             cache='Warm cache: complete input checkout, object verification/fsck, platform fixtures and full old/new equivalence gate precede ABBA. Warm file cache, no flush, no cached PASS/omitted validation in ABBA, fresh workers; fixed old,new,new,old order.'))
         child(args, 'prepare', 'prepare', prep_deadline)
         child(args, 'platform', 'platform', prep_deadline)
         summary['preparation_seconds'] = time.monotonic()-started
-        summary['compatibility'] = 'FAIL: known TimeoutError retry classification retained; see platform-result.json'
+        summary['compatibility'] = 'PASS for measured platform and caller categories; see platform-result.json'
         verified = json.loads((out/'verified-input.json').read_text())
+        gate_deadline = overall-630
+        summary['stage'] = 'full_input_equivalence'
+        save(out/'summary.json', summary)
+        child(args, 'old', 'gate-old', gate_deadline)
+        child(args, 'new', 'gate-new', gate_deadline)
+        gate_old = json.loads((out/'gate-old.json').read_text())
+        gate_new = json.loads((out/'gate-new.json').read_text())
+        equal_round(gate_old, gate_new, verified)
+        summary['full_input_equivalence'] = 'PASS'
+        save(out/'summary.json', summary)
         if min(ABSOLUTE-time.time(), overall-time.monotonic()) < 630:
             raise TimeoutError('Insufficient full ABBA plus retention window; do not start')
         group_started = time.monotonic()
         group_deadline = min(group_started+600, overall-30)
-        reference = None
+        reference = gate_old
         for i, mode in enumerate(('old', 'new', 'new', 'old'), 1):
             label = str(i)+'-'+mode
             child(args, mode, label, group_deadline)
@@ -479,7 +509,7 @@ def controller(args):
             save(out/'summary.json', summary)
         summary.update(status='PASS: function equivalence and completed bounded comparison only',
                        full_ABBA=True, ABBA_wall_seconds=time.monotonic()-group_started,
-                       production_admission='NOT_VERIFIED; known compatibility blocker; no full rescue/network/publication measured')
+                       production_admission='NOT_VERIFIED; registration and full rescue/network/publication remain untested')
     except BaseException as exc:
         summary.update(status='FAIL or incomplete experiment; not a production candidate verdict',
                        error_type=type(exc).__name__, error=str(exc), traceback=traceback.format_exc())
