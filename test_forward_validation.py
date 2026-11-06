@@ -124,15 +124,18 @@ class BatchHistoryTests(unittest.TestCase):
   rows=self.rows if rows is None else rows
   def result(fn):
    try:return ('ok',fn(self.root,self.path,self.cols,rows))
-   except Exception as exc:return ('reject',type(exc).__name__)
+   except Exception as exc:
+    failures=getattr(self,'_failure_details',[]);failures.append(dict(module=fn.__module__,type=type(exc).__name__,message=str(exc),cause_type=type(exc.__cause__).__name__ if exc.__cause__ else None));self._failure_details=failures
+    return ('reject',type(exc).__name__)
+  self._failure_details=[]
   old,new=result(self.old.history_receipts),result(self.v.history_receipts)
-  self.assertEqual(old[0],new[0],(old,new))
-  if old[0]=='ok':self.assertEqual(old[1],new[1])
   import os,json,hashlib
   report=os.environ.get('HISTORY_EQUIVALENCE_LOG')
   if report:
    with open(report,'a',encoding='utf-8') as f:
-    f.write(json.dumps(dict(test=self._testMethodName,old_status=old[0],new_status=new[0],old_result=old[1] if old[0]=='reject' else hashlib.sha256(json.dumps(old[1],sort_keys=True).encode()).hexdigest(),new_result=new[1] if new[0]=='reject' else hashlib.sha256(json.dumps(new[1],sort_keys=True).encode()).hexdigest()))+'\n')
+    f.write(json.dumps(dict(test=self._testMethodName,scenario=getattr(self,'_scenario',None),native_no_replace_set=self.v._history_no_replace_is_set(),failures=self._failure_details,counterexample_receipts={'old':old[1] if old[0]=='ok' else None,'new':new[1] if new[0]=='ok' else None} if old!=new else None,old_status=old[0],new_status=new[0],old_result=old[1] if old[0]=='reject' else hashlib.sha256(json.dumps(old[1],sort_keys=True).encode()).hexdigest(),new_result=new[1] if new[0]=='reject' else hashlib.sha256(json.dumps(new[1],sort_keys=True).encode()).hexdigest()))+'\n')
+  self.assertEqual(old[0],new[0],(old,new))
+  if old[0]=='ok':self.assertEqual(old[1],new[1])
   return old,new
  def test_structural_git_process_reduction_without_skipping_versions(self):
   from unittest.mock import patch
@@ -282,12 +285,72 @@ else:
   from unittest.mock import patch
   import os
   for value in ('1','0','false',''):
+   self._scenario={'GIT_NO_REPLACE_OBJECTS':value,'core.useReplaceRefs':'unset','GIT_REPLACE_REF_BASE':'default','git':self.git('--version')}
    with patch.dict(os.environ,{'GIT_NO_REPLACE_OBJECTS':value}):
     old_result,new_result=self.both();self.assertEqual(new_result[0],'ok')
-  self.git('config','core.useReplaceRefs','false');old_result,new_result=self.both();self.assertEqual(new_result[0],'ok')
+  self.git('config','core.useReplaceRefs','false');self._scenario={'GIT_NO_REPLACE_OBJECTS':os.environ.get('GIT_NO_REPLACE_OBJECTS'),'core.useReplaceRefs':'false','GIT_REPLACE_REF_BASE':'default'};old_result,new_result=self.both();self.assertEqual(new_result[0],'ok')
   self.git('config','core.useReplaceRefs','true');self.git('update-ref','refs/customreplace/'+old,new)
   with patch.dict(os.environ,{'GIT_REPLACE_REF_BASE':'refs/customreplace/'}):
+   self._scenario={'GIT_NO_REPLACE_OBJECTS':os.environ.get('GIT_NO_REPLACE_OBJECTS'),'core.useReplaceRefs':'true','GIT_REPLACE_REF_BASE':'refs/customreplace/'}
    old_result,new_result=self.both();self.assertEqual(new_result[0],'ok')
+
+ def test_local_io_errors_never_retry_but_network_errors_still_do(self):
+  import urllib.error
+  from unittest.mock import patch
+  import quote_capture_retry as retry
+  for error in [TimeoutError('local stall'),BrokenPipeError('local pipe'),subprocess.TimeoutExpired(['git','cat-file'],1),subprocess.CalledProcessError(7,['git','cat-file'])]:
+   with self.subTest(error=type(error).__name__):
+    calls=[];delays=[]
+    def local_failure(*a):
+     calls.append(1)
+     with patch.object(self.v,'git',side_effect=error):return self.v.history_receipts(self.root,self.path,self.cols,{})
+    outcome=retry.capture('direction',root=self.root,collect=local_failure,sleep=delays.append)
+    self.assertEqual(outcome['status'],'failed');self.assertEqual(len(calls),1);self.assertEqual(delays,[])
+    self.assertIn('HistoryReadError',outcome['error']);self.assertFalse(outcome['registry_changed'])
+    with patch.object(self.v,'git',side_effect=error):
+     with self.assertRaises(self.v.HistoryReadError) as caught:self.v.history_receipts(self.root,self.path,self.cols,{})
+    self.assertIs(caught.exception.__cause__,error)
+  calls=[];delays=[]
+  def network_failure(*a):calls.append(1);raise urllib.error.URLError('synthetic network')
+  outcome=retry.capture('direction',root=self.root,collect=network_failure,sleep=delays.append)
+  self.assertEqual(outcome['status'],'failed');self.assertEqual(len(calls),3);self.assertEqual(delays,[2,4])
+  with patch.object(self.v,'git',side_effect=KeyboardInterrupt('cancel')):
+   with self.assertRaises(KeyboardInterrupt):self.v.history_receipts(self.root,self.path,self.cols,{})
+
+ def test_native_empty_environment_at_process_start(self):
+  import os,sys,json
+  script=r'''import os,sys,json,subprocess
+from pathlib import Path
+sys.path.insert(0,sys.argv[1])
+import test_forward_validation as tests
+t=tests.BatchHistoryTests();t.setUp()
+try:
+ t.rows={'a':{'forecast_id':'a','value':'1'}};body=tests.serial(t.rows,t.cols).encode();t.commit(body)
+ oid=t.git('rev-parse','HEAD:'+t.path);other=subprocess.check_output(['git','hash-object','-w','--stdin'],cwd=t.root,input=body.replace(b'\r\n',b'\n')).decode().strip()
+ t.git('replace',oid,other);old,new=t.both();assert old[0]==new[0]=='ok';print(json.dumps({'old':old,'new':new,'environment_value':os.environ.get('GIT_NO_REPLACE_OBJECTS'),'native_is_set':t.v._history_no_replace_is_set()}))
+finally:t.tearDown()
+'''
+  p=subprocess.run([sys.executable,'-c',script,str(Path(__file__).resolve().parent)],env=dict(os.environ,GIT_NO_REPLACE_OBJECTS=''),capture_output=True,text=True,encoding='utf-8',timeout=15)
+  self.assertEqual(p.returncode,0,p.stdout+p.stderr)
+
+ def test_real_reader_timeout_one_attempt_without_business_writes(self):
+  import sys,hashlib
+  from unittest.mock import patch
+  import quote_capture_retry as retry
+  self.rows={'a':{'forecast_id':'a','value':'1'}};self.commit(serial(self.rows,self.cols).encode())
+  before=hashlib.sha256((self.root/self.path).read_bytes()).hexdigest();calls=[];delays=[];readers=[]
+  original=self.v._HistoryBatch
+  def stalled(root):
+   reader=original(root,timeout=.1,command=[sys.executable,'-c','import time;time.sleep(30)']);readers.append(reader);return reader
+  def collect(*a):
+   calls.append(1)
+   return self.v.history_receipts(self.root,self.path,self.cols,self.rows)
+  with patch.object(self.v,'_HistoryBatch',side_effect=stalled):
+   outcome=retry.capture('direction',root=self.root,collect=collect,sleep=delays.append)
+  self.assertEqual(len(calls),1);self.assertEqual(delays,[]);self.assertEqual(outcome['status'],'failed')
+  self.assertIn('HistoryReadError',outcome['error']);self.assertFalse(outcome['registry_changed'])
+  self.assertEqual(hashlib.sha256((self.root/self.path).read_bytes()).hexdigest(),before)
+  self.assertIsNotNone(readers[0].process.poll());self.assertFalse(readers[0].threads_alive())
 
  def test_text_decoding_matches_old_for_crlf_cr_nul_and_invalid_utf8(self):
   cases=[(b'forecast_id,value\ra,"line1\rline2"\r','line1\nline2'),(b'forecast_id,value\r\na,"line1\r\nline2"','line1\nline2'),(b'forecast_id,value\na,\x00','\x00'),(b'forecast_id,value\na,\xff','invalid')]

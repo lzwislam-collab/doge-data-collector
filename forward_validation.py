@@ -87,6 +87,27 @@ def _history_windows_job(process):
   if snapshot and snapshot!=w.HANDLE(-1).value:kernel.CloseHandle(snapshot)
  return kernel,job
 
+class HistoryReadError(RuntimeError):
+ """A local history I/O failure, never a transient market-network failure."""
+
+def _history_no_replace_is_set():
+ """Match the environment inherited by Git, including a present empty value."""
+ if os.name!='nt':return 'GIT_NO_REPLACE_OBJECTS' in os.environ
+ # On Windows os.environ may retain '' after SetEnvironmentVariable deleted
+ # the native entry. Query that native environment without changing it.
+ import ctypes
+ from ctypes import wintypes
+ kernel=ctypes.WinDLL('kernel32',use_last_error=True)
+ kernel.GetEnvironmentVariableW.argtypes=[wintypes.LPCWSTR,wintypes.LPWSTR,wintypes.DWORD]
+ kernel.GetEnvironmentVariableW.restype=wintypes.DWORD
+ ctypes.set_last_error(0)
+ size=kernel.GetEnvironmentVariableW('GIT_NO_REPLACE_OBJECTS',None,0)
+ error=ctypes.get_last_error()
+ if size:return True
+ if error==203:return False  # ERROR_ENVVAR_NOT_FOUND
+ if error==0:return True  # Present but empty; Git must still disable replaces.
+ raise ctypes.WinError(error)
+
 class _HistoryBatch:
  """One outstanding query, binary framing, bounded inactivity, no PASS cache."""
  def __init__(self,root,timeout=30,command=None):
@@ -102,7 +123,7 @@ class _HistoryBatch:
    except subprocess.CalledProcessError as exc:
     if exc.returncode!=1:raise
     replace_config='true'
-   if not os.environ.get('GIT_NO_REPLACE_OBJECTS') and replace_config!='false':
+   if not _history_no_replace_is_set() and replace_config!='false':
     base=os.environ.get('GIT_REPLACE_REF_BASE','refs/replace')
     for line in git(self.root,'for-each-ref','--format=%(refname) %(objectname)',base).splitlines():
      ref,oid=line.split();self.replacements[ref.rsplit('/',1)[1]]=oid
@@ -237,6 +258,12 @@ class _HistoryBatch:
  def __exit__(self,kind,value,tb):self._close(kind is not None);return False
 
 def history_receipts(root,relative,columns,current):
+ """Keep local Git errors out of transport retry, preserving their causes."""
+ try:return _history_receipts(root,relative,columns,current)
+ except (OSError,subprocess.SubprocessError) as exc:
+  raise HistoryReadError('local Git history I/O failed: '+type(exc).__name__) from exc
+
+def _history_receipts(root,relative,columns,current):
  """Check every reachable revision, including deletions. Retain first commit receipt."""
  if git(root,'rev-parse','--is-shallow-repository')!='false':
   raise ValueError('full git history required')
