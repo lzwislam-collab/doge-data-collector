@@ -32,7 +32,7 @@ FINAL = 'f4e292609719cc323c923d989388cdcfba810e01'
 CODE_SHA = 'df1bc81b8da79e2d7c77f21fd0c52016d8bdcde8fb9485a3749b38937ce1eebb'
 TEST_SHA = '680272d41a1d9302268486cf7caf2440d6300468bd87fa9b63f3f328be843c77'
 MANIFEST_SHA = 'e35417b4f3652aadc45665b41d300a6c70175a811f0ed947ce82bf2edc35ffdb'
-ABSOLUTE = 1793970000.0  # 2026-11-06T13:00:00Z; checked independently below.
+ABSOLUTE = 1793995200.0  # 2026-11-06T20:00:00Z; checked independently below.
 
 
 def save(path, value):
@@ -465,7 +465,7 @@ def controller(args):
     try:
         if sys.platform != 'linux':
             raise RuntimeError('Actual comparison is Ubuntu/Linux only')
-        if datetime.fromisoformat('2026-11-06T13:00:00+00:00').timestamp() != ABSOLUTE:
+        if datetime.fromisoformat('2026-11-06T20:00:00+00:00').timestamp() != ABSOLUTE:
             raise ValueError('Absolute cutoff constant incorrect')
         if ctypes.CDLL(None).prctl(36, 1, 0, 0, 0) != 0:
             raise RuntimeError('Cannot own/reap diagnostic descendants')
@@ -474,7 +474,7 @@ def controller(args):
              transport_checkout=git(ROOT, 'rev-parse', 'HEAD', deadline=prep_deadline),
              transport_parents=git(ROOT, 'show', '-s', '--format=%P', 'HEAD', deadline=prep_deadline),
              code=identities(), prep_started_monotonic=started, complete_job_limit=900,
-             prep_limit=180, ABBA_group_limit=600, hard_UTC_cutoff='2026-11-06T13:00:00Z',
+             prep_limit=180, ABBA_group_limit=600, hard_UTC_cutoff='2026-11-06T20:00:00Z',
              cache='Warm cache: complete input checkout, object verification/fsck, platform fixtures and full old/new equivalence gate precede ABBA. Warm file cache, no flush, no cached PASS/omitted validation in ABBA, fresh workers; fixed old,new,new,old order.'))
         child(args, 'prepare', 'prepare', prep_deadline)
         child(args, 'platform', 'platform', prep_deadline)
@@ -530,10 +530,10 @@ def main():
     p.add_argument('--order', default='old,new,new,old')
     p.add_argument('--preparation-seconds', type=int, default=180)
     p.add_argument('--comparison-seconds', type=int, default=600)
-    p.add_argument('--deadline-utc', default='2026-11-06T13:00:00Z')
+    p.add_argument('--deadline-utc', default='2026-11-06T20:00:00Z')
     args = p.parse_args()
     if (args.input_sha != INPUT or args.order != 'old,new,new,old' or args.preparation_seconds != 180
-            or args.comparison_seconds != 600 or args.deadline_utc != '2026-11-06T13:00:00Z'):
+            or args.comparison_seconds != 600 or args.deadline_utc != '2026-11-06T20:00:00Z'):
         raise ValueError('Approved fixed experiment parameters changed')
     if args.worker == 'prepare':
         prepare(args)
