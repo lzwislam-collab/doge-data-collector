@@ -19,6 +19,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
+      - name: Start non-production budget clock
+        if: github.event_name == 'pull_request' && github.event.pull_request.number == 85 && github.head_ref == 'ci/strict24-isolation-ubuntu-20261106'
+        run: echo "SCALE_JOB_STARTED_EPOCH=$(date +%s.%N)" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -26,11 +29,29 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: python -m unittest test_quote_only_rescue test_quote_only_rescue_scope test_quote_evidence_v2 test_publish_forward_evidence -v
+      - name: Reuse accepted functional CI only for identical code and protocols
+        if: github.event_name == 'pull_request' && github.event.pull_request.number == 85 && github.head_ref == 'ci/strict24-isolation-ubuntu-20261106'
+        id: prior
+        run: python .github/scripts/quote_rescue_scale_diagnostic.py --identity --out "$RUNNER_TEMP/quote-scale-evidence"
+      - if: steps.prior.outputs.reuse != 'true'
+        run: python -m unittest test_quote_only_rescue test_quote_only_rescue_scope test_quote_evidence_v2 test_publish_forward_evidence -v
       - uses: actions/setup-node@v4
+        if: steps.prior.outputs.reuse != 'true'
         with:
           node-version: '22'
-      - run: node apps_script/test_quote_rescue_live.cjs
+      - if: steps.prior.outputs.reuse != 'true'
+        run: node apps_script/test_quote_rescue_live.cjs
+      - name: Measure fixed actual-scale input in temporary local repositories
+        if: steps.prior.outputs.reuse == 'true'
+        run: python .github/scripts/quote_rescue_scale_diagnostic.py --out "$RUNNER_TEMP/quote-scale-evidence"
+      - name: Retain small non-production diagnosis
+        if: always() && github.event_name == 'pull_request' && github.event.pull_request.number == 85 && github.head_ref == 'ci/strict24-isolation-ubuntu-20261106'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nonproduction-scale-diagnosis-${{ github.run_id }}
+          path: ${{ runner.temp }}/quote-scale-evidence
+          if-no-files-found: error
+          retention-days: 3
   rescue:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
