@@ -1,5 +1,5 @@
 """Strict rescue scope; synthetic quotes and local files only."""
-import hashlib,json,tempfile,unittest
+import hashlib,json,os,tempfile,unittest
 from datetime import datetime,timedelta,timezone
 from pathlib import Path
 from unittest.mock import patch,Mock
@@ -15,6 +15,35 @@ def row(h=24,issued=None):
                 source_hour_start_utc=hour.isoformat(),target_utc=(issued+timedelta(hours=h)).isoformat())
 
 class ScopeTests(unittest.TestCase):
+    def setUp(self):
+        self.environment=patch.dict(os.environ,{k:v for k,v in os.environ.items() if not k.startswith('GIT_')},clear=True);self.environment.start()
+    def tearDown(self):self.environment.stop()
+    def test_both_exact_current_github_origin_forms_reach_clone_without_network(self):
+        class CloneReached(RuntimeError):pass
+        origins=['https://github.com/lzwislam-collab/doge-data-collector',
+                 'https://github.com/lzwislam-collab/doge-data-collector.git']
+        for origin in origins:
+            calls=[]
+            def git(root,*args):
+                if args==('remote','get-url','origin'):return origin.encode()
+                if args[0]=='clone':calls.append(args);raise CloneReached('test-only clone interception; no network')
+                raise AssertionError('unexpected Git operation before clone')
+            with self.subTest(origin=origin),tempfile.TemporaryDirectory() as directory,patch.object(rescue,'local_git',side_effect=git):
+                with self.assertRaises(CloneReached):rescue.create_attempt(Path(directory),Path(directory),{})
+                self.assertEqual(len(calls),1);self.assertIn(origin,calls[0]);self.assertIn('--no-hardlinks',calls[0])
+    def test_foreign_insecure_and_spoofed_github_origins_stop_before_clone(self):
+        origins=['https://github.com/other/repository.git','https://example.test/lzwislam-collab/doge-data-collector',
+                 'http://github.com/lzwislam-collab/doge-data-collector',
+                 'https://user@example.test/lzwislam-collab/doge-data-collector',
+                 'https://github.com/lzwislam-collab/doge-data-collector.evil']
+        for origin in origins:
+            calls=[]
+            def git(root,*args):
+                if args==('remote','get-url','origin'):return origin.encode()
+                calls.append(args);raise AssertionError('foreign origin reached a Git write')
+            with self.subTest(origin=origin),tempfile.TemporaryDirectory() as directory,patch.object(rescue,'local_git',side_effect=git):
+                with self.assertRaises(ValueError):rescue.create_attempt(Path(directory),Path(directory),{})
+                self.assertEqual(calls,[])
     def test_valid_24h_selected(self):
         r=row();self.assertEqual(rescue.eligible_ids({r['forecast_id']:r},{},NOW,[r['forecast_id']]),[r['forecast_id']])
     def test_requested_other_horizons_rejected_before_side_effect(self):
@@ -52,6 +81,17 @@ class ScopeTests(unittest.TestCase):
                                 (NOW-timedelta(seconds=121),NOW)):
             with self.subTest(quoted=quoted),self.assertRaises(ValueError):
                 rescue.capture_scope({fid:r},{},[fid],quoted,observed)
+    def test_quote25m_and_age120s_boundaries_remain_distinct_from_rescue20m(self):
+        r=row();fid=r['forecast_id'];target=rescue.frozen.utc(r['target_utc'])
+        quoted=target+timedelta(minutes=25);observed=quoted+timedelta(seconds=120)
+        raw=json.dumps({'code':'0','data':[{'instId':'DOGE-USDT','last':'1.1','ts':str(int(quoted.timestamp()*1000))}]})
+        payload={'source_url':rescue.evidence.URL,'raw_response_utf8':raw,'observed_at_utc':observed.isoformat()}
+        self.assertEqual(rescue.evidence.parse(payload)[1:],(quoted,observed))
+        with self.assertRaises(ValueError):rescue.capture_scope({fid:r},{},[fid],quoted,observed)
+        payload['observed_at_utc']=(observed+timedelta(microseconds=1)).isoformat()
+        with self.assertRaises(ValueError):rescue.evidence.parse(payload)
+        self.assertEqual(rescue.eligible_ids({fid:r},{},target+timedelta(minutes=20),[fid]),[fid])
+        self.assertEqual(rescue.eligible_ids({fid:r},{},target+timedelta(minutes=20,microseconds=1),[fid]),[])
     def test_invalid_request_run_never_invokes_capture_publish_or_git_config(self):
         r=row(1);state={'registry':{r['forecast_id']:r},'scores':{},'bindings':{},'snapshots':{}}
         capture=Mock();publish=Mock()
@@ -65,7 +105,10 @@ class ScopeTests(unittest.TestCase):
         state={'registry':{r['forecast_id']:r for r in (first,future)},'scores':{},'bindings':{},'snapshots':{}}
         capture=Mock();publish=Mock()
         with patch.object(rescue,'ensure_clean_checkout'),patch.object(rescue,'guard_protocol'),patch.object(rescue,'take_state',return_value=state),patch.object(rescue.publisher,'validate_state'),patch.object(rescue,'verify_formal_issues',side_effect=ValueError('future target lacks witness')) as formal:
-            with self.assertRaises(ValueError):rescue.run(Path('.'),ids,clock=lambda:now,capture_fn=capture,publish_fn=publish)
+            # This is a pure pre-capture policy unit test of the actual attempt
+            # entry. Full isolated-clone behavior is tested with local bare Git
+            # fixtures in RescueTests; never clone the production origin here.
+            with self.assertRaises(ValueError):rescue._run_in_attempt(Path('.'),ids,clock=lambda:now,capture_fn=capture,publish_fn=publish)
             self.assertEqual(formal.call_args.args[-1],set(ids));capture.assert_not_called();publish.assert_not_called()
     def test_http_result_rejected_before_any_quote_score_or_binding_write(self):
         r=row();fid=r['forecast_id'];extra=row(1,NOW-timedelta(hours=1)+timedelta(seconds=1))
