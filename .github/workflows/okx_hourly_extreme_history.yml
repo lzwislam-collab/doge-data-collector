@@ -437,7 +437,7 @@ jobs:
           fi
       - name: Freeze archive bytes and continue single-writer capture during upload
         id: archive_bridge_start
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.persist.outcome == 'success'
+        if: ${{ !cancelled() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.persist.outcome == 'success' }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python archive_capture_bridge.py start --snapshot archive-snapshot --control "$RUNNER_TEMP/doge-archive-bridge-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
