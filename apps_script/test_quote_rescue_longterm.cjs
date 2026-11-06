@@ -9,27 +9,28 @@ function test(name,fn){try{fn();passed++;console.log('PASS '+name);}catch(e){fai
 function fixture(opt={}){
  let now=epoch,locked=false,uid=0;
  const props={GH_ACTIONS_READ_TOKEN:'synthetic-read-secret',GH_QUOTE_RESCUE_DISPATCH_TOKEN:'synthetic-dispatch-secret',DRY_TRIAL_STATE:'original-failure',QRV1_STATE:'old-real-proof',QLT1_DEPLOYMENT_READY:'QLT1_REVIEW_20261016',QLT1_READ_TOKEN_EXPIRES_UTC:'2026-11-16T00:00:00Z',QLT1_DISPATCH_TOKEN_EXPIRES_UTC:'2026-11-16T00:00:00Z',QLT1_MAIL_ENABLED:'true',QLT1_SCORE_FIX_READY:'PINNED_SCORE_20261016'};
- const requests=[],emails=[],mailAttempts=[],logs=[];
+ const requests=[],emails=[],mailAttempts=[],logs=[],serviceCalls=[];
+ const service=name=>{serviceCalls.push(name);now+=opt.serviceMs?.[name]??0;};
  const trigger=name=>({getHandlerFunction:()=>name,getUniqueId:()=>String(++uid)});
  const unrelated=trigger('normal_unrelated'),triggers=[unrelated];
  let registry='forecast_id,issued_at_utc,target_utc\ndue,2026-10-16T06:50:00Z,2026-10-16T07:55:00Z\n',scores='forecast_id,status,observed_at_utc,target_quote_utc\n',runs=[];
  let run={id:12345,path:'.github/workflows/quote_only_rescue.yml',event:'workflow_dispatch',head_branch:'main',status:'in_progress',conclusion:null,created_at:'2026-10-16T08:00:00Z'};
- const store={getProperty:k=>props[k]??null,setProperty:(k,v)=>{opt.onStore?.(k,v,{advance:ms=>{now+=ms;},props});if(opt.failStore?.(k,v,requests))throw new Error('storage synthetic-secret');props[k]=v;},deleteProperty:k=>delete props[k]};
+ const store={getProperty:k=>{service('getProperty');return props[k]??null;},setProperty:(k,v)=>{service('setProperty');opt.onStore?.(k,v,{advance:ms=>{now+=ms;},props});if(opt.failStore?.(k,v,requests))throw new Error('storage synthetic-secret');props[k]=v;},deleteProperty:k=>delete props[k]};
  class Clock extends Date{constructor(...args){super(...(args.length?args:[now]));}static now(){return now;}}
- const c=vm.createContext({Date:Clock,console:{log:x=>logs.push(JSON.parse(x))},
-  PropertiesService:{getScriptProperties:()=>store},LockService:{getScriptLock:()=>({tryLock:()=>{if(locked)return false;locked=true;return true;},releaseLock:()=>{locked=false;}})},
-  Utilities:{parseCsv:t=>t.trim().split(/\r?\n/).map(s=>s.split(',')),DigestAlgorithm:{SHA_256:'SHA_256',SHA_1:'SHA_1'},Charset:{UTF_8:'UTF_8'},computeDigest:(alg,s)=>[...crypto.createHash(alg==='SHA_1'?'sha1':'sha256').update(Array.isArray(s)?Buffer.from(s.map(n=>n&255)):s).digest()],base64Decode:s=>[...Buffer.from(s,'base64')],newBlob:s=>({getBytes:()=>[...Buffer.from(typeof s==='string'?s:s.map(n=>n&255))],getDataAsString:()=>Buffer.from(s.map(n=>n&255)).toString('utf8')})},
+ const c=vm.createContext({Date:Clock,console:{log:x=>{service('consoleLog');logs.push(JSON.parse(x));}},
+  PropertiesService:{getScriptProperties:()=>{service('getScriptProperties');return store;}},LockService:{getScriptLock:()=>{service('getScriptLock');return {tryLock:()=>{service('tryLock');if(locked)return false;locked=true;return true;},releaseLock:()=>{service('releaseLock');locked=false;}};}},
+  Utilities:{parseCsv:t=>{service('parseCsv');return t.trim().split(/\r?\n/).map(s=>s.split(','));},DigestAlgorithm:{SHA_256:'SHA_256',SHA_1:'SHA_1'},Charset:{UTF_8:'UTF_8'},computeDigest:(alg,s)=>{service('computeDigest');return [...crypto.createHash(alg==='SHA_1'?'sha1':'sha256').update(Array.isArray(s)?Buffer.from(s.map(n=>n&255)):s).digest()];},base64Decode:s=>[...Buffer.from(s,'base64')],newBlob:s=>({getBytes:()=>[...Buffer.from(typeof s==='string'?s:s.map(n=>n&255))],getDataAsString:()=>Buffer.from(s.map(n=>n&255)).toString('utf8')})},
   ScriptApp:{getProjectTriggers:()=>triggers.slice(),deleteTrigger:t=>{if(opt.failDelete)throw new Error('delete failed');triggers.splice(triggers.indexOf(t),1);},newTrigger:name=>({timeBased:()=>({everyMinutes:m=>({create:()=>{if(opt.failCreate===name)throw new Error('trigger create failed');const t=trigger(name);triggers.push(t);return t;}})})})},
   MailApp:{getRemainingDailyQuota:()=>opt.mailQuota??100,sendEmail:(to,subject,body)=>{mailAttempts.push({to,subject});if(opt.failMail)throw new Error('mail synthetic-secret');emails.push({to,subject,body});}},
-  UrlFetchApp:{fetch:(url,options)=>{requests.push({url,options});opt.onFetch?.(url,options,{advance:ms=>{now+=ms;},props});if(opt.failFetch)throw new Error('network synthetic-secret');
+  UrlFetchApp:{fetch:(url,options)=>{service('fetch');requests.push({url,options});opt.onFetch?.(url,options,{advance:ms=>{now+=ms;},props});if(opt.failFetch)throw new Error('network synthetic-secret');
    const post=options.method==='post',code=post?(opt.postCode??200):(opt.getCodeFor?.(url)??opt.getCode??200);
    const pin=opt.pinnedScores??scores;const bytes=Buffer.from(pin);const payload={type:'file',path:'data/direction_v42/forward_scores.csv',encoding:'base64',size:bytes.length,sha:crypto.createHash('sha1').update(Buffer.concat([Buffer.from('blob '+bytes.length+'\0'),bytes])).digest('hex'),content:bytes.toString('base64'),...(opt.contentsOverrides||{})};
    const text=url.endsWith('/branches/main')?(opt.branchBody??JSON.stringify({name:'main',commit:{sha:'a'.repeat(40)}})):url.includes('/contents/')?JSON.stringify(payload):post?(opt.postBody??JSON.stringify({workflow_run_id:12345})):url.includes('registry.csv')?registry:url.includes('scores.csv')?scores:/\/runs\/\d+$/.test(url)?JSON.stringify(run):(opt.runsBody??JSON.stringify({workflow_runs:runs}));
-   return {getResponseCode:()=>code,getContentText:()=>text,getAllHeaders:()=>({'x-ratelimit-limit':'5000','x-ratelimit-remaining':String(opt.rateRemaining??4900)})};}}
+   return {getResponseCode:()=>{service('getResponseCode');return code;},getContentText:()=>{service('getContentText');return text;},getAllHeaders:()=>{service('getAllHeaders');return {'x-ratelimit-limit':'5000','x-ratelimit-remaining':String(opt.rateRemaining??4900)};}};}}
  });
  vm.runInContext(live+'\n'+source,c);
  const state=()=>JSON.parse(props.QLT1_STATE||'null');
- return {c,props,requests,emails,mailAttempts,logs,triggers,state,advance:ms=>now+=ms,setTime:v=>now=v,setScores:v=>scores=v,setRegistry:v=>registry=v,setRuns:v=>runs=v,setRun:v=>run={...run,...v},setLocked:v=>locked=v,start:()=>c.startQuoteRescueLongTerm(),tick:()=>c.runQuoteRescueLongTerm({triggerUid:'actual'}),watch:()=>c.watchQuoteRescueLongTerm({triggerUid:'actual'}),own:()=>triggers.filter(t=>[handler,watchdog].includes(t.getHandlerFunction())),mutate:fn=>{const s=state();fn(s);props.QLT1_STATE=JSON.stringify(s);}};
+ return {c,props,requests,emails,mailAttempts,logs,serviceCalls,now:()=>now,triggers,state,advance:ms=>now+=ms,setTime:v=>now=v,setScores:v=>scores=v,setRegistry:v=>registry=v,setRuns:v=>runs=v,setRun:v=>run={...run,...v},setLocked:v=>locked=v,start:()=>c.startQuoteRescueLongTerm(),tick:()=>c.runQuoteRescueLongTerm({triggerUid:'actual'}),watch:()=>c.watchQuoteRescueLongTerm({triggerUid:'actual'}),own:()=>triggers.filter(t=>[handler,watchdog].includes(t.getHandlerFunction())),mutate:fn=>{const s=state();fn(s);props.QLT1_STATE=JSON.stringify(s);}};
 }
 test('loading does not start, query, send or alter old evidence',()=>{const f=fixture();assert.equal(typeof f.c.startQuoteRescueLongTerm,'function');assert.equal(f.requests.length+f.emails.length,0);assert(!f.props.QLT1_STATE);assert.equal(f.triggers.length,1);});
 test('start requires reviewed readiness and credentials with expiry headroom',()=>{for(const key of ['QLT1_DEPLOYMENT_READY','GH_ACTIONS_READ_TOKEN','GH_QUOTE_RESCUE_DISPATCH_TOKEN','QLT1_MAIL_ENABLED']){const f=fixture();delete f.props[key];assert.throws(f.start);assert.equal(f.own().length,0);}const f=fixture();f.props.QLT1_DISPATCH_TOKEN_EXPIRES_UTC='2026-10-16T09:00:00Z';assert.throws(f.start);assert.equal(f.own().length,0);});
@@ -196,4 +197,35 @@ test('recovery cannot restore a caller without reserved stop-notice capacity',()
 
 test('recovery clock reversal leaves the original stop untouched',()=>{const f=stoppedScore({pinnedScores:undefined});f.setTime(epoch-1);const n=f.requests.length,before=f.props.QLT1_STATE;assert.throws(()=>f.c.resumeQuoteRescueLongTermAfterScoreFix());assert.equal(f.requests.length,n);assert.equal(f.props.QLT1_STATE,before);assert(!f.props.QLT1_STOP_ARCHIVE_20261016);});
 test('recovery ages expired rolling notice buckets without resetting original archive',()=>{const opt={},f=stoppedScore(opt);opt.pinnedScores=validScore;f.mutate(s=>s.budget=[[Math.floor(epoch/3600000)-27,99,1,10000,3]]);const old=f.props.QLT1_STATE;f.c.resumeQuoteRescueLongTermAfterScoreFix();assert.equal(f.state().phase,'RUNNING');assert.equal(f.props.QLT1_STOP_ARCHIVE_20261016,old);assert.equal(f.state().budget.reduce((n,b)=>n+b[4],0),0);});
+test('phase timing includes entry services and final save but preserves legacy clocks and calls',()=>{
+ const f=fixture({serviceMs:{getScriptLock:2,tryLock:3,getScriptProperties:5,getProperty:7,setProperty:11,fetch:13,getResponseCode:17,getAllHeaders:19,getContentText:23,parseCsv:29,consoleLog:37,releaseLock:31}});
+ f.setScores('forecast_id,status\ndue,scored\n');f.start();const before=f.now(),n=f.serviceCalls.length;f.tick();
+ const r=f.logs.at(-1),t=r.timing,calls=f.serviceCalls.slice(n);assert.equal(t.revision,'PHASE_TIMING_20261017');
+ assert.equal(Date.parse(t.entry_at_utc),before);assert.equal(t.legacy_started_offset_ms,10);assert.equal(r.elapsed_ms,276);assert.equal(t.measured_to_log_ms,297);assert.equal(f.now()-before,365);
+ assert.equal(t.spans_ms.lock,5);assert.equal(t.spans_ms.properties_handle,5);assert.equal(t.spans_ms.property_get,63);assert.equal(t.spans_ms.property_set,22);assert.equal(t.spans_ms.state_load,7);assert.equal(t.spans_ms.credentials,42);assert.equal(t.spans_ms.final_save,11);
+ assert.equal(t.spans_ms.registry_parse,29);assert.equal(t.spans_ms.scores_parse,29);assert.deepEqual(Array.from(r.request_ms),[30,30]);
+ assert.deepEqual(t.requests.map(x=>x.endpoint),['REGISTRY','SCORES']);for(const q of t.requests){assert.deepEqual(q.spans_ms,{fetch:13,response_code:17,headers:19,text:23});assert.equal(q.status,200);assert.equal(q.completed,true);}
+ assert.equal(calls.filter(x=>x==='getProperty').length,9);assert.equal(calls.filter(x=>x==='setProperty').length,2);assert.equal(f.requests.length,2);assert.equal(f.emails.length,0);assert(!f.props.QLT1_STATE.includes('timing'));
+});
+test('slow serial score fetch is attributed without adding timeout retry or POST',()=>{
+ const f=fixture({onFetch:(u,o,a)=>a.advance(u.includes('registry.csv')?290:29050)});f.setScores('forecast_id,status\ndue,scored\n');f.start();f.tick();const r=f.logs.at(-1);
+ assert.deepEqual(Array.from(r.request_ms),[290,29050]);assert.equal(r.timing.requests[1].endpoint,'SCORES');assert.equal(r.timing.requests[1].spans_ms.fetch,29050);assert.equal(r.elapsed_ms,29340);assert.equal(f.requests.length,2);assert(f.requests.every(x=>x.options.method==='get'&&!('timeoutSeconds' in x.options)));assert.equal(f.state().phase,'RUNNING');
+});
+test('failed fetch retains its timed attempt and original redacted stop behavior',()=>{
+ const f=fixture({failFetch:true,onFetch:(u,o,a)=>a.advance(29050)});f.start();f.tick();const r=f.logs.at(-1),q=r.timing.requests[0];assert.equal(q.spans_ms.fetch,29050);assert.equal(q.completed,false);assert.equal(q.endpoint,'REGISTRY');assert.equal(q.status,undefined);assert.equal(f.state().phase,'STOPPED');assert.equal(f.emails.length,1);assert(!JSON.stringify(f.logs).includes('secret'));
+});
+test('lock busy has an explicit zero-work diagnostic and cannot release the held lock',()=>{
+ const f=fixture({serviceMs:{getScriptLock:2,tryLock:3}});f.start();f.setLocked(true);const before=JSON.stringify(f.props),n=f.serviceCalls.length;f.tick();f.watch();
+ for(const r of f.logs.slice(-2)){assert.equal(r.kind,'LONGTERM_LOCK_BUSY');assert.equal(r.decision,'LOCK_BUSY');assert.equal(r.timing.spans_ms.lock,5);assert.equal(r.timing.measured_to_log_ms,5);assert.equal(r.fetch_calls,0);assert.equal(r.dispatch_calls,0);}
+ assert.equal(JSON.stringify(f.props),before);assert.deepEqual(f.serviceCalls.slice(n),['getScriptLock','tryLock','consoleLog','getScriptLock','tryLock','consoleLog']);assert.equal(f.requests.length+f.emails.length,0);
+});
+test('failed final persistence is timed and still latches before later HTTP',()=>{
+ let armed=false;const f=fixture({serviceMs:{setProperty:11},failStore:(k,v)=>armed&&k==='QLT1_STATE'&&JSON.parse(v).phase==='RUNNING'});f.setScores('forecast_id,status\ndue,scored\n');f.start();armed=true;f.tick();const r=f.logs.at(-1);assert.equal(r.timing.spans_ms.final_save,11);assert.equal(r.persistence_error,true);assert(r.timing.measured_to_log_ms>=r.elapsed_ms+11);const n=f.requests.length;f.tick();assert.equal(f.requests.length,n);assert(f.props.QLT1_FAILURE_LATCH);assert(!JSON.stringify(f.logs).includes('secret'));
+});
+test('CSV parse failure retains its phase and does not read the next file',()=>{
+ const f=fixture({serviceMs:{parseCsv:29}});f.setRegistry('wrong_header\nvalue\n');f.start();f.tick();const r=f.logs.at(-1);assert.equal(r.timing.spans_ms.registry_parse,29);assert.equal(f.requests.length,1);assert.equal(f.state().phase,'STOPPED');assert.equal(f.emails.length,1);
+});
+test('pinned completion times each dependent read and integrity validation',()=>{
+ const f=fixture({serviceMs:{computeDigest:17,parseCsv:29}});f.start();f.tick();f.setRun({status:'completed',conclusion:'success'});f.setScores(validScore);f.advance(300000);f.tick();const r=f.logs.at(-1);assert.deepEqual(r.timing.requests.map(x=>x.endpoint),['RUN','MAIN_REF','PINNED_SCORES']);assert.equal(r.timing.spans_ms.pinned_integrity,17);assert.equal(r.timing.spans_ms.pinned_scores_parse,29);assert.equal(r.score_checks[0].reason,'OK');assert.equal(r.dispatch_calls,0);assert.equal(f.state().phase,'RUNNING');assert(!JSON.stringify(r).includes('secret'));
+});
 console.log(`${passed} passed, ${failed} failed; all platform effects synthetic.`);process.exitCode=failed?1:0;
