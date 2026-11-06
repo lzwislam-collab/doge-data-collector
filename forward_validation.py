@@ -26,29 +26,246 @@ RCOLS=['forecast_id','head_sha','created_at','first_verified_at_utc']
 def git(root,*args):
  return subprocess.run(['git',*args],cwd=root,check=True,capture_output=True,text=True,encoding='utf-8').stdout.strip()
 
+def _history_stamp(root,relative,columns,current):
+ """Per-call input identity only; never store or reuse a validation result."""
+ root=Path(root).resolve();gd=Path(git(root,'rev-parse','--absolute-git-dir'))
+ common=Path(git(root,'rev-parse','--path-format=absolute','--git-common-dir'))
+ files=[root/relative,root/PROTOCOL,root/'data/stage5/forward_validation_protocol_v2.json',
+        gd/'HEAD',gd/'FETCH_HEAD',gd/'config',common/'config',common/'shallow',common/'info/grafts',Path(__file__)]
+ def identity(p):
+  if p.is_symlink():raise ValueError('redirected history input')
+  return hashlib.sha256(p.read_bytes()).hexdigest() if p.exists() else None
+ return (str(root),str(gd.resolve()),str(common.resolve()),root.stat().st_dev,root.stat().st_ino,
+         git(root,'rev-parse','HEAD'),git(root,'for-each-ref','--format=%(refname) %(objectname)'),
+         tuple((str(p),identity(p)) for p in files),tuple(columns),json.dumps(current,sort_keys=True,ensure_ascii=False),
+         tuple(sorted((k,v) for k,v in os.environ.items() if k.startswith('GIT_'))))
+
+def _history_windows_job(process):
+ """Own only this reader and its children; closing the handle kills the tree."""
+ import ctypes
+ from ctypes import wintypes as w
+ class Basic(ctypes.Structure):
+  _fields_=[('process_time',ctypes.c_longlong),('job_time',ctypes.c_longlong),('flags',w.DWORD),
+   ('min_ws',ctypes.c_size_t),('max_ws',ctypes.c_size_t),('active',w.DWORD),('affinity',ctypes.c_size_t),('priority',w.DWORD),('scheduling',w.DWORD)]
+ class IO(ctypes.Structure):_fields_=[(n,ctypes.c_ulonglong) for n in ('read_ops','write_ops','other_ops','read_bytes','write_bytes','other_bytes')]
+ class Extended(ctypes.Structure):
+  _fields_=[('basic',Basic),('io',IO),('process_mem',ctypes.c_size_t),('job_mem',ctypes.c_size_t),('peak_process',ctypes.c_size_t),('peak_job',ctypes.c_size_t)]
+ kernel=ctypes.WinDLL('kernel32',use_last_error=True)
+ kernel.CreateJobObjectW.argtypes=[ctypes.c_void_p,w.LPCWSTR];kernel.CreateJobObjectW.restype=w.HANDLE
+ kernel.SetInformationJobObject.argtypes=[w.HANDLE,ctypes.c_int,ctypes.c_void_p,w.DWORD]
+ kernel.AssignProcessToJobObject.argtypes=[w.HANDLE,w.HANDLE]
+ kernel.CloseHandle.argtypes=[w.HANDLE]
+ job=kernel.CreateJobObjectW(None,None)
+ if not job:raise ctypes.WinError(ctypes.get_last_error())
+ info=Extended();info.basic.flags=0x2000  # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+ if not kernel.SetInformationJobObject(job,9,ctypes.byref(info),ctypes.sizeof(info)) or not kernel.AssignProcessToJobObject(job,w.HANDLE(int(process._handle))):
+  error=ctypes.get_last_error();kernel.CloseHandle(job);raise ctypes.WinError(error)
+ # Popen closed the primary thread handle. Find that still-suspended thread,
+ # bind the Job first, and only then allow any Git/user child code to execute.
+ class Thread(ctypes.Structure):
+  _fields_=[('size',w.DWORD),('usage',w.DWORD),('tid',w.DWORD),('pid',w.DWORD),('base',w.LONG),('delta',w.LONG),('flags',w.DWORD)]
+ kernel.CreateToolhelp32Snapshot.argtypes=[w.DWORD,w.DWORD];kernel.CreateToolhelp32Snapshot.restype=w.HANDLE
+ kernel.Thread32First.argtypes=[w.HANDLE,ctypes.POINTER(Thread)];kernel.Thread32Next.argtypes=[w.HANDLE,ctypes.POINTER(Thread)]
+ kernel.OpenThread.argtypes=[w.DWORD,w.BOOL,w.DWORD];kernel.OpenThread.restype=w.HANDLE
+ kernel.ResumeThread.argtypes=[w.HANDLE];kernel.ResumeThread.restype=w.DWORD
+ snapshot=kernel.CreateToolhelp32Snapshot(4,0);handle=None
+ try:
+  if snapshot==w.HANDLE(-1).value:raise ctypes.WinError(ctypes.get_last_error())
+  entry=Thread();entry.size=ctypes.sizeof(entry);tids=[]
+  more=kernel.Thread32First(snapshot,ctypes.byref(entry))
+  while more:
+   if entry.pid==process.pid:tids.append(entry.tid)
+   more=kernel.Thread32Next(snapshot,ctypes.byref(entry))
+  if len(tids)!=1:raise RuntimeError('suspended history process thread identity is ambiguous')
+  handle=kernel.OpenThread(2,False,tids[0])  # THREAD_SUSPEND_RESUME
+  if not handle:raise ctypes.WinError(ctypes.get_last_error())
+  if kernel.ResumeThread(handle)!=1:raise RuntimeError('history process was not safely suspended')
+ except BaseException:
+  kernel.CloseHandle(job);raise
+ finally:
+  if handle:kernel.CloseHandle(handle)
+  if snapshot and snapshot!=w.HANDLE(-1).value:kernel.CloseHandle(snapshot)
+ return kernel,job
+
+class _HistoryBatch:
+ """One outstanding query, binary framing, bounded inactivity, no PASS cache."""
+ def __init__(self,root,timeout=30,command=None):
+  self.root=root;self.timeout=timeout;self.command=command or ['git','cat-file','--batch-command','-Z']
+ def __enter__(self):
+  import queue,threading,tempfile
+  self.queue=queue.Queue(maxsize=4);self.writes=queue.Queue(maxsize=1)
+  self.stop=threading.Event();self.buffer=bytearray();self.job=None;self.threads=[]
+  self.stderr=tempfile.TemporaryFile()
+  try:
+   self.replacements={}
+   try:replace_config=git(self.root,'config','--bool','--get','core.useReplaceRefs')
+   except subprocess.CalledProcessError as exc:
+    if exc.returncode!=1:raise
+    replace_config='true'
+   if not os.environ.get('GIT_NO_REPLACE_OBJECTS') and replace_config!='false':
+    base=os.environ.get('GIT_REPLACE_REF_BASE','refs/replace')
+    for line in git(self.root,'for-each-ref','--format=%(refname) %(objectname)',base).splitlines():
+     ref,oid=line.split();self.replacements[ref.rsplit('/',1)[1]]=oid
+   self.process=subprocess.Popen(self.command,cwd=self.root,stdin=subprocess.PIPE,stdout=subprocess.PIPE,
+      stderr=self.stderr,creationflags=(subprocess.CREATE_NEW_PROCESS_GROUP|0x4|0x08000000) if os.name=='nt' else 0,start_new_session=os.name!='nt')
+   if os.name=='nt':self.job=_history_windows_job(self.process)
+   self.threads=[threading.Thread(target=self._reader,daemon=True),threading.Thread(target=self._writer,daemon=True)]
+   for thread in self.threads:thread.start()
+   return self
+  except BaseException:
+   self._close(True);raise
+ def _reader(self):
+  import queue
+  try:
+   while not self.stop.is_set():
+    block=self.process.stdout.read1(65536)
+    while not self.stop.is_set():
+     try:self.queue.put(block,timeout=.05);break
+     except queue.Full:pass
+    if not block:break
+  except Exception as exc:
+   while not self.stop.is_set():
+    try:self.queue.put(exc,timeout=.05);break
+    except queue.Full:pass
+ def _writer(self):
+  import queue
+  while not self.stop.is_set():
+   try:item=self.writes.get(timeout=.05)
+   except queue.Empty:continue
+   data,done,errors=item
+   try:
+    if data is None:self.process.stdin.close()
+    else:self.process.stdin.write(data);self.process.stdin.flush()
+   except Exception as exc:errors.append(exc)
+   finally:done.set()
+   if data is None:break
+ def _send(self,data):
+  import threading,queue
+  done=threading.Event();errors=[]
+  try:self.writes.put((data,done,errors),timeout=self.timeout)
+  except queue.Full:raise TimeoutError('history Git writer stalled')
+  if not done.wait(self.timeout):raise TimeoutError('history Git writer stalled')
+  if errors:raise errors[0]
+ def _more(self):
+  import queue
+  try:block=self.queue.get(timeout=self.timeout)
+  except queue.Empty:raise TimeoutError('history Git response stalled')
+  if isinstance(block,Exception):raise block
+  if not block:
+   code=self.process.wait(timeout=self.timeout)
+   if code:
+    self.stderr.seek(0)
+    raise subprocess.CalledProcessError(code,self.command,stderr=self.stderr.read(65536).decode('utf-8',errors='replace'))
+   raise ValueError('truncated history Git response')
+  self.buffer.extend(block)
+ def _exact(self,n):
+  # Buffer one object at a time, never all historical bodies.
+  while len(self.buffer)<n:self._more()
+  result=bytes(self.buffer[:n]);del self.buffer[:n];return result
+ def _header(self):
+  while b'\0' not in self.buffer:
+   if len(self.buffer)>65536:raise ValueError('oversized history Git header')
+   self._more()
+  end=self.buffer.index(0);line=self._exact(end+1)[:-1]
+  parts=line.split(b' ')
+  if len(parts)!=3:
+   raise subprocess.CalledProcessError(128,self.command,output=line)
+  oid,kind,size=parts
+  if len(oid) not in (40,64) or any(c not in b'0123456789abcdef' for c in oid) or kind!=b'blob' or not size.isdigit():
+   raise ValueError('invalid history Git object identity/type/length')
+  return oid,kind,int(size)
+ def read_blob(self,expression):
+  if '\0' in expression:raise ValueError('NUL in history object request')
+  self._send(b'info '+expression.encode('utf-8')+b'\0');expected=self._header()
+  self._send(b'contents '+expected[0]+b'\0');actual=self._header()
+  if actual!=expected:raise ValueError('history Git response does not match request')
+  raw=self._exact(actual[2])
+  if self._exact(1)!=b'\0':raise ValueError('invalid history Git object separator')
+  identity=actual[0].decode('ascii');seen=set()
+  while identity in self.replacements:
+   if identity in seen:raise ValueError('cyclic Git replacement identity')
+   seen.add(identity);identity=self.replacements[identity]
+  digest=hashlib.sha1 if len(identity)==40 else hashlib.sha256
+  if digest(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()!=identity:
+   raise ValueError('history Git object content identity mismatch')
+  return io.TextIOWrapper(io.BytesIO(raw),encoding='utf-8',errors='strict',newline=None).read().strip()
+ def threads_alive(self):return any(t.is_alive() for t in self.threads)
+ def _kill_tree(self):
+  if self.job:
+   kernel,job=self.job;kernel.CloseHandle(job);self.job=None
+  elif hasattr(self,'process'):
+   if os.name!='nt':
+    import signal
+    try:os.killpg(self.process.pid,signal.SIGKILL)
+    except ProcessLookupError:pass
+   elif self.process.poll() is None:self.process.kill()
+ def _close(self,failed):
+  import queue
+  error=None
+  if not hasattr(self,'process'):
+   self.stderr.close();return
+  try:
+   if failed:self._kill_tree()
+   else:
+    self._send(None)
+    self.process.wait(timeout=self.timeout)
+    if self.process.returncode:
+     self.stderr.seek(0)
+     raise subprocess.CalledProcessError(self.process.returncode,self.command,stderr=self.stderr.read(65536).decode('utf-8',errors='replace'))
+    # Let the reader deliver EOF (or unsolicited bytes) before setting stop.
+    for thread in self.threads:thread.join(timeout=min(2,self.timeout))
+    if self.threads_alive():raise ValueError('undrained history Git output')
+   self._kill_tree()
+  except BaseException as exc:
+   error=exc;self._kill_tree()
+  finally:
+   self.stop.set()
+   try:self.process.wait(timeout=5)
+   except subprocess.TimeoutExpired:self.process.kill();self.process.wait(timeout=5)
+   for thread in self.threads:thread.join(timeout=2)
+   if self.threads_alive():error=RuntimeError('history Git reader threads did not stop')
+   if not failed and not error:
+    extras=bool(self.buffer)
+    while True:
+     try:item=self.queue.get_nowait();extras=extras or bool(item)
+     except queue.Empty:break
+    if extras:error=ValueError('unexpected trailing history Git output')
+   for stream in (self.process.stdin,self.process.stdout,self.stderr):
+    if not stream.closed:stream.close()
+  if self.threads_alive():raise RuntimeError('history Git cleanup incomplete')
+  if error and not failed:raise error
+ def __exit__(self,kind,value,tb):self._close(kind is not None);return False
+
 def history_receipts(root,relative,columns,current):
  """Check every reachable revision, including deletions. Retain first commit receipt."""
  if git(root,'rev-parse','--is-shallow-repository')!='false':
   raise ValueError('full git history required')
- revs=git(root,'log','--reverse','--format=%H','--',relative).splitlines()
+ stamp=_history_stamp(root,relative,columns,current)
+ revisions=[]
+ # Resolve the same initial history even if HEAD moves away and back mid-call.
+ for line in git(root,'log','--reverse','--format=%H%x00%cI',stamp[5],'--',relative).splitlines():
+  parts=line.split('\0')
+  if len(parts)!=2:raise ValueError('invalid history revision metadata')
+  revisions.append(parts)
  prior={};receipts={}
- for rev in revs:
-  body=git(root,'show',rev+':'+relative)
-  reader=csv.DictReader(io.StringIO(body))
-  if reader.fieldnames!=columns:raise ValueError('historic schema revised: '+relative)
-  snap={}
-  for row in reader:
-   fid=row['forecast_id']
-   if not fid or fid in snap:raise ValueError('duplicate historical ID')
-   snap[fid]=row
-  if any(snap.get(k)!=v for k,v in prior.items()):
-   raise ValueError('committed record revised: '+relative)
-  stamp=git(root,'show','-s','--format=%cI',rev)
-  for fid in snap.keys()-prior.keys():
-   receipts[fid]={'commit_sha':rev,'committed_at_utc':datetime.fromisoformat(stamp).astimezone(timezone.utc).isoformat()}
-  prior=snap
+ with _HistoryBatch(root) as batch:
+  for rev,committed in revisions:
+   body=batch.read_blob(rev+':'+relative)
+   reader=csv.DictReader(io.StringIO(body))
+   if reader.fieldnames!=columns:raise ValueError('historic schema revised: '+relative)
+   snap={}
+   for row in reader:
+    fid=row['forecast_id']
+    if not fid or fid in snap:raise ValueError('duplicate historical ID')
+    snap[fid]=row
+   if any(snap.get(k)!=v for k,v in prior.items()):
+    raise ValueError('committed record revised: '+relative)
+   for fid in snap.keys()-prior.keys():
+    receipts[fid]={'commit_sha':rev,'committed_at_utc':datetime.fromisoformat(committed).astimezone(timezone.utc).isoformat()}
+   prior=snap
  if any(current.get(k)!=v for k,v in prior.items()):
   raise ValueError('current record revised: '+relative)
+ if _history_stamp(root,relative,columns,current)!=stamp:raise ValueError('history verification input changed during read')
  return receipts
 
 def locked_file(root,relative):

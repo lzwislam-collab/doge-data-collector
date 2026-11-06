@@ -1,6 +1,9 @@
 name: Test prospective evidence and spot paper accounting
 on:
   workflow_dispatch:
+  push:
+    branches: ['ci/history-batch-da20-ubuntu-20261106']
+    paths: ['forward_validation.py', 'test_forward_validation.py', '.github/scripts/history_batch_full_diagnostic.py', '.github/fixtures/history_batch_input_04b83739.json', '.github/workflows/test_forward_validation.yml']
   pull_request:
     paths:
       - 'pit_retention_preparation.py'
@@ -42,6 +45,7 @@ permissions:
   contents: read
 jobs:
   test:
+    if: github.event_name != 'push' || github.ref != 'refs/heads/ci/history-batch-da20-ubuntu-20261106'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -57,3 +61,66 @@ jobs:
           python -m unittest discover -v
       - run: python minimal_market_forward.py prepare
       - run: python forward_validation_v2.py --integrity-only
+
+  history_batch_experiment:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/ci/history-batch-da20-ubuntu-20261106' && github.repository == 'lzwislam-collab/doge-data-collector'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Single preparation clock including anonymous checkout and environment
+        run: |
+          python3 - <<'PY'
+          import os,sys,time,json,subprocess,signal
+          from pathlib import Path
+          from datetime import datetime,timezone
+          started=time.monotonic();limit=started+180
+          hard=datetime(2026,11,6,13,tzinfo=timezone.utc).timestamp()
+          out=Path(os.environ['RUNNER_TEMP'])/'history-batch-evidence';out.mkdir(exist_ok=True)
+          events=[]
+          def record(status,reason=None):
+           (out/'bootstrap.json').write_text(json.dumps(dict(status=status,reason=reason,events=events,started_monotonic=started,seconds=time.monotonic()-started,utc=datetime.now(timezone.utc).isoformat(),input='04b83739c1105c4fa7222cd14c8567abac2d9b8d',credentials_persisted=False),indent=2)+'\n')
+          record('started')
+          if time.time()+900>hard:
+           record('stopped','Insufficient15minute job window before absolute deadline');sys.exit(1)
+          env=os.environ.copy();env.update(GIT_TERMINAL_PROMPT='0',GIT_CONFIG_GLOBAL=os.devnull,GIT_CONFIG_NOSYSTEM='1',GIT_NO_LAZY_FETCH='1',GIT_OPTIONAL_LOCKS='0',PYTHONDONTWRITEBYTECODE='1')
+          for k in ('GITHUB_TOKEN','GH_TOKEN'):env.pop(k,None)
+          def run(*args,data=None):
+           remaining=min(limit-time.monotonic(),hard-time.time())
+           if remaining<=0:raise TimeoutError('Shared180second preparation deadline')
+           t=time.monotonic();p=subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.PIPE,stdin=subprocess.PIPE if data is not None else subprocess.DEVNULL,env=env,start_new_session=True)
+           try:
+            a,b=p.communicate(data,timeout=remaining);events.append(dict(args=args,seconds=time.monotonic()-t,exit_code=p.returncode));record('running')
+            if p.returncode:raise RuntimeError(b.decode(errors='replace')[-4000:])
+            return a
+           finally:
+            if p.poll() is None:os.killpg(p.pid,signal.SIGKILL);p.wait()
+          try:
+           os.chdir(os.environ['GITHUB_WORKSPACE'])
+           run('git','init','-q');run('git','config','gc.auto','0')
+           run('git','-c','credential.helper=','fetch','--quiet','--no-tags','--no-auto-maintenance','https://github.com/lzwislam-collab/doge-data-collector.git',os.environ['GITHUB_SHA'])
+           run('git','update-ref','--no-deref','HEAD',os.environ['GITHUB_SHA'])
+           run('git','read-tree',os.environ['GITHUB_SHA'])
+           entries=run('git','ls-tree','-r','--name-only','-z',os.environ['GITHUB_SHA']).split(b'\0')
+           needed={b'data/stage5/forward_validation_protocol.json',b'data/stage5/forward_validation_protocol_v2.json',b'.github/scripts/history_batch_full_diagnostic.py',b'.github/fixtures/history_batch_input_04b83739.json'}
+           code=[p for p in entries if (b'/' not in p and p.endswith(b'.py')) or p in needed]
+           if not needed.issubset(set(code)):raise ValueError('Missing diagnostic code/protocol input')
+           run('git','checkout-index','--stdin','-z',data=b'\0'.join(code)+b'\0')
+           events.append(dict(code_paths=len(code),actual_input_materialized_here=False,reason='Only code bootstrap; full fixed input materialized once in prepare worker'))
+           record('checkout_completed')
+           env['HB_PREP_STARTED_MONOTONIC']=str(started)
+           os.environ.clear();os.environ.update(env)
+           script=Path('.github/scripts/history_batch_full_diagnostic.py').resolve()
+           os.execv(sys.executable,[sys.executable,str(script),'--manifest',str(Path('.github/fixtures/history_batch_input_04b83739.json').resolve()),'--out',str(out)])
+          except BaseException as ex:
+           record('FAIL',type(ex).__name__+': '+str(ex));raise
+          PY
+      - name: Retain lightweight diagnostic evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: history-batch-function-${{ github.run_id }}
+          path: ${{ runner.temp }}/history-batch-evidence
+          if-no-files-found: error
+          retention-days: 3
