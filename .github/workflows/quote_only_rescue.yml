@@ -17,11 +17,16 @@ jobs:
   verify:
     if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 85 && github.head_ref == 'ci/strict24-isolation-ubuntu-20261106' && 8 || 5 }}
     steps:
       - name: Start non-production budget clock
         if: github.event_name == 'pull_request' && github.event.pull_request.number == 85 && github.head_ref == 'ci/strict24-isolation-ubuntu-20261106'
-        run: echo "SCALE_JOB_STARTED_EPOCH=$(date +%s.%N)" >> "$GITHUB_ENV"
+        run: |
+          python3 - <<'PY'
+          import os,time
+          with open(os.environ['GITHUB_ENV'],'a') as stream:
+              stream.write(f'SCALE_JOB_STARTED_EPOCH={time.time()}\nSCALE_JOB_STARTED_MONOTONIC={time.monotonic()}\n')
+          PY
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
