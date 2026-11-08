@@ -581,9 +581,9 @@ class LiveAdapter:
             import paired_forward_cohort as pair
             with PublicationProfile() as profile:
                 profile.call('preflight_validate_p2', validate_p2, self.root)
-                profile.call('preflight_validate_state', publisher.validate_state, self.root)
+                profile.call('preflight_validate_state', validate_publication_state, self.root)
                 profile.call('preflight_pair_guard', pair.guard, self.root)
-                profile.call('preflight_pair_history_guard', pair.history_guard, self.root)
+                profile.call('preflight_pair_history_guard', validate_paired_history, self.root)
                 core_paths = ('data/direction_v42/forward_registry.csv',
                               'data/direction_v42/forward_scores.csv', 'data/quote_evidence_v2/bindings.csv')
                 self.core_witness_pending = self.core_witness_pending or bool(
@@ -602,9 +602,9 @@ class LiveAdapter:
                 expected = {p: (self.root/p).read_bytes() for p in staged}
                 publication_scope = 'data'
                 def validate(current_root):
-                    profile.call(publication_scope+'_post_rebase_validate_state', publisher.validate_state, current_root)
+                    profile.call(publication_scope+'_post_rebase_validate_state', validate_publication_state, current_root)
                     profile.call(publication_scope+'_post_rebase_pair_guard', pair.guard, current_root)
-                    profile.call(publication_scope+'_post_rebase_pair_history_guard', pair.history_guard, current_root)
+                    profile.call(publication_scope+'_post_rebase_pair_history_guard', validate_paired_history, current_root)
                     profile.call(publication_scope+'_post_rebase_validate_p2', validate_p2, current_root)
                 publication = profile.call('data_publisher_total', publisher.publish, self.root, validate=validate)
                 if not profile.call('supplementary_readback', publisher.verify_readback, self.root, 'FETCH_HEAD', expected):
@@ -666,6 +666,29 @@ class LiveAdapter:
         events = engine.read_events(self.root)
         return bool(events and events[-1]['book_sha256'] == self.last_qualified_book['book_sha256']
                     and qualified_capture(events[-1], next(engine.event_books(self.root, [events[-1]]))))
+
+
+def validate_publication_state(root):
+    import runtime_publication_state
+    diagnostics = {}
+    succeeded = False
+    try:
+        runtime_publication_state.validate_state(root, diagnostics=diagnostics)
+        succeeded = True
+    finally:
+        runtime_publication_state.emit_diagnostics(diagnostics, succeeded)
+
+
+def validate_paired_history(root):
+    import runtime_paired_history
+    diagnostics = {}
+    succeeded = False
+    try:
+        records = runtime_paired_history.history_guard(root, diagnostics=diagnostics)
+        succeeded = True
+        return records
+    finally:
+        runtime_paired_history.emit_diagnostics(diagnostics, succeeded)
 
 
 def validate_p2(root):

@@ -5,6 +5,14 @@ on:
     paths:
       - 'runtime_deadline_service.py'
       - 'runtime_p2_history.py'
+      - 'runtime_publication_state.py'
+      - 'runtime_paired_history.py'
+      - 'runtime_core_history_profile.py'
+      - 'test_runtime_core_history_profile.py'
+      - 'test_runtime_publication_state.py'
+      - 'test_runtime_paired_history.py'
+      - 'test_runtime_publication_validators.py'
+      - 'test_runtime_publication_boundary.py'
       - 'test_runtime_p2_history.py'
       - 'runtime_publication_profile.py'
       - 'runtime_audit_worker.py'
@@ -93,6 +101,20 @@ jobs:
         with:
           name: source-audit-checkout-profile-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/runtime-audit-checkout-profile.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Compare complete publication validators on the failed archive source
+        if: github.event_name == 'pull_request' && github.head_ref == 'fix/archive-qualified-drain-failure-20261026'
+        timeout-minutes: 7
+        run: |
+          python runtime_core_history_profile.py --source-root . --ref 25a7c2381855428b1487a86e6fa58c4c07e00357 --output "$RUNNER_TEMP/runtime-core-history-profile.json" --timeout-seconds 360
+      - name: Preserve complete publication validator comparison
+        if: always() && github.event_name == 'pull_request' && github.head_ref == 'fix/archive-qualified-drain-failure-20261026'
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-history-profile-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/runtime-core-history-profile.json
           if-no-files-found: error
           retention-days: 7
 

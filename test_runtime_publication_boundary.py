@@ -75,9 +75,9 @@ class PublicationBoundary(unittest.TestCase):
         # These named production validation dependencies require real frozen data.
         # Keep the actual action/staging/publish/verify/readback implementation.
         self.patches = [patch.object(runtime, 'validate_p2', self.fixture_validate),
-                        patch.object(publisher, 'validate_state', self.fixture_validate),
+                        patch.object(runtime, 'validate_publication_state', self.fixture_validate),
                         patch.object(pair, 'guard', self.fixture_validate),
-                        patch.object(pair, 'history_guard', self.fixture_validate)]
+                        patch.object(runtime, 'validate_paired_history', self.fixture_validate)]
         for item in self.patches:
             item.start()
             self.addCleanup(item.stop)

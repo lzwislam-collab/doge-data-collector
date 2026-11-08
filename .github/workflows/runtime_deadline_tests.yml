@@ -4,6 +4,14 @@ on:
     paths:
       - 'runtime_deadline_service.py'
       - 'runtime_p2_history.py'
+      - 'runtime_publication_state.py'
+      - 'runtime_paired_history.py'
+      - 'runtime_core_history_profile.py'
+      - 'test_runtime_core_history_profile.py'
+      - 'test_runtime_publication_state.py'
+      - 'test_runtime_paired_history.py'
+      - 'test_runtime_publication_validators.py'
+      - 'test_runtime_publication_boundary.py'
       - 'test_runtime_p2_history.py'
       - 'archive_window_budget.py'
       - 'test_archive_window_budget.py'
@@ -30,6 +38,14 @@ on:
     paths:
       - 'runtime_deadline_service.py'
       - 'runtime_p2_history.py'
+      - 'runtime_publication_state.py'
+      - 'runtime_paired_history.py'
+      - 'runtime_core_history_profile.py'
+      - 'test_runtime_core_history_profile.py'
+      - 'test_runtime_publication_state.py'
+      - 'test_runtime_paired_history.py'
+      - 'test_runtime_publication_validators.py'
+      - 'test_runtime_publication_boundary.py'
       - 'test_runtime_p2_history.py'
       - 'archive_window_budget.py'
       - 'test_archive_window_budget.py'
@@ -83,7 +99,7 @@ jobs:
                   if (root/p).exists() else None for p in worker.INPUTS+worker.OUTPUTS}}
           Path(sys.argv[1]).write_text(json.dumps(state), encoding='utf-8')
           PY
-          timeout --signal=TERM --kill-after=10s 600s python runtime_audit_worker.py "$GITHUB_WORKSPACE" efe0857ef4389618b09ca30ad8968bda3f26f07c "$RUNNER_TEMP/runtime-source-audit-result.json"
+          timeout --signal=TERM --kill-after=10s 600s python runtime_audit_worker.py "$GITHUB_WORKSPACE" 25a7c2381855428b1487a86e6fa58c4c07e00357 "$RUNNER_TEMP/runtime-source-audit-result.json"
           python - "$RUNNER_TEMP/runtime-source-audit-result.json" "$RUNNER_TEMP/runtime-source-audit-before.json" <<'PY'
           import hashlib
           import json
@@ -92,7 +108,7 @@ jobs:
           from datetime import datetime, timezone
           from pathlib import Path
           import runtime_audit_worker as worker
-          pinned = 'efe0857ef4389618b09ca30ad8968bda3f26f07c'
+          pinned = '25a7c2381855428b1487a86e6fa58c4c07e00357'
           result = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
           root = Path.cwd()
           before = json.loads(Path(sys.argv[2]).read_text(encoding='utf-8'))
