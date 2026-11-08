@@ -170,5 +170,141 @@ class AuditBoundaries(unittest.TestCase):
   with patch.object(m.releases,'select',return_value={'selection':'FROZEN_REFERENCE'}) as check:
    self.assertEqual(m.selection_state(True,datetime.now(timezone.utc))['selection'],'FROZEN_REFERENCE');check.assert_called_once()
 
+class SkippedUpstreamWorkflowTests(unittest.TestCase):
+ """Exercise the actual job expression against observed zero-step upstreams."""
+ EMPTY_UPSTREAMS = (
+  (42476547225, 'learned_shadow_live.yml'),
+  (42476547269, 'phase2_forward_live_v2.yml'),
+  (42476547270, 'phase2_forward_audit_v2.yml'),
+  (42476550514, 'phase2_forward_audit_v2.yml'),
+ )
+ REVIEW_NAME = 'Independently review DOGE R2 competition and paper rollback'
+
+ def setUp(self):
+  self.workflows=Path(__file__).resolve().parent/'.github/workflows'
+  self.workflow=(self.workflows/'plus_shadow.yml').read_text(encoding='utf-8')
+
+ def context(self,*,event_name='workflow_run',upstream_event='workflow_run',conclusion='skipped',path='learned_shadow_live.yml',name='',run_id=42476547225,branch='main',repository='local/project'):
+  from types import SimpleNamespace as N
+  return N(event_name=event_name,repository='local/project',event=N(workflow_run=N(
+   event=upstream_event,conclusion=conclusion,path='.github/workflows/'+path,
+   name=name,id=run_id,head_branch=branch,repository=N(full_name=repository))))
+
+ def evaluate(self,expression,github):
+  from types import SimpleNamespace
+  expression=' '.join(expression.strip().removeprefix('>-').split())
+  expression=expression.replace('&&',' and ').replace('||',' or ')
+  return eval(expression,{'__builtins__':{}},{'github':github,'inputs':SimpleNamespace(assessment_run_id='')})
+
+ def render(self,github):
+  section=self.workflow.split('  render:\n',1)[1].split('    runs-on:',1)[0]
+  return bool(self.evaluate(section.split('    if:',1)[1],github))
+
+ def test_observed_zero_step_natural_callbacks_do_not_render(self):
+  for run_id,path in self.EMPTY_UPSTREAMS:
+   with self.subTest(run_id=run_id,path=path):
+    self.assertFalse(self.render(self.context(run_id=run_id,path=path)))
+
+ def test_success_failure_cancellation_and_other_conclusions_still_render(self):
+  for path in {item[1] for item in self.EMPTY_UPSTREAMS}:
+   for conclusion in ('success','failure','cancelled','timed_out','neutral','action_required','stale',''):
+    with self.subTest(path=path,conclusion=conclusion):
+     self.assertTrue(self.render(self.context(path=path,conclusion=conclusion)))
+
+ def test_direct_events_and_non_natural_upstream_events_are_unchanged(self):
+  for event in ('push','pull_request','workflow_dispatch'):
+   with self.subTest(event=event):
+    self.assertTrue(self.render(self.context(event_name=event)))
+  for event in ('push','workflow_dispatch'):
+   for _,path in self.EMPTY_UPSTREAMS:
+    with self.subTest(upstream_event=event,path=path):
+     self.assertTrue(self.render(self.context(upstream_event=event,path=path)))
+
+ def test_skipped_independent_review_keeps_explicit_unavailable_assessment(self):
+  import plus_shadow as m
+  github=self.context(path='phase3_independent.yml',name=self.REVIEW_NAME,run_id=42476550541)
+  self.assertTrue(self.render(github))
+  expression=self.workflow.split('PLUS_ASSESSMENT_RUN_ID: ${{ ',1)[1].split(' }}',1)[0]
+  assessment=self.evaluate(expression,github)
+  self.assertEqual(assessment,42476550541)
+  with patch.object(m.releases,'review_source',side_effect=ValueError('actual successful same-repository main review required')):
+   result=m.assessment_panel(assessment,True,13)
+  self.assertEqual(result['status'],'REQUESTED_REVIEW_UNAVAILABLE')
+  self.assertEqual(result['review_run_id'],42476550541)
+  self.assertFalse(result['current_full_statistics_claimed'])
+
+ def test_other_skipped_upstreams_are_not_suppressed(self):
+  for path in ('okx_hourly_extreme_history.yml','oss_inventory_retention.yml','learned_shadow_v1.yml','phase3_independent.yml','future_workflow.yml'):
+   with self.subTest(path=path):
+    self.assertTrue(self.render(self.context(path=path)))
+
+ def test_existing_branch_repository_and_pull_request_trust_gates_remain(self):
+  for change in ({'branch':'feature/untrusted'},{'repository':'other/project'},{'upstream_event':'pull_request'}):
+   with self.subTest(change=change):
+    self.assertFalse(self.render(self.context(conclusion='success',**change)))
+
+ def test_topology_guard_rejects_inline_quoted_and_merge_job_additions(self):
+  original_read_text=Path.read_text
+  path=self.workflows/'learned_shadow_live.yml'
+  original=original_read_text(path,encoding='utf-8')
+  variants=(
+   original+"\n  extra_audit: {if: false, runs-on: ubuntu-24.04, steps: [{run: 'echo changed obligation'}]}\n",
+   original+"\n  'extra_audit': {if: false, runs-on: ubuntu-24.04, steps: [{run: 'echo changed obligation'}]}\n",
+   original.replace('\njobs:\n',"\nx-extra-jobs: &extra_jobs\n  extra_audit: {if: false, runs-on: ubuntu-24.04, steps: [{run: 'echo changed obligation'}]}\njobs:\n")+"\n  <<: *extra_jobs\n",
+  )
+  for changed in variants:
+   with self.subTest(extra_header=changed.splitlines()[-1]):
+    def read_text(current,*args,**kwargs):
+     return changed if current==path else original_read_text(current,*args,**kwargs)
+    result=unittest.TestResult()
+    with patch.object(Path,'read_text',new=read_text):
+     type(self)('test_filtered_upstreams_are_single_success_gated_jobs_with_direct_root_coverage').run(result)
+    self.assertEqual(result.errors,[])
+    self.assertTrue(result.failures,'topology guard accepted an additional upstream job')
+
+ def test_upstream_contract_changes_trigger_existing_pr_checks_without_extra_pushes(self):
+  import ast,re
+  sections={event:self.workflow.split('  '+event+':\n',1)[1].split('\n  workflow_run:',1)[0] for event in ('push','pull_request')}
+  paths={event:ast.literal_eval(re.search(r'^    paths: (\[.*\])$',section,re.M).group(1)) for event,section in sections.items()}
+  for _,name in self.EMPTY_UPSTREAMS:
+   path='.github/workflows/'+name
+   with self.subTest(path=path):
+    self.assertIn(path,paths['pull_request'])
+    self.assertNotIn(path,paths['push'])
+
+ def test_filtered_upstreams_are_single_success_gated_jobs_with_direct_root_coverage(self):
+  import ast,re
+  hourly='Backfill DOGE BTC ETH 1H extreme-event research history'
+  learned_audit='Audit future learned DOGE shadow candidate registration'
+  r2_live='Publish DOGE V2 R2 frozen forward evidence'
+  expected={
+   'learned_shadow_live.yml':[hourly,learned_audit],
+   'phase2_forward_live_v2.yml':[hourly],
+   'phase2_forward_audit_v2.yml':[hourly,r2_live],
+  }
+  def subscriptions(text):
+   return ast.literal_eval(re.search(r'^    workflows: (\[.*\])$',text,re.M).group(1))
+  plus_subscriptions=subscriptions(self.workflow)
+  for path,parents in expected.items():
+   with self.subTest(path=path):
+    text=(self.workflows/path).read_text(encoding='utf-8')
+    self.assertEqual(subscriptions(text),parents)
+    for parent in parents:
+     self.assertIn(parent,plus_subscriptions)
+    jobs=text.split('\njobs:\n',1)[1]
+    # Fail closed on extra top-level keys, including inline, quoted or merged jobs.
+    expected_job='audit' if path=='phase2_forward_audit_v2.yml' else 'publish'
+    self.assertEqual(re.findall(r'^  [^\s#].*$',jobs,re.M),['  '+expected_job+':'])
+    expression=jobs.split('    if:',1)[1].split('    runs-on:',1)[0]
+    for conclusion in ('failure','cancelled','skipped'):
+     self.assertFalse(self.evaluate(expression,self.context(conclusion=conclusion)))
+    self.assertTrue(self.evaluate(expression,self.context(conclusion='success')))
+  # Direct root coverage avoids relying on a fourth workflow_run chain level.
+  for path,name in (('okx_hourly_extreme_history.yml',hourly),('learned_shadow_v1.yml',learned_audit)):
+   text=(self.workflows/path).read_text(encoding='utf-8')
+   self.assertEqual(text.splitlines()[0],'name: '+name)
+   self.assertNotIn('  workflow_run:',text.split('\npermissions:',1)[0])
+   self.assertIn(name,plus_subscriptions)
+
 if __name__=='__main__':unittest.main()
 
