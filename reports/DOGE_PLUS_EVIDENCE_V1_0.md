@@ -4,10 +4,10 @@
 
 独立版本：DOGE_PLUS_EVIDENCE_V1_0_20261012；系统登记：registered_evidence_only；数据：data/plus_evidence_v1_0。
 旧SPOT_PLUS_v0.1、V1诊断、冻结V2及预发行补充记录分别保留。旧收益/胜率不升级或合并为本版本成绩。
-报告统一观察时点UTC：2026-11-08T13:10:49.321831+00:00；各来源原始截止仍分别列示。
-来源版本清单：[data/plus_evidence_v1_0/sources/manifests/20261108T131049322682Z_e4935e5a1541452db2ee5218806583f2.json](../data/plus_evidence_v1_0/sources/manifests/20261108T131049322682Z_e4935e5a1541452db2ee5218806583f2.json)。
+报告统一观察时点UTC：2026-11-08T14:21:09.306266+00:00；各来源原始截止仍分别列示。
+来源版本清单：[data/plus_evidence_v1_0/sources/manifests/20261108T142110649250Z_ab0c622c3aab418f96afb34ddfbee4d5.json](../data/plus_evidence_v1_0/sources/manifests/20261108T142110649250Z_ab0c622c3aab418f96afb34ddfbee4d5.json)。
 外部保留验证：NOT_CONFIGURED；independent_retention_verified=False。
-公开后盘口采样：not_requested_daily_snapshot_only；错误：无。
+公开后盘口采样：captured；错误：无。
 
 已修复证据记录能力：首次可用时点及版本归档、公开后盘口深度、VWAP纸面估值及采样路径缺口、独立30天可靠性统计。
 实际新增预测或报价须严格晚于补充层启用与预测公开时点；历史缺失不补造。迟到记录显示排除/漏采，不改原预测。
