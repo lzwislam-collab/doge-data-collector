@@ -10,7 +10,7 @@ on:
     branches: [main, 'feature/plus-shadow-*', 'audit/layers-*']
     paths: ['plus_report_refresh.py', 'test_plus_report_refresh.py', 'plus_shadow.py', 'plus_scorecard.py', 'test_plus_scorecard.py', 'test_plus_shadow.py', 'forecast_worm.py', 'test_forecast_worm.py', 'test_report_custody.py', 'docs/plus_shadow_v1.md', '.github/workflows/plus_shadow.yml']
   pull_request:
-    paths: ['plus_report_refresh.py', 'test_plus_report_refresh.py', 'plus_shadow.py', 'plus_scorecard.py', 'test_plus_scorecard.py', 'test_plus_shadow.py', 'forecast_worm.py', 'test_forecast_worm.py', 'test_report_custody.py', 'docs/plus_shadow_v1.md', '.github/workflows/plus_shadow.yml']
+    paths: ['plus_report_refresh.py', 'test_plus_report_refresh.py', 'plus_shadow.py', 'plus_scorecard.py', 'test_plus_scorecard.py', 'test_plus_shadow.py', 'forecast_worm.py', 'test_forecast_worm.py', 'test_report_custody.py', 'docs/plus_shadow_v1.md', '.github/workflows/plus_shadow.yml', '.github/workflows/learned_shadow_live.yml', '.github/workflows/phase2_forward_live_v2.yml', '.github/workflows/phase2_forward_audit_v2.yml']
   workflow_run:
     workflows: ['Publish frozen learned DOGE shadow candidates', 'Publish DOGE V2 R2 frozen forward evidence', 'Backfill DOGE BTC ETH 1H extreme-event research history', 'Audit future learned DOGE shadow candidate registration', 'Audit DOGE V2 R2 frozen forward registration', 'Lock existing daily DOGE inventory in OSS', 'Independently review DOGE R2 competition and paper rollback']
     types: [completed]
@@ -23,7 +23,18 @@ concurrency:
   cancel-in-progress: false
 jobs:
   render:
-    if: github.event_name != 'workflow_run' || (github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.event != 'pull_request' && github.event.workflow_run.repository.full_name == github.repository)
+    # These three single-job workflows do no work when a natural parent is unsuccessful.
+    # Their root producers already trigger PLUS directly; phase3 assessment events still render.
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.event != 'pull_request' &&
+       github.event.workflow_run.repository.full_name == github.repository &&
+       (github.event.workflow_run.event != 'workflow_run' ||
+        github.event.workflow_run.conclusion != 'skipped' ||
+        (github.event.workflow_run.path != '.github/workflows/learned_shadow_live.yml' &&
+         github.event.workflow_run.path != '.github/workflows/phase2_forward_live_v2.yml' &&
+         github.event.workflow_run.path != '.github/workflows/phase2_forward_audit_v2.yml')))
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
