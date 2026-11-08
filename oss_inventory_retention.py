@@ -133,17 +133,46 @@ def download_artifact(artifact,destination):
 def stage(root,force=False):
     root=Path(root).resolve();base=root/'data/pit_retention_preparation_v1'
     prior=json.loads((base/'latest.json').read_bytes());marker=json.loads((base/'artifact_publication.json').read_bytes())
-    sha=prior['bundle_sha256']
-    if not re.fullmatch('[a-f0-9]{64}',sha) or marker['bundle_sha256']!=sha:raise ValueError('publication binding mismatch')
+    # latest.json advances at preparation time, before artifact publication.
+    # Custody must follow the completed artifact's identity, not combine it with
+    # a newer, unpublished preparation. The latter remains explicitly pending.
+    sha=marker['bundle_sha256'];current_sha=prior['bundle_sha256']
+    if any(not isinstance(value,str) or not re.fullmatch('[a-f0-9]{64}',value)
+           for value in (sha,current_sha)):raise ValueError('publication binding mismatch')
+    pending=current_sha!=sha
+    if pending:
+        try:
+            prepared=datetime.fromisoformat(prior['prepared_at_utc'].replace('Z','+00:00'))
+            published=datetime.fromisoformat(marker['recorded_at_utc'].replace('Z','+00:00'))
+            runs=(str(prior.get('run_id','')),str(marker.get('run_id','')))
+            newer=(prepared.tzinfo is not None and published.tzinfo is not None
+                   and published<prepared<=datetime.now(timezone.utc)
+                   and prior.get('status')=='NOT_CONFIGURED'
+                   and marker.get('status')=='GITHUB_ARTIFACT_UPLOAD_RECORDED_NOT_WORM'
+                   and all(value.isdigit() and int(value)>0 for value in runs) and int(runs[0])!=int(runs[1]))
+        except (KeyError,TypeError,ValueError):newer=False
+        if not newer:raise ValueError('publication binding mismatch')
+    publication={'current_preparation_bundle_sha256':current_sha,
+                 'current_preparation_artifact_published':not pending}
     output=root/'oss-retention-output';output.mkdir(exist_ok=True)
     previous=root/'audit/oss_retention'/f'{sha}.json'
     if previous.exists() and not force:
         old=json.loads(previous.read_bytes())
         if old.get('status')!='LOCKED_DAILY_INVENTORY_VERIFIED' or old.get('bundle_sha256')!=sha:
             raise ValueError('invalid previous receipt')
-        (output/'status.json').write_text(json.dumps({'status':'SKIP_PREVIOUSLY_VERIFIED_INVENTORY','bundle_sha256':sha,
+        if pending:
+            # A cross-generation wait may reuse only the receipt for this exact
+            # publication. Validate locally before taking the no-network path.
+            ids=(marker.get('artifact_id'),old.get('artifact_id'),marker.get('run_id'),old.get('source_run_id'))
+            archive_sha=marker.get('artifact_archive_sha256');receipt_digest=old.get('artifact_digest')
+            if (any(type(value) not in (int,str) or not re.fullmatch('[1-9][0-9]*',str(value)) for value in ids)
+                or str(ids[0])!=str(ids[1]) or str(ids[2])!=str(ids[3])
+                or not isinstance(archive_sha,str) or not re.fullmatch('[a-f0-9]{64}',archive_sha)
+                or not isinstance(receipt_digest,str) or receipt_digest.removeprefix('sha256:')!=archive_sha):
+                raise ValueError('publication receipt provenance mismatch')
+        (output/'status.json').write_text(json.dumps({'status':'WAIT_NEW_INVENTORY_PUBLICATION' if pending else 'SKIP_PREVIOUSLY_VERIFIED_INVENTORY','bundle_sha256':sha,
             'fresh_object_readback_performed':False,'previous_receipt':str(previous.relative_to(root)),
-            'independent_custodian_verified':False},indent=2)+'\n')
+            'independent_custodian_verified':False,**publication},indent=2)+'\n')
         return False
     artifact=github('/actions/artifacts/'+str(int(marker['artifact_id'])))
     run=github('/actions/runs/'+str(int(marker['run_id'])))
@@ -164,7 +193,7 @@ def stage(root,force=False):
     head=subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()
     (output/'source.json').write_text(json.dumps({'source_commit':head,'artifact_source_commit':run['head_sha'],'artifact_id':artifact['id'],
         'artifact_digest':artifact['digest'],'source_run_id':run['id'],'source_run_url':run['html_url'],
-        'bundle_sha256':sha,'inventory_objects':copied['objects'],'prepared_at_utc':copied['prepared_at_utc']},indent=2)+'\n')
+        'bundle_sha256':sha,'inventory_objects':copied['objects'],'prepared_at_utc':copied['prepared_at_utc'],**publication},indent=2)+'\n')
     return True
 
 def upload_inventory(root):
@@ -220,7 +249,7 @@ if __name__=='__main__':
     if args.mode=='stage':
         ready=stage(root,args.force)
         with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('ready='+str(ready).lower()+'\n')
-        print('Inventory ready for real OSS upload' if ready else 'Unchanged inventory; no fresh readback claimed')
+        print('Published inventory ready for real OSS upload' if ready else (root/'oss-retention-output/status.json').read_text())
     else:
         try:print(json.dumps(upload_inventory(root),sort_keys=True))
         except Exception as exc:

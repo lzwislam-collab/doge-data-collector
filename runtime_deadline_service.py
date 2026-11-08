@@ -229,9 +229,12 @@ def run(root, adapter, duration_seconds=2400, clock=None, sleep=None, stop_file=
               'economic_acceptance_passed': False, 'historical_gaps_repaired': False,
               'real_orders_authorized': False, 'new_economic_cohort_activated': False}
     if require_qualified_stop:
+        result['qualified_stop_required'] = True
         result['qualified_stop_satisfied'] = bool(stop_requested() and adapter.can_stop() and not fatal)
         result['last_qualified_book_sha256'] = getattr(adapter,'last_qualified_book',{}).get('book_sha256')
-        if not result['qualified_stop_satisfied']: result['status'] = 'DEGRADED'
+        if not result['qualified_stop_satisfied']:
+            result.update(fatal=True, status='DEGRADED',
+                          fatal_reason='REQUIRED_QUALIFIED_STOP_NOT_SATISFIED')
     path = Path(root)/BASE/'latest.json'
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(result, indent=2, allow_nan=False)+'\n', encoding='utf-8')
@@ -289,14 +292,22 @@ class LiveAdapter:
             mode = 'capture' if self.source_ready() else 'smoke'
             self.python('p2_paired_execution_v3_1.py', mode)
             self.last_qualified_book = {}
+            source_count = None
+            context = 'AUDIT_NOT_READY'
             if mode == 'capture':
                 import p2_paired_execution_v3_1 as engine
                 events = engine.read_events(self.root)
+                context = 'NO_FORMAL_CAPTURE_EVENT'
                 if events:
+                    source_count = len(events[-1]['source_items'])
+                    context = 'RESERVED_SOURCE_NOT_QUALIFIED' if source_count else 'NO_RESERVED_SOURCE_CONTEXT'
                     book = next(engine.event_books(self.root, [events[-1]]))
-                    if qualified_capture(events[-1], book): self.last_qualified_book = events[-1]
+                    if qualified_capture(events[-1], book):
+                        self.last_qualified_book = events[-1]
+                        context = 'QUALIFIED_FORMAL_BOOK'
             return {'status': 'command_completed', 'stage': name, 'mode': mode,
-                    'formal_eligibility': bool(self.last_qualified_book)}
+                    'formal_eligibility': bool(self.last_qualified_book),
+                    'source_context_status': context, 'reserved_source_count': source_count}
         elif name == 'publish':
             import publish_forward_evidence as publisher
             import paired_forward_cohort as pair
@@ -422,31 +433,80 @@ def finish(root, adapter, result):
     return result
 
 
+def finish_due_on_budget_exhaustion(root, adapter, error):
+    """One serial due-target attempt; never start issuance or a capture loop."""
+    started = datetime.now(timezone.utc)
+    registry, scores = adapter.state()
+    receipt = {'id': uuid.uuid4().hex, 'observed_at_utc': started.isoformat(),
+               'mode': 'WORKFLOW_BUDGET_EXHAUSTED_DUE_ONLY',
+               'open_target_ids': open_targets(registry, scores, started),
+               'actions': [], 'errors': [], 'fatal': True,
+               'historical_backfill': False, 'economic_acceptance_passed': False}
+    if receipt['open_target_ids']:
+        # A failed watch may still have appended valid evidence. The existing
+        # publisher validates and reads back that evidence before we exit.
+        for name in ('watch', 'publish'):
+            before = datetime.now(timezone.utc)
+            try:
+                outcome = adapter.action(name)
+                receipt['actions'].append({'stage': name, 'result': outcome,
+                    'started_at_utc': before.isoformat(),
+                    'seconds': (datetime.now(timezone.utc)-before).total_seconds()})
+            except Exception as exc:
+                receipt['errors'].append({'stage': name, **exception_details(exc),
+                    'started_at_utc': before.isoformat(),
+                    'seconds': (datetime.now(timezone.utc)-before).total_seconds()})
+    receipt['completed_at_utc'] = datetime.now(timezone.utc).isoformat()
+    # This degraded receipt is preserved locally/by the existing artifact step;
+    # finish() must not republish or clear the fatal downstream-writer gate.
+    save_receipt(root, receipt)
+    return {'fatal': True, 'status': 'DEGRADED',
+            'fatal_reason': 'WORKFLOW_BUDGET_EXHAUSTED', **exception_details(error),
+            'observed_at_utc': started.isoformat(), 'cycles': 0,
+            'economic_acceptance_passed': False, 'historical_gaps_repaired': False,
+            'archive_window_budget': error.budget, 'due_only_receipt': receipt}
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--duration-seconds', type=int, default=2400)
     parser.add_argument('--stop-file', type=Path)
     parser.add_argument('--require-qualified-stop', action='store_true')
     parser.add_argument('--archive-reserve-seconds', type=int)
+    parser.add_argument('--workflow-started-at')
+    parser.add_argument('--workflow-timeout-seconds', type=int)
     args = parser.parse_args()
     root = Path(__file__).resolve().parent
     adapter = LiveAdapter(root)
     try:
+        if ((args.workflow_started_at is not None or args.workflow_timeout_seconds is not None)
+                and args.archive_reserve_seconds is None):
+            raise ValueError('workflow budget applies only to foreground archive reserve')
         adapter.python('forward_validation_v2.py', '--integrity-only')
         adapter.command('git', 'config', 'user.name', 'github-actions[bot]')
         adapter.command('git', 'config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com')
         duration = args.duration_seconds
         budget = None
+        budget_exhausted = None
         if args.archive_reserve_seconds is not None:
             if args.stop_file or args.require_qualified_stop:
                 raise ValueError('archive reserve applies only to foreground service')
-            from archive_window_budget import from_root
-            budget = from_root(root, datetime.now(timezone.utc), duration, args.archive_reserve_seconds)
-            duration = budget['duration_seconds']
-            print(json.dumps({'archive_window_budget': budget}), flush=True)
-        result = run(root, adapter, duration, stop_file=args.stop_file,
-                     require_qualified_stop=args.require_qualified_stop)
-        if budget is not None: result['archive_window_budget'] = budget
+            from archive_window_budget import WorkflowBudgetExhausted, from_root
+            try:
+                budget = from_root(root, datetime.now(timezone.utc), duration, args.archive_reserve_seconds,
+                                   workflow_started_at=args.workflow_started_at,
+                                   workflow_timeout_seconds=args.workflow_timeout_seconds)
+            except WorkflowBudgetExhausted as exc:
+                budget_exhausted = exc
+            else:
+                duration = budget['duration_seconds']
+                print(json.dumps({'archive_window_budget': budget}), flush=True)
+        if budget_exhausted is not None:
+            result = finish_due_on_budget_exhaustion(root, adapter, budget_exhausted)
+        else:
+            result = run(root, adapter, duration, stop_file=args.stop_file,
+                         require_qualified_stop=args.require_qualified_stop)
+            if budget is not None: result['archive_window_budget'] = budget
     except Exception as exc:
         result = {'fatal': True, 'status': 'DEGRADED', **exception_details(exc),
                   'observed_at_utc': datetime.now(timezone.utc).isoformat(), 'economic_acceptance_passed': False}

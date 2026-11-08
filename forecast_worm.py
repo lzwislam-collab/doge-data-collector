@@ -12,6 +12,31 @@ def utc(s):
  if d.tzinfo is None:raise ValueError('timezone required')
  return d.astimezone(timezone.utc)
 def sha(raw):return hashlib.sha256(raw).hexdigest()
+def event_group(event,track):
+ """Keep each original track and horizon as a separate custody obligation."""
+ issued=utc(event['issued_at_utc']);target=utc(event['target_utc'])
+ if track=='original18':
+  hours=event['horizon_hours']
+  if type(hours) is not int or hours not in (1,24):raise ValueError('original horizon mismatch')
+  seconds=hours*3600;pattern=r'[0-9]+_'+str(hours)
+ elif track in ('r2','canary'):
+  seconds=event['horizon_seconds'];cohort='formal' if track=='r2' else 'canary'
+  if type(seconds) is not int or seconds<=0 or event.get('cohort')!=cohort:raise ValueError('cohort/horizon mismatch')
+  if track=='r2' and event.get('included_in_formal_statistics') is not True:raise ValueError('formal membership required')
+  pattern=r'[0-9]+_'+cohort
+ else:raise ValueError('isolated track required')
+ if not re.fullmatch(pattern,event['event_id']) or target-issued!=timedelta(seconds=seconds):raise ValueError('event identity/horizon mismatch')
+ return track,seconds
+def verify_recorded_receipt(raw,event,track,receipt):
+ """Validate recorded journal binding locally; this is not a live OSS readback."""
+ digest=sha(raw);expected=PREFIX+track+'/'+event['event_id']+'/'+digest+'.json'
+ if any(receipt.get(k)!=v for k,v in {'sha256':digest,'track':track,'event_id':event['event_id'],'status':'PRE_TARGET_WORM_VERIFIED','issued_at_utc':event['issued_at_utc'],'target_utc':event['target_utc'],'key':expected,'bucket':inventory.BUCKET,'endpoint':inventory.ENDPOINT,'byte_count':len(raw)}.items()):raise ValueError('existing receipt binding changed')
+ version=receipt.get('version_id')
+ if not isinstance(version,str) or not version or version=='null' or not receipt.get('readback_request_id') or receipt.get('historical_backfill') is not False:raise ValueError('recorded pinned readback identity missing')
+ issued=utc(event['issued_at_utc']);target=utc(event['target_utc'])
+ if not issued.replace(microsecond=0)<=utc(receipt['server_last_modified_utc'])<=utc(receipt['server_response_date_utc'])<target or not issued<=utc(receipt['verified_at_utc'])<target or utc(receipt['calculated_retain_until_utc'])<FLOOR:raise ValueError('recorded pre-target time/retention invalid')
+ # Read the actual validation clock, including for a receipt completed this run.
+ if max(utc(receipt[k]) for k in ('server_last_modified_utc','server_response_date_utc','verified_at_utc'))>datetime.now(timezone.utc):raise ValueError('recorded receipt time is in the future')
 def retain(bucket,raw,track,lock,now=None):
  test_clock=now;now=now or datetime.now(timezone.utc);event=json.loads(raw)
  if track not in ('original18','r2','canary') or len(raw)>16*1024*1024:raise ValueError('isolated track/payload required')
@@ -106,33 +131,54 @@ def run():
    with dest.open('x',encoding='utf-8') as stream:json.dump(receipt,stream,indent=2)
    report['receipts'].append(receipt)
   except Exception as exc:report['errors'].append({'track':'canary','type':type(exc).__name__,'provider_code':str(getattr(exc,'code','')),'request_id':str(getattr(exc,'request_id',''))})
+ latest={};qualified={};missed=[]
  for base,track in [('data/learned_shadow_v1/events','original18'),('data/phase2_forward_v2/events','r2')]:
   for path in sorted((ROOT/base).glob('*.json')):
    raw=path.read_bytes();e=json.loads(raw);actual='canary' if e.get('cohort')=='canary' else track
+   try:
+    group=event_group(e,actual);issued=utc(e['issued_at_utc'])
+    if path.stem!=e['event_id']:raise ValueError('event filename identity mismatch')
+   except Exception as exc:
+    report['errors'].append({'status':'BLOCKED_EVENT_IDENTITY','track':actual,'event_id':e.get('event_id',path.stem),'type':type(exc).__name__});continue
+   if actual!='canary' and issued<=now and (group not in latest or issued>latest[group][0]):latest[group]=(issued,e)
    dest=ROOT/'audit/forecast_worm'/actual/(path.stem+'.json')
    if dest.exists():
-    saved=json.loads(dest.read_bytes())
-    if saved['sha256']!=sha(raw) or saved['track']!=actual:raise ValueError('existing receipt binding changed')
+    try:
+     saved=json.loads(dest.read_bytes());verify_recorded_receipt(raw,e,actual,saved)
+     if issued>now:raise ValueError('future issued receipt cannot satisfy current custody')
+     if actual!='canary':qualified[group]=max(qualified.get(group,issued),issued)
+    except Exception as exc:report['errors'].append({'status':'BLOCKED_EXISTING_RECEIPT_BINDING','track':actual,'event_id':e['event_id'],'type':type(exc).__name__})
     continue
    if utc(e['target_utc'])<=now:
     report['expired_unproven'].append(actual+'/'+e['event_id'])
-    if actual!='canary':report['errors'].append({'status':'BLOCKED_MISSED_FORMAL_PRE_TARGET_DEADLINE','track':actual,'event_id':e['event_id']})
+    if actual!='canary':
+     error={'status':'BLOCKED_MISSED_FORMAL_PRE_TARGET_DEADLINE','track':actual,'event_id':e['event_id']}
+     report['errors'].append(error);missed.append((error,group,issued))
     continue
    try:
     receipt=retain(bucket,raw,actual,lock)
     if inventory.check_bucket(bucket)!=lock:raise ValueError('WORM policy changed during readback')
+    verify_recorded_receipt(raw,e,actual,receipt)
     dest.parent.mkdir(parents=True,exist_ok=True)
     with dest.open('x',encoding='utf-8') as stream:json.dump(receipt,stream,indent=2)
     report['receipts'].append(receipt)
+    if actual!='canary':qualified[group]=max(qualified.get(group,issued),issued)
    except Exception as exc:report['errors'].append({'track':actual,'event_id':e['event_id'],'type':type(exc).__name__,'provider_code':str(getattr(exc,'code','')),'request_id':str(getattr(exc,'request_id',''))})
  if report['errors']:report['status']='BLOCKED_PRE_TARGET_WORM'
  elif report['receipts']:report['status']='PRE_TARGET_WORM_READBACK_PASS'
+ # Age alone never closes an obligation. Only a later, locally bound receipt
+ # in the same original track/horizon separates an earlier missed deadline.
+ report['historical_errors']=[error for error,group,issued in missed if group in qualified and qualified[group]>issued and latest[group][0]>issued]
+ report['runtime_errors']=[error for error in report['errors'] if error not in report['historical_errors']]
+ report['runtime_status']='BLOCKED_PRE_TARGET_WORM' if report['runtime_errors'] else ('NO_CURRENT_CUSTODY_ERRORS_WITH_HISTORICAL_GAPS' if report['historical_errors'] else report['status'])
+ report['recorded_receipt_check_scope']='LOCAL_JOURNAL_BINDING_ONLY_NOT_LIVE_READBACK'
+ report['current_obligations']=[{'track':group[0],'horizon_seconds':group[1],'event_id':event['event_id'],'issued_at_utc':event['issued_at_utc'],'target_utc':event['target_utc']} for group,(issued,event) in sorted(latest.items())]
  if extension=='732':
   dest=ROOT/'audit/forecast_worm/retention'/(os.environ['GITHUB_RUN_ID']+'_'+os.environ.get('GITHUB_RUN_ATTEMPT','1')+'.json');dest.parent.mkdir(parents=True,exist_ok=True)
   with dest.open('x',encoding='utf-8') as stream:json.dump(report,stream,indent=2)
  (out/'result.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
  print(json.dumps(report))
- return bool(report['errors'])
+ return bool(report['runtime_errors'])
 def report_panel(root,rows,online=False):
  daily=Path(root)/'audit/oss_retention/latest.json'
  result={'daily_inventory_status':'NOT_READ','per_forecast_status':'WAIT_NO_FORMAL_EVENTS','external_immutable_retention_verified':False,'live_oss_readback_this_report':False,'events':[],'fixed_horizon_utc':FLOOR.isoformat()}

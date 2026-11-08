@@ -45,6 +45,45 @@ def source_state(raw,now):
  except ValueError as exc:errors.append(str(exc))
  return {'rows':len(rows),'asset_rows':counts,'latest_closed_utc':latest.isoformat(),'latest73_ready':ready,'frame_errors':errors}
 
+def latest_matured(events,now,deadline):
+ candidates=[e for e in events if deadline(e)<=now]
+ return max(candidates,key=lambda e:(deadline(e),f.utc(e['slot_utc']),e['event_id']),default=None)
+
+def publication_events(events,now,p):
+ """A younger event cannot hide the most recently closed formal target."""
+ matured=latest_matured([e for e in events if e['cohort']=='formal'],now,lambda e:f.deadline(e,p))
+ selected=events[-1:]+([matured] if matured is not None else [])
+ return list({e['event_id']:e for e in selected}.values())
+
+def source_runtime_errors(source,now):
+ if source['latest73_ready']:return []
+ expected=now.replace(minute=0,second=0,microsecond=0)
+ # Preserve only the existing one-hour tail grace, never an internal/frame gap.
+ grace=(now-expected<timedelta(minutes=15)
+  and f.utc(source['latest_closed_utc'])==expected-timedelta(hours=1)
+  and source['frame_errors']==['missing latest73 source bars']
+  and all(source['asset_rows'][s]>=73 for s in ('DOGE-USDT','BTC-USDT')))
+ return [] if grace else ['SOURCE_FRAME_NOT_READY']
+
+def legacy_runtime_health(p,events,scores,now):
+ """Latest obligations per horizon; cumulative frozen plan stays untouched."""
+ import learned_shadow_runtime as legacy
+ start=f.utc(p['effective_from_utc']);emap={e['event_id']:e for e in events};scored={s['event_id'] for s in scores}
+ missing_issue=[];missing_target=[];checked=[]
+ for h in p['horizons_hours']:
+  step=timedelta(hours=p['slot_steps_hours'][str(h)]);delay=timedelta(minutes=p['max_issue_delay_minutes'])
+  if now>=start+delay:
+   slot=start+((now-start-delay)//step)*step;key=str(int(slot.timestamp()))+'_'+str(h)
+   if key not in emap:missing_issue.append(key)
+  matured=latest_matured([e for e in events if e['horizon_hours']==h],now,lambda e:legacy.shadow.target_deadline(e,p))
+  if matured is not None:
+   checked.append(matured['event_id'])
+   if matured['event_id'] not in scored:missing_target.append(matured['event_id'])
+ errors=[]
+ if missing_issue:errors.append('ORIGINAL18_MISSING_ISSUANCE')
+ if missing_target:errors.append('ORIGINAL18_MISSING_TARGET')
+ return {'missing_issuance_ids':missing_issue,'missing_target_ids':missing_target,'checked_target_ids':checked,'errors':errors}
+
 def health(events,scores,now,last_closed,qualified):
  p=f.policy();start=f.utc(p['effective_from_utc']);scored={s['event_id'] for s in scores};emap={e['event_id']:e for e in events};errors=[];due=[];near=[];missing_targets=[]
  slots=[];slot=start
@@ -66,9 +105,24 @@ def health(events,scores,now,last_closed,qualified):
  if last_closed<expected and (now-expected>=timedelta(minutes=15) or last_closed<expected-timedelta(hours=1)):errors.append('LATEST_CLOSED_BAR_MISSING')
  qids={q['event_id'] for q in qualified};missing_witness=[e['event_id'] for e in events if e['event_id'] in scored and f.deadline(e,p)<=now and e['event_id'] not in qids]
  if missing_witness:errors.append('PUBLIC_DEADLINE_EVIDENCE_MISSING')
+ # A separate current-window gate never resets or repairs historical gaps.
+ runtime_issue=[slots[-1]] if slots and slots[-1] not in emap else []
+ matured=latest_matured([e for e in events if e['cohort']=='formal'],now,lambda e:f.deadline(e,p))
+ runtime_target=[];runtime_witness=[]
+ if matured is not None:
+  key=matured['event_id']
+  if key not in scored:runtime_target.append(key)
+  elif key not in qids:runtime_witness.append(key)
+ runtime_errors=[]
+ if runtime_issue:runtime_errors.append('MISSING_ISSUANCE')
+ if runtime_target:runtime_errors.append('MISSING_TARGET')
+ if runtime_witness:runtime_errors.append('PUBLIC_DEADLINE_EVIDENCE_MISSING')
+ runtime_errors.extend(e for e in errors if e in ('TARGET_DEADLINE_NEAR','LATEST_CLOSED_BAR_MISSING'))
  return {'at_utc':now.isoformat(),'before_r2_activation':now<start,'missing_issuance':len(missing),'missing_issuance_ids':missing,
   'missing_targets':len(missing_targets),'missing_target_ids':missing_targets,'due_targets':due,'urgent_targets':near,
   'missing_public_witness':missing_witness,'last_closed_utc':last_closed.isoformat(),'errors':errors,
+  'runtime_errors':runtime_errors,'runtime_missing_issuance_ids':runtime_issue,'runtime_missing_target_ids':runtime_target,
+  'runtime_missing_public_witness_ids':runtime_witness,'runtime_checked_event_ids':[] if matured is None else [matured['event_id']],
   'historical_backfill_authorized':False,'real_orders_authorized':False,'promotion_authorized':False}
 
 def actions(events,scores,now,source_ready,source_witnessed):
@@ -98,7 +152,7 @@ def dispatch_once(name):
  return {'workflow':name,'status':'DISPATCH_ACCEPTED_COMPLETION_UNVERIFIED'}
 
 def run(mode):
- r.run('local');p,model,old,files=r.guard();now=datetime.now(timezone.utc);events=r.records('events');scores=r.records('scores');inspected=events[-1:]
+ r.run('local');p,model,old,files=r.guard();now=datetime.now(timezone.utc);events=r.records('events');scores=r.records('scores');inspected=publication_events(events,now,p)
  extra=[e[k] for e in inspected for k in ('registration_run_id','source_run_id')]
  for e in inspected:
   for kind in ('prediction','target'):
@@ -106,12 +160,14 @@ def run(mode):
    if path.exists():extra.append(json.loads(path.read_bytes())['run_id'])
  runs=r.runs_server(extra);qualified,rejected=r.publication(p,inspected,[s for s in scores if s['event_id'] in {e['event_id'] for e in inspected}],files,runs)
  raw=(ROOT/r.SOURCE).read_bytes();source=source_state(raw,now);h=health(events,scores,now,f.utc(source['latest_closed_utc']),qualified)
- # Only the latest publication is checked online; earlier archived records are
- # not mislabeled missing here. Full cohort remains Phase3's responsibility.
- h['missing_public_witness']=[k for k in h['missing_public_witness'] if k in {e['event_id'] for e in inspected}]
+ # Preserve the historical summary's original latest-event scope. The separate
+ # runtime gate additionally checks the latest matured formal event online.
+ h['missing_public_witness']=[k for k in h['missing_public_witness'] if k in {e['event_id'] for e in events[-1:]}]
  if not h['missing_public_witness'] and 'PUBLIC_DEADLINE_EVIDENCE_MISSING' in h['errors']:h['errors'].remove('PUBLIC_DEADLINE_EVIDENCE_MISSING')
  result={**h,'source':source,'online_publication_events':len(inspected),'online_publication_covers_all':len(inspected)==len(events),
   'publication_rejected':rejected,'dispatches':[],'parent_terminal_receipt':None,'parent_trusted':None,'original18':{}}
+ result['runtime_checked_event_ids']=[e['event_id'] for e in inspected]
+ result['runtime_errors'].extend(source_runtime_errors(source,now))
  import learned_shadow_runtime as legacy
  lp=json.loads((ROOT/f.old.POLICY).read_bytes());le=legacy.read_records(ROOT,'events');ls=legacy.read_records(ROOT,'scores');legacyplan=legacy.plan(lp,le,{s['event_id']:s for s in ls},now)
  result['original18']=legacyplan
@@ -119,6 +175,8 @@ def run(mode):
  result['original18']['missing_target_ids']=legacy_missing
  if legacy_missing:result['errors'].append('ORIGINAL18_MISSING_TARGET')
  if any(legacyplan['matured_missing_issuance'].values()):result['errors'].append('ORIGINAL18_MISSING_ISSUANCE')
+ result['original18_runtime']=legacy_runtime_health(lp,le,ls,now)
+ result['runtime_errors'].extend(result['original18_runtime']['errors'])
  desired=actions(events,scores,now,source['latest73_ready'],f.witness({r.SOURCE:raw},runs,r.read_at,now) is not None)
  if legacyplan['issue'] or legacyplan['score']:desired.append('learned_shadow_live.yml')
  if not source['latest73_ready'] and 'LATEST_CLOSED_BAR_MISSING' in h['errors']:desired.append('okx_hourly_extreme_history.yml')
@@ -134,15 +192,23 @@ def run(mode):
    if not result['parent_trusted']:desired=[]
   for name in dict.fromkeys(desired):result['dispatches'].append(dispatch_once(name))
  result['status']='OPERATIONS_ERRORS_PRESERVED' if result['errors'] else 'WAIT_ACTIVATION' if now<f.utc(p['effective_from_utc']) else 'OPERATIONS_CURRENT_WINDOW_CLEAR'
+ result['runtime_status']=('CURRENT_OPERATIONAL_ERRORS' if result['runtime_errors'] else 'WAIT_ACTIVATION' if now<f.utc(p['effective_from_utc'])
+  else 'CURRENT_WINDOW_CLEAR_WITH_HISTORICAL_GAPS' if result['errors'] else 'CURRENT_WINDOW_CLEAR')
  return result
 
 def main():
  parser=argparse.ArgumentParser();parser.add_argument('mode',choices=['audit','bridge']);a=parser.parse_args();out=ROOT/'forward-readiness-output';out.mkdir(exist_ok=True)
- try:result=run(a.mode)
+ try:
+  result=run(a.mode)
+  # Missing/invalid current-state output is an error, never implicit success.
+  if not isinstance(result['runtime_errors'],list) or any(not isinstance(e,str) for e in result['runtime_errors']):raise ValueError('invalid runtime error contract')
+  if not isinstance(result['runtime_status'],str) or not result['runtime_status']:raise ValueError('missing runtime status')
  except Exception as exc:
   (out/'failure.json').write_bytes(f.encode({'error':type(exc).__name__+': '+str(exc)}));raise
- (out/'readiness.json').write_bytes(f.encode(result));print(json.dumps({k:result[k] for k in ('status','errors','dispatches')},sort_keys=True))
+ (out/'readiness.json').write_bytes(f.encode(result));print(json.dumps({k:result[k] for k in ('status','errors','runtime_status','runtime_errors','dispatches')},sort_keys=True))
  if os.environ.get('GITHUB_OUTPUT'):
-  with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as stream:stream.write('has_errors='+str(bool(result['errors'])).lower()+'\n')
+  with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as stream:
+   stream.write('has_errors='+str(bool(result['errors'])).lower()+'\n')
+   stream.write('has_runtime_errors='+str(bool(result['runtime_errors'])).lower()+'\n')
 
 if __name__=='__main__':main()

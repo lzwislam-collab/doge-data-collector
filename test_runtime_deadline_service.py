@@ -130,12 +130,125 @@ class RuntimeTests(unittest.TestCase):
         self.assertFalse(out['economic_acceptance_passed'])
         self.assertFalse(out['historical_gaps_repaired'])
         self.assertEqual(out['cycles'], 3)
+    def test_workflow_budget_reaches_capture_loop_and_saved_final_receipt(self):
+        import archive_window_budget as budget
+        clock = self.clock
+        class ObservedDatetime(datetime):
+            @classmethod
+            def now(cls, tz=None): return clock()
+        rows = [{'forecast_id': 'day', 'horizon_hours': '24',
+                 'issued_at_utc': (START-timedelta(minutes=1)).isoformat(),
+                 'target_utc': (START+timedelta(days=1)).isoformat()}]
+        # Keep the real planner, loop, target-window checks and receipt writes.
+        # Frozen-source loading and all exchange/Git commands are offline seams.
+        def from_root(root, now, maximum, reserve, **options):
+            return budget.plan(rows, now, maximum, reserve, **options)
+        self.adapter.python = lambda *args: None
+        self.adapter.command = lambda *args: None
+        self.adapter.auditor = SimpleNamespace(close=lambda: None)
+        self.adapter.registry = [self.row(target=START-timedelta(minutes=24))]
+        output = self.root/'outputs.txt'
+        printed = io.StringIO()
+        arguments = ['runtime_deadline_service.py', '--duration-seconds', '2400',
+                     '--archive-reserve-seconds', '1800',
+                     '--workflow-started-at', '2026-10-25T09:56:32+00:00',
+                     '--workflow-timeout-seconds', '3900']
+        with patch.object(runtime, 'LiveAdapter', return_value=self.adapter), \
+             patch.object(runtime, '__file__', str(self.root/'runtime_deadline_service.py')), \
+             patch.object(runtime, 'datetime', ObservedDatetime), \
+             patch.object(runtime.time, 'sleep', self.clock.sleep), \
+             patch.object(budget, 'from_root', from_root), \
+             patch.object(sys, 'argv', arguments), \
+             patch.dict(os.environ, {'GITHUB_OUTPUT': str(output)}), redirect_stdout(printed):
+            try:
+                code = runtime.main()
+            except SystemExit as exc:
+                self.fail('workflow budget was not accepted by the runtime: '+str(exc))
+        self.assertEqual(code, 0)
+        saved = json.loads((self.root/runtime.BASE/'latest.json').read_text())
+        self.assertEqual(saved['archive_window_budget']['duration_seconds'], 1292)
+        self.assertEqual(saved['ended_at_utc'], (START+timedelta(seconds=1292)).isoformat())
+        self.assertEqual(self.adapter.calls[0], 'watch')
+        self.assertEqual(output.read_text().splitlines()[-1], 'fatal=false')
+        self.assertFalse(saved['historical_gaps_repaired'])
     def test_cycle_overrun_is_reported_without_overlapping_or_catchup(self):
         self.adapter.duration['source_audit'] = 400
         out = runtime.run(self.root, self.adapter, duration_seconds=500,
                           clock=self.clock, sleep=self.clock.sleep)
         self.assertGreater(out['maximum_cycle_seconds'], 300)
         self.assertFalse(out['cadence_target_met'])
+    def exhausted_main(self, *, integrity_error=False):
+        import archive_window_budget as budget
+        clock = self.clock
+        class ObservedDatetime(datetime):
+            @classmethod
+            def now(cls, tz=None): return clock()
+        def from_root(root, now, maximum, reserve, **options):
+            return budget.plan([], now, maximum, reserve, **options)
+        def integrity(*args):
+            if integrity_error: raise ValueError('integrity rejected')
+        self.adapter.python = integrity
+        self.adapter.command = lambda *args: None
+        self.adapter.auditor = SimpleNamespace(close=lambda: None)
+        output = self.root/'outputs.txt'
+        arguments = ['runtime_deadline_service.py', '--duration-seconds', '2400',
+                     '--archive-reserve-seconds', '1800', '--workflow-started-at',
+                     (START-timedelta(seconds=1500)).isoformat(),
+                     '--workflow-timeout-seconds', '3900']
+        with patch.object(runtime, 'LiveAdapter', return_value=self.adapter), \
+             patch.object(runtime, '__file__', str(self.root/'runtime_deadline_service.py')), \
+             patch.object(runtime, 'datetime', ObservedDatetime), \
+             patch.object(budget, 'from_root', from_root), \
+             patch.object(sys, 'argv', arguments), \
+             patch.dict(os.environ, {'GITHUB_OUTPUT': str(output)}), \
+             redirect_stdout(io.StringIO()):
+            code = runtime.main()
+        saved = json.loads((self.root/runtime.BASE/'latest.json').read_text())
+        self.assertEqual(code, 1)
+        self.assertTrue(saved['fatal'])
+        self.assertEqual(saved['status'], 'DEGRADED')
+        self.assertEqual(output.read_text().splitlines()[-1], 'fatal=true')
+        return saved
+    def test_exhausted_budget_services_due_target_once_without_new_work(self):
+        self.adapter.registry = [self.row(target=START-timedelta(minutes=24))]
+        saved = self.exhausted_main()
+        self.assertEqual(self.adapter.calls, ['watch', 'publish'])
+        self.assertEqual(saved['cycles'], 0)
+        self.assertEqual(saved['fatal_reason'], 'WORKFLOW_BUDGET_EXHAUSTED')
+        self.assertEqual(saved['archive_window_budget']['duration_seconds'], 0)
+        receipt = saved['due_only_receipt']
+        self.assertEqual(receipt['open_target_ids'], ['due'])
+        self.assertEqual(receipt['errors'], [])
+        self.assertFalse(receipt['historical_backfill'])
+        paths = list((self.root/runtime.BASE/'receipts').glob('*.json'))
+        self.assertEqual(len(paths), 1)
+        self.assertEqual(json.loads(paths[0].read_text()), receipt)
+    def test_exhausted_budget_without_open_targets_does_no_network_work(self):
+        self.adapter.registry = [self.row('expired', START-timedelta(minutes=26)),
+                                 self.row('future', START+timedelta(seconds=1)),
+                                 self.row('scored', START)]
+        self.adapter.scores = {'scored': {'status': 'scored'}}
+        saved = self.exhausted_main()
+        self.assertEqual(self.adapter.calls, [])
+        self.assertEqual(saved['due_only_receipt']['open_target_ids'], [])
+        self.assertEqual(saved['cycles'], 0)
+    def test_exhausted_capture_failure_still_publishes_valid_partial_evidence(self):
+        self.adapter.registry = [self.row()]
+        self.adapter.fail = {'watch'}
+        saved = self.exhausted_main()
+        self.assertEqual(self.adapter.calls, ['watch', 'publish'])
+        self.assertEqual([e['stage'] for e in saved['due_only_receipt']['errors']], ['watch'])
+    def test_exhausted_publication_failure_is_not_retried_or_cleared(self):
+        self.adapter.registry = [self.row()]
+        self.adapter.fail = {'publish'}
+        saved = self.exhausted_main()
+        self.assertEqual(self.adapter.calls, ['watch', 'publish'])
+        self.assertEqual([e['stage'] for e in saved['due_only_receipt']['errors']], ['publish'])
+    def test_integrity_failure_never_enters_exhausted_due_only_path(self):
+        self.adapter.registry = [self.row()]
+        saved = self.exhausted_main(integrity_error=True)
+        self.assertEqual(self.adapter.calls, [])
+        self.assertNotIn('due_only_receipt', saved)
     def test_receipt_collision_cannot_overwrite_old_evidence(self):
         runtime.save_receipt(self.root, {'observed_at_utc': START.isoformat(), 'id': 'same'})
         with self.assertRaises(FileExistsError):
