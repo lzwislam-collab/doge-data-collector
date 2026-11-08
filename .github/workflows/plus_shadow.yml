@@ -1,4 +1,6 @@
 name: Render DOGE PLUS shadow predictions and audit
+run-name: >-
+  ${{ github.event_name == 'workflow_run' && format('PLUS upstream {0}/{1} | {2} | {3} | {4}', github.event.workflow_run.id, github.event.workflow_run.run_attempt, github.event.workflow_run.path, github.event.workflow_run.conclusion, github.event.workflow_run.head_sha) || format('PLUS {0}', github.event_name) }}
 on:
   workflow_dispatch:
     inputs:
