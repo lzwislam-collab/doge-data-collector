@@ -359,5 +359,146 @@ class SparseCheckoutAndProgressTests(unittest.TestCase):
             self.assertFalse(any(r['phase'] in worker.SCRIPTS[1:] for r in rows))
             self.assertTrue(any(r['phase']=='result' and r['event']=='end' and r.get('result_status')=='failed' for r in rows))
 
+    def test_blocked_p0_diagnostics_survive_snapshot_cleanup_without_installing_reports(self):
+        import runtime_audit_worker as worker
+        with tempfile.TemporaryDirectory() as directory:
+            root,head,retained,_=self.make_repository(directory)
+            blocked=json.dumps({'status':'blocked','p0_7d_accepted':False,
+                                'error':'HTTP Error 429: PRIVATE_RESPONSE_TOKEN'})+'\n'
+            (root/worker.SCRIPTS[1]).write_text(
+                'import sys\nsys.stdout.write('+repr(blocked)+')\n'
+                'sys.stderr.write("PRIVATE_STDERR_TOKEN")\nraise SystemExit(1)\n')
+            self.git(root,'add',worker.SCRIPTS[1])
+            self.git(root,'-c','user.name=test','-c','user.email=test@example.com','commit','-qm','blocked P0')
+            result_path=Path(directory)/'result.json';logpath=Path(directory)/'failed-p0.log'
+            with logpath.open('w') as log:
+                done=subprocess.run([sys.executable,worker.__file__,str(root),
+                    self.git(root,'rev-parse','HEAD'),str(result_path)],stdout=log,stderr=log,timeout=10)
+            self.assertEqual(done.returncode,0)
+            result=json.loads(result_path.read_text());self.assertEqual(result['status'],'failed')
+            self.assertIn('failure_diagnostics',result)
+            details=result['failure_diagnostics']
+            self.assertEqual(details['phase'],'p0_operational_audit.py')
+            self.assertEqual(details['reported_category'],'http_error')
+            self.assertEqual(details['reported_http_status'],429)
+            self.assertEqual(details['stdout_sha256'],hashlib.sha256(blocked.encode()).hexdigest())
+            self.assertFalse(list(Path(directory).glob('doge-source-audit-*')))
+            with self.assertRaisesRegex(ValueError,'isolated audit failed: CalledProcessError'):
+                worker.accept(root,result)
+            self.assertTrue(all((root/p).read_bytes()==data for p,data in retained.items()))
+            self.assertTrue(all(not (root/p).exists() for p in worker.OUTPUTS))
+            text=logpath.read_text();self.assertNotIn('PRIVATE_',text+result_path.read_text())
+            rows=[json.loads(line) for line in text.splitlines()]
+            end=next(r for r in rows if r['phase']=='p0_operational_audit.py' and r['event']=='end')
+            self.assertEqual(end['failure_diagnostics'],details)
+            self.assertFalse(any(r['phase']=='paired_cohort_audit.py' for r in rows))
+            self.assertTrue(all(len(line)<4096 for line in text.splitlines()))
+
+
+class CommandFailureDiagnosticsTests(unittest.TestCase):
+    def failed_command(self, output, stderr='PRIVATE_STDERR_TOKEN'):
+        import runtime_audit_worker as worker
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'p0_operational_audit.py'
+            path.write_text('import sys\nsys.stdout.write('+repr(output)+')\n'
+                            'sys.stderr.write('+repr(stderr)+')\nraise SystemExit(1)\n')
+            log=io.StringIO()
+            with contextlib.redirect_stdout(log),self.assertRaises(subprocess.CalledProcessError) as caught:
+                worker.timed_command(path.name,sys.executable,path.name,cwd=directory,input_head='a'*40)
+        self.assertEqual(caught.exception.returncode,1)
+        self.assertEqual(caught.exception.stdout,output)
+        self.assertEqual(caught.exception.stderr,stderr)
+        rows=[json.loads(line) for line in log.getvalue().splitlines()]
+        self.assertEqual([r['event'] for r in rows],['begin','end'])
+        self.assertIn('failure_diagnostics',rows[-1])
+        details=rows[-1]['failure_diagnostics']
+        self.assertEqual(details['failure_kind'],'nonzero_exit')
+        self.assertEqual(details['returncode'],1)
+        self.assertEqual(details['stdout_representation'],'captured_text_utf8')
+        self.assertEqual(details['stdout_bytes'],len(output.encode()))
+        self.assertEqual(details['stdout_sha256'],hashlib.sha256(output.encode()).hexdigest())
+        self.assertEqual(details['stderr_sha256'],hashlib.sha256(stderr.encode()).hexdigest())
+        self.assertNotIn('PRIVATE_',log.getvalue())
+        self.assertLess(len(log.getvalue()),4096)
+        return details
+
+    def test_real_blocked_json_preserves_http_status_without_disclosing_response_text(self):
+        for code in (403,503):
+            with self.subTest(code=code):
+                output=json.dumps({'status':'blocked','p0_7d_accepted':False,
+                    'error':f'HTTP Error {code}: PRIVATE_RESPONSE_TOKEN'})+'\n'
+                details=self.failed_command(output)
+                self.assertEqual(details['reported_category'],'http_error')
+                self.assertEqual(details['reported_http_status'],code)
+                self.assertEqual(details['stdout_parse'],'blocked_json')
+
+    def test_only_exact_known_blocked_messages_are_classified(self):
+        cases=(
+            ('frozen prediction implementation modified','validation_error','frozen_prediction_implementation_modified'),
+            ('invalid V2 protocol or incomplete implementation manifest','validation_error','invalid_v2_protocol'),
+            ('timed out','timeout','reported_timeout'),
+            ('<urlopen error timed out>','timeout','reported_timeout'),
+            ('PRIVATE_FAILURE after 20.0969 seconds','unknown','unknown'),
+            ('frozen prediction implementation modified PRIVATE_SUFFIX','unknown','unknown'))
+        for error,category,code in cases:
+            with self.subTest(error=error):
+                details=self.failed_command(json.dumps({'status':'blocked','error':error})+'\n')
+                self.assertEqual(details['reported_category'],category)
+                self.assertEqual(details['reported_error_code'],code)
+                self.assertNotIn('reported_http_status',details)
+
+    def test_malformed_multiline_nonblocked_and_oversized_outputs_stay_unknown(self):
+        outputs=(
+            '{"status":"blocked","error": PRIVATE_BROKEN',
+            '{"status":"blocked","error":"HTTP Error 403: PRIVATE_TOKEN"}\n{}\n',
+            json.dumps({'status':'ok','error':'HTTP Error 403: PRIVATE_TOKEN'}),
+            json.dumps({'status':'blocked','error':{'PRIVATE_TOKEN':'timed out'}}),
+            json.dumps({'status':'blocked','error':'HTTP Error 403: '+('PRIVATE_TOKEN'*7000)}))
+        for output in outputs:
+            with self.subTest(bytes=len(output.encode())):
+                details=self.failed_command(output)
+                self.assertEqual(details['reported_category'],'unknown')
+                self.assertEqual(details['reported_error_code'],'unknown')
+                self.assertNotIn('reported_http_status',details)
+
+    def test_command_timeout_retains_original_exception_and_hashes_partial_bytes(self):
+        import runtime_audit_worker as worker
+        original=subprocess.TimeoutExpired(('python','p0_operational_audit.py'),240,
+            output=b'PRIVATE_PARTIAL\xff',stderr=b'PRIVATE_STDERR')
+        log=io.StringIO()
+        with patch.object(worker,'command',side_effect=original),contextlib.redirect_stdout(log):
+            with self.assertRaises(subprocess.TimeoutExpired) as caught:
+                worker.timed_command('p0_operational_audit.py','python','p0_operational_audit.py',cwd='.')
+        self.assertIs(caught.exception,original)
+        end=json.loads(log.getvalue().splitlines()[-1])
+        self.assertIn('failure_diagnostics',end)
+        details=end['failure_diagnostics']
+        self.assertEqual(details['failure_kind'],'command_timeout')
+        self.assertEqual(details['timeout_seconds'],240)
+        self.assertEqual(details['reported_category'],'unknown')
+        self.assertEqual(details['stdout_representation'],'captured_bytes')
+        self.assertEqual(details['stdout_bytes'],len(original.output))
+        self.assertEqual(details['stdout_sha256'],hashlib.sha256(original.output).hexdigest())
+        self.assertNotIn('PRIVATE_',log.getvalue())
+
+    def test_diagnostic_failure_never_replaces_original_failure_or_result(self):
+        import runtime_audit_worker as worker
+        original=subprocess.CalledProcessError(1,('python','p0_operational_audit.py'),
+            output='PRIVATE_OUTPUT',stderr='PRIVATE_STDERR')
+        with patch.object(worker,'failure_diagnostics',side_effect=RuntimeError('PRIVATE_DIAGNOSTIC_FAILURE'),create=True):
+            with patch.object(worker,'command',side_effect=original),contextlib.redirect_stdout(io.StringIO()):
+                with self.assertRaises(subprocess.CalledProcessError) as caught:
+                    worker.timed_command('p0_operational_audit.py','python','p0_operational_audit.py',cwd='.')
+            self.assertIs(caught.exception,original)
+            with tempfile.TemporaryDirectory() as directory:
+                target=Path(directory)/'result.json'
+                with patch.object(worker,'audit_snapshot',side_effect=original),patch.object(sys,'argv',
+                        ['worker','.','a'*40,str(target)]),contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(worker.main(),0)
+                result=json.loads(target.read_text())
+                self.assertEqual(result['status'],'failed')
+                self.assertTrue(result['error'].startswith('CalledProcessError: '))
+                self.assertNotIn('PRIVATE_',target.read_text())
+
 
 if __name__ == '__main__': unittest.main()
