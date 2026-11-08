@@ -100,10 +100,18 @@ concurrency:
 jobs:
   hourly-history:
     runs-on: ubuntu-24.04
-    timeout-minutes: 65 # 40m serial deadline service + existing research/archive tail + margin
+    timeout-minutes: 65 # foreground is capped against this existing budget; reserve the archive tail
     env:
       DOGE_ARCHIVE_QUALIFIED_DRAIN: '1'
     steps:
+      - name: Record job start for the existing archive time reserve
+        run: |
+          python3 - <<'PY'
+          import os
+          from datetime import datetime, timezone
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as stream:
+              stream.write('DOGE_WORKFLOW_STARTED_UTC='+datetime.now(timezone.utc).isoformat()+'\n')
+          PY
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -195,7 +203,9 @@ jobs:
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: python runtime_deadline_service.py --duration-seconds 2400 --archive-reserve-seconds 1800
+        run: |
+          python runtime_deadline_service.py --duration-seconds 2400 --archive-reserve-seconds 1800 \
+            --workflow-started-at "$DOGE_WORKFLOW_STARTED_UTC" --workflow-timeout-seconds 3900
       - name: Preserve immutable deadline service receipts even on partial failure
         if: always()
         uses: actions/upload-artifact@v4
@@ -437,7 +447,7 @@ jobs:
           fi
       - name: Freeze archive bytes and continue single-writer capture during upload
         id: archive_bridge_start
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.persist.outcome == 'success'
+        if: ${{ !cancelled() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.persist.outcome == 'success' }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python archive_capture_bridge.py start --snapshot archive-snapshot --control "$RUNNER_TEMP/doge-archive-bridge-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"

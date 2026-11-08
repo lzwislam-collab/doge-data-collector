@@ -1,4 +1,6 @@
-import tempfile, unittest, urllib.error
+import copy, json, subprocess, tempfile, unittest, urllib.error
+from contextlib import ExitStack
+from unittest.mock import patch
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 import quote_capture_retry as retry
@@ -144,5 +146,167 @@ class SlotTests(unittest.TestCase):
         out=audit.reconcile([],{},set(),self.t,self.t+timedelta(hours=1),[run])
         self.assertEqual(out['slots'][0]['status'],'workflow_failed')
         self.assertEqual(out['slots'][0]['run_ids'],[7])
+
+class CapturedSourceRecoveryTests(unittest.TestCase):
+    IDS=('DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792987200000_1h',
+         'DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1793008800000_1h')
+    REPO='lzwislam-collab/doge-data-collector'
+
+    def setUp(self):
+        self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
+        self.root=Path(self.temp.name);self.seed()
+
+    def git(self,*args):
+        return subprocess.check_output(['git',*args],cwd=self.root,text=True,encoding='utf-8').strip()
+
+    def commit(self):
+        self.git('add','.');self.git('-c','user.name=Offline QA','-c','user.email=qa@example.test',
+                                    'commit','-qm','synthetic offline fixture')
+        return self.git('rev-parse','HEAD')
+
+    def write(self,path,body):
+        path=self.root/path;path.parent.mkdir(parents=True,exist_ok=True);path.write_text(body,encoding='utf-8')
+
+    def seed(self,missing_public_quote=False,missing_public_binding=False):
+        self.git('init','-q');self.git('config','core.autocrlf','false');self.rows={};self.bindings={}
+        clocks=(('2026-10-26T05:00:53.297688+00:00','2026-10-26T05:00:52.769000+00:00'),
+                ('2026-10-26T11:01:20.888712+00:00','2026-10-26T11:01:20.269000+00:00'),
+                ('2026-10-26T13:01:00+00:00','2026-10-26T13:01:00+00:00'))
+        for fid,(issued,quoted) in zip(self.IDS+('UNSCOPED',),clocks):
+            at=audit.frozen.utc(issued);stamp=audit.frozen.utc(quoted)
+            row=dict(zip(audit.frozen.FCOLS,[fid,'DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1',issued,
+                quoted,at.replace(minute=0,second=0,microsecond=0).isoformat(),'.11','1',
+                (at+timedelta(hours=1)).isoformat(),'.5','UP','UP','DOWN','fixture']))
+            raw=json.dumps({'code':'0','data':[{'instId':'DOGE-USDT','last':'.11',
+                                             'ts':str(int(stamp.timestamp()*1000))}]})
+            qid=audit.evidence.save_quote(self.root,raw,at)
+            audit.evidence.bind(self.bindings,fid,'ISSUE',qid);self.rows[fid]=row
+        self.write(audit.base.REG,audit.frozen.serial(self.rows,audit.frozen.FCOLS))
+        public_bindings={k:v for k,v in self.bindings.items()
+                         if not (missing_public_binding and k==self.IDS[0]+'|ISSUE')}
+        self.write(audit.evidence.BINDINGS,audit.frozen.serial(public_bindings,audit.evidence.BCOLS))
+        quote=audit.evidence.snapshot_path(self.root,self.bindings[self.IDS[0]+'|ISSUE']['quote_id'])
+        quote_bytes=quote.read_bytes()
+        if missing_public_quote:quote.unlink()
+        head=self.commit()
+        if missing_public_quote:quote.write_bytes(quote_bytes)
+        self.write(audit.evidence.BINDINGS,audit.frozen.serial(self.bindings,audit.evidence.BCOLS))
+        observed=('2026-10-26T05:01:43+00:00','2026-10-26T11:02:05+00:00')
+        self.pins={fid:(rid,head,at) for fid,rid,at in zip(self.IDS,('40272071041','40311990494'),observed)}
+        self.originals={fid:{'forecast_id':fid,'run_id':rid,'head_sha':head,
+            'observed_public_utc':at,'run_url':f'https://github.com/{self.REPO}/actions/runs/{rid}'}
+            for fid,(rid,head,at) in self.pins.items()}
+        self.server_runs={rid:{'id':int(rid),'head_sha':head,'created_at':at.replace('+00:00','Z'),
+            'html_url':f'https://github.com/{self.REPO}/actions/runs/{rid}',
+            'repository':{'full_name':self.REPO},'head_repository':{'full_name':self.REPO}}
+            for rid,head,at in self.pins.values()}
+        self.proofs={fid:{'issued_at_utc':self.rows[fid]['issued_at_utc'],
+            'source_quote_utc':self.rows[fid]['source_quote_utc'],
+            'quote_id':self.bindings[fid+'|ISSUE']['quote_id'],'publication':copy.deepcopy(w)}
+            for fid,w in self.originals.items()}
+        late=dict(self.originals[self.IDS[1]],run_id='40318185646',
+            observed_public_utc='2026-10-26T11:51:38+00:00',
+            run_url=f'https://github.com/{self.REPO}/actions/runs/40318185646')
+        self.write(audit.base.WITNESSES,audit.frozen.serial({self.IDS[1]:late},audit.base.WCOLS))
+        other={'forecast_id':'UNSCOPED','run_id':'99','head_sha':head,
+               'observed_public_utc':'2026-10-26T13:02:00+00:00',
+               'run_url':f'https://github.com/{self.REPO}/actions/runs/99'}
+        self.legacy={'verified_remote_head_witnesses':{self.IDS[1]:late,'UNSCOPED':other},
+                     'commit_receipts_not_publication_times':{}}
+        self.write(audit.v2.PROTOCOL,json.dumps({'protocol_id':'OFFLINE_FIXTURE',
+            'effective_from_utc':'2026-10-26T00:00:00+00:00'}))
+        self.write('data/stage5/forward_validation_v2/latest.json','{"horizons":{}}')
+        self.write('data/hourly_research/ohlc.csv',
+            'symbol,open_utc_ms\nDOGE-USDT,1793052000000\nBTC-USDT,1793052000000\nETH-USDT,1793052000000\n')
+        self.write('p0_operational_audit.py',Path(audit.__file__).read_text(encoding='utf-8'))
+        self.save_proof()
+
+    def save_proof(self):
+        self.write('data/p0_operations/latest.json',json.dumps({'forecast_proofs':self.proofs}))
+        self.proof_commit=self.commit()
+
+    def evaluate(self):
+        def request(path):return copy.deepcopy(self.server_runs[path.rsplit('/',1)[-1]])
+        # Isolate the supplied legacy projection; publication/quote/Git guards stay real.
+        with ExitStack() as stack:
+            for name in ('check_protocol','check_code'):
+                stack.enter_context(patch.object(audit.v2,name))
+            stack.enter_context(patch.object(audit.base,'locked_file'))
+            stack.enter_context(patch.object(audit.v2,'protocol_witness',return_value=True))
+            stack.enter_context(patch.object(audit.base,'evaluate',return_value=copy.deepcopy(self.legacy)))
+            stack.enter_context(patch.object(audit.base,'github_json',side_effect=request))
+            stack.enter_context(patch.object(audit,'_CAPTURED_SOURCE_WITNESSES',self.pins,create=True))
+            stack.enter_context(patch.object(audit,'_CAPTURED_SOURCE_PROOF_COMMIT',self.proof_commit,create=True))
+            return audit.evaluate(self.root,datetime(2026,10,27,tzinfo=timezone.utc),runs=[])
+
+    def test_restores_only_the_two_original_publications_without_writing_history(self):
+        before={p.relative_to(self.root):p.read_bytes() for p in self.root.rglob('*')
+                if p.is_file() and '.git' not in p.relative_to(self.root).parts}
+        out=self.evaluate()
+        for fid in self.IDS:
+            self.assertIn(fid,out['forecast_proofs'])
+            self.assertEqual(out['forecast_proofs'][fid]['publication'],self.originals[fid])
+        self.assertEqual(out['forecast_proofs']['UNSCOPED']['publication'],
+                         self.legacy['verified_remote_head_witnesses']['UNSCOPED'])
+        self.assertFalse(out['p0_7d_accepted']);self.assertFalse(out['p2_profit_accepted'])
+        after={p.relative_to(self.root):p.read_bytes() for p in self.root.rglob('*')
+               if p.is_file() and '.git' not in p.relative_to(self.root).parts}
+        self.assertEqual(after,before)
+
+    def test_changed_server_identity_is_rejected(self):
+        rid=self.pins[self.IDS[0]][0];original=copy.deepcopy(self.server_runs[rid])
+        for field,value in [('id',1),('head_sha','f'*40),('created_at','2026-10-26T05:01:44Z'),
+                            ('html_url','https://example.test/run'),
+                            ('repository',{'full_name':'wrong/repository'}),
+                            ('head_repository',{'full_name':'wrong/repository'})]:
+            with self.subTest(field=field):
+                self.server_runs[rid]=dict(original,**{field:value})
+                out=self.evaluate();self.assertNotIn(self.IDS[0],out['forecast_proofs'])
+                self.assertIn('original source run identity mismatch',out['rejected_evidence'][self.IDS[0]])
+
+    def test_changed_historical_proof_is_rejected(self):
+        self.proofs[self.IDS[0]]['publication']['head_sha']='f'*40;self.save_proof()
+        out=self.evaluate();self.assertNotIn(self.IDS[0],out['forecast_proofs'])
+        self.assertIn('original source proof identity mismatch',out['rejected_evidence'][self.IDS[0]])
+
+    def test_changed_current_forecast_row_cannot_be_recovered(self):
+        self.rows[self.IDS[0]]['majority_direction']='DOWN'
+        self.write(audit.base.REG,audit.frozen.serial(self.rows,audit.frozen.FCOLS))
+        out=self.evaluate();self.assertNotIn(self.IDS[0],out['forecast_proofs'])
+        self.assertIn('invalid persisted forecast witness',out['rejected_evidence'][self.IDS[0]])
+
+    def test_missing_original_public_quote_still_fails(self):
+        self.root=self.root/'missing-quote';self.root.mkdir();self.seed(missing_public_quote=True)
+        out=self.evaluate();self.assertNotIn(self.IDS[0],out['forecast_proofs'])
+        self.assertIn('issue raw quote not present',out['rejected_evidence'][self.IDS[0]])
+
+    def test_missing_original_public_binding_still_fails(self):
+        self.root=self.root/'missing-binding';self.root.mkdir();self.seed(missing_public_binding=True)
+        out=self.evaluate();self.assertNotIn(self.IDS[0],out['forecast_proofs'])
+        self.assertIn('ISSUE binding absent',out['rejected_evidence'][self.IDS[0]])
+
+    def test_unknown_forecast_does_not_gain_a_recovery_path(self):
+        self.legacy['verified_remote_head_witnesses'].pop('UNSCOPED')
+        out=self.evaluate();self.assertNotIn('UNSCOPED',out['forecast_proofs'])
+        self.assertEqual(out['rejected_evidence']['UNSCOPED'],'no pre-target GitHub server run witness')
+
+    def test_invalid_current_issue_quote_still_fails(self):
+        path=audit.evidence.snapshot_path(self.root,self.bindings[self.IDS[0]+'|ISSUE']['quote_id'])
+        path.write_bytes(path.read_bytes()+b' ')
+        out=self.evaluate();self.assertNotIn(self.IDS[0],out['forecast_proofs'])
+        self.assertIn('hash',out['rejected_evidence'][self.IDS[0]])
+
+    def test_recovery_cannot_relax_the_45_minute_publication_deadline(self):
+        fid=self.IDS[0];rid,head,_=self.pins[fid];late='2026-10-26T05:50:00+00:00'
+        self.pins[fid]=(rid,head,late);self.proofs[fid]['publication']['observed_public_utc']=late
+        self.server_runs[rid]['created_at']=late.replace('+00:00','Z');self.save_proof()
+        out=self.evaluate();self.assertNotIn(fid,out['forecast_proofs'])
+        self.assertEqual(out['rejected_evidence'][fid],'late public witness')
+
+    def test_proof_commit_must_be_an_ancestor_of_current_checkout(self):
+        self.proof_commit=self.git('-c','user.name=Offline QA','-c','user.email=qa@example.test',
+            'commit-tree',self.git('rev-parse','HEAD^{tree}'),'-m','unrelated proof fixture')
+        out=self.evaluate()
+        for fid in self.IDS:self.assertNotIn(fid,out['forecast_proofs'])
 
 if __name__=='__main__': unittest.main()

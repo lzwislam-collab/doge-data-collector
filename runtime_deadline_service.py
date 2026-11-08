@@ -8,6 +8,7 @@ import csv
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -17,6 +18,51 @@ from pathlib import Path
 
 BASE = 'data/runtime_deadline_v1'
 REPO = 'lzwislam-collab/doge-data-collector'
+
+
+def diagnostic_text(value, limit=1000):
+    """Bounded, best-effort redaction; never add argv or an environment dump."""
+    if len(value) > 16384 or (isinstance(value, str)
+                            and len(value.encode('utf-8', errors='replace')) > 16384):
+        return '[omitted: diagnostic input exceeds limit]'
+    text = value.decode('utf-8', errors='replace') if isinstance(value, bytes) else value
+    secrets = {v for k, v in os.environ.items() if v and re.search(
+        r'token|secret|password|passwd|credential|authorization|private.?key|access.?key', k, re.I)}
+    # Exception summaries may repr() argv; captured output may contain JSON.
+    secrets |= {form for v in secrets for form in
+                (repr(v)[1:-1], json.dumps(v)[1:-1], json.dumps(v, ensure_ascii=False)[1:-1])}
+    for secret in sorted(secrets, key=len, reverse=True):
+        text = text.replace(secret, '[REDACTED]')
+    text = re.sub(r'-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?(?:-----END [A-Z0-9 ]*PRIVATE KEY-----|$)',
+                  '[REDACTED]', text, flags=re.S)
+    # Hide the whole URL, including userinfo, path, query and fragment. Also
+    # handle JSON-escaped slashes rather than trying to identify every SAS key.
+    text = re.sub(r'''\b[a-z][a-z0-9+.-]*:(?:\\?/){2}[^\s<>]+''',
+                  '[REDACTED]', text, flags=re.I)
+    text = re.sub(r'\b(?:github_pat_[A-Za-z0-9_]+|gh[pousr]_[A-Za-z0-9_]{20,}|AKIA[A-Z0-9]{16})\b',
+                  '[REDACTED]', text)
+    text = re.sub(r'''(\b(?:authorization|proxy-authorization|cookie|set-cookie|password|passwd|pwd|(?:[a-z0-9]+[_-])*(?:token|secret|signature|credentials?|api[_-]?key|access[_-]?key|session[_-]?key)|sig)\b[\\"']*\s*[:=]\s*)[^\r\n]+''',
+                  r'\1[REDACTED]', text, flags=re.I)
+    text = re.sub(r'\b(?:bearer|basic)\s+\S+', '[REDACTED]', text, flags=re.I)
+    marker = '[truncated]'
+    return text if len(text) <= limit else text[:limit-len(marker)] + marker
+
+
+def exception_details(exc):
+    """Add only subprocess metadata already present; diagnostics cannot raise."""
+    prefix = type(exc).__name__ + ': '
+    try:
+        result = {'error': prefix + diagnostic_text(str(exc), 500)}
+        if isinstance(exc, subprocess.CalledProcessError):
+            if type(exc.returncode) is int:
+                result['returncode'] = exc.returncode
+            for name in ('stdout', 'stderr'):
+                value = getattr(exc, name, None)
+                if isinstance(value, (str, bytes)):
+                    result[name] = diagnostic_text(value)
+        return result
+    except Exception:
+        return {'error': prefix + '[diagnostic unavailable]'}
 
 
 def utc(value):
@@ -48,7 +94,7 @@ def cycle(adapter, state, clock):
                                    'seconds': (utc(clock())-before).total_seconds()})
             return True
         except Exception as exc:
-            out['errors'].append({'stage': name, 'error': type(exc).__name__ + ': ' + str(exc)[:500],
+            out['errors'].append({'stage': name, **exception_details(exc),
                                   'started_at_utc': before.isoformat(),
                                   'seconds': (utc(clock())-before).total_seconds()})
             return False
@@ -296,8 +342,17 @@ class LiveAdapter:
             if publication.get('status') != 'verified_remote_readback':
                 raise ValueError('core publication not verified')
             publication.update(pair_error=None, paired_verified_files=sum(p.startswith(pair.BASE+'/') for p in expected))
-            (self.root/pair.BASE/'publication_latest.json').write_text(json.dumps(publication)+'\n', encoding='utf-8')
-            self.public_head = publication['remote_head']
+            receipt_path = pair.BASE+'/publication_latest.json'
+            (self.root/receipt_path).write_text(json.dumps(publication)+'\n', encoding='utf-8')
+            # This receipt describes the first verified data publication. Persist
+            # it in a descendant commit, then stop writing tracked files.
+            expected[receipt_path] = (self.root/receipt_path).read_bytes()
+            self.command('git', 'add', '-f', '--', receipt_path)
+            receipt_publication = publisher.publish(self.root, validate=validate)
+            if (receipt_publication.get('status') != 'verified_remote_readback'
+                    or not publisher.verify_readback(self.root, 'FETCH_HEAD', expected)):
+                raise ValueError('runtime publication receipt remote readback mismatch')
+            self.public_head = receipt_publication['remote_head']
             return {'status': 'verified_remote_readback', 'head': self.public_head}
         elif name == 'witness':
             from urllib.request import Request, urlopen
@@ -370,10 +425,46 @@ def finish(root, adapter, result):
         try:
             adapter.action('publish')
         except Exception as exc:
-            result.update(fatal=True, status='DEGRADED', final_publication_error=type(exc).__name__+': '+str(exc)[:500])
+            details = exception_details(exc)
+            result.update(fatal=True, status='DEGRADED', final_publication_error=details.pop('error'))
+            if details: result['final_publication_diagnostics'] = details
             path.write_text(json.dumps(result, indent=2)+'\n', encoding='utf-8')
     output(bool(result.get('fatal')))
     return result
+
+
+def finish_due_on_budget_exhaustion(root, adapter, error):
+    """One serial due-target attempt; never start issuance or a capture loop."""
+    started = datetime.now(timezone.utc)
+    registry, scores = adapter.state()
+    receipt = {'id': uuid.uuid4().hex, 'observed_at_utc': started.isoformat(),
+               'mode': 'WORKFLOW_BUDGET_EXHAUSTED_DUE_ONLY',
+               'open_target_ids': open_targets(registry, scores, started),
+               'actions': [], 'errors': [], 'fatal': True,
+               'historical_backfill': False, 'economic_acceptance_passed': False}
+    if receipt['open_target_ids']:
+        # A failed watch may still have appended valid evidence. The existing
+        # publisher validates and reads back that evidence before we exit.
+        for name in ('watch', 'publish'):
+            before = datetime.now(timezone.utc)
+            try:
+                outcome = adapter.action(name)
+                receipt['actions'].append({'stage': name, 'result': outcome,
+                    'started_at_utc': before.isoformat(),
+                    'seconds': (datetime.now(timezone.utc)-before).total_seconds()})
+            except Exception as exc:
+                receipt['errors'].append({'stage': name, **exception_details(exc),
+                    'started_at_utc': before.isoformat(),
+                    'seconds': (datetime.now(timezone.utc)-before).total_seconds()})
+    receipt['completed_at_utc'] = datetime.now(timezone.utc).isoformat()
+    # This degraded receipt is preserved locally/by the existing artifact step;
+    # finish() must not republish or clear the fatal downstream-writer gate.
+    save_receipt(root, receipt)
+    return {'fatal': True, 'status': 'DEGRADED',
+            'fatal_reason': 'WORKFLOW_BUDGET_EXHAUSTED', **exception_details(error),
+            'observed_at_utc': started.isoformat(), 'cycles': 0,
+            'economic_acceptance_passed': False, 'historical_gaps_repaired': False,
+            'archive_window_budget': error.budget, 'due_only_receipt': receipt}
 
 
 def main():
@@ -382,27 +473,42 @@ def main():
     parser.add_argument('--stop-file', type=Path)
     parser.add_argument('--require-qualified-stop', action='store_true')
     parser.add_argument('--archive-reserve-seconds', type=int)
+    parser.add_argument('--workflow-started-at')
+    parser.add_argument('--workflow-timeout-seconds', type=int)
     args = parser.parse_args()
     root = Path(__file__).resolve().parent
     adapter = LiveAdapter(root)
     try:
+        if ((args.workflow_started_at is not None or args.workflow_timeout_seconds is not None)
+                and args.archive_reserve_seconds is None):
+            raise ValueError('workflow budget applies only to foreground archive reserve')
         adapter.python('forward_validation_v2.py', '--integrity-only')
         adapter.command('git', 'config', 'user.name', 'github-actions[bot]')
         adapter.command('git', 'config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com')
         duration = args.duration_seconds
         budget = None
+        budget_exhausted = None
         if args.archive_reserve_seconds is not None:
             if args.stop_file or args.require_qualified_stop:
                 raise ValueError('archive reserve applies only to foreground service')
-            from archive_window_budget import from_root
-            budget = from_root(root, datetime.now(timezone.utc), duration, args.archive_reserve_seconds)
-            duration = budget['duration_seconds']
-            print(json.dumps({'archive_window_budget': budget}), flush=True)
-        result = run(root, adapter, duration, stop_file=args.stop_file,
-                     require_qualified_stop=args.require_qualified_stop)
-        if budget is not None: result['archive_window_budget'] = budget
+            from archive_window_budget import WorkflowBudgetExhausted, from_root
+            try:
+                budget = from_root(root, datetime.now(timezone.utc), duration, args.archive_reserve_seconds,
+                                   workflow_started_at=args.workflow_started_at,
+                                   workflow_timeout_seconds=args.workflow_timeout_seconds)
+            except WorkflowBudgetExhausted as exc:
+                budget_exhausted = exc
+            else:
+                duration = budget['duration_seconds']
+                print(json.dumps({'archive_window_budget': budget}), flush=True)
+        if budget_exhausted is not None:
+            result = finish_due_on_budget_exhaustion(root, adapter, budget_exhausted)
+        else:
+            result = run(root, adapter, duration, stop_file=args.stop_file,
+                         require_qualified_stop=args.require_qualified_stop)
+            if budget is not None: result['archive_window_budget'] = budget
     except Exception as exc:
-        result = {'fatal': True, 'status': 'DEGRADED', 'error': type(exc).__name__+': '+str(exc)[:500],
+        result = {'fatal': True, 'status': 'DEGRADED', **exception_details(exc),
                   'observed_at_utc': datetime.now(timezone.utc).isoformat(), 'economic_acceptance_passed': False}
     adapter.auditor.close()
     result = finish(root, adapter, result)

@@ -58,6 +58,6 @@ jobs:
           path: |
             engineering_completion_receipt.json
             forward-readiness-output/
-      - name: Fail visibly only after preserving operational gaps
-        if: steps.readiness.outputs.has_errors == 'true'
+      - name: Fail visibly on current errors after preserving historical gaps
+        if: steps.readiness.outcome == 'success' && steps.readiness.outputs.has_runtime_errors != 'false'
         run: exit 1

@@ -1,9 +1,15 @@
 """Future capture deadlines, serial execution and honest receipts."""
+import io
 import json
+import os
+import subprocess
+import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 try:
@@ -124,12 +130,125 @@ class RuntimeTests(unittest.TestCase):
         self.assertFalse(out['economic_acceptance_passed'])
         self.assertFalse(out['historical_gaps_repaired'])
         self.assertEqual(out['cycles'], 3)
+    def test_workflow_budget_reaches_capture_loop_and_saved_final_receipt(self):
+        import archive_window_budget as budget
+        clock = self.clock
+        class ObservedDatetime(datetime):
+            @classmethod
+            def now(cls, tz=None): return clock()
+        rows = [{'forecast_id': 'day', 'horizon_hours': '24',
+                 'issued_at_utc': (START-timedelta(minutes=1)).isoformat(),
+                 'target_utc': (START+timedelta(days=1)).isoformat()}]
+        # Keep the real planner, loop, target-window checks and receipt writes.
+        # Frozen-source loading and all exchange/Git commands are offline seams.
+        def from_root(root, now, maximum, reserve, **options):
+            return budget.plan(rows, now, maximum, reserve, **options)
+        self.adapter.python = lambda *args: None
+        self.adapter.command = lambda *args: None
+        self.adapter.auditor = SimpleNamespace(close=lambda: None)
+        self.adapter.registry = [self.row(target=START-timedelta(minutes=24))]
+        output = self.root/'outputs.txt'
+        printed = io.StringIO()
+        arguments = ['runtime_deadline_service.py', '--duration-seconds', '2400',
+                     '--archive-reserve-seconds', '1800',
+                     '--workflow-started-at', '2026-10-25T09:56:32+00:00',
+                     '--workflow-timeout-seconds', '3900']
+        with patch.object(runtime, 'LiveAdapter', return_value=self.adapter), \
+             patch.object(runtime, '__file__', str(self.root/'runtime_deadline_service.py')), \
+             patch.object(runtime, 'datetime', ObservedDatetime), \
+             patch.object(runtime.time, 'sleep', self.clock.sleep), \
+             patch.object(budget, 'from_root', from_root), \
+             patch.object(sys, 'argv', arguments), \
+             patch.dict(os.environ, {'GITHUB_OUTPUT': str(output)}), redirect_stdout(printed):
+            try:
+                code = runtime.main()
+            except SystemExit as exc:
+                self.fail('workflow budget was not accepted by the runtime: '+str(exc))
+        self.assertEqual(code, 0)
+        saved = json.loads((self.root/runtime.BASE/'latest.json').read_text())
+        self.assertEqual(saved['archive_window_budget']['duration_seconds'], 1292)
+        self.assertEqual(saved['ended_at_utc'], (START+timedelta(seconds=1292)).isoformat())
+        self.assertEqual(self.adapter.calls[0], 'watch')
+        self.assertEqual(output.read_text().splitlines()[-1], 'fatal=false')
+        self.assertFalse(saved['historical_gaps_repaired'])
     def test_cycle_overrun_is_reported_without_overlapping_or_catchup(self):
         self.adapter.duration['source_audit'] = 400
         out = runtime.run(self.root, self.adapter, duration_seconds=500,
                           clock=self.clock, sleep=self.clock.sleep)
         self.assertGreater(out['maximum_cycle_seconds'], 300)
         self.assertFalse(out['cadence_target_met'])
+    def exhausted_main(self, *, integrity_error=False):
+        import archive_window_budget as budget
+        clock = self.clock
+        class ObservedDatetime(datetime):
+            @classmethod
+            def now(cls, tz=None): return clock()
+        def from_root(root, now, maximum, reserve, **options):
+            return budget.plan([], now, maximum, reserve, **options)
+        def integrity(*args):
+            if integrity_error: raise ValueError('integrity rejected')
+        self.adapter.python = integrity
+        self.adapter.command = lambda *args: None
+        self.adapter.auditor = SimpleNamespace(close=lambda: None)
+        output = self.root/'outputs.txt'
+        arguments = ['runtime_deadline_service.py', '--duration-seconds', '2400',
+                     '--archive-reserve-seconds', '1800', '--workflow-started-at',
+                     (START-timedelta(seconds=1500)).isoformat(),
+                     '--workflow-timeout-seconds', '3900']
+        with patch.object(runtime, 'LiveAdapter', return_value=self.adapter), \
+             patch.object(runtime, '__file__', str(self.root/'runtime_deadline_service.py')), \
+             patch.object(runtime, 'datetime', ObservedDatetime), \
+             patch.object(budget, 'from_root', from_root), \
+             patch.object(sys, 'argv', arguments), \
+             patch.dict(os.environ, {'GITHUB_OUTPUT': str(output)}), \
+             redirect_stdout(io.StringIO()):
+            code = runtime.main()
+        saved = json.loads((self.root/runtime.BASE/'latest.json').read_text())
+        self.assertEqual(code, 1)
+        self.assertTrue(saved['fatal'])
+        self.assertEqual(saved['status'], 'DEGRADED')
+        self.assertEqual(output.read_text().splitlines()[-1], 'fatal=true')
+        return saved
+    def test_exhausted_budget_services_due_target_once_without_new_work(self):
+        self.adapter.registry = [self.row(target=START-timedelta(minutes=24))]
+        saved = self.exhausted_main()
+        self.assertEqual(self.adapter.calls, ['watch', 'publish'])
+        self.assertEqual(saved['cycles'], 0)
+        self.assertEqual(saved['fatal_reason'], 'WORKFLOW_BUDGET_EXHAUSTED')
+        self.assertEqual(saved['archive_window_budget']['duration_seconds'], 0)
+        receipt = saved['due_only_receipt']
+        self.assertEqual(receipt['open_target_ids'], ['due'])
+        self.assertEqual(receipt['errors'], [])
+        self.assertFalse(receipt['historical_backfill'])
+        paths = list((self.root/runtime.BASE/'receipts').glob('*.json'))
+        self.assertEqual(len(paths), 1)
+        self.assertEqual(json.loads(paths[0].read_text()), receipt)
+    def test_exhausted_budget_without_open_targets_does_no_network_work(self):
+        self.adapter.registry = [self.row('expired', START-timedelta(minutes=26)),
+                                 self.row('future', START+timedelta(seconds=1)),
+                                 self.row('scored', START)]
+        self.adapter.scores = {'scored': {'status': 'scored'}}
+        saved = self.exhausted_main()
+        self.assertEqual(self.adapter.calls, [])
+        self.assertEqual(saved['due_only_receipt']['open_target_ids'], [])
+        self.assertEqual(saved['cycles'], 0)
+    def test_exhausted_capture_failure_still_publishes_valid_partial_evidence(self):
+        self.adapter.registry = [self.row()]
+        self.adapter.fail = {'watch'}
+        saved = self.exhausted_main()
+        self.assertEqual(self.adapter.calls, ['watch', 'publish'])
+        self.assertEqual([e['stage'] for e in saved['due_only_receipt']['errors']], ['watch'])
+    def test_exhausted_publication_failure_is_not_retried_or_cleared(self):
+        self.adapter.registry = [self.row()]
+        self.adapter.fail = {'publish'}
+        saved = self.exhausted_main()
+        self.assertEqual(self.adapter.calls, ['watch', 'publish'])
+        self.assertEqual([e['stage'] for e in saved['due_only_receipt']['errors']], ['publish'])
+    def test_integrity_failure_never_enters_exhausted_due_only_path(self):
+        self.adapter.registry = [self.row()]
+        saved = self.exhausted_main(integrity_error=True)
+        self.assertEqual(self.adapter.calls, [])
+        self.assertNotIn('due_only_receipt', saved)
     def test_receipt_collision_cannot_overwrite_old_evidence(self):
         runtime.save_receipt(self.root, {'observed_at_utc': START.isoformat(), 'id': 'same'})
         with self.assertRaises(FileExistsError):
@@ -188,6 +307,238 @@ class RuntimeTests(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text('{"partial":', encoding='utf-8')
         with self.assertRaises(ValueError): runtime.validate_p2(self.root)
+
+
+class DiagnosticTests(unittest.TestCase):
+    def setUp(self):
+        self.clock = Clock()
+        self.adapter = Adapter(self.clock)
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+
+    def fail_publication(self, exc):
+        original = self.adapter.action
+        def action(name):
+            if name == 'publish':
+                self.adapter.calls.append(name)
+                raise exc
+            return original(name)
+        self.adapter.action = action
+
+    def cycle_failure(self, exc):
+        self.fail_publication(exc)
+        result = runtime.cycle(self.adapter, {}, self.clock)
+        self.assertTrue(result['fatal'])
+        self.assertNotIn('book', self.adapter.calls)
+        self.assertNotIn('witness', self.adapter.calls)
+        self.assertEqual(self.adapter.calls.count('publish'), 1)
+        self.assertFalse(result['economic_acceptance_passed'])
+        return result
+
+    def test_called_process_metadata_survives_in_durable_fatal_receipt(self):
+        self.fail_publication(subprocess.CalledProcessError(
+            1, ['git', 'push'], output='rejected update', stderr=b'non-fast-forward'))
+        result = runtime.run(self.root, self.adapter, 60, self.clock, self.clock.sleep)
+        self.assertTrue(result['fatal'])
+        receipts = list((self.root/runtime.BASE/'receipts').glob('*.json'))
+        self.assertEqual(len(receipts), 1)
+        entry = json.loads(receipts[0].read_text())['errors'][0]
+        self.assertIn('returncode', entry)
+        self.assertEqual(entry['returncode'], 1)
+        self.assertEqual(entry['stdout'], 'rejected update')
+        self.assertEqual(entry['stderr'], 'non-fast-forward')
+        self.assertIn('CalledProcessError:', entry['error'])
+        self.assertEqual(self.adapter.calls, ['prepare', 'issue', 'publish'])
+
+    def test_real_offline_child_failure_keeps_code_and_redacts_captured_bytes(self):
+        original = self.adapter.action
+        def action(name):
+            if name == 'publish':
+                self.adapter.calls.append(name)
+                return subprocess.run([sys.executable, '-I', '-c',
+                    "import sys; print('remote: non-fast-forward'); "
+                    "print('token=fake-child-secret', file=sys.stderr); sys.exit(17)"],
+                    cwd=self.root, check=True, capture_output=True)
+            return original(name)
+        self.adapter.action = action
+        result = runtime.run(self.root, self.adapter, 60, self.clock, self.clock.sleep)
+        self.assertTrue(result['fatal'])
+        receipt = next((self.root/runtime.BASE/'receipts').glob('*.json'))
+        entry = json.loads(receipt.read_text())['errors'][0]
+        self.assertEqual(entry['returncode'], 17)
+        self.assertIn('non-fast-forward', entry['stdout'])
+        self.assertNotIn('fake-child-secret', receipt.read_text())
+        self.assertNotIn('book', self.adapter.calls)
+
+    def test_absent_output_is_omitted_and_empty_output_is_preserved(self):
+        for output, stderr, present in [(None, None, False), ('', b'', True)]:
+            with self.subTest(present=present):
+                self.adapter = Adapter(self.clock)
+                entry = self.cycle_failure(subprocess.CalledProcessError(
+                    -15, ['git', 'push'], output=output, stderr=stderr))['errors'][0]
+                self.assertIn('returncode', entry)
+                self.assertEqual(entry['returncode'], -15)
+                self.assertEqual('stdout' in entry, present)
+                self.assertEqual('stderr' in entry, present)
+                if present:
+                    self.assertEqual(entry['stdout'], '')
+                    self.assertEqual(entry['stderr'], '')
+
+    def test_error_and_both_streams_hide_environment_secrets_and_signed_urls(self):
+        secret = 'fake-env-secret.[+](value)'
+        url = 'https://fake-user:fake-pass@example.invalid/archive?sig=fake-signature#fragment'
+        exc = subprocess.CalledProcessError(1, ['git', 'push', url, secret],
+            output='remote: '+url, stderr='fatal: '+secret)
+        with patch.dict(os.environ, {'DIAGNOSTIC_TEST_TOKEN': secret}):
+            result = self.cycle_failure(exc)
+        body = json.dumps(result)
+        for sensitive in (secret, 'fake-user', 'fake-pass', 'fake-signature', 'fragment'):
+            self.assertNotIn(sensitive, body)
+        self.assertIn('[REDACTED]', body)
+
+    def test_credential_forms_are_redacted_without_erasing_plain_failure_reason(self):
+        examples = [
+            'Authorization: Bearer fake-bearer-value',
+            'Authorization: Basic ZmFrZS1jcmVkZW50aWFs',
+            '{"password": "fake-password-value"}',
+            '{"api_key":"fake-api-value"}',
+            'access_token=fake-token-value',
+            'Cookie: session=fake-cookie-value',
+            'ghp_'+('a'*36),
+            '-----BEGIN PRIVATE KEY-----\nfake-private-material\n-----END PRIVATE KEY-----',
+        ]
+        for value in examples:
+            with self.subTest(form=value[:18]):
+                self.adapter = Adapter(self.clock)
+                entry = self.cycle_failure(subprocess.CalledProcessError(
+                    1, ['git', 'push'], output=value, stderr='non-fast-forward'))['errors'][0]
+                self.assertIn('stdout', entry)
+                self.assertIn('[REDACTED]', entry['stdout'])
+                self.assertNotIn(value, entry['stdout'])
+                self.assertNotIn('fake-', entry['stdout'])
+                self.assertEqual(entry['stderr'], 'non-fast-forward')
+
+    def test_url_quotes_cannot_leave_userinfo_or_path_fragments_in_receipts(self):
+        url = "https://fake-user:fake-pass'private@example.invalid/private-path"
+        entry = self.cycle_failure(subprocess.CalledProcessError(
+            1, ['git', 'push', url], output=url, stderr=url))['errors'][0]
+        for name in ('error', 'stdout', 'stderr'):
+            self.assertNotIn('private', entry[name])
+            self.assertNotIn('fake-pass', entry[name])
+            self.assertIn('[REDACTED]', entry[name])
+
+    def test_escaped_known_secrets_are_removed_from_argv_repr_and_json_strings(self):
+        for secret in ('fake\\backslash-secret', 'fake\nnewline-secret',
+                       'fake\tunicode-密钥', 'fake\'"quotes-secret'):
+            with self.subTest(form=repr(secret[:5])):
+                self.adapter = Adapter(self.clock)
+                with patch.dict(os.environ, {'DIAGNOSTIC_TEST_TOKEN': secret}):
+                    entry = self.cycle_failure(subprocess.CalledProcessError(
+                        1, ['git', 'push', secret], output=json.dumps(secret),
+                        stderr=secret))['errors'][0]
+                for name in ('error', 'stdout', 'stderr'):
+                    self.assertIn('[REDACTED]', entry[name])
+                    self.assertNotIn('fake', entry[name])
+
+    def test_known_short_credentials_are_not_exempt_from_redaction(self):
+        with patch.dict(os.environ, {'DIAGNOSTIC_TEST_TOKEN': 'abc'}):
+            entry = self.cycle_failure(subprocess.CalledProcessError(
+                1, ['git', 'push', 'abc'], output='abc', stderr='abc'))['errors'][0]
+        for name in ('error', 'stdout', 'stderr'):
+            self.assertNotIn('abc', entry[name])
+            self.assertIn('[REDACTED]', entry[name])
+
+    def test_nested_json_credential_fields_are_redacted(self):
+        value = r'{\"password\":\"fake-nested-password\"}'
+        entry = self.cycle_failure(subprocess.CalledProcessError(
+            1, ['git', 'push'], output=value, stderr=value))['errors'][0]
+        self.assertNotIn('fake-nested-password', entry['stdout'])
+        self.assertNotIn('fake-nested-password', entry['stderr'])
+        self.assertIn('[REDACTED]', entry['stdout'])
+
+    def test_invalid_utf8_and_unicode_output_remain_json_serializable(self):
+        entry = self.cycle_failure(subprocess.CalledProcessError(
+            2, 'git push', output=b'failed\xff', stderr='拒绝更新'))['errors'][0]
+        self.assertIn('stdout', entry)
+        self.assertEqual(entry['stdout'], 'failed\ufffd')
+        self.assertEqual(entry['stderr'], '拒绝更新')
+        json.dumps(entry, allow_nan=False)
+
+    def test_output_is_sanitized_before_truncation_and_each_field_is_bounded(self):
+        value = 'x'*980+' token='+('s'*2500)
+        entry = self.cycle_failure(subprocess.CalledProcessError(
+            1, ['git', 'push'], output=value, stderr='y'*4000))['errors'][0]
+        self.assertIn('stdout', entry)
+        self.assertNotIn('s'*10, entry['stdout'])
+        self.assertLessEqual(len(entry['stdout']), 1000)
+        self.assertLessEqual(len(entry['stderr']), 1000)
+        self.assertTrue(entry['stderr'].endswith('[truncated]'))
+        self.assertLessEqual(len(entry['error']), len('CalledProcessError: ')+500)
+
+    def test_oversize_diagnostics_are_omitted_without_changing_failure(self):
+        entry = self.cycle_failure(subprocess.CalledProcessError(
+            1, 'git push', output=b'x'*17000, stderr='密'*6000))['errors'][0]
+        self.assertIn('stdout', entry)
+        self.assertEqual(entry['stdout'], '[omitted: diagnostic input exceeds limit]')
+        self.assertEqual(entry['stderr'], '[omitted: diagnostic input exceeds limit]')
+
+    def test_plain_exceptions_keep_original_summary_without_fabricated_streams(self):
+        entry = self.cycle_failure(RuntimeError('publish failed'))['errors'][0]
+        self.assertEqual(entry['error'], 'RuntimeError: publish failed')
+        for name in ('returncode', 'stdout', 'stderr'):
+            self.assertNotIn(name, entry)
+
+    def test_non_subprocess_error_summary_is_also_redacted(self):
+        entry = self.cycle_failure(RuntimeError('password=fake-summary-secret'))['errors'][0]
+        self.assertNotIn('fake-summary-secret', entry['error'])
+        self.assertTrue(entry['error'].startswith('RuntimeError: '))
+
+    def test_unprintable_exception_cannot_break_fatal_handling(self):
+        class Unprintable(subprocess.CalledProcessError):
+            def __str__(self): raise ValueError('unprintable')
+        result = self.cycle_failure(Unprintable(1, ['git', 'push']))
+        self.assertIn('[diagnostic unavailable]', result['errors'][0]['error'])
+
+    def test_final_publication_failure_keeps_unsafe_and_sanitized_evidence(self):
+        self.fail_publication(subprocess.CalledProcessError(
+            1, 'git push', output='remote refused', stderr='token=fake-final-secret'))
+        output = self.root/'outputs.txt'
+        with patch.dict(os.environ, {'GITHUB_OUTPUT': str(output)}):
+            result = runtime.finish(self.root, self.adapter,
+                {'fatal': False, 'status': 'CAPTURE_LOOP_COMPLETED'})
+        self.assertTrue(result['fatal'])
+        self.assertEqual(result['status'], 'DEGRADED')
+        self.assertNotIn('fatal=false', output.read_text())
+        saved = json.loads((self.root/runtime.BASE/'latest.json').read_text())
+        self.assertIn('final_publication_diagnostics', saved)
+        self.assertEqual(saved['final_publication_diagnostics']['returncode'], 1)
+        self.assertEqual(saved['final_publication_diagnostics']['stdout'], 'remote refused')
+        self.assertNotIn('fake-final-secret', json.dumps(saved))
+
+    def test_startup_failure_keeps_unsafe_without_calling_real_producers(self):
+        exc = subprocess.CalledProcessError(7, 'fixture', output='offline failure',
+                                          stderr='secret=fake-startup-secret')
+        closed = []
+        def fail(*args): raise exc
+        fake = SimpleNamespace(python=fail,
+            auditor=SimpleNamespace(close=lambda: closed.append(True)))
+        output = self.root/'outputs.txt'
+        printed = io.StringIO()
+        with patch.object(runtime, 'LiveAdapter', return_value=fake), \
+             patch.object(runtime, '__file__', str(self.root/'runtime_deadline_service.py')), \
+             patch.object(sys, 'argv', ['runtime_deadline_service.py']), \
+             patch.dict(os.environ, {'GITHUB_OUTPUT': str(output)}), redirect_stdout(printed):
+            code = runtime.main()
+        self.assertEqual(code, 1)
+        self.assertEqual(closed, [True])
+        self.assertNotIn('fatal=false', output.read_text())
+        result = json.loads(printed.getvalue())
+        self.assertTrue(result['fatal'])
+        self.assertIn('returncode', result)
+        self.assertEqual(result['returncode'], 7)
+        self.assertEqual(result['stdout'], 'offline failure')
+        self.assertNotIn('fake-startup-secret', printed.getvalue())
 
 
 if __name__ == '__main__': unittest.main()

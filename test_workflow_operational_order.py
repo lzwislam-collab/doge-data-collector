@@ -7,6 +7,7 @@ non-production unit tests; tests still fail the workflow for independent alertin
 No additional cron or modification of frozen model implementations is needed.
 """
 import unittest
+from types import SimpleNamespace
 from pathlib import Path
 
 WORKFLOW=Path(__file__).resolve().parent/'.github/workflows/okx_hourly_extreme_history.yml'
@@ -21,6 +22,33 @@ class TestOperationalOrder(unittest.TestCase):
   found=[i for i,line in enumerate(self.lines) if fragment in line]
   self.assertEqual(len(found),1,'missing/duplicate operational step: '+fragment)
   return found[0]
+
+ def test_cancelled_job_never_starts_a_new_archive_writer_but_still_drains(self):
+  # Characterize our emitted GitHub gate, including cancellation after persist.
+  # always() previously launched a fresh 600-second producer during the
+  # platform's five-minute forced-cancellation grace period.
+  def condition(step_id, cancelled, fatal='false', tail_fatal='false', persist='success'):
+   start=self.offset('id: '+step_id)
+   expression=self.lines[start+1].strip().removeprefix('if: ').strip()
+   if expression.startswith('${{'):
+    expression=expression[3:-2].strip()
+   expression=expression.replace('&&',' and ').replace('!cancelled()','not cancelled()')
+   steps=SimpleNamespace(
+    deadline_service=SimpleNamespace(outputs=SimpleNamespace(fatal=fatal)),
+    open_target_guard=SimpleNamespace(outputs=SimpleNamespace(tail_fatal=tail_fatal)),
+    persist=SimpleNamespace(outcome=persist),
+    archive_bridge_start=SimpleNamespace(outcome='success'))
+   return bool(eval(expression,{'__builtins__':{}},
+                    {'steps':steps,'always':lambda:True,'cancelled':lambda:cancelled}))
+  self.assertFalse(condition('archive_bridge_start',True),
+                   'cancelled jobs must not launch a new producer')
+  self.assertTrue(condition('archive_bridge_start',False))
+  for arguments in ({'fatal':'true'},{'fatal':''},{'tail_fatal':'true'},
+                    {'tail_fatal':''},{'persist':'failure'},{'persist':'skipped'}):
+   with self.subTest(arguments=arguments):
+    self.assertFalse(condition('archive_bridge_start',False,**arguments))
+  self.assertTrue(condition('archive_bridge_stop',True),
+                  'an already-started writer still requires drain on cancellation')
 
  def test_frozen_integrity_check_precedes_all_quote_source_writes(self):
   a=self.offset('Fail closed before writes on full-history or frozen protocol mutation')

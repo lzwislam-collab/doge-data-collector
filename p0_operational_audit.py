@@ -6,6 +6,39 @@ import forward_validation_v2 as v2
 import direction_forward_v42 as frozen
 import quote_evidence_v2 as evidence
 
+# Original public identities already recorded in P2 books and this fixed P0 proof.
+# These locators are not replacement publication times or edits to witness history.
+_CAPTURED_SOURCE_PROOF_COMMIT='2ff6e82aa5872d47e7e63e7e87017af85ebfef92'
+_CAPTURED_SOURCE_WITNESSES={
+    'DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1792987200000_1h':
+        ('40272071041','aeeb87094691b34757c92b44da1a41aa130912c4','2026-10-26T05:01:43+00:00'),
+    'DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1793008800000_1h':
+        ('40311990494','43b4a2ad11d8773b56dce2bdd30b50f1778d7f5f','2026-10-26T11:02:05+00:00')}
+
+def recover_captured_source_witness(root,row,bindings):
+    fid=row['forecast_id']
+    if fid not in _CAPTURED_SOURCE_WITNESSES:raise ValueError('forecast outside original source recovery scope')
+    rid,head,observed=_CAPTURED_SOURCE_WITNESSES[fid]
+    repo='lzwislam-collab/doge-data-collector'
+    witness={'forecast_id':fid,'run_id':rid,'head_sha':head,'observed_public_utc':observed,
+             'run_url':f'https://github.com/{repo}/actions/runs/{rid}'}
+    base.git(root,'merge-base','--is-ancestor',_CAPTURED_SOURCE_PROOF_COMMIT,'HEAD')
+    proof=json.loads(base.git(root,'show',_CAPTURED_SOURCE_PROOF_COMMIT+':data/p0_operations/latest.json'))
+    proof=proof.get('forecast_proofs',{}).get(fid,{})
+    if (proof.get('publication')!=witness or proof.get('issued_at_utc')!=row['issued_at_utc']
+        or proof.get('source_quote_utc')!=row['source_quote_utc']
+        or proof.get('quote_id')!=bindings.get(fid+'|ISSUE',{}).get('quote_id')):
+        raise ValueError('original source proof identity mismatch')
+    run=base.github_json('/actions/runs/'+rid)
+    if (str(run.get('id'))!=rid or run.get('head_sha')!=head
+        or run.get('html_url')!=witness['run_url']
+        or run.get('repository',{}).get('full_name')!=repo
+        or run.get('head_repository',{}).get('full_name')!=repo
+        or frozen.utc(run.get('created_at',''))!=frozen.utc(observed)):
+        raise ValueError('original source run identity mismatch')
+    # Reuse frozen server/head/registry checks without changing CSV or cache.
+    return base.remote_witnesses(root,{fid:row},{fid:witness},[run],persist_cache=False)[fid]
+
 def fetch_operational_runs(since, request=None, until=None):
     from urllib.parse import urlencode
     request=request or base.github_json
@@ -127,8 +160,13 @@ def evaluate(root=frozen.ROOT, now=None, runs=None):
         try:
             evidence.verify_bound(root,row,None,bindings)
             witness=legacy['verified_remote_head_witnesses'].get(fid)
+            issued=frozen.utc(row['issued_at_utc'])
+            if fid in _CAPTURED_SOURCE_WITNESSES and (not witness
+                or not issued-timedelta(seconds=1)<=frozen.utc(witness['observed_public_utc'])<=issued+timedelta(minutes=45)
+                or frozen.utc(witness['observed_public_utc'])>=frozen.utc(row['target_utc'])):
+                witness=recover_captured_source_witness(root,row,bindings)
             if not witness: raise ValueError('no pre-target GitHub server run witness')
-            issued=frozen.utc(row['issued_at_utc']);public=frozen.utc(witness['observed_public_utc'])
+            public=frozen.utc(witness['observed_public_utc'])
             if not issued-timedelta(seconds=1)<=public<=issued+timedelta(minutes=45) or public>=frozen.utc(row['target_utc']): raise ValueError('late public witness')
             evidence.verify_public_issue(root,row,bindings,witness['head_sha'])
             # Binding itself must also exist at the server-witnessed public commit.
