@@ -106,7 +106,8 @@ def worker(root, control):
     args = [sys.executable,str(root/'runtime_deadline_service.py'),
         '--duration-seconds','600','--stop-file',str(control/'stop')]
     if os.environ.get('DOGE_ARCHIVE_QUALIFIED_DRAIN') == '1': args.append('--require-qualified-stop')
-    code = subprocess.call(args,cwd=root)
+    env = dict(os.environ, DOGE_ARCHIVE_RUNTIME_PROGRESS='1')
+    code = subprocess.call(args,cwd=root,env=env)
     atomic_json(control/'completed.json',{'exit_code':code,'ended_at_utc':datetime.now(timezone.utc).isoformat()})
 
 

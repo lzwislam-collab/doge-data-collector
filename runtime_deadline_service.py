@@ -15,6 +15,7 @@ import sys
 import tempfile
 import time
 import uuid
+from contextvars import ContextVar
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -28,6 +29,37 @@ PUBLICATION_PHASES = frozenset(
      'receipt_publisher_total', 'receipt_readback'] +
     [scope+'_post_rebase_'+stage for scope in ('data', 'receipt')
      for stage in ('validate_state', 'pair_guard', 'pair_history_guard', 'validate_p2')])
+PROGRESS_ACTIONS = frozenset(('watch', 'publish', 'witness', 'prepare', 'issue',
+                              'source_audit', 'book', 'preserve_smoke'))
+_PROGRESS_CYCLE_ID = ContextVar('runtime_progress_cycle_id', default=None)
+
+
+def emit_runtime_progress(scope, stage, event, invocation, status=None, error=None):
+    """Archive-only JSONL to inherited runtime.log; never publish free text."""
+    try:
+        if os.environ.get('DOGE_ARCHIVE_RUNTIME_PROGRESS') != '1': return
+        stages = {'cycle_action': PROGRESS_ACTIONS, 'publication': PUBLICATION_PHASES}
+        if (type(scope) is not str or scope not in stages or type(stage) is not str
+                or stage not in stages[scope] or type(event) is not str
+                or event not in ('begin', 'end') or type(invocation) is not int
+                or not 1 <= invocation <= PUBLICATION_PROFILE_LIMIT): return
+        if event == 'end' and (type(status) is not str or status not in ('ok', 'error')): return
+        row = {'schema_version': 1, 'kind': 'runtime_progress',
+               'at_utc': datetime.now(timezone.utc).isoformat(), 'scope': scope,
+               'stage': stage, 'event': event, 'invocation': invocation}
+        cycle_id = _PROGRESS_CYCLE_ID.get()
+        if type(cycle_id) is str and re.fullmatch('[0-9a-f]{32}', cycle_id):
+            row['cycle_id'] = cycle_id
+        if event == 'end':
+            row['status'] = status
+            if error is not None:
+                kinds = (ValueError, RuntimeError, TimeoutError, OSError, KeyError,
+                         TypeError, AssertionError, subprocess.CalledProcessError,
+                         subprocess.TimeoutExpired, KeyboardInterrupt, SystemExit)
+                row['error_type'] = type(error).__name__ if type(error) in kinds else 'Exception'
+        print(json.dumps(row, sort_keys=True, allow_nan=False), flush=True)
+    except Exception:
+        pass
 
 
 def finite_seconds(value):
@@ -107,11 +139,20 @@ class PublicationProfile:
             started = self.clock()
         except Exception:
             pass
+        try:
+            if row is not None:
+                emit_runtime_progress('publication', stage, 'begin', row['invocation'])
+        except Exception:
+            pass
         succeeded = False
+        failure = None
         try:
             result = operation(*args, **kwargs)
             succeeded = result is not False
             return result
+        except BaseException as exc:
+            failure = exc
+            raise
         finally:
             try:
                 ended = self.clock()
@@ -121,6 +162,12 @@ class PublicationProfile:
                         row['seconds'] = ended-started
                     elif started is not None and ended is not None:
                         self.timing_errors = min(PUBLICATION_PROFILE_LIMIT, self.timing_errors+1)
+            except Exception:
+                pass
+            try:
+                if row is not None:
+                    emit_runtime_progress('publication', stage, 'end', row['invocation'],
+                                          'ok' if succeeded else 'error', failure)
             except Exception:
                 pass
 
@@ -208,20 +255,45 @@ def cycle(adapter, state, clock):
            'this_cycle_deferred_smoke_pending_at_end': False}
     issuance_publication_complete = False
     audit_pending = False
+    progress_invocations = {}
 
     def action(name):
         before = utc(clock())
+        token, invocation, succeeded, failure = None, 0, False, None
+        try:
+            if os.environ.get('DOGE_ARCHIVE_RUNTIME_PROGRESS') == '1':
+                token = _PROGRESS_CYCLE_ID.set(out['id'])
+                invocation = progress_invocations.get(name, 0)+1
+                progress_invocations[name] = invocation
+                emit_runtime_progress('cycle_action', name, 'begin', invocation)
+        except Exception:
+            pass
         try:
             result = adapter.action(name)
             out['actions'].append({'stage': name, 'result': result,
                                    'started_at_utc': before.isoformat(),
                                    'seconds': (utc(clock())-before).total_seconds()})
+            succeeded = True
             return True
         except Exception as exc:
+            failure = exc
             out['errors'].append({'stage': name, **exception_details(exc),
                                   'started_at_utc': before.isoformat(),
                                   'seconds': (utc(clock())-before).total_seconds()})
             return False
+        except BaseException as exc:
+            failure = exc
+            raise
+        finally:
+            try:
+                emit_runtime_progress('cycle_action', name, 'end', invocation,
+                                      'ok' if succeeded else 'error', failure)
+            except Exception:
+                pass
+            try:
+                if token is not None: _PROGRESS_CYCLE_ID.reset(token)
+            except Exception:
+                pass
 
     def publish():
         if not action('publish'):
