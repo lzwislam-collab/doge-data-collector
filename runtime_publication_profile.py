@@ -4,6 +4,7 @@ This does not call LiveAdapter.action('publish'), commit, push, issue, witness o
 OSS. The original checkout is read-only. Timings exclude production transport.
 """
 import argparse
+from contextlib import nullcontext
 import hashlib
 import importlib
 import json
@@ -15,6 +16,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 
 
@@ -123,19 +125,22 @@ def input_manifest(inputs):
             'manifest_sha256': hashlib.sha256(encoded).hexdigest()}
 
 
-def phase(report, output, stage, function, *, records=None):
+def phase(report, output, stage, function, *, records=None, lock=None):
     record = {'stage': stage, 'status': 'running'}
-    (report['phases'] if records is None else records).append(record)
-    write_report(output, report)
+    with lock or nullcontext():
+        (report['phases'] if records is None else records).append(record)
+        write_report(output, report)
     started = time.perf_counter()
     primary_failed = False
     try:
         result = function()
-        record['status'] = 'ok'
+        with lock or nullcontext():
+            record['status'] = 'ok'
         return result
     except BaseException:
         primary_failed = True
-        record['status'] = 'error'
+        with lock or nullcontext():
+            record['status'] = 'error'
         raise
     finally:
         diagnostic_error = None
@@ -145,26 +150,29 @@ def phase(report, output, stage, function, *, records=None):
             report.setdefault('diagnostic_errors', []).append(
                 {'stage': stage, 'operation': operation, 'type': type(error).__name__})
 
-        try:
-            elapsed = time.perf_counter() - started
-            if not math.isfinite(elapsed) or elapsed < 0:
-                raise ProfileError('invalid monotonic phase duration')
-            record['seconds'] = elapsed
-        except Exception as exc:
-            diagnostic_error = exc
-            unavailable('clock', exc)
-        try:
-            write_report(output, report)
-        except Exception as exc:
-            diagnostic_error = diagnostic_error or exc
-            unavailable('report', exc)
+        with lock or nullcontext():
+            try:
+                elapsed = time.perf_counter() - started
+                if not math.isfinite(elapsed) or elapsed < 0:
+                    raise ProfileError('invalid monotonic phase duration')
+                record['seconds'] = elapsed
+            except Exception as exc:
+                diagnostic_error = exc
+                unavailable('clock', exc)
+            try:
+                write_report(output, report)
+            except Exception as exc:
+                diagnostic_error = diagnostic_error or exc
+                unavailable('report', exc)
         # A diagnostic failure must never replace the validator's exception or
         # its cause. A successful validator still cannot make failed profiling green.
         if diagnostic_error is not None and not primary_failed:
             raise diagnostic_error
 
 
-def initial_report(source_sha, index_experiment=False):
+def initial_report(source_sha, index_experiment=False, parallel_validation_experiment=False):
+    if index_experiment and parallel_validation_experiment:
+        raise ProfileError('diagnostic experiments are mutually exclusive')
     report = {'schema_version': 1, 'status': 'running', 'source_sha': source_sha,
             'scope': 'single_pass_local_validation_and_fixed_HEAD_readback',
             'clock': 'monotonic', 'phases': [], 'python_network_denied': True,
@@ -180,6 +188,11 @@ def initial_report(source_sha, index_experiment=False):
             'build': {'status': 'not_started', 'phases': []},
             'p2_breakdown': {'status': 'not_started', 'phases': [],
                              'scope': 'additional_pass_do_not_add_to_trial_totals'}}
+    if parallel_validation_experiment:
+        report['scope'] = 'serial_parallel_serial_same_checkout_full_validation'
+        report['parallel_validation_experiment'] = {
+            'status': 'running', 'trials': [], 'threads': 2,
+            'timing_scope': 'phase_elapsed_times_overlap_do_not_add_as_wall_time'}
     return report
 
 
@@ -329,12 +342,196 @@ def index_experiment(checkout, source, source_sha, report, output, validators, r
     write_report(output, report)
 
 
-def worker(source, source_sha, output, workspace, use_index_experiment=False, timeout_seconds=360):
+def elapsed_seconds(started):
+    elapsed = time.perf_counter() - started
+    if not math.isfinite(elapsed) or elapsed < 0:
+        raise ProfileError('invalid monotonic experiment duration')
+    return elapsed
+
+
+def parallel_experiment(checkout, source, source_sha, report, output,
+                        validators, readback, core_snapshot):
+    experiment = report['parallel_validation_experiment']
+    baseline_source = source_state(source)
+    baseline_status = git(checkout, 'status', '--porcelain', '--untracked-files=no')
+    baseline_history = history_oids(checkout)
+    baseline_inputs = core_snapshot()
+    experiment['source_before'] = baseline_source
+    lock = threading.RLock()
+
+    def check_state(trial, suffix):
+        head = git(checkout, 'rev-parse', 'HEAD').decode().strip()
+        trial['head_' + suffix] = head
+        if head != source_sha:
+            raise ProfileError('fixed diagnostic HEAD changed')
+        tracked_status = git(checkout, 'status', '--porcelain', '--untracked-files=no')
+        trial['tracked_status_' + suffix + '_sha256'] = hashlib.sha256(tracked_status).hexdigest()
+        if tracked_status != baseline_status:
+            raise ProfileError('tracked input state changed during parallel experiment')
+        histories = history_oids(checkout)
+        trial['history_' + suffix] = history_manifest(histories)
+        if histories != baseline_history:
+            raise ProfileError('ordered history OID lists changed during parallel experiment')
+        inputs = core_snapshot()
+        trial['core_inputs_' + suffix] = input_manifest(inputs)
+        if inputs != baseline_inputs:
+            raise ProfileError('core input bytes changed during parallel experiment')
+        current_source = source_state(source)
+        trial['source_' + suffix] = current_source
+        if current_source != baseline_source:
+            raise ProfileError('original source state changed during parallel experiment')
+
+    for name in ('serial_before', 'parallel', 'serial_after'):
+        trial = {'name': name, 'status': 'running', 'phases': [], 'groups': []}
+        experiment['trials'].append(trial)
+        write_report(output, report)
+        started = time.perf_counter()
+        primary = None
+        try:
+            check_state(trial, 'before')
+            validation_started = time.perf_counter()
+            if name == 'parallel':
+                validator_failures = {}
+                diagnostic_failures = {}
+                completed_validators = set()
+                groups = [('p2', [0]), ('remaining_in_original_order', list(range(1, len(validators))))]
+                trial['groups'] = [{'name': label, 'status': 'not_started',
+                                    'stages': [validators[i][0] for i in indices]}
+                                   for label, indices in groups]
+
+                def run_group(group, indices, done):
+                    group_started = None
+                    current_index = indices[0]
+                    try:
+                        with lock:
+                            group['status'] = 'running'
+                        # Entry diagnostics belong inside the failure boundary too.
+                        group_started = time.perf_counter()
+                        for current_index in indices:
+                            stage, function = validators[current_index]
+
+                            def validate(function=function, index=current_index):
+                                try:
+                                    result = function()
+                                except BaseException as exc:
+                                    with lock:
+                                        validator_failures[index] = (exc, exc.__traceback__)
+                                    raise
+                                with lock:
+                                    completed_validators.add(index)
+                                return result
+
+                            phase(report, output, stage, validate, records=trial['phases'], lock=lock)
+                        with lock:
+                            group['status'] = 'completed'
+                    except BaseException as exc:
+                        with lock:
+                            if current_index not in validator_failures:
+                                diagnostic_failures.setdefault(current_index, (exc, exc.__traceback__))
+                            group['status'] = 'error'
+                    finally:
+                        try:
+                            with lock:
+                                try:
+                                    if group_started is not None:
+                                        group['wall_seconds'] = elapsed_seconds(group_started)
+                                    else:
+                                        group['diagnostic_status'] = 'unavailable'
+                                    write_report(output, report)
+                                except BaseException as exc:
+                                    group['status'] = 'error'
+                                    diagnostic_failures.setdefault(current_index, (exc, exc.__traceback__))
+                        finally:
+                            done.set()
+
+                readers = [(threading.Thread(target=run_group, args=(group, indices, done)), done)
+                           for group, (_, indices), done in zip(
+                               trial['groups'], groups, [threading.Event(), threading.Event()])]
+                # Never propagate a failure until every started reader has stopped.
+                # Cleanup remains inside the original run_bounded process-group
+                # deadline; an interruption cannot start a new trial or extend it.
+                started_readers = []
+                try:
+                    for thread, done in readers:
+                        started_readers.append((thread, done))
+                        thread.start()
+                except BaseException as exc:
+                    diagnostic_failures.setdefault(len(validators), (exc, exc.__traceback__))
+                finally:
+                    for thread, done in started_readers:
+                        # Registration precedes start: an interrupted return can
+                        # hide a live reader. A missing ident means no launch was
+                        # observed, so do not join a never-started thread.
+                        if thread.ident is None:
+                            continue
+                        # The completion event also covers a join interrupted while
+                        # Python's Thread bookkeeping prematurely reports stopped.
+                        while not done.is_set() or thread.is_alive():
+                            try:
+                                thread.join(timeout=.05)
+                            except BaseException as exc:
+                                diagnostic_failures.setdefault(len(validators), (exc, exc.__traceback__))
+                            if not done.is_set():
+                                try:
+                                    done.wait(.05)
+                                except BaseException as exc:
+                                    diagnostic_failures.setdefault(len(validators), (exc, exc.__traceback__))
+                # A real validation failure always outranks diagnostics in any
+                # group; ties among validators retain their original order.
+                failures = validator_failures or diagnostic_failures
+                if failures:
+                    error, traceback = failures[min(failures)]
+                    raise error.with_traceback(traceback)
+                if (completed_validators != set(range(len(validators)))
+                        or any(group['status'] != 'completed' for group in trial['groups'])):
+                    raise ProfileError('parallel validation groups did not fully complete')
+            else:
+                for stage, function in validators:
+                    phase(report, output, stage, function, records=trial['phases'])
+            if (len(trial['phases']) != len(validators)
+                    or {p['stage'] for p in trial['phases']} != {stage for stage, _ in validators}
+                    or any(p['status'] != 'ok' for p in trial['phases'])):
+                raise ProfileError('required validator phases did not fully complete')
+            trial['validation_wall_seconds'] = elapsed_seconds(validation_started)
+            phase(report, output, 'core_exact_readback', readback, records=trial['phases'])
+            trial['validation_and_readback_wall_seconds'] = elapsed_seconds(validation_started)
+            trial['phase_seconds_sum'] = sum(p['seconds'] for p in trial['phases'])
+        except BaseException as exc:
+            primary = (exc, exc.__traceback__)
+        finally:
+            try:
+                check_state(trial, 'after')
+                trial['wall_seconds'] = elapsed_seconds(started)
+            except BaseException as exc:
+                trial['state_or_timing_error'] = {'type': type(exc).__name__}
+                if isinstance(exc, ProfileError): trial['state_or_timing_error']['reason'] = str(exc)
+                if primary is None: primary = (exc, exc.__traceback__)
+            trial['status'] = 'error' if primary else 'completed'
+            if primary:
+                experiment['status'] = 'error'
+                trial['error'] = {'type': type(primary[0]).__name__}
+            try:
+                write_report(output, report)
+            except BaseException as exc:
+                report.setdefault('diagnostic_errors', []).append(
+                    {'stage': name, 'operation': 'report', 'type': type(exc).__name__})
+                if primary is None:
+                    primary = (exc, exc.__traceback__)
+                    trial['status'] = experiment['status'] = 'error'
+        if primary:
+            raise primary[0].with_traceback(primary[1])
+    experiment.update(status='completed', history_sequences_equal=True,
+                      source_after=source_state(source), source_unchanged=True)
+    write_report(output, report)
+
+
+def worker(source, source_sha, output, workspace, use_index_experiment=False, timeout_seconds=360,
+           use_parallel_validation_experiment=False):
     source, output, workspace = Path(source).resolve(), Path(output).resolve(), Path(workspace).resolve()
     if output.is_relative_to(source) or workspace.is_relative_to(source):
         raise ProfileError('worker output and workspace must be outside the original checkout')
     deadline = time.perf_counter() + timeout_seconds
-    report = initial_report(source_sha, use_index_experiment)
+    report = initial_report(source_sha, use_index_experiment, use_parallel_validation_experiment)
     write_report(output, report)
     lock_down_worker()
     checkout = workspace / 'checkout'
@@ -368,6 +565,9 @@ def worker(source, source_sha, output, workspace, use_index_experiment=False, ti
                 raise ProfileError('fixed HEAD core readback mismatch')
         if use_index_experiment:
             index_experiment(checkout, source, source_sha, report, output, validators, readback, deadline)
+        elif use_parallel_validation_experiment:
+            parallel_experiment(checkout, source, source_sha, report, output, validators, readback,
+                                lambda: core_inputs(checkout, publisher, evidence))
         else:
             for name, function in validators:
                 phase(report, output, name, function)
@@ -389,6 +589,7 @@ def worker(source, source_sha, output, workspace, use_index_experiment=False, ti
     except Exception as exc:
         report['status'] = 'error'
         if use_index_experiment: report['index_experiment']['status'] = 'error'
+        if use_parallel_validation_experiment: report['parallel_validation_experiment']['status'] = 'error'
         report['error'] = {'type': type(exc).__name__}
         if isinstance(exc, ProfileError):
             report['error']['reason'] = str(exc)
@@ -420,7 +621,8 @@ def run_bounded(command, environment, timeout_seconds):
     return {'returncode': process.returncode, 'timed_out': timed_out}
 
 
-def run_profile(source, source_sha, output, timeout_seconds, index_experiment=False):
+def run_profile(source, source_sha, output, timeout_seconds, index_experiment=False,
+                parallel_validation_experiment=False):
     source, output = Path(source).resolve(), Path(output).resolve()
     if output.is_relative_to(source):
         raise ValueError('diagnostic output must be outside the original checkout')
@@ -429,7 +631,7 @@ def run_profile(source, source_sha, output, timeout_seconds, index_experiment=Fa
         raise ValueError('Ubuntu diagnostic requires a timeout in (0, 360] seconds')
     if not re.fullmatch('[0-9a-f]{40}', source_sha):
         raise ValueError('a complete fixed commit SHA is required')
-    report = initial_report(source_sha, index_experiment)
+    report = initial_report(source_sha, index_experiment, parallel_validation_experiment)
     write_report(output, report)
     started = time.perf_counter()
     with tempfile.TemporaryDirectory(prefix='runtime-publication-profile-') as workspace:
@@ -438,9 +640,10 @@ def run_profile(source, source_sha, output, timeout_seconds, index_experiment=Fa
                               '--output', str(output), '--workspace', workspace,
                               '--timeout-seconds', str(timeout_seconds)]
         if index_experiment: command.append('--index-experiment')
+        if parallel_validation_experiment: command.append('--parallel-validation-experiment')
         result = run_bounded(command, safe_environment(), timeout_seconds)
     try: report = json.loads(output.read_text(encoding='utf-8'))
-    except (OSError, ValueError): report = initial_report(source_sha, index_experiment)
+    except (OSError, ValueError): report = initial_report(source_sha, index_experiment, parallel_validation_experiment)
     if result['timed_out']:
         report['status'] = 'timeout'
         for record in report['phases']:
@@ -451,6 +654,13 @@ def run_profile(source, source_sha, output, timeout_seconds, index_experiment=Fa
             for section in [experiment['build'], *experiment['trials'], experiment['p2_breakdown']]:
                 if section['status'] == 'running': section['status'] = 'timeout'
                 for record in section['phases']:
+                    if record['status'] == 'running': record['status'] = 'timeout'
+        if parallel_validation_experiment:
+            experiment = report['parallel_validation_experiment']
+            experiment['status'] = 'timeout'
+            for trial in experiment['trials']:
+                if trial['status'] == 'running': trial['status'] = 'timeout'
+                for record in trial['phases'] + trial['groups']:
                     if record['status'] == 'running': record['status'] = 'timeout'
     elif result['returncode'] != 0 or report['status'] != 'completed':
         report['status'] = 'error'
@@ -465,17 +675,20 @@ def main():
     parser.add_argument('--source-sha', required=True)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--timeout-seconds', type=float, default=360)
-    parser.add_argument('--index-experiment', action='store_true',
+    experiments = parser.add_mutually_exclusive_group()
+    experiments.add_argument('--index-experiment', action='store_true',
                         help='compare native Git commit-graph off/on/off in the same isolated checkout')
+    experiments.add_argument('--parallel-validation-experiment', action='store_true',
+                             help='compare complete serial/parallel/serial validation offline')
     parser.add_argument('--worker', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--source-repo', type=Path, help=argparse.SUPPRESS)
     parser.add_argument('--workspace', type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.worker:
         return worker(args.source_repo, args.source_sha, args.output, args.workspace,
-                      args.index_experiment, args.timeout_seconds)
+                      args.index_experiment, args.timeout_seconds, args.parallel_validation_experiment)
     code = run_profile(Path(__file__).resolve().parent, args.source_sha, args.output,
-                       args.timeout_seconds, args.index_experiment)
+                       args.timeout_seconds, args.index_experiment, args.parallel_validation_experiment)
     print(args.output.read_text(encoding='utf-8'))
     return code
 
