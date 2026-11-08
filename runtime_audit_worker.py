@@ -49,6 +49,81 @@ AUDITED_BLOBS = {
 }
 
 
+def failure_diagnostics(phase, error):
+    """Summarize captured failures without emitting output, URLs, or reports.
+
+    A blocked JSON message is only a reported classification, not proof of its
+    underlying cause. Text hashes cover subprocess's UTF-8 captured text (which
+    already has universal-newline normalization), not the original wire bytes.
+    """
+    if phase not in ('clone',)+SCRIPTS or not isinstance(
+            error, (subprocess.CalledProcessError, subprocess.TimeoutExpired)):
+        return None
+    details = {'schema_version': 1, 'phase': phase,
+               'failure_kind': 'command_timeout' if isinstance(error, subprocess.TimeoutExpired) else 'nonzero_exit',
+               'reported_category': 'unknown', 'reported_error_code': 'unknown',
+               'stdout_parse': 'not_attempted'}
+    if isinstance(error, subprocess.CalledProcessError):
+        if type(error.returncode) is int and -(2**31) <= error.returncode < 2**31:
+            details['returncode'] = error.returncode
+    elif type(error.timeout) in (float, int) and math.isfinite(error.timeout) and error.timeout >= 0:
+        details['timeout_seconds'] = error.timeout
+    captured = {}
+    for stream in ('stdout', 'stderr'):
+        value = getattr(error, stream, None)
+        if type(value) is str:
+            body, representation = value.encode('utf-8'), 'captured_text_utf8'
+        elif type(value) is bytes:
+            body, representation = value, 'captured_bytes'
+        else:
+            details[stream+'_representation'] = 'absent' if value is None else 'unavailable'
+            continue
+        captured[stream] = body
+        details.update({stream+'_representation': representation, stream+'_bytes': len(body),
+                        stream+'_sha256': hashlib.sha256(body).hexdigest()})
+    if not isinstance(error, subprocess.CalledProcessError) or phase not in SCRIPTS:
+        return details
+    body = captured.get('stdout')
+    if body is None: return details
+    if len(body) > 65536:
+        details['stdout_parse'] = 'oversized'
+        return details
+    try: report = json.loads(body.decode('utf-8'))
+    except (ValueError, UnicodeError, RecursionError):
+        details['stdout_parse'] = 'malformed'
+        return details
+    if not isinstance(report, dict) or report.get('status') not in ('blocked', 'BLOCKED') or type(report.get('error')) is not str:
+        details['stdout_parse'] = 'unrecognized_json'
+        return details
+    details['stdout_parse'] = 'blocked_json'
+    message = report['error']
+    if len(message) > 4096: return details
+    http = re.fullmatch(r'HTTP Error ([45][0-9]{2}): [^\r\n]*', message)
+    if http:
+        details.update(reported_category='http_error', reported_error_code='reported_http_error',
+                       reported_http_status=int(http.group(1)))
+    elif message in ('timed out', 'The read operation timed out', '<urlopen error timed out>'):
+        details.update(reported_category='timeout', reported_error_code='reported_timeout')
+    else:
+        known = {
+            'full git history required': 'full_git_history_required',
+            'frozen prediction implementation modified': 'frozen_prediction_implementation_modified',
+            'frozen model modified': 'frozen_model_modified',
+            'invalid V2 protocol or incomplete implementation manifest': 'invalid_v2_protocol',
+            'V2 protocol witness mismatch': 'v2_protocol_witness_mismatch',
+            'invalid V2 protocol witness': 'invalid_v2_protocol_witness',
+            'missing original protocol witness': 'missing_original_protocol_witness',
+            'duplicate historical ID': 'duplicate_historical_id',
+            'duplicate hourly source key': 'duplicate_hourly_source_key',
+            'audit clock must be UTC': 'audit_clock_not_utc',
+        }
+        if message in known:
+            details.update(reported_category='validation_error', reported_error_code=known[message])
+        elif message == 'one-day operational query exceeds 1000 records; cannot classify missing runs':
+            details.update(reported_category='operational_limit', reported_error_code='operational_run_query_limit')
+    return details
+
+
 def emit_progress(phase, event, **metadata):
     """Bounded metadata only, flushed to the inherited log; never raw reports."""
     try:
@@ -86,6 +161,9 @@ def emit_progress(phase, event, **metadata):
             kinds = (ValueError, RuntimeError, TimeoutError, OSError, KeyError, TypeError,
                      AssertionError, subprocess.CalledProcessError, subprocess.TimeoutExpired)
             row['error_type'] = type(error).__name__ if type(error) in kinds else 'Exception'
+            try: details = failure_diagnostics(phase, error)
+            except Exception: details = None
+            if details is not None: row['failure_diagnostics'] = details
         print(json.dumps(row, sort_keys=True, allow_nan=False), flush=True)
     except Exception:
         pass
@@ -107,6 +185,8 @@ def timed_command(phase, *args, cwd, **metadata):
     try:
         output = command(*args, cwd=cwd)
     except BaseException as exc:
+        try: exc._audit_command_phase = phase
+        except Exception: pass
         emit_progress(phase, 'end', status='error', seconds=elapsed(start), error=exc, **metadata)
         raise
     seconds = time.monotonic()-start
@@ -294,7 +374,11 @@ class Auditor:
 
 def main():
     try: result = audit_snapshot(Path(sys.argv[1]), sys.argv[2], Path(sys.argv[3]).parent)
-    except Exception as exc: result = {'status': 'failed', 'error': type(exc).__name__+': '+str(exc)[:500]}
+    except Exception as exc:
+        result = {'status': 'failed', 'error': type(exc).__name__+': '+str(exc)[:500]}
+        try: details = failure_diagnostics(getattr(exc, '_audit_command_phase', None), exc)
+        except Exception: details = None
+        if details is not None: result['failure_diagnostics'] = details
     emit_progress('result', 'begin', input_head=sys.argv[2])
     start = time.monotonic()
     try:
