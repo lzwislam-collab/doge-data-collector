@@ -4,10 +4,11 @@ This does not call LiveAdapter.action('publish'), commit, push, issue, witness o
 OSS. The original checkout is read-only. Timings exclude production transport.
 """
 import argparse
-from contextlib import nullcontext
+from contextlib import nullcontext, redirect_stdout
 import hashlib
 import importlib
 import importlib.util
+import io
 import json
 import math
 import os
@@ -29,6 +30,7 @@ HISTORY_PATHS = ('data/direction_v42/forward_registry.csv',
                  'data/quote_evidence_v2/bindings.csv',
                  'data/paired_forward_v1/pairs.jsonl',
                  'data/p2_paired_execution_v3_1/books.jsonl')
+IMPLEMENTATION_FILES = ('runtime_deadline_service.py', 'runtime_p2_history.py')
 
 
 class ProfileError(ValueError):
@@ -172,9 +174,9 @@ def phase(report, output, stage, function, *, records=None, lock=None):
 
 
 def initial_report(source_sha, index_experiment=False, parallel_validation_experiment=False,
-                   history_batch_experiment=False):
+                   history_batch_experiment=False, p2_equivalence_experiment=False):
     if sum(bool(x) for x in (index_experiment, parallel_validation_experiment,
-                            history_batch_experiment)) > 1:
+                            history_batch_experiment, p2_equivalence_experiment)) > 1:
         raise ProfileError('diagnostic experiments are mutually exclusive')
     report = {'schema_version': 1, 'status': 'running', 'source_sha': source_sha,
             'scope': 'single_pass_local_validation_and_fixed_HEAD_readback',
@@ -201,6 +203,11 @@ def initial_report(source_sha, index_experiment=False, parallel_validation_exper
         report['history_batch_experiment'] = {
             'status': 'not_started', 'path': HISTORY_PATHS[-1],
             'production_validator_replaced': False}
+    if p2_equivalence_experiment:
+        report['scope'] = 'reference_candidate_reference_full_p2_validation'
+        report['p2_equivalence_experiment'] = {
+            'status': 'not_started', 'trials': [], 'production_validator_replaced': False,
+            'timing_scope': 'main_validation_wall_excludes_additional_event_equivalence_pass'}
     return report
 
 
@@ -226,7 +233,53 @@ def source_state(source):
             'tracked_status_sha256': hashlib.sha256(
                 git(source, 'status', '--porcelain', '--untracked-files=no')).hexdigest(),
             'runtime_code_sha256': hashlib.sha256((source / 'runtime_deadline_service.py').read_bytes()).hexdigest(),
+            'helper_code_sha256': file_sha256(source / 'runtime_p2_history.py'),
             'graph': graph_inventory(object_directory(source))}
+
+
+def file_sha256(path):
+    if path.is_symlink():
+        raise ProfileError('implementation files must not be symbolic links')
+    if not path.exists():
+        return None
+    if not path.is_file():
+        raise ProfileError('implementation path is not a regular file')
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def install_implementation_overlays(checkout, source, report, originals):
+    report['implementation_overlays'] = {}
+    for name in IMPLEMENTATION_FILES:
+        target, current = checkout / name, source / name
+        fixed_sha, measured_sha = file_sha256(target), file_sha256(current)
+        if name == 'runtime_deadline_service.py' and measured_sha is None:
+            raise ProfileError('current runtime implementation is missing')
+        originals[name] = target.read_bytes() if fixed_sha is not None else None
+        report['implementation_overlays'][name] = {
+            'fixed_sha256': fixed_sha, 'measured_sha256': measured_sha}
+        if measured_sha is None:
+            target.unlink(missing_ok=True)
+        else:
+            target.write_bytes(current.read_bytes())
+            if file_sha256(target) != measured_sha:
+                raise ProfileError('implementation overlay bytes changed during installation')
+    report['runtime_code_sha256'] = report['implementation_overlays']['runtime_deadline_service.py']['measured_sha256']
+    report['fixed_runtime_code_sha256'] = report['implementation_overlays']['runtime_deadline_service.py']['fixed_sha256']
+
+
+def restore_implementation_overlays(checkout, originals, report):
+    for name, body in originals.items():
+        path = checkout / name
+        if path.is_symlink():
+            path.unlink()
+        if body is None:
+            path.unlink(missing_ok=True)
+        else:
+            path.write_bytes(body)
+        expected = None if body is None else hashlib.sha256(body).hexdigest()
+        if file_sha256(path) != expected:
+            raise ProfileError('fixed implementation overlay was not restored')
+    report['overlays_restored'] = True
 
 
 def history_oids(root):
@@ -597,27 +650,161 @@ def history_batch_probe(checkout, source, source_sha, report, output, deadline):
         raise primary[0].with_traceback(primary[1])
 
 
+def p2_equivalence_experiment(checkout, source, source_sha, report, output,
+                              runtime, validators, readback, core_snapshot):
+    """Measure the real entry point; retain full event equality separately."""
+    experiment = report['p2_equivalence_experiment']
+    engine = importlib.import_module('p2_paired_execution_v3_1')
+    helper = importlib.import_module('runtime_p2_history')
+    for module, filename in ((engine, 'p2_paired_execution_v3_1.py'),
+                             (helper, 'runtime_p2_history.py'),
+                             (runtime, 'runtime_deadline_service.py')):
+        if Path(module.__file__).resolve() != (checkout / filename).resolve():
+            raise ProfileError('P2 implementation imported outside the isolated fixed checkout')
+
+    def state():
+        return {'head': git(checkout, 'rev-parse', 'HEAD').decode().strip(),
+                'tracked_status': git(checkout, 'status', '--porcelain', '--untracked-files=no'),
+                'histories': history_oids(checkout), 'core': core_snapshot(),
+                'p2_bytes': (checkout / HISTORY_PATHS[-1]).read_bytes(),
+                'implementation': {name: file_sha256(checkout / name) for name in
+                    (*IMPLEMENTATION_FILES, 'p2_paired_execution_v3_1.py')},
+                'source': source_state(source)}
+
+    baseline = state()
+    if baseline['head'] != source_sha or not baseline['histories'][HISTORY_PATHS[-1]]:
+        raise ProfileError('P2 equivalence requires fixed complete nonempty history')
+    experiment.update(status='running', source_before=baseline['source'],
+                      implementation_sha256=baseline['implementation'])
+
+    def check_state(trial, suffix):
+        observed = state()
+        trial['head_' + suffix] = observed['head']
+        trial['history_' + suffix] = history_manifest(observed['histories'])
+        trial['core_inputs_' + suffix] = input_manifest(observed['core'])
+        if observed != baseline:
+            raise ProfileError('P2 equivalence changed fixed history, inputs, implementation or source')
+
+    def original_p2():
+        engine.guard(checkout)
+        events = engine.history_guard(checkout)
+        for _ in engine.event_books(checkout, events):
+            pass
+        return events
+
+    def event_bytes(events):
+        if not isinstance(events, list):
+            raise ProfileError('full ordered P2 events must be a list')
+        return json.dumps(events, sort_keys=True, separators=(',', ':'),
+                          ensure_ascii=False, allow_nan=False).encode('utf-8')
+
+    reference_bytes = None
+    for name in ('reference_before', 'candidate', 'reference_after'):
+        trial = {'name': name, 'status': 'running', 'phases': [], 'equivalence_phases': []}
+        experiment['trials'].append(trial)
+        write_report(output, report)
+        started = time.perf_counter()
+        primary = None
+        try:
+            check_state(trial, 'before')
+            validation_started = time.perf_counter()
+            if name == 'candidate':
+                captured = io.StringIO()
+                def candidate_p2():
+                    with redirect_stdout(captured):
+                        outcome = runtime.validate_p2(checkout)
+                    if outcome is not None:
+                        raise ProfileError('candidate validate_p2 contract must return None')
+                phase(report, output, 'preflight_validate_p2', candidate_p2,
+                      records=trial['phases'])
+            else:
+                events = phase(report, output, 'preflight_validate_p2', original_p2,
+                               records=trial['phases'])
+            for stage, function in validators[1:]:
+                phase(report, output, stage, function, records=trial['phases'])
+            trial['validation_wall_seconds'] = elapsed_seconds(validation_started)
+            phase(report, output, 'core_exact_readback', readback, records=trial['phases'])
+            trial['validation_and_readback_wall_seconds'] = elapsed_seconds(validation_started)
+            trial['phase_seconds_sum'] = sum(p['seconds'] for p in trial['phases'])
+            if name == 'candidate':
+                raw = captured.getvalue()
+                if len(raw) > 65536:
+                    raise ProfileError('candidate validation diagnostics exceed the bounded report')
+                logs = []
+                for line in raw.splitlines():
+                    try: entry = json.loads(line)
+                    except ValueError: continue
+                    if isinstance(entry, dict) and entry.get('kind') == 'runtime_p2_history_validation':
+                        logs.append(entry)
+                if (len(logs) != 1 or logs[0].get('validation_status') != 'ok'
+                        or logs[0].get('status') != 'ok'
+                        or logs[0].get('mode') not in ('native_batch', 'legacy_full_fallback')
+                        or logs[0].get('module_sha256') != baseline['implementation']['runtime_p2_history.py']):
+                    raise ProfileError('candidate entry point diagnostics do not identify a completed implementation')
+                trial['candidate_diagnostics'] = logs[0]
+                diagnostics = {}
+                events = phase(report, output, 'candidate_history_equivalence',
+                               lambda: helper.history_guard(checkout, engine=engine, diagnostics=diagnostics),
+                               records=trial['equivalence_phases'])
+                trial['equivalence_diagnostics'] = diagnostics
+                if (diagnostics.get('status') != 'ok'
+                        or diagnostics.get('mode') not in ('native_batch', 'legacy_full_fallback')):
+                    raise ProfileError('additional event equivalence validation did not complete')
+            encoded = event_bytes(events)
+            trial['events'] = {'count': len(events), 'sha256': hashlib.sha256(encoded).hexdigest()}
+            if reference_bytes is None:
+                reference_bytes = encoded
+            elif encoded != reference_bytes:
+                raise ProfileError('complete P2 event values or order differ from the original reference')
+        except BaseException as exc:
+            primary = (exc, exc.__traceback__)
+        finally:
+            try:
+                check_state(trial, 'after')
+                trial['wall_seconds'] = elapsed_seconds(started)
+            except BaseException as exc:
+                trial['state_or_timing_error'] = {'type': type(exc).__name__}
+                if primary is None: primary = (exc, exc.__traceback__)
+            trial['status'] = 'error' if primary else 'completed'
+            if primary:
+                experiment['status'] = 'error'
+                trial['error'] = {'type': type(primary[0]).__name__}
+            try:
+                write_report(output, report)
+            except BaseException as exc:
+                if primary is None:
+                    primary = (exc, exc.__traceback__)
+                    trial['status'] = experiment['status'] = 'error'
+        if primary:
+            raise primary[0].with_traceback(primary[1])
+    experiment.update(status='completed', events_equal=True, source_unchanged=True,
+                      source_after=source_state(source))
+    write_report(output, report)
+
+
 def worker(source, source_sha, output, workspace, use_index_experiment=False, timeout_seconds=360,
-           use_parallel_validation_experiment=False, use_history_batch_experiment=False):
+           use_parallel_validation_experiment=False, use_history_batch_experiment=False,
+           use_p2_equivalence_experiment=False):
     source, output, workspace = Path(source).resolve(), Path(output).resolve(), Path(workspace).resolve()
     if output.is_relative_to(source) or workspace.is_relative_to(source):
         raise ProfileError('worker output and workspace must be outside the original checkout')
     deadline = time.perf_counter() + timeout_seconds
     report = initial_report(source_sha, use_index_experiment, use_parallel_validation_experiment,
-                            use_history_batch_experiment)
+                            use_history_batch_experiment, use_p2_equivalence_experiment)
     write_report(output, report)
     lock_down_worker()
     checkout = workspace / 'checkout'
-    original_runtime = None
+    original_implementations = {}
+    baseline_source = None
     try:
+        baseline_source = source_state(source)
         setup = time.perf_counter()
         report['full_history_commit_count'] = prepare_checkout(source, source_sha, checkout)
         report['setup_seconds'] = time.perf_counter() - setup
-        original_runtime = (checkout / 'runtime_deadline_service.py').read_bytes()
-        measured_runtime = (source / 'runtime_deadline_service.py').read_bytes()
-        report['runtime_code_sha256'] = hashlib.sha256(measured_runtime).hexdigest()
-        report['fixed_runtime_code_sha256'] = hashlib.sha256(original_runtime).hexdigest()
-        (checkout / 'runtime_deadline_service.py').write_bytes(measured_runtime)
+        install_implementation_overlays(checkout, source, report, original_implementations)
+        if (use_p2_equivalence_experiment
+                and report['implementation_overlays']['runtime_p2_history.py']['measured_sha256'] is None):
+            raise ProfileError('P2 equivalence requires the current runtime helper')
         sys.path.insert(0, str(checkout))
         runtime = importlib.import_module('runtime_deadline_service')
         publisher = importlib.import_module('publish_forward_evidence')
@@ -641,6 +828,10 @@ def worker(source, source_sha, output, workspace, use_index_experiment=False, ti
         elif use_parallel_validation_experiment:
             parallel_experiment(checkout, source, source_sha, report, output, validators, readback,
                                 lambda: core_inputs(checkout, publisher, evidence))
+        elif use_p2_equivalence_experiment:
+            p2_equivalence_experiment(checkout, source, source_sha, report, output,
+                                     runtime, validators, readback,
+                                     lambda: core_inputs(checkout, publisher, evidence))
         else:
             for name, function in validators:
                 phase(report, output, name, function)
@@ -650,17 +841,14 @@ def worker(source, source_sha, output, workspace, use_index_experiment=False, ti
         if use_history_batch_experiment:
             # The original validators above measured the current runtime wrapper.
             # The separate Git-byte probe must inspect a clean fixed-commit tree.
-            (checkout / 'runtime_deadline_service.py').write_bytes(original_runtime)
-            original_runtime = None
+            restore_implementation_overlays(checkout, original_implementations, report)
             history_batch_probe(checkout, source, source_sha, report, output, deadline)
         after = core_inputs(checkout, publisher, evidence)
         report['core_inputs_after'] = input_manifest(after)
         if after != expected:
             raise ProfileError('core input bytes changed during readback')
         report['input_bytes_unchanged'] = True
-        if original_runtime is not None:
-            (checkout / 'runtime_deadline_service.py').write_bytes(original_runtime)
-            original_runtime = None
+        restore_implementation_overlays(checkout, original_implementations, report)
         report['tracked_worktree_clean'] = not git(checkout, 'status', '--porcelain', '--untracked-files=no').strip()
         if not report['tracked_worktree_clean']:
             raise ProfileError('tracked inputs changed during read-only diagnostic')
@@ -672,12 +860,21 @@ def worker(source, source_sha, output, workspace, use_index_experiment=False, ti
         if use_parallel_validation_experiment: report['parallel_validation_experiment']['status'] = 'error'
         if use_history_batch_experiment and report['history_batch_experiment']['status'] != 'not_started':
             report['history_batch_experiment']['status'] = 'error'
+        if use_p2_equivalence_experiment and report['p2_equivalence_experiment']['status'] != 'not_started':
+            report['p2_equivalence_experiment']['status'] = 'error'
         report['error'] = {'type': type(exc).__name__}
         if isinstance(exc, ProfileError):
             report['error']['reason'] = str(exc)
     finally:
-        if original_runtime is not None:
-            (checkout / 'runtime_deadline_service.py').write_bytes(original_runtime)
+        try:
+            if original_implementations:
+                restore_implementation_overlays(checkout, original_implementations, report)
+            if baseline_source is not None and source_state(source) != baseline_source:
+                raise ProfileError('original source implementation or state changed')
+        except Exception as exc:
+            report['status'] = 'error'
+            report['restore_or_source_error'] = {'type': type(exc).__name__}
+            report.setdefault('error', {'type': type(exc).__name__})
         write_report(output, report)
     return 0 if report['status'] == 'completed' else 1
 
@@ -704,7 +901,8 @@ def run_bounded(command, environment, timeout_seconds):
 
 
 def run_profile(source, source_sha, output, timeout_seconds, index_experiment=False,
-                parallel_validation_experiment=False, history_batch_experiment=False):
+                parallel_validation_experiment=False, history_batch_experiment=False,
+                p2_equivalence_experiment=False):
     source, output = Path(source).resolve(), Path(output).resolve()
     if output.is_relative_to(source):
         raise ValueError('diagnostic output must be outside the original checkout')
@@ -714,7 +912,7 @@ def run_profile(source, source_sha, output, timeout_seconds, index_experiment=Fa
     if not re.fullmatch('[0-9a-f]{40}', source_sha):
         raise ValueError('a complete fixed commit SHA is required')
     report = initial_report(source_sha, index_experiment, parallel_validation_experiment,
-                            history_batch_experiment)
+                            history_batch_experiment, p2_equivalence_experiment)
     write_report(output, report)
     started = time.perf_counter()
     with tempfile.TemporaryDirectory(prefix='runtime-publication-profile-') as workspace:
@@ -725,11 +923,12 @@ def run_profile(source, source_sha, output, timeout_seconds, index_experiment=Fa
         if index_experiment: command.append('--index-experiment')
         if parallel_validation_experiment: command.append('--parallel-validation-experiment')
         if history_batch_experiment: command.append('--history-batch-experiment')
+        if p2_equivalence_experiment: command.append('--p2-equivalence-experiment')
         result = run_bounded(command, safe_environment(), timeout_seconds)
     try: report = json.loads(output.read_text(encoding='utf-8'))
     except (OSError, ValueError):
         report = initial_report(source_sha, index_experiment, parallel_validation_experiment,
-                                history_batch_experiment)
+                                history_batch_experiment, p2_equivalence_experiment)
     if result['timed_out']:
         report['status'] = 'timeout'
         for record in report['phases']:
@@ -750,6 +949,13 @@ def run_profile(source, source_sha, output, timeout_seconds, index_experiment=Fa
                     if record['status'] == 'running': record['status'] = 'timeout'
         if history_batch_experiment and report['history_batch_experiment']['status'] == 'running':
             report['history_batch_experiment']['status'] = 'timeout'
+        if p2_equivalence_experiment:
+            experiment = report['p2_equivalence_experiment']
+            if experiment['status'] == 'running': experiment['status'] = 'timeout'
+            for trial in experiment['trials']:
+                if trial['status'] == 'running': trial['status'] = 'timeout'
+                for record in trial['phases'] + trial['equivalence_phases']:
+                    if record['status'] == 'running': record['status'] = 'timeout'
     elif result['returncode'] != 0 or report['status'] != 'completed':
         report['status'] = 'error'
     report['total_seconds'] = time.perf_counter() - started
@@ -770,6 +976,8 @@ def main():
                              help='compare complete serial/parallel/serial validation offline')
     experiments.add_argument('--history-batch-experiment', action='store_true',
                              help='compare native Git patch bytes after original full validation')
+    experiments.add_argument('--p2-equivalence-experiment', action='store_true',
+                             help='compare full original and current P2 validation with ordered event equivalence')
     parser.add_argument('--worker', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--source-repo', type=Path, help=argparse.SUPPRESS)
     parser.add_argument('--workspace', type=Path, help=argparse.SUPPRESS)
@@ -777,10 +985,10 @@ def main():
     if args.worker:
         return worker(args.source_repo, args.source_sha, args.output, args.workspace,
                       args.index_experiment, args.timeout_seconds, args.parallel_validation_experiment,
-                      args.history_batch_experiment)
+                      args.history_batch_experiment, args.p2_equivalence_experiment)
     code = run_profile(Path(__file__).resolve().parent, args.source_sha, args.output,
                        args.timeout_seconds, args.index_experiment, args.parallel_validation_experiment,
-                       args.history_batch_experiment)
+                       args.history_batch_experiment, args.p2_equivalence_experiment)
     print(args.output.read_text(encoding='utf-8'))
     return code
 

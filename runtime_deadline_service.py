@@ -670,9 +670,16 @@ class LiveAdapter:
 
 def validate_p2(root):
     import p2_paired_execution_v3_1 as engine
-    engine.guard(root)
-    events = engine.history_guard(root)
-    for _ in engine.event_books(root, events): pass
+    import runtime_p2_history
+    diagnostics = {}
+    succeeded = False
+    try:
+        engine.guard(root)
+        events = runtime_p2_history.history_guard(root, engine=engine, diagnostics=diagnostics)
+        for _ in engine.event_books(root, events): pass
+        succeeded = True
+    finally:
+        runtime_p2_history.emit_diagnostics(diagnostics, succeeded)
 
 
 def finish(root, adapter, result):
