@@ -18,6 +18,8 @@ on:
       - 'test_archive_capture_bridge.py'
       - 'p0_open_target_guard.py'
       - 'runtime_audit_worker.py'
+      - 'runtime_audit_checkout_profile.py'
+      - 'test_runtime_audit_checkout_profile.py'
       - 'test_runtime_audit_worker.py'
       - 'test_runtime_deadline_service.py'
       - 'test_qualified_archive_drain.py'
@@ -42,6 +44,8 @@ on:
       - 'test_archive_capture_bridge.py'
       - 'p0_open_target_guard.py'
       - 'runtime_audit_worker.py'
+      - 'runtime_audit_checkout_profile.py'
+      - 'test_runtime_audit_checkout_profile.py'
       - 'test_runtime_audit_worker.py'
       - 'test_runtime_deadline_service.py'
       - 'test_qualified_archive_drain.py'
@@ -62,3 +66,79 @@ jobs:
       - run: python -m pip install numpy==2.3.5 oss2==2.19.1 aliyun-python-sdk-core==2.16.1
       - run: python -m unittest discover -q
       - run: python forward_validation_v2.py --integrity-only
+
+      - name: Run original source audits in the isolated pinned checkout
+        if: github.event_name == 'pull_request' && github.head_ref == 'fix/archive-qualified-drain-failure-20261026'
+        timeout-minutes: 11
+        run: |
+          python - "$RUNNER_TEMP/runtime-source-audit-before.json" <<'PY'
+          import hashlib, json, subprocess, sys
+          from pathlib import Path
+          import runtime_audit_worker as worker
+          root = Path.cwd()
+          state = {'head':subprocess.check_output(['git','rev-parse','HEAD']).decode().strip(),
+              'tracked_status_sha256':hashlib.sha256(subprocess.check_output(
+                  ['git','status','--porcelain','--untracked-files=no'])).hexdigest(),
+              'files':{p:hashlib.sha256((root/p).read_bytes()).hexdigest()
+                  if (root/p).exists() else None for p in worker.INPUTS+worker.OUTPUTS}}
+          Path(sys.argv[1]).write_text(json.dumps(state), encoding='utf-8')
+          PY
+          timeout --signal=TERM --kill-after=10s 600s python runtime_audit_worker.py "$GITHUB_WORKSPACE" efe0857ef4389618b09ca30ad8968bda3f26f07c "$RUNNER_TEMP/runtime-source-audit-result.json"
+          python - "$RUNNER_TEMP/runtime-source-audit-result.json" "$RUNNER_TEMP/runtime-source-audit-before.json" <<'PY'
+          import hashlib
+          import json
+          import subprocess
+          import sys
+          from datetime import datetime, timezone
+          from pathlib import Path
+          import runtime_audit_worker as worker
+          pinned = 'efe0857ef4389618b09ca30ad8968bda3f26f07c'
+          result = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+          root = Path.cwd()
+          before = json.loads(Path(sys.argv[2]).read_text(encoding='utf-8'))
+          after = {'head':subprocess.check_output(['git','rev-parse','HEAD']).decode().strip(),
+              'tracked_status_sha256':hashlib.sha256(subprocess.check_output(
+                  ['git','status','--porcelain','--untracked-files=no'])).hexdigest(),
+              'files':{p:hashlib.sha256((root/p).read_bytes()).hexdigest()
+                  if (root/p).exists() else None for p in worker.INPUTS+worker.OUTPUTS}}
+          assert after == before, 'source checkout changed during the isolated audit'
+          if result.get('status') != 'ok':
+              raise ValueError('original isolated source audit failed: '+str(result.get('error'))[:500])
+          assert result['input_head'] == pinned
+          assert result['checkout']['mode'] == 'sparse_source_archive_excluded'
+          assert result['checkout']['exclude_source_archive'] is True
+          assert [item['stage'] for item in result['timings']] == list(worker.SCRIPTS)
+          expected = {path: hashlib.sha256(subprocess.check_output(
+              ['git', 'show', pinned+':'+path])).hexdigest() for path in worker.INPUTS}
+          assert result['inputs'] == expected
+          assert set(result['outputs']) == set(worker.OUTPUTS)
+          reports = {path: json.loads(body) for path, body in result['outputs'].items()}
+          assert all(report.get('status') == 'ok' for report in reports.values())
+          operations, paired = (reports[path] for path in worker.OUTPUTS)
+          assert operations['input_head'] == pinned
+          assert paired['source_p0_cutoff_utc'] == operations['audited_at_utc']
+          assert paired['input_registry_sha256'] == expected[worker.INPUTS[0]]
+          now = datetime.now(timezone.utc)
+          for value in (operations['audited_at_utc'], paired['evaluated_at_utc']):
+              stamp = datetime.fromisoformat(value.replace('Z', '+00:00'))
+              assert stamp.tzinfo is not None
+              assert 0 <= (now-stamp).total_seconds() <= 900
+          print(json.dumps({'status':'verified_original_source_audits',
+              'input_head':pinned, 'inputs':expected, 'checkout':result['checkout'],
+              'timings':result['timings'], 'report_statuses':{
+                  path:report['status'] for path,report in reports.items()},
+              'worker_sha256':hashlib.sha256(Path(worker.__file__).read_bytes()).hexdigest(),
+              'source_head_status_inputs_and_reports_unchanged':True}, sort_keys=True))
+          PY
+      - name: Preserve isolated source audit validation
+        if: always() && github.event_name == 'pull_request' && github.head_ref == 'fix/archive-qualified-drain-failure-20261026'
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-audit-validation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/runtime-source-audit-result.json
+            ${{ runner.temp }}/runtime-source-audit-before.json
+          if-no-files-found: warn
+          retention-days: 7
+
+

@@ -7,6 +7,10 @@ on:
       - 'runtime_p2_history.py'
       - 'test_runtime_p2_history.py'
       - 'runtime_publication_profile.py'
+      - 'runtime_audit_worker.py'
+      - 'test_runtime_audit_worker.py'
+      - 'runtime_audit_checkout_profile.py'
+      - 'test_runtime_audit_checkout_profile.py'
       - 'git_history_batch_probe.py'
       - 'test_git_history_batch_probe.py'
       - 'test_runtime_publication*.py'
@@ -77,3 +81,18 @@ jobs:
           path: ${{ runner.temp }}/runtime-publication-profile.json
           if-no-files-found: error
           retention-days: 7
+
+      - name: Compare isolated audit checkouts on pinned complete history
+        if: github.event_name == 'pull_request' && github.head_ref == 'fix/archive-qualified-drain-failure-20261026'
+        timeout-minutes: 8
+        run: |
+          python runtime_audit_checkout_profile.py --source-root . --ref efe0857ef4389618b09ca30ad8968bda3f26f07c --output "$RUNNER_TEMP/runtime-audit-checkout-profile.json" --timeout-seconds 360
+      - name: Preserve isolated audit checkout diagnostics
+        if: always() && github.event_name == 'pull_request' && github.head_ref == 'fix/archive-qualified-drain-failure-20261026'
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-audit-checkout-profile-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/runtime-audit-checkout-profile.json
+          if-no-files-found: error
+          retention-days: 7
+
