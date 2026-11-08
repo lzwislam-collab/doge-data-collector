@@ -59,6 +59,139 @@ class ProfilerSafetyTests(unittest.TestCase):
             target.write_text(content)
         return self.commit('fixed fixture inputs')
 
+    def index_fixture(self, extra='None'):
+        validator = (
+            "import json, subprocess; path=root/'.profile-calls'; "
+            "calls=json.loads(path.read_text()) if path.exists() else []; "
+            "actual=subprocess.check_output(['git','config','--get','core.commitGraph'],cwd=root).decode().strip(); "
+            "assert actual==('false','true','false')[len(calls)], 'wrong graph mode'; "
+            "calls.append(actual); path.write_text(json.dumps(calls)); " + extra)
+        self.fixture(validator)
+        files = {
+            'data/direction_v42/forward_scores.csv': 'forecast_id\n',
+            'data/quote_evidence_v2/bindings.csv': 'forecast_id\n',
+            'data/paired_forward_v1/pairs.jsonl': '{}\n',
+            'data/p2_paired_execution_v3_1/books.jsonl': '{}\n',
+            'p2_paired_execution_v3_1.py':
+                "import subprocess\n"
+                "def guard(root):\n"
+                "    assert subprocess.check_output(['git','config','--get','core.commitGraph'],cwd=root).strip()==b'false'\n"
+                "def history_guard(root): return []\n"
+                "def event_books(root, events): return iter([])\n",
+        }
+        for path, content in files.items():
+            target = self.source / path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(content)
+        return self.commit('complete offline index fixture')
+
+    def object_bytes(self):
+        directory = self.source / '.git/objects'
+        return {p.relative_to(directory).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+                for p in directory.rglob('*') if p.is_file()}
+
+    def test_index_experiment_runs_complete_off_on_off_and_preserves_source_objects(self):
+        fixed = self.index_fixture()
+        self.git(self.source, '-c', 'core.commitGraph=true', 'commit-graph', 'write',
+                 '--reachable', '--changed-paths')
+        original_objects = self.object_bytes()
+        original_config = (self.source / '.git/config').read_bytes()
+        output = self.base / 'index.json'
+        code = self.driver.run_profile(self.source, fixed, output, 20, index_experiment=True)
+        report = json.loads(output.read_text())
+        self.assertEqual(code, 0, report)
+        experiment = report['index_experiment']
+        self.assertEqual(experiment['status'], 'completed')
+        self.assertTrue(experiment['source_unchanged'])
+        self.assertTrue(experiment['initial_graph_state']['alternates'][0]['has_commit_graph'])
+        self.assertTrue(experiment['build']['graph_after']['has_commit_graph'])
+        self.assertEqual(experiment['build']['object_directory_scope'], 'isolated_checkout_only')
+        self.assertEqual([p['stage'] for p in experiment['build']['phases']],
+                         ['commit_graph_build', 'commit_graph_verify'])
+        self.assertTrue(all(p['status'] == 'ok' for p in experiment['build']['phases']))
+        trials = experiment['trials']
+        self.assertEqual([t['name'] for t in trials], ['off_before', 'on', 'off_after'])
+        self.assertEqual([t['commit_graph_enabled'] for t in trials], [False, True, False])
+        expected_stages = ['preflight_validate_p2', 'preflight_validate_state',
+                           'preflight_pair_guard', 'preflight_pair_history_guard', 'core_exact_readback']
+        for trial in trials:
+            self.assertEqual(trial['status'], 'completed')
+            self.assertEqual([p['stage'] for p in trial['phases']], expected_stages)
+            self.assertTrue(all(p['status'] == 'ok' for p in trial['phases']))
+            self.assertEqual(trial['head_before'], fixed)
+            self.assertEqual(trial['head_after'], fixed)
+            self.assertEqual(len(trial['history_sequences']), 5)
+            self.assertTrue(all(v['commits'] > 0 for v in trial['history_sequences'].values()))
+            self.assertEqual(trial['history_sequences'], trials[0]['history_sequences'])
+        self.assertTrue(experiment['history_sequences_equal'])
+        self.assertEqual(experiment['p2_breakdown']['status'], 'completed')
+        self.assertEqual([p['stage'] for p in experiment['p2_breakdown']['phases']],
+                         ['p2_guard', 'p2_history_guard', 'p2_event_books'])
+        self.assertEqual(report['core_inputs_before'], report['core_inputs_after'])
+        self.assertTrue(report['tracked_worktree_clean'])
+        self.assertFalse(report['production_publication_verified'])
+        self.assertEqual(self.git(self.source, 'rev-parse', 'HEAD'), fixed)
+        self.assertEqual((self.source / '.git/config').read_bytes(), original_config)
+        self.assertEqual(self.object_bytes(), original_objects)
+
+    def test_index_experiment_third_validation_failure_preserves_two_complete_trials(self):
+        fixed = self.index_fixture("exec(\"if len(calls)==3: raise ValueError('third validator failure')\")")
+        output = self.base / 'index.json'
+        self.assertNotEqual(self.driver.run_profile(self.source, fixed, output, 20, index_experiment=True), 0)
+        report = json.loads(output.read_text())
+        trials = report['index_experiment']['trials']
+        self.assertEqual(report['status'], 'error')
+        self.assertEqual([t['status'] for t in trials], ['completed', 'completed', 'error'])
+        self.assertEqual([len(t['phases']) for t in trials], [5, 5, 1])
+        self.assertEqual(trials[-1]['phases'][0]['stage'], 'preflight_validate_p2')
+        self.assertEqual(trials[-1]['phases'][0]['status'], 'error')
+        self.assertNotEqual(report['index_experiment']['p2_breakdown']['status'], 'completed')
+        self.assertFalse(report.get('frozen_validation_completed', False))
+
+    def test_index_experiment_timeout_preserves_nested_trial_diagnostics(self):
+        fixed = self.index_fixture("__import__('time').sleep(30) if len(calls)==2 else None")
+        output = self.base / 'index.json'
+        self.assertNotEqual(self.driver.run_profile(self.source, fixed, output, 2, index_experiment=True), 0)
+        report = json.loads(output.read_text())
+        self.assertEqual(report['status'], 'timeout')
+        trials = report['index_experiment']['trials']
+        self.assertEqual([t['status'] for t in trials], ['completed', 'timeout'])
+        self.assertEqual(trials[1]['phases'][0]['status'], 'timeout')
+        self.assertEqual(trials[0]['phases'][-1]['stage'], 'core_exact_readback')
+
+    def test_index_experiment_skips_only_additional_breakdown_when_budget_is_low(self):
+        fixed = self.index_fixture()
+        output = self.base / 'index.json'
+        self.assertEqual(self.driver.run_profile(self.source, fixed, output, 8, index_experiment=True), 0)
+        report = json.loads(output.read_text())
+        experiment = report['index_experiment']
+        self.assertEqual([t['status'] for t in experiment['trials']], ['completed'] * 3)
+        self.assertEqual([len(t['phases']) for t in experiment['trials']], [5] * 3)
+        self.assertEqual(experiment['p2_breakdown']['status'], 'not_run_due_budget')
+        self.assertEqual(experiment['p2_breakdown']['phases'], [])
+
+    def test_index_experiment_rejects_reordered_history_even_with_equal_counts(self):
+        fixed = self.fixture()
+        checkout = self.base / 'isolated'
+        count = self.driver.prepare_checkout(self.source, fixed, checkout)
+        report = self.driver.initial_report(fixed, index_experiment=True)
+        report['full_history_commit_count'] = count
+        output = self.base / 'index.json'
+        first = {p: ['1' * 40, '2' * 40] for p in self.driver.HISTORY_PATHS}
+        changed = {p: list(v) for p, v in first.items()}
+        changed[self.driver.HISTORY_PATHS[0]].reverse()
+        validators = [(name, lambda: None) for name in (
+            'preflight_validate_p2', 'preflight_validate_state', 'preflight_pair_guard',
+            'preflight_pair_history_guard')]
+        with mock.patch.object(self.driver, 'history_oids', side_effect=[first, changed]):
+            with self.assertRaisesRegex(ValueError, 'ordered history'):
+                self.driver.index_experiment(checkout, self.source, fixed, report, output,
+                                             validators, lambda: None, time.perf_counter() + 30)
+        trials = report['index_experiment']['trials']
+        self.assertEqual([t['status'] for t in trials], ['completed', 'error'])
+        self.assertEqual(len(trials[0]['phases']), 5)
+        self.assertFalse(report['index_experiment'].get('history_sequences_equal', False))
+
     def test_fixed_commit_checkout_does_not_use_or_change_dirty_source_data(self):
         fixed = self.fixture()
         data = self.source / 'data/direction_v42/forward_registry.csv'

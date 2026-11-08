@@ -21,6 +21,11 @@ import time
 DATA_PREFIXES = ('system', 'data/stage5', 'data/direction_v42',
                  'data/quote_evidence_v2', 'data/paired_forward_v1',
                  'data/p2_paired_execution_v3_1')
+HISTORY_PATHS = ('data/direction_v42/forward_registry.csv',
+                 'data/direction_v42/forward_scores.csv',
+                 'data/quote_evidence_v2/bindings.csv',
+                 'data/paired_forward_v1/pairs.jsonl',
+                 'data/p2_paired_execution_v3_1/books.jsonl')
 
 
 class ProfileError(ValueError):
@@ -51,9 +56,9 @@ def lock_down_worker():
     sys.addaudithook(reject)
 
 
-def git(root, *args):
+def git(root, *args, input=None):
     return subprocess.run(['git', *args], cwd=root, env=safe_environment(),
-                          check=True, capture_output=True).stdout
+                          input=input, check=True, capture_output=True).stdout
 
 
 def write_report(output, report):
@@ -118,9 +123,9 @@ def input_manifest(inputs):
             'manifest_sha256': hashlib.sha256(encoded).hexdigest()}
 
 
-def phase(report, output, stage, function):
+def phase(report, output, stage, function, *, records=None):
     record = {'stage': stage, 'status': 'running'}
-    report['phases'].append(record)
+    (report['phases'] if records is None else records).append(record)
     write_report(output, report)
     started = time.perf_counter()
     primary_failed = False
@@ -159,21 +164,177 @@ def phase(report, output, stage, function):
             raise diagnostic_error
 
 
-def initial_report(source_sha):
-    return {'schema_version': 1, 'status': 'running', 'source_sha': source_sha,
+def initial_report(source_sha, index_experiment=False):
+    report = {'schema_version': 1, 'status': 'running', 'source_sha': source_sha,
             'scope': 'single_pass_local_validation_and_fixed_HEAD_readback',
             'clock': 'monotonic', 'phases': [], 'python_network_denied': True,
             'git_protocols_allowed': ['file'], 'lazy_fetch_disabled': True,
             'production_network_time_measured': False,
             'production_publication_verified': False,
             'two_publication_transactions_measured': False}
+    if index_experiment:
+        report['scope'] = 'native_git_commit_graph_off_on_off_same_checkout'
+        report['index_experiment'] = {
+            'status': 'running', 'trials': [],
+            'baseline_kind': 'explicit_graph_off_not_production_baseline',
+            'build': {'status': 'not_started', 'phases': []},
+            'p2_breakdown': {'status': 'not_started', 'phases': [],
+                             'scope': 'additional_pass_do_not_add_to_trial_totals'}}
+    return report
 
 
-def worker(source, source_sha, output, workspace):
+def graph_inventory(objects):
+    objects = Path(objects)
+    single = objects / 'info/commit-graph'
+    chain = objects / 'info/commit-graphs/commit-graph-chain'
+    files = ([single] if single.is_file() else []) + ([chain] if chain.is_file() else [])
+    files += sorted((objects / 'info/commit-graphs').glob('*.graph'))
+    return {'has_commit_graph': single.is_file(), 'has_split_chain': chain.is_file(),
+            'files': [{'name': path.relative_to(objects).as_posix(),
+                       'bytes': path.stat().st_size,
+                       'sha256': hashlib.sha256(path.read_bytes()).hexdigest()} for path in files]}
+
+
+def object_directory(root):
+    path = Path(git(root, 'rev-parse', '--git-path', 'objects').decode().strip())
+    return (root / path).resolve() if not path.is_absolute() else path.resolve()
+
+
+def source_state(source):
+    return {'head': git(source, 'rev-parse', 'HEAD').decode().strip(),
+            'tracked_status_sha256': hashlib.sha256(
+                git(source, 'status', '--porcelain', '--untracked-files=no')).hexdigest(),
+            'runtime_code_sha256': hashlib.sha256((source / 'runtime_deadline_service.py').read_bytes()).hexdigest(),
+            'graph': graph_inventory(object_directory(source))}
+
+
+def history_oids(root):
+    result = {}
+    for path in HISTORY_PATHS:
+        revisions = git(root, 'log', '--reverse', '--format=%H', '--', path).decode('ascii').splitlines()
+        if any(not re.fullmatch('[0-9a-f]{40}', rev) for rev in revisions):
+            raise ProfileError('invalid ordered history OID')
+        result[path] = revisions
+    return result
+
+
+def history_manifest(histories):
+    return {path: {'commits': len(revisions),
+                   'ordered_oids_sha256': hashlib.sha256(
+                       json.dumps(revisions, separators=(',', ':')).encode()).hexdigest()}
+            for path, revisions in histories.items()}
+
+
+def index_experiment(checkout, source, source_sha, report, output, validators, readback, deadline):
+    experiment = report['index_experiment']
+    objects = object_directory(checkout)
+    if objects != (checkout / '.git/objects').resolve() or not objects.is_relative_to(checkout):
+        raise ProfileError('commit graph must use isolated checkout objects')
+    alternates_file = objects / 'info/alternates'
+    alternates = alternates_file.read_text().splitlines() if alternates_file.exists() else []
+    experiment['git_version'] = git(checkout, '--version').decode().strip()
+    experiment['initial_graph_state'] = {
+        'own': graph_inventory(objects),
+        'alternates': [graph_inventory((objects / alternate).resolve()) for alternate in alternates],
+        'core_commit_graph': git(checkout, 'config', '--default', 'unset', '--get', 'core.commitGraph').decode().strip(),
+        'changed_paths_version': git(checkout, 'config', '--default', 'unset', '--get', 'commitGraph.changedPathsVersion').decode().strip()}
+    experiment['source_before'] = source_state(source)
+    tracked_before = git(checkout, 'status', '--porcelain', '--untracked-files=no')
+    baseline_history = None
+
+    def check_fixed_state():
+        head = git(checkout, 'rev-parse', 'HEAD').decode().strip()
+        if head != source_sha:
+            raise ProfileError('fixed diagnostic HEAD changed')
+        if git(checkout, 'status', '--porcelain', '--untracked-files=no') != tracked_before:
+            raise ProfileError('tracked input state changed during index experiment')
+        return head
+
+    for name, enabled in (('off_before', False), ('on', True), ('off_after', False)):
+        if enabled:
+            build = experiment['build']
+            build.update(status='running', object_directory_scope='isolated_checkout_only',
+                         source_sha=source_sha)
+            try:
+                phase(report, output, 'commit_graph_build', lambda: git(
+                    checkout, '-c', 'core.commitGraph=true', 'commit-graph',
+                    '--object-dir=' + str(objects), 'write', '--stdin-commits',
+                    '--changed-paths', '--max-new-filters=-1', '--no-progress',
+                    input=(source_sha + '\n').encode('ascii')), records=build['phases'])
+                build['graph_after'] = graph_inventory(objects)
+                if not build['graph_after']['has_commit_graph'] and not build['graph_after']['has_split_chain']:
+                    raise ProfileError('native commit graph was not written to isolated objects')
+                phase(report, output, 'commit_graph_verify', lambda: git(
+                    checkout, '-c', 'core.commitGraph=true', 'commit-graph',
+                    '--object-dir=' + str(objects), 'verify', '--no-progress'), records=build['phases'])
+                build['status'] = 'completed'
+            except BaseException:
+                build['status'] = 'error'
+                raise
+        git(checkout, 'config', '--local', 'core.commitGraph', 'true' if enabled else 'false')
+        git(checkout, 'config', '--local', 'commitGraph.changedPathsVersion', '-1')
+        trial = {'name': name, 'commit_graph_enabled': enabled, 'status': 'running', 'phases': []}
+        experiment['trials'].append(trial)
+        write_report(output, report)
+        try:
+            trial['head_before'] = check_fixed_state()
+            trial['full_history_commit_count'] = int(git(checkout, 'rev-list', '--count', 'HEAD').strip())
+            if trial['full_history_commit_count'] != report['full_history_commit_count']:
+                raise ProfileError('full history count changed during index experiment')
+            # These additional queries prove equivalence; they are deliberately
+            # outside the original validator/readback phase timings.
+            current_history = history_oids(checkout)
+            trial['history_sequences'] = history_manifest(current_history)
+            if baseline_history is None:
+                baseline_history = current_history
+            elif current_history != baseline_history:
+                raise ProfileError('ordered history OID lists changed with native index mode')
+            for stage, function in validators:
+                phase(report, output, stage, function, records=trial['phases'])
+            phase(report, output, 'core_exact_readback', readback, records=trial['phases'])
+            trial['head_after'] = check_fixed_state()
+            trial['validation_and_readback_seconds'] = sum(p['seconds'] for p in trial['phases'])
+            trial['status'] = 'completed'
+            write_report(output, report)
+        except BaseException:
+            trial['status'] = 'error'
+            raise
+    experiment['history_sequences_equal'] = True
+    breakdown = experiment['p2_breakdown']
+    remaining = max(0.0, deadline - time.perf_counter())
+    estimate = 1.25 * max(t['phases'][0]['seconds'] for t in experiment['trials'])
+    breakdown.update(estimated_seconds=estimate, remaining_seconds=remaining, reserve_seconds=10)
+    if remaining < estimate + 10:
+        breakdown['status'] = 'not_run_due_budget'
+    else:
+        breakdown['status'] = 'running'
+        try:
+            engine = importlib.import_module('p2_paired_execution_v3_1')
+            phase(report, output, 'p2_guard', lambda: engine.guard(checkout), records=breakdown['phases'])
+            events = phase(report, output, 'p2_history_guard', lambda: engine.history_guard(checkout),
+                           records=breakdown['phases'])
+            def books():
+                for _ in engine.event_books(checkout, events): pass
+            phase(report, output, 'p2_event_books', books, records=breakdown['phases'])
+            breakdown['status'] = 'completed'
+        except BaseException:
+            breakdown['status'] = 'error'
+            raise
+    check_fixed_state()
+    experiment['source_after'] = source_state(source)
+    experiment['source_unchanged'] = experiment['source_before'] == experiment['source_after']
+    if not experiment['source_unchanged']:
+        raise ProfileError('original source state changed during index experiment')
+    experiment['status'] = 'completed'
+    write_report(output, report)
+
+
+def worker(source, source_sha, output, workspace, use_index_experiment=False, timeout_seconds=360):
     source, output, workspace = Path(source).resolve(), Path(output).resolve(), Path(workspace).resolve()
     if output.is_relative_to(source) or workspace.is_relative_to(source):
         raise ProfileError('worker output and workspace must be outside the original checkout')
-    report = initial_report(source_sha)
+    deadline = time.perf_counter() + timeout_seconds
+    report = initial_report(source_sha, use_index_experiment)
     write_report(output, report)
     lock_down_worker()
     checkout = workspace / 'checkout'
@@ -194,20 +355,25 @@ def worker(source, source_sha, output, workspace):
         evidence = importlib.import_module('quote_evidence_v2')
         expected = core_inputs(checkout, publisher, evidence)
         report['core_inputs_before'] = input_manifest(expected)
-        for name, function in (
+        validators = [(name, lambda function=function: function(checkout)) for name, function in (
                 ('preflight_validate_p2', runtime.validate_p2),
                 ('preflight_validate_state', publisher.validate_state),
                 ('preflight_pair_guard', pair.guard),
-                ('preflight_pair_history_guard', pair.history_guard)):
-            phase(report, output, name, lambda function=function: function(checkout))
-        report['frozen_validation_completed'] = True
+                ('preflight_pair_history_guard', pair.history_guard))]
 
         def readback():
             if core_inputs(checkout, publisher, evidence) != expected:
                 raise ProfileError('core input bytes changed during validation')
             if not publisher.verify_readback(checkout, 'HEAD', expected):
                 raise ProfileError('fixed HEAD core readback mismatch')
-        phase(report, output, 'core_exact_readback', readback)
+        if use_index_experiment:
+            index_experiment(checkout, source, source_sha, report, output, validators, readback, deadline)
+        else:
+            for name, function in validators:
+                phase(report, output, name, function)
+            report['frozen_validation_completed'] = True
+            phase(report, output, 'core_exact_readback', readback)
+        report['frozen_validation_completed'] = True
         after = core_inputs(checkout, publisher, evidence)
         report['core_inputs_after'] = input_manifest(after)
         if after != expected:
@@ -222,6 +388,7 @@ def worker(source, source_sha, output, workspace):
         report['status'] = 'completed'
     except Exception as exc:
         report['status'] = 'error'
+        if use_index_experiment: report['index_experiment']['status'] = 'error'
         report['error'] = {'type': type(exc).__name__}
         if isinstance(exc, ProfileError):
             report['error']['reason'] = str(exc)
@@ -253,7 +420,7 @@ def run_bounded(command, environment, timeout_seconds):
     return {'returncode': process.returncode, 'timed_out': timed_out}
 
 
-def run_profile(source, source_sha, output, timeout_seconds):
+def run_profile(source, source_sha, output, timeout_seconds, index_experiment=False):
     source, output = Path(source).resolve(), Path(output).resolve()
     if output.is_relative_to(source):
         raise ValueError('diagnostic output must be outside the original checkout')
@@ -262,20 +429,29 @@ def run_profile(source, source_sha, output, timeout_seconds):
         raise ValueError('Ubuntu diagnostic requires a timeout in (0, 360] seconds')
     if not re.fullmatch('[0-9a-f]{40}', source_sha):
         raise ValueError('a complete fixed commit SHA is required')
-    report = initial_report(source_sha)
+    report = initial_report(source_sha, index_experiment)
     write_report(output, report)
     started = time.perf_counter()
     with tempfile.TemporaryDirectory(prefix='runtime-publication-profile-') as workspace:
-        result = run_bounded([sys.executable, '-I', '-B', str(Path(__file__).resolve()),
+        command = [sys.executable, '-I', '-B', str(Path(__file__).resolve()),
                               '--worker', '--source-repo', str(source), '--source-sha', source_sha,
-                              '--output', str(output), '--workspace', workspace],
-                             safe_environment(), timeout_seconds)
+                              '--output', str(output), '--workspace', workspace,
+                              '--timeout-seconds', str(timeout_seconds)]
+        if index_experiment: command.append('--index-experiment')
+        result = run_bounded(command, safe_environment(), timeout_seconds)
     try: report = json.loads(output.read_text(encoding='utf-8'))
-    except (OSError, ValueError): report = initial_report(source_sha)
+    except (OSError, ValueError): report = initial_report(source_sha, index_experiment)
     if result['timed_out']:
         report['status'] = 'timeout'
         for record in report['phases']:
             if record['status'] == 'running': record['status'] = 'timeout'
+        if index_experiment:
+            experiment = report['index_experiment']
+            experiment['status'] = 'timeout'
+            for section in [experiment['build'], *experiment['trials'], experiment['p2_breakdown']]:
+                if section['status'] == 'running': section['status'] = 'timeout'
+                for record in section['phases']:
+                    if record['status'] == 'running': record['status'] = 'timeout'
     elif result['returncode'] != 0 or report['status'] != 'completed':
         report['status'] = 'error'
     report['total_seconds'] = time.perf_counter() - started
@@ -289,13 +465,17 @@ def main():
     parser.add_argument('--source-sha', required=True)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--timeout-seconds', type=float, default=360)
+    parser.add_argument('--index-experiment', action='store_true',
+                        help='compare native Git commit-graph off/on/off in the same isolated checkout')
     parser.add_argument('--worker', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--source-repo', type=Path, help=argparse.SUPPRESS)
     parser.add_argument('--workspace', type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.worker:
-        return worker(args.source_repo, args.source_sha, args.output, args.workspace)
-    code = run_profile(Path(__file__).resolve().parent, args.source_sha, args.output, args.timeout_seconds)
+        return worker(args.source_repo, args.source_sha, args.output, args.workspace,
+                      args.index_experiment, args.timeout_seconds)
+    code = run_profile(Path(__file__).resolve().parent, args.source_sha, args.output,
+                       args.timeout_seconds, args.index_experiment)
     print(args.output.read_text(encoding='utf-8'))
     return code
 
