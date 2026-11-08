@@ -318,6 +318,8 @@ class PendingSmokeReplayAdapter(Adapter):
         self.book_result = {'status': 'command_completed', 'mode': 'smoke',
                             'formal_eligibility': False}
         self.audit_status = 'pending'
+        self.prepared_path = root/'data/prepared_source_context.json'
+        self.published_prepared = []
         self.raw_paths = []
         self.published_raw = []
         self.fail_publish_number = None
@@ -328,7 +330,11 @@ class PendingSmokeReplayAdapter(Adapter):
                    'source_audit': 0.019398, 'book': 0.515468}.get(name, 0)
         if name == 'publish': seconds = 181.037305 if number == 1 else 182.766045
         if name == 'witness': seconds = 1.124913 if number == 1 else 0.024160
+        seconds = self.duration.get(name, seconds)
         self.clock.sleep(seconds)
+        if name == 'prepare':
+            self.prepared_path.parent.mkdir(parents=True, exist_ok=True)
+            self.prepared_path.write_bytes(b'{"prepared_source_context":"current_hour"}\n')
         if name == 'book':
             import p2_paired_execution_v3_1 as engine
             qid, relative = engine.save_book(self.root, {'synthetic_raw_book': number}, engineering=True)
@@ -347,6 +353,8 @@ class PendingSmokeReplayAdapter(Adapter):
             for fid in runtime.open_targets(self.registry, self.scores, self.clock()):
                 self.scores[fid] = {'status': 'scored'}
         if name == 'publish':
+            self.published_prepared.append(self.prepared_path.read_bytes()
+                                           if self.prepared_path.exists() else None)
             self.published_raw.append({p.name: p.read_bytes() for p in self.raw_paths})
             return {'status': 'verified_remote_readback'}
         if name == 'witness': return {'status': 'requested_only'}
@@ -363,13 +371,17 @@ class DeferredSmokeTests(unittest.TestCase):
         self.root = Path(self.tmp.name)
         self.case = 0
         self.make_adapter()
-    def make_adapter(self):
+    def make_adapter(self, already_issued=False):
         self.case += 1
         self.clock = Clock()
         self.clock.at = datetime(2026, 11, 8, 9, tzinfo=timezone.utc)
         self.start = self.clock()
         self.root = Path(self.tmp.name)/f'case-{self.case}'
         self.adapter = PendingSmokeReplayAdapter(self.clock, self.root)
+        if already_issued:
+            self.adapter.registry = [{'forecast_id': 'old', 'horizon_hours': '1',
+                'source_hour_start_utc': self.start.isoformat(),
+                'target_utc': (self.start+timedelta(hours=1)).isoformat()}]
     def add_target(self, seconds):
         self.adapter.registry.append({'forecast_id': 'due', 'horizon_hours': '1',
             'source_hour_start_utc': (self.start-timedelta(hours=1)).isoformat(),
@@ -385,17 +397,74 @@ class DeferredSmokeTests(unittest.TestCase):
         self.assertEqual(result['errors'], [])
         self.assertEqual(self.adapter.published_raw, [{}])
         self.assertTrue(self.adapter.raw_paths[0].read_bytes())
-    def test_next_normal_tick_publishes_both_retained_raw_samples(self):
+    def test_next_ready_tick_publishes_all_samples_retained_while_audit_pending(self):
         state = {}
         first = self.cycle(state)
         raw = self.adapter.raw_paths[0].read_bytes()
         self.assertTrue(first.get('this_cycle_deferred_smoke_pending_at_end', False))
         second = self.cycle(state)
-        self.assertFalse(second.get('this_cycle_smoke_publication_deferred', False))
+        self.assertTrue(second.get('this_cycle_smoke_publication_deferred', False))
+        self.assertEqual(self.adapter.calls.count('publish'), 1)
+        self.adapter.audit_status = 'ready'
+        third = self.cycle(state)
+        self.assertFalse(third.get('this_cycle_smoke_publication_deferred', False))
         self.assertEqual(self.adapter.calls.count('publish'), 2)
         self.assertEqual(self.adapter.published_raw[-1][self.adapter.raw_paths[0].name], raw)
-        self.assertEqual(len(self.adapter.published_raw[-1]), 2)
+        self.assertEqual(len(self.adapter.published_raw[-1]), 3)
         self.assertEqual(self.adapter.raw_paths[0].read_bytes(), raw)
+    def test_pending_smoke_without_prior_core_publication_is_only_locally_retained(self):
+        self.make_adapter(already_issued=True)
+        self.adapter.duration['publish'] = 240
+        result = self.cycle()
+        self.assertEqual(result['issuance'], 'ALREADY_ISSUED')
+        self.assertNotIn('publish', self.adapter.calls)
+        self.assertTrue(result['this_cycle_deferred_smoke_pending_at_end'])
+        kept = next(a['result'] for a in result['actions'] if a['stage'] == 'preserve_smoke')
+        self.assertEqual((self.root/kept['artifact_path']).read_bytes(), self.adapter.raw_paths[0].read_bytes())
+        self.assertFalse(kept['remote_readback_verified'])
+        self.assertFalse(kept['worm_verified'])
+        self.assertEqual(self.adapter.published_raw, [])
+    def test_preparation_crossing_reserve_or_hour_must_publish_written_context(self):
+        for seconds, issuance in ((4.971565, 'SKIP_RESERVE_EXHAUSTED'),
+                                  (1202, 'SKIP_SOURCE_HOUR_CHANGED')):
+            with self.subTest(prepare_seconds=seconds, issuance=issuance):
+                self.make_adapter()
+                self.clock.at = self.start+timedelta(minutes=39, seconds=59)
+                self.adapter.duration['prepare'] = seconds
+                result = self.cycle()
+                self.assertEqual(result['issuance'], issuance)
+                self.assertEqual(result['errors'], [])
+                self.assertEqual(self.adapter.calls, ['prepare', 'source_audit', 'book',
+                                                      'publish', 'witness'])
+                self.assertEqual(self.adapter.published_prepared,
+                                 [self.adapter.prepared_path.read_bytes()])
+                self.assertEqual(self.adapter.published_raw[-1][self.adapter.raw_paths[0].name],
+                                 self.adapter.raw_paths[0].read_bytes())
+                self.assertFalse(result['this_cycle_smoke_publication_deferred'])
+                self.assertFalse(result['this_cycle_deferred_smoke_pending_at_end'])
+    def test_pending_smoke_does_not_put_a_240_second_publish_before_newly_due_target(self):
+        self.make_adapter(already_issued=True)
+        self.adapter.duration['publish'] = 240
+        self.add_target(0.25)  # Becomes due during book, after the pre-book target check.
+        result = self.cycle()
+        watch = next(a for a in result['actions'] if a['stage'] == 'watch')
+        self.assertEqual(watch['started_at_utc'], (self.start+timedelta(seconds=0.534866)).isoformat())
+        self.assertEqual(self.adapter.calls, ['source_audit', 'book', 'preserve_smoke',
+                                              'watch', 'publish', 'witness'])
+        self.assertIn('due', self.adapter.scores)
+        self.assertTrue(result['this_cycle_smoke_publication_deferred'])
+        self.assertFalse(result['this_cycle_deferred_smoke_pending_at_end'])
+        self.assertTrue(self.adapter.published_raw[-1])
+        self.assertEqual(result['errors'], [])
+    def test_finish_flushes_smoke_deferred_without_any_prior_core_publication(self):
+        self.make_adapter(already_issued=True)
+        result = runtime.run(self.root, self.adapter, 1, self.clock, self.clock.sleep)
+        self.assertNotIn('publish', self.adapter.calls)
+        raw = self.adapter.raw_paths[0].read_bytes()
+        finished = runtime.finish(self.root, self.adapter, result)
+        self.assertFalse(finished['fatal'])
+        self.assertEqual(self.adapter.calls.count('publish'), 1)
+        self.assertEqual(self.adapter.published_raw[-1][self.adapter.raw_paths[0].name], raw)
     def test_existing_finish_publishes_pending_raw_without_resetting_clock(self):
         result = runtime.run(self.root, self.adapter, 1, self.clock, self.clock.sleep)
         raw = self.adapter.raw_paths[0].read_bytes()
@@ -439,29 +508,38 @@ class DeferredSmokeTests(unittest.TestCase):
         raw = self.adapter.raw_paths[0].read_bytes()
         qid = self.adapter.smoke_qid
         self.adapter.fail_publish_number = 2
+        self.adapter.audit_status = 'ready'
         result = self.cycle(state)
         self.assertTrue(result['fatal'])
         runtime.finish(self.root, self.adapter, result)
         copy = self.root/runtime.BASE/'deferred_smoke_books'/qid[:2]/(qid+'.json')
         self.assertEqual(copy.read_bytes(), raw)
     def test_failed_finish_keeps_raw_copy_and_explicit_failure(self):
-        result = runtime.run(self.root, self.adapter, 1, self.clock, self.clock.sleep)
-        raw = self.adapter.raw_paths[0].read_bytes()
-        qid = self.adapter.smoke_qid
-        self.adapter.fail_publish_number = 2
-        finished = runtime.finish(self.root, self.adapter, result)
-        self.assertTrue(finished['fatal'])
-        self.assertEqual(finished['status'], 'DEGRADED')
-        self.assertIn('final_publication_error', finished)
-        copy = self.root/runtime.BASE/'deferred_smoke_books'/qid[:2]/(qid+'.json')
-        self.assertEqual(copy.read_bytes(), raw)
+        for already_issued in (False, True):
+            with self.subTest(already_issued=already_issued):
+                self.make_adapter(already_issued=already_issued)
+                result = runtime.run(self.root, self.adapter, 1, self.clock, self.clock.sleep)
+                raw = self.adapter.raw_paths[0].read_bytes()
+                qid = self.adapter.smoke_qid
+                self.adapter.fail_publish_number = self.adapter.calls.count('publish')+1
+                finished = runtime.finish(self.root, self.adapter, result)
+                self.assertTrue(finished['fatal'])
+                self.assertEqual(finished['status'], 'DEGRADED')
+                self.assertIn('final_publication_error', finished)
+                copy = self.root/runtime.BASE/'deferred_smoke_books'/qid[:2]/(qid+'.json')
+                self.assertTrue(copy.exists(), 'failed finish lost the retained local smoke copy')
+                self.assertEqual(copy.read_bytes(), raw)
     def test_raw_preservation_failure_uses_original_immediate_publication(self):
-        with patch.object(runtime, 'preserve_smoke_book', side_effect=OSError('disk full')):
-            result = self.cycle()
-        self.assertEqual(self.adapter.calls.count('publish'), 2)
-        self.assertFalse(result.get('this_cycle_smoke_publication_deferred', False))
-        self.assertEqual(result['errors'][-1]['stage'], 'preserve_smoke')
-        self.assertTrue(self.adapter.published_raw[-1])
+        for already_issued in (False, True):
+            with self.subTest(already_issued=already_issued):
+                self.make_adapter(already_issued=already_issued)
+                with patch.object(runtime, 'preserve_smoke_book', side_effect=OSError('disk full')):
+                    result = self.cycle()
+                self.assertEqual(self.adapter.calls.count('publish'), 1 if already_issued else 2)
+                self.assertFalse(result.get('this_cycle_smoke_publication_deferred', False))
+                self.assertTrue(any(e['stage'] == 'preserve_smoke' and 'disk full' in e['error']
+                                    for e in result['errors']))
+                self.assertTrue(self.adapter.published_raw[-1])
     def test_partial_copy_write_leaves_no_truncated_sha_file_or_temporary(self):
         actual_temporary = tempfile.NamedTemporaryFile
         actual_open = Path.open
@@ -525,17 +603,19 @@ class DeferredSmokeTests(unittest.TestCase):
         with self.assertRaises(ValueError): runtime.preserve_smoke_book(self.root, qid)
         self.assertEqual(copy.read_bytes(), b'existing mismatch')
     def test_formal_capture_or_nonexplicit_smoke_proof_is_never_deferred(self):
-        for book in ({'mode': 'capture', 'formal_eligibility': True},
+        cases = ({'mode': 'capture', 'formal_eligibility': True},
                      {'mode': 'capture', 'formal_eligibility': False},
                      {'mode': 'smoke', 'formal_eligibility': True},
                      {'mode': 'smoke'}, {'formal_eligibility': False},
-                     {'mode': 'smoke', 'formal_eligibility': 0}):
-            with self.subTest(book=book):
-                self.make_adapter()
-                self.adapter.book_result = book
-                result = self.cycle()
-                self.assertEqual(self.adapter.calls.count('publish'), 2)
-                self.assertFalse(result.get('this_cycle_smoke_publication_deferred', False))
+                     {'mode': 'smoke', 'formal_eligibility': 0})
+        for already_issued in (False, True):
+            for book in cases:
+                with self.subTest(book=book, already_issued=already_issued):
+                    self.make_adapter(already_issued=already_issued)
+                    self.adapter.book_result = book
+                    result = self.cycle()
+                    self.assertEqual(self.adapter.calls.count('publish'), 1 if already_issued else 2)
+                    self.assertFalse(result.get('this_cycle_smoke_publication_deferred', False))
     def test_book_or_witness_error_prevents_deferral(self):
         for failed in ('book', 'witness'):
             with self.subTest(failed=failed):
@@ -553,20 +633,25 @@ class DeferredSmokeTests(unittest.TestCase):
         self.assertGreaterEqual(self.adapter.calls.count('publish'), 3)
         self.assertFalse(result.get('this_cycle_smoke_publication_deferred', False))
         self.assertTrue(result['errors'])
-    def test_no_new_issuance_or_nonpending_audit_cannot_defer(self):
-        for condition in ('already_issued', 'audit_ready'):
-            with self.subTest(condition=condition):
-                self.make_adapter()
-                if condition == 'already_issued':
-                    self.adapter.registry = [{'forecast_id': 'old', 'horizon_hours': '1',
-                        'source_hour_start_utc': self.start.isoformat(),
-                        'target_utc': (self.start+timedelta(hours=1)).isoformat()}]
-                else:
-                    self.adapter.audit_status = 'ready'
+    def test_nonpending_audit_cannot_defer_with_or_without_new_issuance(self):
+        for already_issued in (False, True):
+            with self.subTest(already_issued=already_issued):
+                self.make_adapter(already_issued=already_issued)
+                self.adapter.audit_status = 'ready'
                 result = self.cycle()
-                self.assertEqual(self.adapter.calls.count('publish'), 1 if condition == 'already_issued' else 2)
+                self.assertEqual(self.adapter.calls.count('publish'), 1 if already_issued else 2)
                 self.assertFalse(result.get('this_cycle_smoke_publication_deferred', False))
                 self.assertTrue(self.adapter.published_raw[-1])
+    def test_no_issue_cycle_errors_keep_the_original_immediate_publish_path(self):
+        for failed in ('source_audit', 'book'):
+            with self.subTest(failed=failed):
+                self.make_adapter(already_issued=True)
+                self.adapter.fail = {failed}
+                result = self.cycle()
+                self.assertEqual(self.adapter.calls.count('publish'), 1)
+                self.assertNotIn('preserve_smoke', self.adapter.calls)
+                self.assertFalse(result['this_cycle_smoke_publication_deferred'])
+                self.assertTrue(any(e['stage'] == failed for e in result['errors']))
 
 
 class DiagnosticTests(unittest.TestCase):

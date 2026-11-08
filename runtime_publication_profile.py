@@ -7,6 +7,7 @@ import argparse
 from contextlib import nullcontext
 import hashlib
 import importlib
+import importlib.util
 import json
 import math
 import os
@@ -170,8 +171,10 @@ def phase(report, output, stage, function, *, records=None, lock=None):
             raise diagnostic_error
 
 
-def initial_report(source_sha, index_experiment=False, parallel_validation_experiment=False):
-    if index_experiment and parallel_validation_experiment:
+def initial_report(source_sha, index_experiment=False, parallel_validation_experiment=False,
+                   history_batch_experiment=False):
+    if sum(bool(x) for x in (index_experiment, parallel_validation_experiment,
+                            history_batch_experiment)) > 1:
         raise ProfileError('diagnostic experiments are mutually exclusive')
     report = {'schema_version': 1, 'status': 'running', 'source_sha': source_sha,
             'scope': 'single_pass_local_validation_and_fixed_HEAD_readback',
@@ -193,6 +196,11 @@ def initial_report(source_sha, index_experiment=False, parallel_validation_exper
         report['parallel_validation_experiment'] = {
             'status': 'running', 'trials': [], 'threads': 2,
             'timing_scope': 'phase_elapsed_times_overlap_do_not_add_as_wall_time'}
+    if history_batch_experiment:
+        report['scope'] = 'original_full_validation_then_native_git_patch_byte_comparison'
+        report['history_batch_experiment'] = {
+            'status': 'not_started', 'path': HISTORY_PATHS[-1],
+            'production_validator_replaced': False}
     return report
 
 
@@ -525,13 +533,78 @@ def parallel_experiment(checkout, source, source_sha, report, output,
     write_report(output, report)
 
 
+def history_batch_probe(checkout, source, source_sha, report, output, deadline):
+    """Compare native Git I/O only; never replace a frozen validation function."""
+    experiment = report['history_batch_experiment']
+    path = experiment['path']
+
+    def state():
+        return {'head': git(checkout, 'rev-parse', 'HEAD').decode().strip(),
+                'tracked_status': git(checkout, 'status', '--porcelain', '--untracked-files=no'),
+                'histories': history_oids(checkout),
+                'path_bytes': (checkout / path).read_bytes(),
+                'source': source_state(source)}
+
+    before = state()
+    if before['head'] != source_sha or not before['histories'][path]:
+        raise ProfileError('patch probe requires the fixed nonempty history')
+    experiment.update(status='running', head_before=before['head'],
+                      history_before=history_manifest(before['histories']))
+    write_report(output, report)
+    primary = None
+    try:
+        spec = importlib.util.spec_from_file_location(
+            'offline_git_history_batch_probe', source / 'git_history_batch_probe.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        remaining = deadline - time.perf_counter()
+        if remaining <= 0:
+            raise TimeoutError('patch probe has no remaining diagnostic budget')
+        result = phase(report, output, 'history_patch_byte_probe',
+                       lambda: module.run_probe(checkout, path, timeout_seconds=remaining,
+                                                allow_object_directory=object_directory(source)))
+        experiment['result'] = result
+        if (not isinstance(result, dict) or result.get('status') != 'completed'
+                or result.get('patch_bytes_equal') is not True
+                or result.get('ordered_oids_equal') is not True
+                or type(result.get('commit_count')) is not int
+                or result['commit_count'] != len(before['histories'][path])):
+            raise ProfileError('patch probe did not establish complete byte equivalence')
+    except BaseException as exc:
+        primary = (exc, exc.__traceback__)
+    finally:
+        try:
+            after = state()
+            experiment.update(head_after=after['head'],
+                              history_after=history_manifest(after['histories']))
+            if after != before:
+                raise ProfileError('patch probe changed its fixed source or tracked inputs')
+            experiment['state_unchanged'] = True
+        except BaseException as exc:
+            experiment['state_error'] = {'type': type(exc).__name__}
+            if primary is None:
+                primary = (exc, exc.__traceback__)
+        experiment['status'] = 'error' if primary else 'completed'
+        if primary:
+            experiment['error'] = {'type': type(primary[0]).__name__}
+        try:
+            write_report(output, report)
+        except BaseException as exc:
+            if primary is None:
+                primary = (exc, exc.__traceback__)
+                experiment['status'] = 'error'
+    if primary:
+        raise primary[0].with_traceback(primary[1])
+
+
 def worker(source, source_sha, output, workspace, use_index_experiment=False, timeout_seconds=360,
-           use_parallel_validation_experiment=False):
+           use_parallel_validation_experiment=False, use_history_batch_experiment=False):
     source, output, workspace = Path(source).resolve(), Path(output).resolve(), Path(workspace).resolve()
     if output.is_relative_to(source) or workspace.is_relative_to(source):
         raise ProfileError('worker output and workspace must be outside the original checkout')
     deadline = time.perf_counter() + timeout_seconds
-    report = initial_report(source_sha, use_index_experiment, use_parallel_validation_experiment)
+    report = initial_report(source_sha, use_index_experiment, use_parallel_validation_experiment,
+                            use_history_batch_experiment)
     write_report(output, report)
     lock_down_worker()
     checkout = workspace / 'checkout'
@@ -574,13 +647,20 @@ def worker(source, source_sha, output, workspace, use_index_experiment=False, ti
             report['frozen_validation_completed'] = True
             phase(report, output, 'core_exact_readback', readback)
         report['frozen_validation_completed'] = True
+        if use_history_batch_experiment:
+            # The original validators above measured the current runtime wrapper.
+            # The separate Git-byte probe must inspect a clean fixed-commit tree.
+            (checkout / 'runtime_deadline_service.py').write_bytes(original_runtime)
+            original_runtime = None
+            history_batch_probe(checkout, source, source_sha, report, output, deadline)
         after = core_inputs(checkout, publisher, evidence)
         report['core_inputs_after'] = input_manifest(after)
         if after != expected:
             raise ProfileError('core input bytes changed during readback')
         report['input_bytes_unchanged'] = True
-        (checkout / 'runtime_deadline_service.py').write_bytes(original_runtime)
-        original_runtime = None
+        if original_runtime is not None:
+            (checkout / 'runtime_deadline_service.py').write_bytes(original_runtime)
+            original_runtime = None
         report['tracked_worktree_clean'] = not git(checkout, 'status', '--porcelain', '--untracked-files=no').strip()
         if not report['tracked_worktree_clean']:
             raise ProfileError('tracked inputs changed during read-only diagnostic')
@@ -590,6 +670,8 @@ def worker(source, source_sha, output, workspace, use_index_experiment=False, ti
         report['status'] = 'error'
         if use_index_experiment: report['index_experiment']['status'] = 'error'
         if use_parallel_validation_experiment: report['parallel_validation_experiment']['status'] = 'error'
+        if use_history_batch_experiment and report['history_batch_experiment']['status'] != 'not_started':
+            report['history_batch_experiment']['status'] = 'error'
         report['error'] = {'type': type(exc).__name__}
         if isinstance(exc, ProfileError):
             report['error']['reason'] = str(exc)
@@ -622,7 +704,7 @@ def run_bounded(command, environment, timeout_seconds):
 
 
 def run_profile(source, source_sha, output, timeout_seconds, index_experiment=False,
-                parallel_validation_experiment=False):
+                parallel_validation_experiment=False, history_batch_experiment=False):
     source, output = Path(source).resolve(), Path(output).resolve()
     if output.is_relative_to(source):
         raise ValueError('diagnostic output must be outside the original checkout')
@@ -631,7 +713,8 @@ def run_profile(source, source_sha, output, timeout_seconds, index_experiment=Fa
         raise ValueError('Ubuntu diagnostic requires a timeout in (0, 360] seconds')
     if not re.fullmatch('[0-9a-f]{40}', source_sha):
         raise ValueError('a complete fixed commit SHA is required')
-    report = initial_report(source_sha, index_experiment, parallel_validation_experiment)
+    report = initial_report(source_sha, index_experiment, parallel_validation_experiment,
+                            history_batch_experiment)
     write_report(output, report)
     started = time.perf_counter()
     with tempfile.TemporaryDirectory(prefix='runtime-publication-profile-') as workspace:
@@ -641,9 +724,12 @@ def run_profile(source, source_sha, output, timeout_seconds, index_experiment=Fa
                               '--timeout-seconds', str(timeout_seconds)]
         if index_experiment: command.append('--index-experiment')
         if parallel_validation_experiment: command.append('--parallel-validation-experiment')
+        if history_batch_experiment: command.append('--history-batch-experiment')
         result = run_bounded(command, safe_environment(), timeout_seconds)
     try: report = json.loads(output.read_text(encoding='utf-8'))
-    except (OSError, ValueError): report = initial_report(source_sha, index_experiment, parallel_validation_experiment)
+    except (OSError, ValueError):
+        report = initial_report(source_sha, index_experiment, parallel_validation_experiment,
+                                history_batch_experiment)
     if result['timed_out']:
         report['status'] = 'timeout'
         for record in report['phases']:
@@ -662,6 +748,8 @@ def run_profile(source, source_sha, output, timeout_seconds, index_experiment=Fa
                 if trial['status'] == 'running': trial['status'] = 'timeout'
                 for record in trial['phases'] + trial['groups']:
                     if record['status'] == 'running': record['status'] = 'timeout'
+        if history_batch_experiment and report['history_batch_experiment']['status'] == 'running':
+            report['history_batch_experiment']['status'] = 'timeout'
     elif result['returncode'] != 0 or report['status'] != 'completed':
         report['status'] = 'error'
     report['total_seconds'] = time.perf_counter() - started
@@ -680,15 +768,19 @@ def main():
                         help='compare native Git commit-graph off/on/off in the same isolated checkout')
     experiments.add_argument('--parallel-validation-experiment', action='store_true',
                              help='compare complete serial/parallel/serial validation offline')
+    experiments.add_argument('--history-batch-experiment', action='store_true',
+                             help='compare native Git patch bytes after original full validation')
     parser.add_argument('--worker', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--source-repo', type=Path, help=argparse.SUPPRESS)
     parser.add_argument('--workspace', type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.worker:
         return worker(args.source_repo, args.source_sha, args.output, args.workspace,
-                      args.index_experiment, args.timeout_seconds, args.parallel_validation_experiment)
+                      args.index_experiment, args.timeout_seconds, args.parallel_validation_experiment,
+                      args.history_batch_experiment)
     code = run_profile(Path(__file__).resolve().parent, args.source_sha, args.output,
-                       args.timeout_seconds, args.index_experiment, args.parallel_validation_experiment)
+                       args.timeout_seconds, args.index_experiment, args.parallel_validation_experiment,
+                       args.history_batch_experiment)
     print(args.output.read_text(encoding='utf-8'))
     return code
 

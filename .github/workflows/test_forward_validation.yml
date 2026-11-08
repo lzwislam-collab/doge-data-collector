@@ -5,6 +5,8 @@ on:
     paths:
       - 'runtime_deadline_service.py'
       - 'runtime_publication_profile.py'
+      - 'git_history_batch_probe.py'
+      - 'test_git_history_batch_probe.py'
       - 'test_runtime_publication*.py'
       - 'pit_retention_preparation.py'
       - 'test_pit_retention_preparation.py'
@@ -60,11 +62,11 @@ jobs:
           python -m unittest discover -v
       - run: python minimal_market_forward.py prepare
       - run: python forward_validation_v2.py --integrity-only
-      - name: Compare full validation serial and parallel on pinned history
+      - name: Compare native Git patch bytes after original frozen validation
         if: github.event_name == 'pull_request' && github.head_ref == 'fix/archive-qualified-drain-failure-20261026'
         timeout-minutes: 8
         run: |
-          python runtime_publication_profile.py --source-sha 64d43e642804b1622dbd84f5fbc09258e3a26ced --output "$RUNNER_TEMP/runtime-publication-profile.json" --timeout-seconds 360 --parallel-validation-experiment
+          python runtime_publication_profile.py --source-sha 64d43e642804b1622dbd84f5fbc09258e3a26ced --output "$RUNNER_TEMP/runtime-publication-profile.json" --timeout-seconds 360 --history-batch-experiment
       - name: Preserve bounded publication diagnostics
         if: always() && github.event_name == 'pull_request' && github.head_ref == 'fix/archive-qualified-drain-failure-20261026'
         uses: actions/upload-artifact@v4
