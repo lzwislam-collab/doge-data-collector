@@ -309,6 +309,266 @@ class RuntimeTests(unittest.TestCase):
         with self.assertRaises(ValueError): runtime.validate_p2(self.root)
 
 
+class PendingSmokeReplayAdapter(Adapter):
+    """Offline action timings from run 42458999547's 09:00 UTC cycle."""
+    def __init__(self, clock, root):
+        super().__init__(clock)
+        self.root = root
+        self.started = clock()
+        self.book_result = {'status': 'command_completed', 'mode': 'smoke',
+                            'formal_eligibility': False}
+        self.audit_status = 'pending'
+        self.raw_paths = []
+        self.published_raw = []
+        self.fail_publish_number = None
+    def action(self, name):
+        self.calls.append(name)
+        number = self.calls.count(name)
+        seconds = {'prepare': 4.971565, 'issue': 26.722580,
+                   'source_audit': 0.019398, 'book': 0.515468}.get(name, 0)
+        if name == 'publish': seconds = 181.037305 if number == 1 else 182.766045
+        if name == 'witness': seconds = 1.124913 if number == 1 else 0.024160
+        self.clock.sleep(seconds)
+        if name == 'book':
+            import p2_paired_execution_v3_1 as engine
+            qid, relative = engine.save_book(self.root, {'synthetic_raw_book': number}, engineering=True)
+            path = self.root/relative
+            (self.root/engine.BASE/'engineering_smoke_latest.json').write_text(json.dumps(
+                {'status': 'ok', 'book_sha256': qid, 'snapshot_path': relative}))
+            self.smoke_qid = qid
+            self.raw_paths.append(path)
+        if name in self.fail or (name == 'publish' and number == self.fail_publish_number):
+            raise RuntimeError(name + ' failed')
+        if name == 'issue':
+            self.registry.append({'forecast_id': 'issued', 'horizon_hours': '1',
+                'source_hour_start_utc': self.started.isoformat(),
+                'target_utc': (self.started+timedelta(hours=1)).isoformat()})
+        if name == 'watch':
+            for fid in runtime.open_targets(self.registry, self.scores, self.clock()):
+                self.scores[fid] = {'status': 'scored'}
+        if name == 'publish':
+            self.published_raw.append({p.name: p.read_bytes() for p in self.raw_paths})
+            return {'status': 'verified_remote_readback'}
+        if name == 'witness': return {'status': 'requested_only'}
+        if name == 'source_audit': return {'status': self.audit_status}
+        if name == 'book': return self.book_result
+        if name == 'preserve_smoke': return runtime.preserve_smoke_book(self.root, self.smoke_qid)
+        return {'status': 'command_completed'}
+
+
+class DeferredSmokeTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.case = 0
+        self.make_adapter()
+    def make_adapter(self):
+        self.case += 1
+        self.clock = Clock()
+        self.clock.at = datetime(2026, 11, 8, 9, tzinfo=timezone.utc)
+        self.start = self.clock()
+        self.root = Path(self.tmp.name)/f'case-{self.case}'
+        self.adapter = PendingSmokeReplayAdapter(self.clock, self.root)
+    def add_target(self, seconds):
+        self.adapter.registry.append({'forecast_id': 'due', 'horizon_hours': '1',
+            'source_hour_start_utc': (self.start-timedelta(hours=1)).isoformat(),
+            'target_utc': (self.start+timedelta(seconds=seconds)).isoformat()})
+    def cycle(self, state=None):
+        return runtime.cycle(self.adapter, {} if state is None else state, self.clock)
+    def test_recorded_duplicate_publication_cycle_defers_only_smoke(self):
+        result = self.cycle()
+        self.assertEqual(self.adapter.calls.count('publish'), 1)
+        self.assertAlmostEqual((self.clock()-self.start).total_seconds(), 214.391229, places=6)
+        self.assertTrue(result.get('this_cycle_smoke_publication_deferred', False))
+        self.assertTrue(result.get('this_cycle_deferred_smoke_pending_at_end', False))
+        self.assertEqual(result['errors'], [])
+        self.assertEqual(self.adapter.published_raw, [{}])
+        self.assertTrue(self.adapter.raw_paths[0].read_bytes())
+    def test_next_normal_tick_publishes_both_retained_raw_samples(self):
+        state = {}
+        first = self.cycle(state)
+        raw = self.adapter.raw_paths[0].read_bytes()
+        self.assertTrue(first.get('this_cycle_deferred_smoke_pending_at_end', False))
+        second = self.cycle(state)
+        self.assertFalse(second.get('this_cycle_smoke_publication_deferred', False))
+        self.assertEqual(self.adapter.calls.count('publish'), 2)
+        self.assertEqual(self.adapter.published_raw[-1][self.adapter.raw_paths[0].name], raw)
+        self.assertEqual(len(self.adapter.published_raw[-1]), 2)
+        self.assertEqual(self.adapter.raw_paths[0].read_bytes(), raw)
+    def test_existing_finish_publishes_pending_raw_without_resetting_clock(self):
+        result = runtime.run(self.root, self.adapter, 1, self.clock, self.clock.sleep)
+        raw = self.adapter.raw_paths[0].read_bytes()
+        self.assertEqual(self.adapter.calls.count('publish'), 1)
+        self.assertAlmostEqual(result['maximum_cycle_seconds'], 214.391229, places=6)
+        self.assertTrue(result['cadence_target_met'])
+        finished = runtime.finish(self.root, self.adapter, result)
+        self.assertFalse(finished['fatal'])
+        self.assertEqual(self.adapter.published_raw[-1][self.adapter.raw_paths[0].name], raw)
+        self.assertEqual(self.adapter.raw_paths[0].read_bytes(), raw)
+        self.assertAlmostEqual((self.clock()-self.start).total_seconds(), 397.157274, places=6)
+    def test_target_opening_during_smoke_is_immediately_published_and_pending_cleared(self):
+        self.add_target(214)  # After the pre-book check, before book completes.
+        result = runtime.run(self.root, self.adapter, 1, self.clock, self.clock.sleep)
+        receipt = json.loads(next((self.root/runtime.BASE/'receipts').glob('*.json')).read_text())
+        self.assertEqual(self.adapter.calls[-3:], ['watch', 'publish', 'witness'])
+        self.assertTrue(receipt.get('this_cycle_smoke_publication_deferred', False))
+        self.assertFalse(receipt.get('this_cycle_deferred_smoke_pending_at_end', False))
+        self.assertIn('due', self.adapter.scores)
+        self.assertTrue(self.adapter.published_raw[-1])
+        self.assertAlmostEqual(result['maximum_cycle_seconds'], 397.181434, places=6)
+        self.assertFalse(result['cadence_target_met'])
+        self.assertEqual(result['status'], 'DEGRADED')
+    def test_failed_due_publication_keeps_pending_and_fatal(self):
+        self.add_target(214)
+        self.adapter.fail_publish_number = 2
+        result = self.cycle()
+        self.assertTrue(result['fatal'])
+        self.assertTrue(result.get('this_cycle_deferred_smoke_pending_at_end', False))
+        self.assertEqual(result['errors'][-1]['stage'], 'publish')
+        self.assertTrue(self.adapter.raw_paths[0].exists())
+        copy = self.root/runtime.BASE/'deferred_smoke_books'/self.adapter.smoke_qid[:2]/(self.adapter.smoke_qid+'.json')
+        self.assertEqual(copy.read_bytes(), self.adapter.raw_paths[0].read_bytes())
+        count = self.adapter.calls.count('publish')
+        runtime.finish(self.root, self.adapter, result)
+        self.assertEqual(self.adapter.calls.count('publish'), count)
+        self.assertTrue(copy.exists())
+    def test_next_tick_fatal_keeps_first_raw_in_existing_artifact_scope(self):
+        state = {}
+        self.cycle(state)
+        raw = self.adapter.raw_paths[0].read_bytes()
+        qid = self.adapter.smoke_qid
+        self.adapter.fail_publish_number = 2
+        result = self.cycle(state)
+        self.assertTrue(result['fatal'])
+        runtime.finish(self.root, self.adapter, result)
+        copy = self.root/runtime.BASE/'deferred_smoke_books'/qid[:2]/(qid+'.json')
+        self.assertEqual(copy.read_bytes(), raw)
+    def test_failed_finish_keeps_raw_copy_and_explicit_failure(self):
+        result = runtime.run(self.root, self.adapter, 1, self.clock, self.clock.sleep)
+        raw = self.adapter.raw_paths[0].read_bytes()
+        qid = self.adapter.smoke_qid
+        self.adapter.fail_publish_number = 2
+        finished = runtime.finish(self.root, self.adapter, result)
+        self.assertTrue(finished['fatal'])
+        self.assertEqual(finished['status'], 'DEGRADED')
+        self.assertIn('final_publication_error', finished)
+        copy = self.root/runtime.BASE/'deferred_smoke_books'/qid[:2]/(qid+'.json')
+        self.assertEqual(copy.read_bytes(), raw)
+    def test_raw_preservation_failure_uses_original_immediate_publication(self):
+        with patch.object(runtime, 'preserve_smoke_book', side_effect=OSError('disk full')):
+            result = self.cycle()
+        self.assertEqual(self.adapter.calls.count('publish'), 2)
+        self.assertFalse(result.get('this_cycle_smoke_publication_deferred', False))
+        self.assertEqual(result['errors'][-1]['stage'], 'preserve_smoke')
+        self.assertTrue(self.adapter.published_raw[-1])
+    def test_partial_copy_write_leaves_no_truncated_sha_file_or_temporary(self):
+        actual_temporary = tempfile.NamedTemporaryFile
+        actual_open = Path.open
+        partial_paths = []
+        class PartialWriter:
+            def __init__(self, stream): self.stream = stream
+            def __getattr__(self, name): return getattr(self.stream, name)
+            def __enter__(self): return self
+            def __exit__(self, *args): return self.stream.__exit__(*args)
+            def write(self, body):
+                self.stream.write(body[:7])
+                self.stream.flush()
+                path = Path(self.stream.name)
+                partial_paths.append((path, path.read_bytes()))
+                raise OSError('injected failure after a real partial write')
+        def temporary(*args, **kwargs): return PartialWriter(actual_temporary(*args, **kwargs))
+        def direct_open(path, mode='r', *args, **kwargs):
+            stream = actual_open(path, mode, *args, **kwargs)
+            return PartialWriter(stream) if mode == 'xb' and 'deferred_smoke_books' in path.parts else stream
+        with patch.object(tempfile, 'NamedTemporaryFile', side_effect=temporary), \
+                patch.object(Path, 'open', direct_open):
+            result = self.cycle()
+        self.assertEqual(self.adapter.calls.count('publish'), 2)
+        self.assertEqual(result['errors'][-1]['stage'], 'preserve_smoke')
+        self.assertEqual(len(partial_paths), 1)
+        self.assertEqual(len(partial_paths[0][1]), 7)
+        self.assertFalse(partial_paths[0][0].exists())
+        qid = self.adapter.smoke_qid
+        target = self.root/runtime.BASE/'deferred_smoke_books'/qid[:2]/(qid+'.json')
+        self.assertFalse(target.exists())
+        self.assertEqual(self.adapter.published_raw[-1][qid+'.json'], self.adapter.raw_paths[0].read_bytes())
+        self.assertFalse(result.get('this_cycle_smoke_publication_deferred', False))
+    def test_real_smoke_bytes_are_bound_to_current_stdout_and_latest(self):
+        import p2_paired_execution_v3_1 as engine
+        qid, relative = engine.save_book(self.root, {'synthetic_raw_book': 'binding'}, engineering=True)
+        latest = self.root/engine.BASE/'engineering_smoke_latest.json'
+        latest.write_text(json.dumps({'status': 'ok', 'book_sha256': qid, 'snapshot_path': relative}))
+        with patch.dict(os.environ, {'GITHUB_REF': 'refs/heads/main', 'GITHUB_REPOSITORY': runtime.REPO}):
+            live = runtime.LiveAdapter(self.root)
+        live.source_ready = lambda: False
+        live.python = lambda *args: json.dumps({'status': 'ok', 'book_sha256': qid})
+        live.action('book')
+        kept = live.action('preserve_smoke')
+        self.assertEqual((self.root/kept['artifact_path']).read_bytes(), (self.root/relative).read_bytes())
+        self.assertFalse(kept['remote_readback_verified'])
+        self.assertFalse(kept['worm_verified'])
+        self.assertEqual(live.action('preserve_smoke'), kept)
+        latest.write_text(json.dumps({'status': 'ok', 'book_sha256': 'a'*64, 'snapshot_path': relative}))
+        with self.assertRaises(ValueError): live.action('preserve_smoke')
+    def test_raw_hash_or_existing_copy_mismatch_is_never_overwritten(self):
+        import p2_paired_execution_v3_1 as engine
+        qid, relative = engine.save_book(self.root, {'synthetic_raw_book': 'tamper'}, engineering=True)
+        latest = self.root/engine.BASE/'engineering_smoke_latest.json'
+        latest.write_text(json.dumps({'status': 'ok', 'book_sha256': qid, 'snapshot_path': relative}))
+        kept = runtime.preserve_smoke_book(self.root, qid)
+        copy = self.root/kept['artifact_path']
+        copy.write_bytes(b'existing mismatch')
+        with self.assertRaises(ValueError): runtime.preserve_smoke_book(self.root, qid)
+        self.assertEqual(copy.read_bytes(), b'existing mismatch')
+        (self.root/relative).write_bytes(b'changed original')
+        with self.assertRaises(ValueError): runtime.preserve_smoke_book(self.root, qid)
+        self.assertEqual(copy.read_bytes(), b'existing mismatch')
+    def test_formal_capture_or_nonexplicit_smoke_proof_is_never_deferred(self):
+        for book in ({'mode': 'capture', 'formal_eligibility': True},
+                     {'mode': 'capture', 'formal_eligibility': False},
+                     {'mode': 'smoke', 'formal_eligibility': True},
+                     {'mode': 'smoke'}, {'formal_eligibility': False},
+                     {'mode': 'smoke', 'formal_eligibility': 0}):
+            with self.subTest(book=book):
+                self.make_adapter()
+                self.adapter.book_result = book
+                result = self.cycle()
+                self.assertEqual(self.adapter.calls.count('publish'), 2)
+                self.assertFalse(result.get('this_cycle_smoke_publication_deferred', False))
+    def test_book_or_witness_error_prevents_deferral(self):
+        for failed in ('book', 'witness'):
+            with self.subTest(failed=failed):
+                self.make_adapter()
+                self.adapter.fail = {failed}
+                result = self.cycle()
+                self.assertEqual(self.adapter.calls.count('publish'), 2)
+                self.assertFalse(result.get('this_cycle_smoke_publication_deferred', False))
+                self.assertTrue(result['errors'])
+                self.assertTrue(self.adapter.published_raw[-1])
+    def test_earlier_watch_error_prevents_deferral_after_successful_issuance(self):
+        self.add_target(0)
+        self.adapter.fail = {'watch'}
+        result = self.cycle()
+        self.assertGreaterEqual(self.adapter.calls.count('publish'), 3)
+        self.assertFalse(result.get('this_cycle_smoke_publication_deferred', False))
+        self.assertTrue(result['errors'])
+    def test_no_new_issuance_or_nonpending_audit_cannot_defer(self):
+        for condition in ('already_issued', 'audit_ready'):
+            with self.subTest(condition=condition):
+                self.make_adapter()
+                if condition == 'already_issued':
+                    self.adapter.registry = [{'forecast_id': 'old', 'horizon_hours': '1',
+                        'source_hour_start_utc': self.start.isoformat(),
+                        'target_utc': (self.start+timedelta(hours=1)).isoformat()}]
+                else:
+                    self.adapter.audit_status = 'ready'
+                result = self.cycle()
+                self.assertEqual(self.adapter.calls.count('publish'), 1 if condition == 'already_issued' else 2)
+                self.assertFalse(result.get('this_cycle_smoke_publication_deferred', False))
+                self.assertTrue(self.adapter.published_raw[-1])
+
+
 class DiagnosticTests(unittest.TestCase):
     def setUp(self):
         self.clock = Clock()
