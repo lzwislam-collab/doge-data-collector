@@ -2,10 +2,18 @@
 const fs=require('fs'),vm=require('vm'),assert=require('node:assert/strict');
 const path=require('path').join(__dirname,'quote_rescue_live.gs');
 const source=fs.existsSync(path)?fs.readFileSync(path,'utf8'):'';
-const epoch=Date.parse('2026-10-16T04:00:00Z');
+const epoch=Date.parse('2026-10-16T03:50:00Z');
 const repo='lzwislam-collab/doge-data-collector';
 const handler='runQuoteRescueLiveValidation';
-const approved='PR54:16a7eeef4b284f5ba62e4742f73f0be6e50792e3';
+const approved='STRICT24_TARGET_SCOPE_V1_REQUIRES_FRESH_APPROVAL';
+const model='DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1';
+const columns=['forecast_id','model_id','issued_at_utc','source_quote_utc','source_hour_start_utc','horizon_hours','target_utc'];
+function forecast(h=24,target=epoch-10*60000,overrides={}) {
+ const issued=target-h*3600000, hour=Math.floor(issued/3600000)*3600000;
+ return Object.assign({forecast_id:model+'_'+(hour-3600000)+'_'+h+'h',model_id:model,issued_at_utc:new Date(issued).toISOString(),source_quote_utc:new Date(issued).toISOString(),source_hour_start_utc:new Date(hour).toISOString(),horizon_hours:String(h),target_utc:new Date(target).toISOString()},overrides);
+}
+const due=forecast().forecast_id;
+const registryText=rows=>[columns.join(','),...rows.map(r=>columns.map(c=>r[c]).join(','))].join('\n')+'\n';
 let passed=0;
 function test(name,fn){try{fn();passed++;console.log('PASS '+name);}catch(e){console.error('FAIL '+name);throw e;}}
 function fixture(options={}) {
@@ -13,7 +21,7 @@ function fixture(options={}) {
  const props={GH_ACTIONS_READ_TOKEN:'test-read-secret',GH_QUOTE_RESCUE_DISPATCH_TOKEN:'test-dispatch-secret',QRV1_VALIDATION_READY:approved};
  const requests=[],logs=[],triggers=[{getHandlerFunction:()=> 'normal_unrelated_trigger'}];
  const table=rows=>rows.map(r=>r.join(',')).join('\n')+'\n';
- let registry=table([['forecast_id','issued_at_utc','target_utc'],['due','2026-10-16T02:50:00Z','2026-10-16T03:50:00Z']]);
+ let registry=registryText([forecast()]);
  let scores='forecast_id,status\n';let runs=[];
  const store={getProperty:k=>props[k]??null,setProperty:(k,v)=>{options.onStore?.(k,v,{advance:ms=>{now+=ms;}});if(options.failStore?.(k,v,requests))throw new Error('storage failure');props[k]=v;}};
  class Clock extends Date {constructor(...args){super(...(args.length?args:[now]));}static now(){return now;}}
@@ -31,22 +39,28 @@ function fixture(options={}) {
  const state=()=>JSON.parse(props.QRV1_STATE||'null');
  return {c:context,props,requests,logs,triggers,state,advance:ms=>{now+=ms;},setRegistry:v=>{registry=v;},setScores:v=>{scores=v;},setRuns:v=>{runs=v;},setLocked:v=>{locked=v;},start:()=>context.startQuoteRescueLiveValidation(),tick:()=>context.runQuoteRescueLiveValidation({triggerUid:'synthetic'}),liveTriggers:()=>triggers.filter(t=>t.getHandlerFunction()===handler)};
 }
+test('non-24h targets never dispatch',()=>{for(const h of [1,168,720]){const f=fixture();f.setRegistry(registryText([forecast(h)]));f.start();f.tick();assert.equal(f.requests.filter(r=>r.opts.method==='post').length,0);assert.equal(f.state().decision,'SKIP_NO_OPEN_TARGET');}});
+test('mixed cycles request only validated 24h IDs',()=>{const f=fixture();f.setRegistry(registryText([forecast(1),forecast(),forecast(168)]));f.start();f.tick();const post=f.requests.filter(r=>r.opts.method==='post');assert.equal(post.length,1);assert.deepEqual(JSON.parse(JSON.parse(post[0].opts.payload).inputs.expected_ids_json),[due]);});
+test('forged 24h identity or time stops before dispatch',()=>{for(const change of [{forecast_id:'invalid_24h'},{horizon_hours:'1'},{model_id:'other'},{target_utc:new Date(epoch-9*60000).toISOString()},{source_hour_start_utc:'2026-10-15T02:00:00Z'},{issued_at_utc:'2026-10-15T03:50:00+09:00'},{source_quote_utc:'2026-10-15T03:51:00Z'},{source_quote_utc:'2026-10-15T03:40:00.000001Z'},{source_quote_utc:'2026-10-15T03:37:59.999999Z'}]){const f=fixture();f.setRegistry(registryText([forecast(24,epoch-10*60000,change)]));f.start();f.tick();assert.equal(f.requests.filter(r=>r.opts.method==='post').length,0);assert.equal(f.state().phase,'STOPPED');}});
+test('invalid Gregorian calendar date cannot normalize into eligibility',()=>{const f=fixture();assert(Number.isFinite(Date.parse('2026-02-30T03:40:00Z')));assert(Number.isNaN(f.c.quoteRescueLiveUtcMicros_('2026-02-30T03:40:00Z')));f.setRegistry(registryText([forecast(24,epoch-10*60000,{source_quote_utc:'2026-09-45T03:40:00Z'})]));f.start();f.tick();assert.equal(f.requests.filter(r=>r.opts.method==='post').length,0);});
+test('duplicate IDs stop before dispatch',()=>{const f=fixture();f.setRegistry(registryText([forecast(),forecast()]));f.start();f.tick();assert.equal(f.requests.filter(r=>r.opts.method==='post').length,0);assert.equal(f.state().phase,'STOPPED');});
+test('partially expired batch cannot dispatch after reservation',()=>{const f=fixture({onStore:(k,v,api)=>{if(k==='QRV1_STATE'&&JSON.parse(v).phase==='DISPATCH_RESERVED')api.advance(2*60000);}});f.setRegistry(registryText([forecast(24,epoch-5*60000),forecast(24,epoch+10*60000)]));f.advance(15*60000);f.start();f.tick();assert.equal(f.requests.filter(r=>r.opts.method==='post').length,0);});
 test('live entry exists but loading source performs no work',()=>{const f=fixture();assert.equal(typeof f.c.runQuoteRescueLiveValidation,'function');assert.equal(f.requests.length,0);assert(!f.props.QRV1_STATE);});
 test('start requires explicit deployed and reviewed readiness marker',()=>{const f=fixture();delete f.props.QRV1_VALIDATION_READY;assert.throws(f.start);assert.equal(f.liveTriggers().length,0);assert.equal(f.requests.length,0);});
 test('missing dispatch credential cannot silently reuse read credential',()=>{const f=fixture();delete f.props.GH_QUOTE_RESCUE_DISPATCH_TOKEN;assert.throws(f.start);assert.equal(f.liveTriggers().length,0);});
 test('start once preserves trial evidence and unrelated trigger',()=>{const f=fixture();f.props.DRY_TRIAL_STATE='old-failed-evidence';f.start();assert.equal(f.liveTriggers().length,1);assert.equal(f.props.DRY_TRIAL_STATE,'old-failed-evidence');assert.throws(f.start);assert.equal(f.liveTriggers().length,1);});
 test('manual live handler call cannot consume sample or dispatch',()=>{const f=fixture();f.start();assert.throws(()=>f.c.runQuoteRescueLiveValidation());assert.equal(f.state().polls,0);assert.equal(f.requests.length,0);});
-test('only new quote-only workflow main may receive one POST then own trigger stops',()=>{const f=fixture();f.start();f.tick();const post=f.requests.filter(r=>r.opts.method==='post');assert.equal(post.length,1);assert.equal(post[0].url,'https://api.github.com/repos/'+repo+'/actions/workflows/quote_only_rescue.yml/dispatches');const data=JSON.parse(post[0].opts.payload);assert.equal(data.ref,'main');assert.deepEqual(JSON.parse(data.inputs.expected_ids_json),['due']);assert.equal(f.state().phase,'STOPPED');assert.equal(f.state().dispatch_attempts,1);assert.equal(f.state().decision,'DISPATCH_ACCEPTED_AWAIT_EVIDENCE');assert.equal(f.liveTriggers().length,0);f.tick();assert.equal(f.requests.length,4);assert.equal(f.triggers.length,1);});
+test('only new quote-only workflow main may receive one POST then own trigger stops',()=>{const f=fixture();f.start();f.tick();const post=f.requests.filter(r=>r.opts.method==='post');assert.equal(post.length,1);assert.equal(post[0].url,'https://api.github.com/repos/'+repo+'/actions/workflows/quote_only_rescue.yml/dispatches');const data=JSON.parse(post[0].opts.payload);assert.equal(data.ref,'main');assert.deepEqual(JSON.parse(data.inputs.expected_ids_json),[due]);assert.equal(f.state().phase,'STOPPED');assert.equal(f.state().dispatch_attempts,1);assert.equal(f.state().decision,'DISPATCH_ACCEPTED_AWAIT_EVIDENCE');assert.equal(f.liveTriggers().length,0);f.tick();assert.equal(f.requests.length,4);assert.equal(f.triggers.length,1);});
 test('GETs retain read token and only POST uses separate dispatch token',()=>{const f=fixture();f.start();f.tick();assert.equal(f.requests.length,4);for(const {url,opts} of f.requests){assert.equal(opts.followRedirects,false);assert.equal(opts.headers.Authorization,opts.method==='post'?'Bearer test-dispatch-secret':url.startsWith('https://api.github.com/')?'Bearer test-read-secret':undefined);}assert(!JSON.stringify(f.logs).includes('secret'));assert(!f.props.QRV1_STATE.includes('secret'));});
 test('new GitHub 200 response retains only validated numeric run ID',()=>{const f=fixture({postCode:200,postBody:JSON.stringify({workflow_run_id:12345,html_url:'ignored'})});f.start();f.tick();assert.equal(f.state().run_id,12345);assert.equal(f.state().decision,'DISPATCH_ACCEPTED_AWAIT_EVIDENCE');});
 test('malformed success response is ambiguous and never retried',()=>{const f=fixture({postCode:200,postBody:'unexpected-secret'});f.start();f.tick();assert.equal(f.state().decision,'DISPATCH_RESULT_UNKNOWN');f.tick();assert.equal(f.requests.length,4);assert(!JSON.stringify(f.logs).includes('unexpected-secret'));});
 test('denied POST stops without widening permissions or repeating',()=>{const f=fixture({postCode:403});f.start();f.tick();assert.equal(f.state().decision,'DISPATCH_HTTP_403');f.tick();assert.equal(f.requests.length,4);assert.equal(f.liveTriggers().length,0);});
 test('network exception is redacted and stops without retrying',()=>{const f=fixture({throwFetch:true});f.start();f.tick();assert.equal(f.liveTriggers().length,0);assert.equal(f.requests.length,1);assert(!JSON.stringify(f.logs).includes('secret'));});
-test('existing missing score is never requested',()=>{const f=fixture();f.setScores('forecast_id,status\ndue,unscorable_missing_target_quote\n');f.start();f.tick();assert.equal(f.state().decision,'SKIP_NO_OPEN_TARGET');assert.equal(f.requests.length,3);});
+test('existing missing score is never requested',()=>{const f=fixture();f.setScores('forecast_id,status\n'+due+',unscorable_missing_target_quote\n');f.start();f.tick();assert.equal(f.state().decision,'SKIP_NO_OPEN_TARGET');assert.equal(f.requests.length,3);});
 for(const name of ['okx_hourly_extreme_history','quote_only_rescue'])test('active '+name+' run prevents duplicate request',()=>{const f=fixture();f.setRuns([{path:'.github/workflows/'+name+'.yml',head_branch:'main',status:'in_progress'}]);f.start();f.tick();assert.equal(f.state().decision,'SKIP_EXISTING_RUN');assert.equal(f.requests.length,3);});
 test('time is rechecked after reads and old targets are skipped',()=>{const f=fixture({onFetch:(url,opts,api)=>{if(url.includes('actions/runs'))api.advance(11*60000);}});f.start();f.tick();assert.equal(f.state().decision,'SKIP_NO_OPEN_TARGET');assert.equal(f.requests.length,3);});
 test('inconsistent or malformed input fails closed',()=>{const f=fixture();f.setScores('forecast_id,status\nunknown,scored\n');f.start();f.tick();assert.notEqual(f.state().decision,'DISPATCH_ACCEPTED_AWAIT_EVIDENCE');assert.equal(f.requests.length,3);});
-test('12 genuine event polls without open targets auto-stop',()=>{const f=fixture();f.setScores('forecast_id,status\ndue,scored\n');f.start();for(let i=0;i<12;i++){f.advance(i===0?60000:5*60000);f.tick();}assert.equal(f.state().polls,12);assert.equal(f.state().fetch_calls,36);assert.equal(f.state().dispatch_attempts,0);assert.equal(f.liveTriggers().length,0);assert.equal(f.triggers.length,1);});
+test('12 genuine event polls without open targets auto-stop',()=>{const f=fixture();f.setScores('forecast_id,status\n'+due+',scored\n');f.start();for(let i=0;i<12;i++){f.advance(i===0?60000:5*60000);f.tick();}assert.equal(f.state().polls,12);assert.equal(f.state().fetch_calls,36);assert.equal(f.state().dispatch_attempts,0);assert.equal(f.liveTriggers().length,0);assert.equal(f.triggers.length,1);});
 test('expired validation deadline stops before any request',()=>{const f=fixture();f.start();f.advance(66*60000);f.tick();assert.equal(f.requests.length,0);assert.equal(f.liveTriggers().length,0);});
 test('late poll cannot start unless full execution fits wall deadline',()=>{const f=fixture();f.start();f.advance(64*60000);f.tick();assert.equal(f.requests.length,0);assert.equal(f.liveTriggers().length,0);});
 test('script lock rejects overlap without requests',()=>{const f=fixture();f.start();f.setLocked(true);f.tick();assert.equal(f.requests.length,0);assert.equal(f.state().polls,0);});

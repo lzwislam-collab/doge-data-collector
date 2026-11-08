@@ -1,7 +1,7 @@
 /** Independent, bounded live validation. Loading this file never starts a trigger. */
 const QRV1 = Object.freeze({
  repo:'lzwislam-collab/doge-data-collector',handler:'runQuoteRescueLiveValidation',
- approved:'PR54:16a7eeef4b284f5ba62e4742f73f0be6e50792e3',
+ approved:'STRICT24_TARGET_SCOPE_V1_REQUIRES_FRESH_APPROVAL',
  maxPolls:12,maxWallMs:65*60000,maxBodyMs:30*60000,maxExecutionMs:6*60000,maxFetches:37,
  stateKey:'QRV1_STATE',startedKey:'QRV1_STARTED'
 });
@@ -62,11 +62,19 @@ function quoteRescueLiveCsv_(text,required) {
 }
 function quoteRescueLiveRead_(properties,record) {
  const base='https://raw.githubusercontent.com/'+QRV1.repo+'/main/data/direction_v42/';
- const registry=quoteRescueLiveCsv_(quoteRescueLiveRequest_(base+'forward_registry.csv','get',properties,record).text,['forecast_id','issued_at_utc','target_utc']);
+ const registry=quoteRescueLiveCsv_(quoteRescueLiveRequest_(base+'forward_registry.csv','get',properties,record).text,['forecast_id','model_id','horizon_hours','issued_at_utc','source_quote_utc','source_hour_start_utc','target_utc']);
  const scores=quoteRescueLiveCsv_(quoteRescueLiveRequest_(base+'forward_scores.csv','get',properties,record).text,['forecast_id','status']);
  const runs=JSON.parse(quoteRescueLiveRequest_('https://api.github.com/repos/'+QRV1.repo+'/actions/runs?branch=main&per_page=30','get',properties,record).text).workflow_runs;
  if(!Array.isArray(runs))throw new Error('QRV1_RUN_SCHEMA');
  return {registry:registry,scores:scores,runs:runs};
+}
+function quoteRescueLiveUtcMicros_(value) {
+ if(typeof value!=='string'||!/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.[0-9]{1,6})?(?:Z|\+00:00)$/.test(value))return NaN;
+ const ms=Date.parse(value);
+ if(!Number.isFinite(ms)||new Date(ms).toISOString().slice(0,19)!==value.slice(0,19))return NaN;
+ const fraction=((value.match(/\.([0-9]+)/)||[])[1]||'').padEnd(6,'0');
+ const micros=ms*1000+Number(fraction.slice(3));
+ return Number.isSafeInteger(micros)?micros:NaN;
 }
 function quoteRescueLiveDecide_(data,now) {
  const seen=new Set(),scored=new Set(),due=[];
@@ -74,7 +82,20 @@ function quoteRescueLiveDecide_(data,now) {
  data.registry.forEach(r=>{
   const target=Date.parse(r.target_utc),issued=Date.parse(r.issued_at_utc);
   if(!r.forecast_id||r.forecast_id.length>200||seen.has(r.forecast_id)||!Number.isFinite(target)||!Number.isFinite(issued)||issued>now)throw new Error('QRV1_REGISTRY_SCHEMA');
-  seen.add(r.forecast_id);if(!scored.has(r.forecast_id)&&target<=now&&now<=target+20*60000)due.push(r.forecast_id);
+  seen.add(r.forecast_id);
+  const identity=/^DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_([0-9]{13})_([1-9][0-9]*)h$/.exec(r.forecast_id);
+  // Other horizons never enter this rescue, including IDs whose CSV horizon
+  // falsely claims 24h. A purported 24h row must pass every independent check.
+  if(r.horizon_hours!=='24'&&(!identity||identity[2]!=='24'))return;
+  const clocks=[r.issued_at_utc,r.target_utc,r.source_quote_utc,r.source_hour_start_utc].map(quoteRescueLiveUtcMicros_);
+  const [issuedUs,targetUs,sourceUs,hourUs]=clocks;
+  if(!identity||identity[2]!=='24'||r.horizon_hours!=='24'||r.model_id!=='DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1'
+     ||clocks.some(t=>!Number.isFinite(t))||issuedUs>now*1000
+     ||targetUs-issuedUs!==24*3600000000
+     ||Number(identity[1])%3600000!==0||(Number(identity[1])+3600000)*1000!==hourUs
+     ||hourUs%3600000000!==0||issuedUs<hourUs||issuedUs>hourUs+45*60000000||sourceUs>issuedUs||issuedUs-sourceUs>120000000)
+   throw new Error('QRV1_TARGET_SCOPE_INVALID');
+  if(!scored.has(r.forecast_id)&&targetUs<=now*1000&&now*1000<=targetUs+20*60000000)due.push(r.forecast_id);
  });
  if([...scored].some(id=>!seen.has(id)))return {decision:'SKIP_INCONSISTENT_READ',due:[]};
  if(!due.length)return {decision:'SKIP_NO_OPEN_TARGET',due:[]};
@@ -122,7 +143,7 @@ function runQuoteRescueLiveValidation(event) {
    // Durable intent precedes POST. Crash/timeout/ambiguous HTTP results must
    // never cause an automatic second attempt or run a different workflow.
    state.phase='DISPATCH_RESERVED';state.dispatch_attempts=1;state.fetch_budget_reserved++;
-   record.witness_deadline_ms=Math.max(...data.registry.filter(r=>verdict.due.slice(0,100).includes(r.forecast_id)).map(r=>Date.parse(r.target_utc)+20*60000));
+   record.witness_deadline_ms=Math.min(...data.registry.filter(r=>verdict.due.slice(0,100).includes(r.forecast_id)).map(r=>Date.parse(r.target_utc)+20*60000));
    state.dispatch_reserved_at_utc=new Date().toISOString();quoteRescueLiveSave_(p,state);
    const response=quoteRescueLiveRequest_('https://api.github.com/repos/'+QRV1.repo+'/actions/workflows/quote_only_rescue.yml/dispatches','post',p,record,{ref:'main',inputs:{expected_ids_json:JSON.stringify(verdict.due.slice(0,100))}});
    state.decision='DISPATCH_RESULT_UNKNOWN';
