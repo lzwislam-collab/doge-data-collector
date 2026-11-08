@@ -381,7 +381,7 @@ jobs:
         id: pit_preparation
         if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.supplemental_evidence.outcome == 'success'
         continue-on-error: true
-        timeout-minutes: 6
+        timeout-minutes: 8 # observed full preparation took 364s; keep all shard verification
         run: |
           python pit_retention_preparation.py prepare --latest --daily
           python - <<'PY'
@@ -392,7 +392,7 @@ jobs:
               f.write('generated='+str(r['generated_new_bundle']).lower()+'\n')
           PY
       - name: Save current PIT failure receipt including preparation timeout
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.pit_preparation.outcome == 'failure'
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && (steps.pit_preparation.outcome == 'failure' || steps.pit_preparation.outcome == 'cancelled')
         continue-on-error: true
         run: python pit_retention_preparation.py record-failure
       - name: Persist data and diagnostics
@@ -561,7 +561,7 @@ jobs:
         if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && (steps.archive_bridge_start.outcome != 'success' || steps.archive_bridge_stop.outcome != 'success')
         run: exit 1
       - name: Fail visibly on PIT preparation or package artifact error after saving core evidence
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && (steps.pit_preparation.outcome == 'failure' || steps.pit_artifact.outcome == 'failure' || steps.pit_publication.outcome == 'failure')
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && (steps.pit_preparation.outcome == 'failure' || steps.pit_preparation.outcome == 'cancelled' || steps.pit_artifact.outcome == 'failure' || steps.pit_publication.outcome == 'failure')
         run: exit 1
       - name: Fail visibly on supplemental capture failure after preserving core evidence
         if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.supplemental_evidence.outcome != 'success'

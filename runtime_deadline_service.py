@@ -11,6 +11,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -83,7 +84,11 @@ def cycle(adapter, state, clock):
     started = utc(clock())
     out = {'observed_at_utc': started.isoformat(), 'id': uuid.uuid4().hex,
            'errors': [], 'actions': [], 'issuance': 'NOT_ATTEMPTED', 'fatal': False,
-           'historical_backfill': False, 'economic_acceptance_passed': False}
+           'historical_backfill': False, 'economic_acceptance_passed': False,
+           'this_cycle_smoke_publication_deferred': False,
+           'this_cycle_deferred_smoke_pending_at_end': False}
+    issuance_publication_complete = False
+    audit_pending = False
 
     def action(name):
         before = utc(clock())
@@ -103,6 +108,7 @@ def cycle(adapter, state, clock):
         if not action('publish'):
             out['fatal'] = True
             return False
+        out['this_cycle_deferred_smoke_pending_at_end'] = False
         # Dispatch is only a request, never claimed to be an exact-head witness.
         action('witness')
         return True
@@ -133,6 +139,7 @@ def cycle(adapter, state, clock):
             out['issuance'] = 'ATTEMPT_COMPLETED' if action('issue') else 'FAILED'
             state.pop('source_audited_at', None)
             if not publish(): return out
+            issuance_publication_complete = out['issuance'] == 'ATTEMPT_COMPLETED' and not out['errors']
     else:
         out['issuance'] = 'FAILED_PREPARATION'
 
@@ -148,16 +155,29 @@ def cycle(adapter, state, clock):
         if not action('source_audit'):
             publish()
             return out
-        if out['actions'][-1]['result'].get('status') != 'pending':
+        audit_pending = out['actions'][-1]['result'].get('status') == 'pending'
+        if not audit_pending:
             state['source_audited_at'] = utc(clock())
     # New issues invalidate cached registry/source audits even within 5 minutes.
     elif out['issuance'] == 'ATTEMPT_COMPLETED':
         if not action('source_audit'):
             publish()
             return out
+        audit_pending = out['actions'][-1]['result'].get('status') == 'pending'
         state['source_audited_at'] = utc(clock())
-    action('book')
-    if not publish(): return out
+    book_succeeded = action('book')
+    book = out['actions'][-1]['result'] if book_succeeded else {}
+    may_defer = (issuance_publication_complete and not out['errors'] and audit_pending
+                 and book_succeeded and book.get('mode') == 'smoke'
+                 and book.get('formal_eligibility') is False)
+    if may_defer and action('preserve_smoke'):
+        # The original raw file remains in place and an exact independent copy
+        # is already inside the existing always-uploaded runtime artifact tree.
+        # A later normal tick or finish() publishes both; this is no remote claim.
+        out['this_cycle_smoke_publication_deferred'] = True
+        out['this_cycle_deferred_smoke_pending_at_end'] = True
+    elif not publish():
+        return out
 
     # Slow preparation/audit may have opened a target. Use a fresh clock, not
     # the tick's original timestamp, before yielding back to the scheduler.
@@ -167,6 +187,52 @@ def cycle(adapter, state, clock):
         publish()
     out['completed_at_utc'] = utc(clock()).isoformat()
     return out
+
+
+def preserve_smoke_book(root, qid):
+    """Bind this command's raw book to a local copy in the existing artifact."""
+    if not isinstance(qid, str) or not re.fullmatch('[0-9a-f]{64}', qid):
+        raise ValueError('current smoke book hash missing or invalid')
+    root = Path(root).resolve()
+    source = 'data/p2_paired_execution_v3_1/engineering_books/'+qid[:2]+'/'+qid+'.json'
+    latest_path = root/'data/p2_paired_execution_v3_1/engineering_smoke_latest.json'
+    if latest_path.resolve() != latest_path or (root/source).resolve() != root/source:
+        raise ValueError('redirected smoke evidence path')
+    latest = json.loads(latest_path.read_text(encoding='utf-8'))
+    if (latest.get('status') != 'ok' or latest.get('book_sha256') != qid
+            or latest.get('snapshot_path') != source):
+        raise ValueError('current smoke stdout/latest binding mismatch')
+    body = (root/source).read_bytes()
+    if hashlib.sha256(body).hexdigest() != qid:
+        raise ValueError('current smoke raw book hash mismatch')
+    relative = BASE+'/deferred_smoke_books/'+qid[:2]+'/'+qid+'.json'
+    target = root/relative
+    if target.resolve() != target:
+        raise ValueError('redirected smoke artifact copy path')
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.exists():
+        if target.read_bytes() != body: raise ValueError('existing smoke artifact copy mismatch')
+    else:
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(mode='wb', dir=target.parent,
+                                             prefix='.smoke-copy-', delete=False) as stream:
+                temporary = Path(stream.name)
+                if stream.write(body) != len(body): raise OSError('incomplete smoke artifact copy write')
+                stream.flush()
+                os.fsync(stream.fileno())
+            # Install complete bytes without ever replacing an existing copy.
+            try:
+                os.link(temporary, target)
+            except FileExistsError:
+                if target.resolve() != target or target.read_bytes() != body:
+                    raise ValueError('existing smoke artifact copy mismatch')
+        finally:
+            if temporary is not None: temporary.unlink()
+    if target.read_bytes() != body: raise ValueError('smoke artifact copy readback mismatch')
+    return {'status': 'local_copy_verified', 'book_sha256': qid, 'source_path': source,
+            'artifact_path': relative, 'bytes': len(body),
+            'remote_readback_verified': False, 'worm_verified': False}
 
 
 def save_receipt(root, receipt):
@@ -290,7 +356,9 @@ class LiveAdapter:
             # Preserve raw depth during initial/mismatched audit waits without
             # calling it an eligible formal event or retrofitting it later.
             mode = 'capture' if self.source_ready() else 'smoke'
-            self.python('p2_paired_execution_v3_1.py', mode)
+            self.last_smoke_output = None
+            captured_output = self.python('p2_paired_execution_v3_1.py', mode)
+            if mode == 'smoke': self.last_smoke_output = captured_output
             self.last_qualified_book = {}
             source_count = None
             context = 'AUDIT_NOT_READY'
@@ -308,6 +376,10 @@ class LiveAdapter:
             return {'status': 'command_completed', 'stage': name, 'mode': mode,
                     'formal_eligibility': bool(self.last_qualified_book),
                     'source_context_status': context, 'reserved_source_count': source_count}
+        elif name == 'preserve_smoke':
+            captured = json.loads(self.last_smoke_output or '{}')
+            if captured.get('status') != 'ok': raise ValueError('successful current smoke output missing')
+            return preserve_smoke_book(self.root, captured.get('book_sha256'))
         elif name == 'publish':
             import publish_forward_evidence as publisher
             import paired_forward_cohort as pair

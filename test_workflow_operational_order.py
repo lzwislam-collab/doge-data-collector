@@ -59,6 +59,32 @@ class TestOperationalOrder(unittest.TestCase):
   self.assertLess(a,c)
   self.assertLess(a,d)
 
+ def test_cancelled_pit_preparation_records_failure_without_starting_new_work(self):
+  # Run 42458999547 saved a bundle but was cancelled before artifact upload.
+  # A cancelled preparation needs the same truthful terminal receipt as a
+  # failed preparation, while skipped work must not be reported as attempted.
+  def condition(step_name, outcome, fatal='false', tail_fatal='false'):
+   start=self.offset('- name: '+step_name)
+   expression=self.lines[start+1].strip().removeprefix('if: ').strip()
+   expression=expression.replace('&&',' and ').replace('||',' or ')
+   steps=SimpleNamespace(
+    deadline_service=SimpleNamespace(outputs=SimpleNamespace(fatal=fatal)),
+    open_target_guard=SimpleNamespace(outputs=SimpleNamespace(tail_fatal=tail_fatal)),
+    pit_preparation=SimpleNamespace(outcome=outcome),
+    pit_artifact=SimpleNamespace(outcome='success'),
+    pit_publication=SimpleNamespace(outcome='success'))
+   return bool(eval(expression,{'__builtins__':{}},{'steps':steps,'always':lambda:True}))
+  for step in ('Save current PIT failure receipt including preparation timeout',
+               'Fail visibly on PIT preparation or package artifact error after saving core evidence'):
+   for outcome in ('failure','cancelled'):
+    with self.subTest(step=step,outcome=outcome):
+     self.assertTrue(condition(step,outcome))
+     self.assertFalse(condition(step,outcome,fatal='true'))
+     self.assertFalse(condition(step,outcome,tail_fatal='true'))
+   for outcome in ('success','skipped'):
+    with self.subTest(step=step,outcome=outcome):
+     self.assertFalse(condition(step,outcome))
+
  def test_time_sensitive_scoring_and_issuance_precede_fixture_tests(self):
   a=self.offset('Score genuine due target quotes before long collection steps')
   b=self.offset('Issue and score DOGE UP/DOWN shadow forecasts from live ticker quote')
