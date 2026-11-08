@@ -254,6 +254,7 @@ def cycle(adapter, state, clock):
            'this_cycle_smoke_publication_deferred': False,
            'this_cycle_deferred_smoke_pending_at_end': False}
     issuance_publication_complete = False
+    prepared_this_cycle = False
     audit_pending = False
     progress_invocations = {}
 
@@ -321,6 +322,7 @@ def cycle(adapter, state, clock):
     elif started >= current_hour + timedelta(minutes=40):
         out['issuance'] = 'SKIP_RESERVE_EXHAUSTED'
     elif action('prepare'):
+        prepared_this_cycle = True
         after = utc(clock())
         if after.replace(minute=0, second=0, microsecond=0) != current_hour:
             out['issuance'] = 'SKIP_SOURCE_HOUR_CHANGED'
@@ -358,13 +360,16 @@ def cycle(adapter, state, clock):
         state['source_audited_at'] = utc(clock())
     book_succeeded = action('book')
     book = out['actions'][-1]['result'] if book_succeeded else {}
-    may_defer = (issuance_publication_complete and not out['errors'] and audit_pending
+    # Preparation writes source context even if a fresh-clock deadline skips
+    # issuance. Keep that context on the original immediate publication path.
+    may_defer = ((not prepared_this_cycle or issuance_publication_complete)
+                 and not out['errors'] and audit_pending
                  and book_succeeded and book.get('mode') == 'smoke'
                  and book.get('formal_eligibility') is False)
     if may_defer and action('preserve_smoke'):
         # The original raw file remains in place and an exact independent copy
         # is already inside the existing always-uploaded runtime artifact tree.
-        # A later normal tick or finish() publishes both; this is no remote claim.
+        # A later required publication or finish() publishes both; this is no remote claim.
         out['this_cycle_smoke_publication_deferred'] = True
         out['this_cycle_deferred_smoke_pending_at_end'] = True
     elif not publish():
@@ -665,9 +670,16 @@ class LiveAdapter:
 
 def validate_p2(root):
     import p2_paired_execution_v3_1 as engine
-    engine.guard(root)
-    events = engine.history_guard(root)
-    for _ in engine.event_books(root, events): pass
+    import runtime_p2_history
+    diagnostics = {}
+    succeeded = False
+    try:
+        engine.guard(root)
+        events = runtime_p2_history.history_guard(root, engine=engine, diagnostics=diagnostics)
+        for _ in engine.event_books(root, events): pass
+        succeeded = True
+    finally:
+        runtime_p2_history.emit_diagnostics(diagnostics, succeeded)
 
 
 def finish(root, adapter, result):
