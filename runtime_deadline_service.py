@@ -7,6 +7,7 @@ import argparse
 import csv
 import hashlib
 import json
+import math
 import os
 import re
 import subprocess
@@ -19,6 +20,119 @@ from pathlib import Path
 
 BASE = 'data/runtime_deadline_v1'
 REPO = 'lzwislam-collab/doge-data-collector'
+PUBLICATION_PROFILE_LIMIT = 64
+PUBLICATION_PROFILE_SCOPE = 'nested_publisher_totals_include_callbacks_do_not_sum'
+PUBLICATION_PHASES = frozenset(
+    ['preflight_validate_p2', 'preflight_validate_state', 'preflight_pair_guard',
+     'preflight_pair_history_guard', 'data_publisher_total', 'supplementary_readback',
+     'receipt_publisher_total', 'receipt_readback'] +
+    [scope+'_post_rebase_'+stage for scope in ('data', 'receipt')
+     for stage in ('validate_state', 'pair_guard', 'pair_history_guard', 'validate_p2')])
+
+
+def finite_seconds(value):
+    return (type(value) in (int, float) and 0 <= value <= sys.float_info.max
+            and math.isfinite(value))
+
+
+def safe_publication_profile(value):
+    """Keep only fixed labels and bounded numeric diagnostics, never payloads."""
+    if (type(value) is not dict or type(value.get('schema_version')) is not int
+            or value['schema_version'] != 1 or type(value.get('phases')) is not list
+            or type(value.get('status')) is not str or value['status'] not in ('ok', 'error')):
+        return None
+    phases = []
+    truncated = value.get('truncated') is True or len(value['phases']) > PUBLICATION_PROFILE_LIMIT
+    missing_timings = 0
+    for raw in value['phases'][:PUBLICATION_PROFILE_LIMIT]:
+        if (type(raw) is not dict or type(raw.get('stage')) is not str
+                or raw['stage'] not in PUBLICATION_PHASES
+                or type(raw.get('invocation')) is not int
+                or not 1 <= raw['invocation'] <= PUBLICATION_PROFILE_LIMIT
+                or type(raw.get('status')) is not str or raw['status'] not in ('ok', 'error')):
+            truncated = True
+            continue
+        row = {key: raw[key] for key in ('stage', 'invocation', 'status')}
+        if finite_seconds(raw.get('seconds')):
+            row['seconds'] = raw['seconds']
+        else:
+            missing_timings += 1
+        phases.append(row)
+    errors = value.get('timing_errors', 0)
+    errors = min(PUBLICATION_PROFILE_LIMIT, max(0, errors)) if type(errors) is int else 0
+    return {'schema_version': 1, 'clock': 'monotonic', 'scope': PUBLICATION_PROFILE_SCOPE,
+            'status': value['status'], 'phases': phases, 'truncated': truncated,
+            'timing_errors': max(errors, missing_timings)}
+
+
+class PublicationProfile:
+    """Observe the unchanged publication path; diagnostics cannot reject it."""
+    def __init__(self):
+        self.phases = []
+        self.invocations = {}
+        self.truncated = False
+        self.timing_errors = 0
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, traceback):
+        if exc is not None:
+            try:
+                exc.publication_profile = self.snapshot('error')
+            except Exception:
+                pass
+        return False
+
+    def clock(self):
+        try:
+            value = time.monotonic()
+            if finite_seconds(value): return value
+        except Exception:
+            pass
+        self.timing_errors = min(PUBLICATION_PROFILE_LIMIT, self.timing_errors+1)
+        return None
+
+    def call(self, stage, operation, *args, **kwargs):
+        row = started = None
+        try:
+            if stage in PUBLICATION_PHASES and len(self.phases) < PUBLICATION_PROFILE_LIMIT:
+                invocation = self.invocations.get(stage, 0)+1
+                self.invocations[stage] = invocation
+                row = {'stage': stage, 'invocation': invocation, 'status': 'error'}
+                # Append at entry: parent totals precede their nested callbacks.
+                self.phases.append(row)
+            else:
+                self.truncated = True
+            started = self.clock()
+        except Exception:
+            pass
+        succeeded = False
+        try:
+            result = operation(*args, **kwargs)
+            succeeded = result is not False
+            return result
+        finally:
+            try:
+                ended = self.clock()
+                if row is not None:
+                    row['status'] = 'ok' if succeeded else 'error'
+                    if started is not None and ended is not None and finite_seconds(ended-started):
+                        row['seconds'] = ended-started
+                    elif started is not None and ended is not None:
+                        self.timing_errors = min(PUBLICATION_PROFILE_LIMIT, self.timing_errors+1)
+            except Exception:
+                pass
+
+    def snapshot(self, status):
+        try:
+            result = safe_publication_profile({'schema_version': 1, 'status': status,
+                'phases': self.phases, 'truncated': self.truncated, 'timing_errors': self.timing_errors})
+            if result is not None: return result
+        except Exception:
+            pass
+        return {'schema_version': 1, 'clock': 'monotonic', 'scope': PUBLICATION_PROFILE_SCOPE,
+                'status': status, 'phases': [], 'truncated': True, 'timing_errors': 1}
 
 
 def diagnostic_text(value, limit=1000):
@@ -61,9 +175,14 @@ def exception_details(exc):
                 value = getattr(exc, name, None)
                 if isinstance(value, (str, bytes)):
                     result[name] = diagnostic_text(value)
-        return result
     except Exception:
-        return {'error': prefix + '[diagnostic unavailable]'}
+        result = {'error': prefix + '[diagnostic unavailable]'}
+    try:
+        profile = safe_publication_profile(getattr(exc, 'publication_profile', None))
+        if profile is not None: result['publication_profile'] = profile
+    except Exception:
+        pass
+    return result
 
 
 def utc(value):
@@ -383,49 +502,53 @@ class LiveAdapter:
         elif name == 'publish':
             import publish_forward_evidence as publisher
             import paired_forward_cohort as pair
-            validate_p2(self.root)
-            publisher.validate_state(self.root)
-            pair.guard(self.root)
-            pair.history_guard(self.root)
-            core_paths = ('data/direction_v42/forward_registry.csv',
-                          'data/direction_v42/forward_scores.csv', 'data/quote_evidence_v2/bindings.csv')
-            self.core_witness_pending = self.core_witness_pending or bool(
-                self.command('git', 'diff', 'HEAD', '--name-only', '--', *core_paths).strip())
-            paths = ['data/hourly_research', 'data/derived_4h_v1', 'data/feature_ablation_v1',
-                     'data/minimal_market_forward_v1', 'data/p0_operations',
-                     'data/p2_paired_execution_v3_1', 'data/paired_forward_v1', BASE]
-            existing = [p for p in paths if (self.root/p).exists()]
-            # Source histories can only be appended by their existing producers.
-            # Stage an explicit allowlist; never git add the entire checkout.
-            for p in existing: self.command('git', 'add', '-f', '--', p)
-            staged = self.command('git', 'diff', '--cached', '--name-only').splitlines()
-            allowed = tuple(p + '/' for p in paths) + tuple(p + '/' for p in ('data/direction_v42', 'data/quote_evidence_v2'))
-            if any(not p.startswith(allowed) for p in staged):
-                raise ValueError('unexpected staged path outside runtime evidence allowlist')
-            expected = {p: (self.root/p).read_bytes() for p in staged}
-            def validate(current_root):
-                publisher.validate_state(current_root)
-                pair.guard(current_root)
-                pair.history_guard(current_root)
-                validate_p2(current_root)
-            publication = publisher.publish(self.root, validate=validate)
-            if not publisher.verify_readback(self.root, 'FETCH_HEAD', expected):
-                raise ValueError('runtime supplementary evidence remote readback mismatch')
-            if publication.get('status') != 'verified_remote_readback':
-                raise ValueError('core publication not verified')
-            publication.update(pair_error=None, paired_verified_files=sum(p.startswith(pair.BASE+'/') for p in expected))
-            receipt_path = pair.BASE+'/publication_latest.json'
-            (self.root/receipt_path).write_text(json.dumps(publication)+'\n', encoding='utf-8')
-            # This receipt describes the first verified data publication. Persist
-            # it in a descendant commit, then stop writing tracked files.
-            expected[receipt_path] = (self.root/receipt_path).read_bytes()
-            self.command('git', 'add', '-f', '--', receipt_path)
-            receipt_publication = publisher.publish(self.root, validate=validate)
-            if (receipt_publication.get('status') != 'verified_remote_readback'
-                    or not publisher.verify_readback(self.root, 'FETCH_HEAD', expected)):
-                raise ValueError('runtime publication receipt remote readback mismatch')
-            self.public_head = receipt_publication['remote_head']
-            return {'status': 'verified_remote_readback', 'head': self.public_head}
+            with PublicationProfile() as profile:
+                profile.call('preflight_validate_p2', validate_p2, self.root)
+                profile.call('preflight_validate_state', publisher.validate_state, self.root)
+                profile.call('preflight_pair_guard', pair.guard, self.root)
+                profile.call('preflight_pair_history_guard', pair.history_guard, self.root)
+                core_paths = ('data/direction_v42/forward_registry.csv',
+                              'data/direction_v42/forward_scores.csv', 'data/quote_evidence_v2/bindings.csv')
+                self.core_witness_pending = self.core_witness_pending or bool(
+                    self.command('git', 'diff', 'HEAD', '--name-only', '--', *core_paths).strip())
+                paths = ['data/hourly_research', 'data/derived_4h_v1', 'data/feature_ablation_v1',
+                         'data/minimal_market_forward_v1', 'data/p0_operations',
+                         'data/p2_paired_execution_v3_1', 'data/paired_forward_v1', BASE]
+                existing = [p for p in paths if (self.root/p).exists()]
+                # Source histories can only be appended by their existing producers.
+                # Stage an explicit allowlist; never git add the entire checkout.
+                for p in existing: self.command('git', 'add', '-f', '--', p)
+                staged = self.command('git', 'diff', '--cached', '--name-only').splitlines()
+                allowed = tuple(p + '/' for p in paths) + tuple(p + '/' for p in ('data/direction_v42', 'data/quote_evidence_v2'))
+                if any(not p.startswith(allowed) for p in staged):
+                    raise ValueError('unexpected staged path outside runtime evidence allowlist')
+                expected = {p: (self.root/p).read_bytes() for p in staged}
+                publication_scope = 'data'
+                def validate(current_root):
+                    profile.call(publication_scope+'_post_rebase_validate_state', publisher.validate_state, current_root)
+                    profile.call(publication_scope+'_post_rebase_pair_guard', pair.guard, current_root)
+                    profile.call(publication_scope+'_post_rebase_pair_history_guard', pair.history_guard, current_root)
+                    profile.call(publication_scope+'_post_rebase_validate_p2', validate_p2, current_root)
+                publication = profile.call('data_publisher_total', publisher.publish, self.root, validate=validate)
+                if not profile.call('supplementary_readback', publisher.verify_readback, self.root, 'FETCH_HEAD', expected):
+                    raise ValueError('runtime supplementary evidence remote readback mismatch')
+                if publication.get('status') != 'verified_remote_readback':
+                    raise ValueError('core publication not verified')
+                publication.update(pair_error=None, paired_verified_files=sum(p.startswith(pair.BASE+'/') for p in expected))
+                receipt_path = pair.BASE+'/publication_latest.json'
+                (self.root/receipt_path).write_text(json.dumps(publication)+'\n', encoding='utf-8')
+                # This receipt describes the first verified data publication. Persist
+                # it in a descendant commit, then stop writing tracked files.
+                expected[receipt_path] = (self.root/receipt_path).read_bytes()
+                self.command('git', 'add', '-f', '--', receipt_path)
+                publication_scope = 'receipt'
+                receipt_publication = profile.call('receipt_publisher_total', publisher.publish, self.root, validate=validate)
+                if (receipt_publication.get('status') != 'verified_remote_readback'
+                        or not profile.call('receipt_readback', publisher.verify_readback, self.root, 'FETCH_HEAD', expected)):
+                    raise ValueError('runtime publication receipt remote readback mismatch')
+                self.public_head = receipt_publication['remote_head']
+                return {'status': 'verified_remote_readback', 'head': self.public_head,
+                        'publication_profile': profile.snapshot('ok')}
         elif name == 'witness':
             from urllib.request import Request, urlopen
             if not self.core_witness_pending: return {'status': 'no_new_core_evidence'}
