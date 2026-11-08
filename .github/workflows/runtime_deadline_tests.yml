@@ -86,6 +86,8 @@ jobs:
       - name: Run original source audits in the isolated pinned checkout
         if: github.event_name == 'pull_request' && github.head_ref == 'fix/archive-qualified-drain-failure-20261026'
         timeout-minutes: 11
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           python - "$RUNNER_TEMP/runtime-source-audit-before.json" <<'PY'
           import hashlib, json, subprocess, sys
