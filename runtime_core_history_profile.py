@@ -175,7 +175,7 @@ class _BoundedOutput(io.StringIO):
         return super().write(value)
 
 
-def _diagnostics(captured, implementation, candidate):
+def _diagnostics(captured, implementation, candidate, trial):
     raw = captured.getvalue()
     logs = []
     for line in raw.splitlines():
@@ -185,6 +185,11 @@ def _diagnostics(captured, implementation, candidate):
             continue
         if isinstance(entry, dict) and entry.get('kind') in DIAGNOSTICS:
             logs.append(entry)
+    # Preserve the bounded diagnostic before rejecting fallback or a mismatched
+    # implementation. Otherwise the failure report loses the evidence needed
+    # to distinguish a transport fallback from a validation failure.
+    trial['candidate_stdout'] = {'characters': len(raw),
+        'sha256': hashlib.sha256(raw.encode()).hexdigest(), 'diagnostics': logs}
     wanted = list(DIAGNOSTICS) if candidate else ['runtime_p2_history_validation']
     if [entry.get('kind') for entry in logs] != wanted:
         raise ProfileError('validation diagnostics are missing or out of order')
@@ -193,7 +198,7 @@ def _diagnostics(captured, implementation, candidate):
             raise ProfileError('validation did not complete through the native implementation')
         if entry.get('module_sha256') != implementation[DIAGNOSTICS[entry['kind']]]:
             raise ProfileError('validation diagnostics identify a different implementation')
-    return {'characters': len(raw), 'sha256': hashlib.sha256(raw.encode()).hexdigest(), 'diagnostics': logs}
+    return trial['candidate_stdout']
 
 
 def _value_manifest(value):
@@ -248,7 +253,7 @@ def _trials(checkout, report, output, runtime, publisher, pair, implementation, 
                 trial['validation_wall_seconds'] = support.elapsed_seconds(validation_started)
                 support.phase(report, output, 'core_exact_readback', readback, records=trial['phases'])
                 trial['validation_and_readback_wall_seconds'] = support.elapsed_seconds(validation_started)
-            trial['candidate_stdout'] = _diagnostics(captured, implementation, name == 'candidate')
+            _diagnostics(captured, implementation, name == 'candidate', trial)
             if not isinstance(records, list):
                 raise ProfileError('complete ordered paired records must be a list')
             trial['paired_records'] = _value_manifest(records)

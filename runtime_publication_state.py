@@ -165,7 +165,7 @@ def _native_history(root, relative, columns, current, report):
             # Original timestamp parsing comes after this revision's CSV and
             # append checks. Bad native metadata replays the entire original.
             try:
-                if not re.fullmatch(r'[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[+-][0-9]{2}:[0-9]{2}', stamp):
+                if not re.fullmatch(r'[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:Z|[+-][0-9]{2}:[0-9]{2})', stamp):
                     raise _NativeCompatibility('commit_time_format')
                 committed = datetime.fromisoformat(stamp).astimezone(timezone.utc).isoformat()
             except (ValueError, OverflowError) as exc:

@@ -325,6 +325,19 @@ class PublicationHistoryTests(_GitFixture):
         self.assertEqual(got, original.history_receipts(self.root, RELATIVE, COLUMNS, current))
         self.assertEqual(report['mode'], 'legacy_full_fallback')
 
+    def test_real_utc_commit_keeps_native_history_and_exact_original_receipts(self):
+        first = self.commit(self.rows('first'), stamp=STAMP.astimezone(timezone.utc))
+        current = self.rows('first', 'second')
+        self.commit(current)
+        stamp = self.git('show', '-s', '--format=%cI', first).decode().strip()
+        self.assertIn(stamp, ('2026-10-10T00:00:00Z', '2026-10-10T00:00:00+00:00'))
+        got, report = self.candidate(current)
+        self.assertEqual(got, original.history_receipts(self.root, RELATIVE, COLUMNS, current))
+        self.assertEqual(got['0'], {'commit_sha': first,
+                                   'committed_at_utc': '2026-10-10T00:00:00+00:00'})
+        self.assertEqual(report['mode'], 'native_batch')
+        self.assertNotIn('fallback_reason', report)
+
     def test_cross_call_new_rebased_history_is_not_cached(self):
         first = self.commit(self.rows('first'))
         current = self.rows('first', 'second')

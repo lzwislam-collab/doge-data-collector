@@ -236,12 +236,22 @@ def validate_paired_history(root):
         code, report = self.run_probe(fixed)
         self.assertNotEqual(code, 0)
         self.assertIn('native', report['error']['reason'])
+        trial = report['trials'][1]
+        self.assertEqual(trial['status'], 'error')
+        diagnostics = trial['candidate_stdout']['diagnostics']
+        self.assertEqual([item['kind'] for item in diagnostics],
+                         list(self.driver.DIAGNOSTICS))
+        self.assertEqual(diagnostics[1]['mode'], 'legacy_full_fallback')
+        self.assertTrue(report['source_unchanged'])
+        self.assertTrue(report['overlays_restored'])
 
     def test_wrong_module_hash_in_candidate_diagnostics_is_rejected(self):
         fixed = self.fixture(state_sha='0'*64)
         code, report = self.run_probe(fixed)
         self.assertNotEqual(code, 0)
         self.assertIn('implementation', report['error']['reason'])
+        self.assertEqual(report['trials'][1]['candidate_stdout']['diagnostics'][1]['module_sha256'],
+                         '0' * 64)
 
     def test_candidate_stdout_is_bounded_before_a_large_print_completes(self):
         fixed = self.fixture(state_extra="print('x'*70000)")
