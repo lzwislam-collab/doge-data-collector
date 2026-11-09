@@ -159,10 +159,11 @@ class CollectorQueueProtection(unittest.TestCase):
  def api(self,blocking=None,own_pending=False):
   from urllib.parse import parse_qs,urlsplit
   def request(path):
-   if path.startswith('/actions/workflows/'+self.research+'/'):
-    return {'workflow_runs':[{'head_branch':'main','status':'pending'}] if own_pending else []}
-   if '/'+self.collector+'/' not in path:return {'workflow_runs':[]}
    query=parse_qs(urlsplit(path).query)
+   if path.startswith('/actions/workflows/'+self.research+'/'):
+    rows=[{'id':42,'head_branch':'main','status':'pending','path':'.github/workflows/'+self.research}] if own_pending and query.get('status')==['pending'] else []
+    return {'total_count':len(rows),'workflow_runs':rows}
+   if '/'+self.collector+'/' not in path:return {'total_count':0,'workflow_runs':[]}
    # An old pending collector is deliberately absent from the recent-history page.
    if query.get('branch')!=['main'] or not query.get('status'):
     return {'total_count':11,'workflow_runs':[{'head_branch':'main','status':'completed'}]*10}
@@ -209,7 +210,7 @@ class CollectorQueueProtection(unittest.TestCase):
     {'total_count':1,'workflow_runs':[]},
     {'total_count':1,'workflow_runs':[{'id':41,'head_branch':'feature','status':'pending','path':'.github/workflows/'+self.collector}]}):
    def request(path):
-    return response if '/'+self.collector+'/' in path else {'workflow_runs':[]}
+    return response if '/'+self.collector+'/' in path else {'total_count':0,'workflow_runs':[]}
    with self.subTest(response=response),patch.object(self.a.r.frozen,'api',side_effect=request),patch('urllib.request.urlopen',return_value=self.post()) as post,patch.dict(os.environ,{'GITHUB_TOKEN':'unit-test-token'}):
     with self.assertRaises((ValueError,TypeError,KeyError)):self.a.dispatch_once(self.research)
     post.assert_not_called()
@@ -218,9 +219,9 @@ class CollectorQueueProtection(unittest.TestCase):
    self.assertEqual(self.a.dispatch_once(self.research),{'workflow':self.research,'status':'ALREADY_PENDING'})
   self.assertEqual(get.call_count,1);post.assert_not_called()
  def test_other_approved_dispatch_keeps_its_existing_payload_and_checks(self):
-  with patch.object(self.a.r.frozen,'api',return_value={'workflow_runs':[]}) as get,patch('urllib.request.urlopen',return_value=self.post()) as post,patch.dict(os.environ,{'GITHUB_TOKEN':'unit-test-token'}):
+  with patch.object(self.a.r.frozen,'api',return_value={'total_count':0,'workflow_runs':[]}) as get,patch('urllib.request.urlopen',return_value=self.post()) as post,patch.dict(os.environ,{'GITHUB_TOKEN':'unit-test-token'}):
    result=self.a.dispatch_once('phase2_forward_live_v2.yml')
-  self.assertEqual(result['status'],'DISPATCH_ACCEPTED_COMPLETION_UNVERIFIED');self.assertEqual(get.call_count,1)
+  self.assertEqual(result['status'],'DISPATCH_ACCEPTED_COMPLETION_UNVERIFIED');self.assertEqual(get.call_count,5)
   self.assertEqual(json.loads(post.call_args.args[0].data),{'ref':'main','inputs':{'mode':'publish'}})
 
 
@@ -466,5 +467,97 @@ class OriginalTargetBridge(unittest.TestCase):
   with patch.object(self.a,'match_event',side_effect=different_attempt):
    with self.assertRaises(ValueError):self.invoke()
   self.assertEqual(self.posts,[])
+
+
+from unittest.mock import MagicMock
+from urllib.parse import parse_qs, urlsplit
+
+class DispatchQueue(unittest.TestCase):
+    names = ('phase2_forward_live_v2.yml', 'phase2_forward_audit_v2.yml',
+             'okx_hourly_extreme_history.yml', 'learned_shadow_live.yml',
+             'learned_shadow_v1.yml')
+    states = ('pending', 'queued', 'requested', 'waiting', 'in_progress')
+
+    def setUp(self):
+        self.a = importlib.import_module('forward_readiness')
+        self.response = MagicMock()
+        self.response.__enter__.return_value.status = 204
+
+    def row(self, name, state, rid=41):
+        return {'id': rid, 'head_branch': 'main', 'status': state,
+                'path': '.github/workflows/' + name}
+
+    def api(self, name, blocking=None):
+        def request(path):
+            q = parse_qs(urlsplit(path).query)
+            if '/actions/workflows/' + name + '/runs?' not in path:
+                return {'total_count': 0, 'workflow_runs': []}
+            if not q.get('status'):
+                # Ten newer completed runs hide an older active run in production.
+                return {'total_count': 11, 'workflow_runs': [
+                    self.row(name, 'completed', 100 + i) for i in range(10)]}
+            self.assertEqual(q.get('branch'), ['main'])
+            self.assertEqual(q.get('per_page'), ['1'])
+            rows = [blocking] if blocking and q['status'] == [blocking['status']] else []
+            return {'total_count': len(rows), 'workflow_runs': rows}
+        return request
+
+    def test_all_approved_workflows_defer_old_active_runs_after_recent_page_churn(self):
+        for name in self.names:
+            for state in self.states:
+                with self.subTest(name=name, state=state), \
+                        patch.object(self.a.r.frozen, 'api', side_effect=self.api(name, self.row(name, state))), \
+                        patch('urllib.request.urlopen', return_value=self.response) as post, \
+                        patch.dict(os.environ, {'GITHUB_TOKEN': 'unit-test-token'}):
+                    result = self.a.dispatch_once(name)
+                    self.assertEqual(result['status'], 'ALREADY_PENDING')
+                    post.assert_not_called()
+
+    def test_filtered_api_failure_never_posts(self):
+        name = 'phase2_forward_live_v2.yml'
+        normal = self.api(name)
+        for state in self.states:
+            def request(path):
+                if parse_qs(urlsplit(path).query).get('status') == [state]:
+                    raise OSError('queue unavailable')
+                return normal(path)
+            with self.subTest(state=state), patch.object(self.a.r.frozen, 'api', side_effect=request), \
+                    patch('urllib.request.urlopen', return_value=self.response) as post, \
+                    patch.dict(os.environ, {'GITHUB_TOKEN': 'unit-test-token'}):
+                with self.assertRaises(OSError):
+                    self.a.dispatch_once(name)
+                post.assert_not_called()
+
+    def test_filtered_response_must_have_complete_trusted_identity(self):
+        name = 'phase2_forward_live_v2.yml'
+        invalid = ({}, {'total_count': 1, 'workflow_runs': []},
+                   {'total_count': 0, 'workflow_runs': [self.row(name, 'pending')]},
+                   {'total_count': True, 'workflow_runs': []},
+                   {'total_count': 1, 'workflow_runs': [self.row('unapproved.yml', 'pending')]},
+                   {'total_count': 1, 'workflow_runs': [{**self.row(name, 'pending'), 'head_branch': 'feature'}]})
+        for response in invalid:
+            def request(path):
+                return response if parse_qs(urlsplit(path).query).get('status') else self.api(name)(path)
+            with self.subTest(response=response), patch.object(self.a.r.frozen, 'api', side_effect=request), \
+                    patch('urllib.request.urlopen', return_value=self.response) as post, \
+                    patch.dict(os.environ, {'GITHUB_TOKEN': 'unit-test-token'}):
+                with self.assertRaises((ValueError, KeyError, TypeError)):
+                    self.a.dispatch_once(name)
+                post.assert_not_called()
+
+    def test_empty_queue_preserves_existing_exact_payload_after_all_five_checks(self):
+        name = 'phase2_forward_live_v2.yml'
+        with patch.object(self.a.r.frozen, 'api', side_effect=self.api(name)) as get, \
+                patch('urllib.request.urlopen', return_value=self.response) as post, \
+                patch.dict(os.environ, {'GITHUB_TOKEN': 'unit-test-token'}):
+            result = self.a.dispatch_once(name)
+        self.assertEqual(result['status'], 'DISPATCH_ACCEPTED_COMPLETION_UNVERIFIED')
+        self.assertEqual({parse_qs(urlsplit(c.args[0]).query).get('status', [None])[0]
+                          for c in get.call_args_list}, set(self.states))
+        post.assert_called_once()
+        self.assertEqual(json.loads(post.call_args.args[0].data),
+                         {'ref': 'main', 'inputs': {'mode': 'publish'}})
+
+
 
 if __name__=='__main__':unittest.main()

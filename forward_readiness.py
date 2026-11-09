@@ -155,8 +155,10 @@ def pending_normal_collector():
 
 def dispatch_once(name):
  if name not in ('phase2_forward_live_v2.yml','phase2_forward_audit_v2.yml','okx_hourly_extreme_history.yml','learned_shadow_live.yml','learned_shadow_v1.yml'):raise ValueError('unapproved dispatcher target')
- runs=r.frozen.api('/actions/workflows/'+name+'/runs?per_page=10')['workflow_runs']
- if any(v['head_branch']=='main' and v['status'] in ('queued','in_progress','waiting','pending','requested') for v in runs):return {'workflow':name,'status':'ALREADY_PENDING'}
+ # An old active run may be hidden by more than ten newer completed runs.
+ # Reuse the server-filtered, fail-closed existence guard for every target.
+ for state in ('pending','queued','requested','waiting','in_progress'):
+  if filtered_bridge_run(name,{'status':state}) is not None:return {'workflow':name,'status':'ALREADY_PENDING'}
  if name=='learned_shadow_live.yml':
   pending=pending_normal_collector()
   if pending is not None:return {'workflow':name,'status':'DEFERRED_NORMAL_COLLECTOR_PENDING',**pending}
