@@ -11,6 +11,8 @@ on:
       - 'test_runtime_r2_bridge.py'
       - 'test_runtime_custody_bridge.py'
       - 'test_runtime_prospective_integration.py'
+      - 'runtime_history_graph.py'
+      - 'test_runtime_history_graph.py'
       - 'test_workflow_operational_order.py'
       - 'runtime_deadline_service.py'
       - 'runtime_process.py'
@@ -60,6 +62,8 @@ on:
       - 'test_runtime_r2_bridge.py'
       - 'test_runtime_custody_bridge.py'
       - 'test_runtime_prospective_integration.py'
+      - 'runtime_history_graph.py'
+      - 'test_runtime_history_graph.py'
       - 'test_workflow_operational_order.py'
       - 'runtime_deadline_service.py'
       - 'runtime_process.py'
@@ -111,7 +115,7 @@ jobs:
         with:
           python-version: '3.11'
       - run: python -m pip install numpy==2.3.5 oss2==2.19.1 aliyun-python-sdk-core==2.16.1 PyYAML==6.0.2
-      - name: Validate existing workflow syntax and prospective full guard
+      - name: Compare complete cold guards before and after local history indexing
         timeout-minutes: 5
         env:
           OPENBLAS_NUM_THREADS: '1'
@@ -119,27 +123,64 @@ jobs:
           PYTHONUTF8: '1'
         run: |
           python - <<'PY'
-          import json, time
+          import hashlib, json, os, sys, time
           from pathlib import Path
           import yaml
+          import runtime_process
+          from runtime_deadline_service import COMMAND_TIMEOUT_SECONDS
+          from runtime_history_graph import prepare
+          root = Path.cwd()
           for path in ('.github/workflows/doge_history.yml',
                        '.github/workflows/okx_hourly_extreme_history.yml',
                        '.github/workflows/runtime_deadline_tests.yml'):
               document = yaml.load(Path(path).read_text(), Loader=yaml.BaseLoader)
               assert isinstance(document, dict) and document.get('on') and document.get('jobs'), path
-              print('WORKFLOW_YAML_PARSED', path)
-          from runtime_forward_bridge import validate_original18, _checked_bundle, _BUNDLE_CACHE
-          from runtime_deadline_service import COMMAND_TIMEOUT_SECONDS
+              print('WORKFLOW_YAML_PARSED', path, flush=True)
+          def git(*args):
+              return runtime_process.command(('git', *args), cwd=root, timeout=30)
+          def snapshot():
+              return {'head':git('rev-parse','HEAD').strip(),
+                      'refs_sha256':hashlib.sha256(git('for-each-ref','--format=%(refname) %(objectname)').encode()).hexdigest(),
+                      'tracked_status_sha256':hashlib.sha256(git('status','--porcelain','--untracked-files=no').encode()).hexdigest(),
+                      'tracked_diff_sha256':hashlib.sha256(git('diff','--binary','HEAD','--').encode()).hexdigest()}
+          code = """import json,time
+          from pathlib import Path
+          from runtime_forward_bridge import validate_original18,_checked_bundle,_BUNDLE_CACHE
           assert not _BUNDLE_CACHE
-          started = time.monotonic()
+          started=time.monotonic()
           _checked_bundle(Path('.'))
-          model_checked_seconds = time.monotonic() - started
-          result = validate_original18(Path('.'))
-          elapsed = time.monotonic() - started
-          assert result['status'] == 'ORIGINAL18_LOCAL_APPEND_ONLY_VALIDATED', result
-          assert elapsed < COMMAND_TIMEOUT_SECONDS, elapsed
-          print(json.dumps({'original18_full_guard': result, 'cold_seconds': elapsed, 'model_checked_seconds': model_checked_seconds,
-                            'journal_guard_seconds': elapsed-model_checked_seconds}, sort_keys=True))
+          model=time.monotonic()-started
+          result=validate_original18(Path('.'))
+          total=time.monotonic()-started
+          print(json.dumps({'result':result,'cold_seconds':total,'model_checked_seconds':model,'journal_guard_seconds':total-model},sort_keys=True))
+          """
+          def cold(label, disable_index=False):
+              child_env = dict(os.environ)
+              if disable_index:
+                  count = int(child_env.get('GIT_CONFIG_COUNT','0'))
+                  child_env.update({'GIT_CONFIG_COUNT':str(count+1),
+                      'GIT_CONFIG_KEY_'+str(count):'core.commitGraph',
+                      'GIT_CONFIG_VALUE_'+str(count):'false'})
+                  assert runtime_process.command(('git','config','--type=bool','--get','core.commitGraph'),
+                      cwd=root,env=child_env,timeout=30).strip() == 'false'
+              output = runtime_process.command((sys.executable,'-c',code),cwd=root,
+                  env=child_env,timeout=COMMAND_TIMEOUT_SECONDS)
+              result = json.loads(output.strip().splitlines()[-1])
+              assert result['result']['status']=='ORIGINAL18_LOCAL_APPEND_ONLY_VALIDATED', result
+              print(json.dumps({'phase':label,**result},sort_keys=True),flush=True)
+              return result
+          before_snapshot = snapshot()
+          before = cold('complete_guard_index_disabled_control', disable_index=True)
+          index = prepare(root)
+          after = cold('complete_guard_verified_native_index')
+          assert before['result'] == after['result'], (before,after)
+          assert snapshot() == before_snapshot, 'tracked source, HEAD or refs changed'
+          assert after['cold_seconds'] < 20, after
+          assert after['cold_seconds'] < before['cold_seconds'] * 0.5, (before,after)
+          print(json.dumps({'status':'LOCAL_HISTORY_INDEX_FULL_GUARD_VERIFIED',
+              'head':before_snapshot['head'],'before':before,'after':after,'index':index,
+              'all_original_checks_retained':True,'source_head_refs_unchanged':True,
+              'natural_cycle_cadence_verified':False},sort_keys=True))
           PY
       - run: python -m unittest discover -q
       - run: python forward_validation_v2.py --integrity-only
