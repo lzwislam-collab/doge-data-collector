@@ -176,7 +176,7 @@ class ProspectiveIntegration(unittest.TestCase):
 
     def test_archive_adapter_does_not_import_or_call_any_prospective_helper(self):
         adapter = service.LiveAdapter.__new__(service.LiveAdapter)
-        adapter.prospective_enabled = False
+        # Legacy callers may allocate the publisher without new optional fields.
         module = types.ModuleType('runtime_forward_bridge')
         module.capture_original18 = lambda *_: self.fail('archive helper called')
         with patch.dict(sys.modules, {'runtime_forward_bridge': module}):

@@ -595,6 +595,8 @@ def run(root, adapter, duration_seconds=2400, clock=None, sleep=None, stop_file=
 
 class LiveAdapter:
     """Only frozen producer entry points; all writers execute sequentially."""
+    # Existing publisher callers without foreground admission stay disabled.
+    prospective_enabled = False
     def __init__(self, root):
         if os.environ.get('GITHUB_REF') != 'refs/heads/main' or os.environ.get('GITHUB_REPOSITORY') != REPO:
             raise ValueError('live service requires the repository main workflow')
