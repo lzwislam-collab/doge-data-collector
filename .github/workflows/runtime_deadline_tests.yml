@@ -3,6 +3,8 @@ on:
   pull_request:
     paths:
       - 'runtime_deadline_service.py'
+      - 'runtime_process.py'
+      - 'test_runtime_process_lifecycle.py'
       - 'runtime_p2_history.py'
       - 'runtime_publication_state.py'
       - 'runtime_paired_history.py'
@@ -37,6 +39,8 @@ on:
     branches: [main]
     paths:
       - 'runtime_deadline_service.py'
+      - 'runtime_process.py'
+      - 'test_runtime_process_lifecycle.py'
       - 'runtime_p2_history.py'
       - 'runtime_publication_state.py'
       - 'runtime_paired_history.py'
@@ -98,7 +102,8 @@ jobs:
               'tracked_status_sha256':hashlib.sha256(subprocess.check_output(
                   ['git','status','--porcelain','--untracked-files=no'])).hexdigest(),
               'files':{p:hashlib.sha256((root/p).read_bytes()).hexdigest()
-                  if (root/p).exists() else None for p in worker.INPUTS+worker.OUTPUTS}}
+                  if (root/p).exists() else None for p in worker.INPUTS+worker.OUTPUTS+
+                  ('runtime_audit_worker.py','runtime_process.py')}}
           Path(sys.argv[1]).write_text(json.dumps(state), encoding='utf-8')
           PY
           timeout --signal=TERM --kill-after=10s 600s python runtime_audit_worker.py "$GITHUB_WORKSPACE" 25a7c2381855428b1487a86e6fa58c4c07e00357 "$RUNNER_TEMP/runtime-source-audit-result.json"
@@ -118,7 +123,8 @@ jobs:
               'tracked_status_sha256':hashlib.sha256(subprocess.check_output(
                   ['git','status','--porcelain','--untracked-files=no'])).hexdigest(),
               'files':{p:hashlib.sha256((root/p).read_bytes()).hexdigest()
-                  if (root/p).exists() else None for p in worker.INPUTS+worker.OUTPUTS}}
+                  if (root/p).exists() else None for p in worker.INPUTS+worker.OUTPUTS+
+                  ('runtime_audit_worker.py','runtime_process.py')}}
           assert after == before, 'source checkout changed during the isolated audit'
           if result.get('status') != 'ok':
               raise ValueError('original isolated source audit failed: '+str(result.get('error'))[:500])
@@ -146,6 +152,7 @@ jobs:
               'timings':result['timings'], 'report_statuses':{
                   path:report['status'] for path,report in reports.items()},
               'worker_sha256':hashlib.sha256(Path(worker.__file__).read_bytes()).hexdigest(),
+              'process_helper_sha256':hashlib.sha256(Path(worker.runtime_process.__file__).read_bytes()).hexdigest(),
               'source_head_status_inputs_and_reports_unchanged':True}, sort_keys=True))
           PY
       - name: Preserve isolated source audit validation

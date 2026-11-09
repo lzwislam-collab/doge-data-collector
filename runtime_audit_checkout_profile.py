@@ -84,11 +84,13 @@ def sha256(data):
 
 
 def source_state(source, helper_file):
+    dependency = Path(helper_file).with_name('runtime_process.py')
     return {'head': git(source, 'rev-parse', 'HEAD').decode().strip(),
             'tree': git(source, 'rev-parse', 'HEAD^{tree}').decode().strip(),
             'parents': git(source, 'show', '-s', '--format=%P', 'HEAD').decode().split(),
             'tracked_status_sha256': sha256(git(source, 'status', '--porcelain', '--untracked-files=no')),
-            'helper_sha256': sha256(Path(helper_file).read_bytes())}
+            'helper_sha256': sha256(Path(helper_file).read_bytes()),
+            'process_helper_sha256': sha256(dependency.read_bytes()) if dependency.exists() else None}
 
 
 def require_full_history(root):
@@ -305,6 +307,7 @@ def worker(source, head, output, workspace, helper_file):
         before = source_state(source, helper_file)
         report.update(actual_source_head=before['head'], actual_source_tree=before['tree'],
                       actual_source_parents=before['parents'], candidate_helper_sha256=before['helper_sha256'],
+                      process_helper_sha256=before['process_helper_sha256'],
                       probe_sha256=sha256(Path(__file__).read_bytes()))
         require_full_history(source)
         git(source, 'cat-file', '-e', head + '^{commit}')
@@ -316,9 +319,19 @@ def worker(source, head, output, workspace, helper_file):
             report['candidate_helper_matches_actual_source_commit'] = True
         else:
             report['candidate_helper_matches_actual_source_commit'] = False
+        dependency = helper_file.with_name('runtime_process.py')
+        report['process_helper_matches_actual_source_commit'] = False
+        if dependency.exists() and dependency.is_relative_to(source):
+            actual = git(source, 'show', before['head']+':'+dependency.relative_to(source).as_posix())
+            if actual != dependency.read_bytes(): raise ProfileError('process helper differs from actual CI checkout commit')
+            report['process_helper_matches_actual_source_commit'] = True
+        sys.path.insert(0, str(helper_file.parent))
         spec = importlib.util.spec_from_file_location('measured_audit_checkout_helper', helper_file)
         helper = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(helper)
+        process_helper = sys.modules.get('runtime_process')
+        if process_helper is not None and Path(process_helper.__file__).resolve() != dependency:
+            raise ProfileError('process helper imported outside the measured helper directory')
         if tuple(helper.INPUTS) != INPUTS or tuple(helper.SCRIPTS) != SCRIPTS:
             raise ProfileError('original five audit inputs or three entrypoints changed')
         locations = []

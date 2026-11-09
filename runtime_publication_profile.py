@@ -30,7 +30,7 @@ HISTORY_PATHS = ('data/direction_v42/forward_registry.csv',
                  'data/quote_evidence_v2/bindings.csv',
                  'data/paired_forward_v1/pairs.jsonl',
                  'data/p2_paired_execution_v3_1/books.jsonl')
-IMPLEMENTATION_FILES = ('runtime_deadline_service.py', 'runtime_p2_history.py')
+IMPLEMENTATION_FILES = ('runtime_deadline_service.py', 'runtime_p2_history.py', 'runtime_process.py')
 
 
 class ProfileError(ValueError):
@@ -234,6 +234,7 @@ def source_state(source):
                 git(source, 'status', '--porcelain', '--untracked-files=no')).hexdigest(),
             'runtime_code_sha256': hashlib.sha256((source / 'runtime_deadline_service.py').read_bytes()).hexdigest(),
             'helper_code_sha256': file_sha256(source / 'runtime_p2_history.py'),
+            'process_helper_code_sha256': file_sha256(source / 'runtime_process.py'),
             'graph': graph_inventory(object_directory(source))}
 
 
@@ -807,6 +808,9 @@ def worker(source, source_sha, output, workspace, use_index_experiment=False, ti
             raise ProfileError('P2 equivalence requires the current runtime helper')
         sys.path.insert(0, str(checkout))
         runtime = importlib.import_module('runtime_deadline_service')
+        if getattr(runtime, 'runtime_process', None) is not None:
+            if Path(runtime.runtime_process.__file__).resolve() != (checkout/'runtime_process.py').resolve():
+                raise ProfileError('process helper imported outside the isolated fixed checkout')
         publisher = importlib.import_module('publish_forward_evidence')
         pair = importlib.import_module('paired_forward_cohort')
         evidence = importlib.import_module('quote_evidence_v2')

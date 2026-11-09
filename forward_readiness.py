@@ -1,5 +1,5 @@
 """Actual-clock operational monitor and bounded bridge; no forecast rewriting."""
-import argparse,csv,io,json,math,os
+import argparse,base64,csv,hashlib,io,json,math,os,re
 from datetime import datetime,timedelta,timezone
 from pathlib import Path
 import phase2_forward_v2 as f
@@ -168,6 +168,79 @@ def dispatch_once(name):
   if response.status!=204:raise ValueError('publisher/audit dispatch not accepted')
  return {'workflow':name,'status':'DISPATCH_ACCEPTED_COMPLETION_UNVERIFIED'}
 
+def original_target_state(previous=None):
+ """Read one current-main snapshot; only immutable bytes may be reused by SHA."""
+ import quote_only_rescue as rescue
+ ref=r.frozen.api('/git/ref/heads/main')['object'];head=ref['sha']
+ if ref.get('type')!='commit' or not isinstance(head,str) or not re.fullmatch('[a-f0-9]{40}',head):raise ValueError('invalid current main identity')
+ if previous is not None and previous[0]==head:return previous
+ def rows(path,columns):
+  result=r.frozen.api('/contents/'+path+'?ref='+head)
+  if result.get('type')!='file' or result.get('path')!=path or result.get('encoding')!='base64' or not isinstance(result.get('content'),str):raise ValueError('invalid original TARGET file response')
+  raw=base64.b64decode(result['content'].replace('\n',''),validate=True)
+  if type(result.get('size')) is not int or result['size']!=len(raw) or result.get('sha')!=hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest():raise ValueError('original TARGET content/blob mismatch')
+  reader=csv.DictReader(io.StringIO(raw.decode('utf-8')))
+  if reader.fieldnames!=columns:raise ValueError('original TARGET schema changed')
+  answer={}
+  for row in reader:
+   fid=row.get('forecast_id')
+   if set(row)!=set(columns) or any(v is None for v in row.values()) or not isinstance(fid,str) or not 1<=len(fid)<=200 or fid in answer:raise ValueError('invalid or duplicate original TARGET ID')
+   answer[fid]=row
+  return answer
+ return head,rows(rescue.base.REG,rescue.frozen.FCOLS),rows(rescue.base.SCORES,rescue.frozen.SCOLS)
+
+def filtered_bridge_run(name,filters):
+ """An existence query is server-filtered, never limited to ten recent runs."""
+ from urllib.parse import urlencode
+ result=r.frozen.api('/actions/workflows/'+name+'/runs?'+urlencode({'branch':'main',**filters,'per_page':1}))
+ runs=result['workflow_runs'];count=result['total_count']
+ if not isinstance(runs,list) or type(count) is not int or count<0 or len(runs)>1 or bool(count)!=bool(runs):raise ValueError('rescue queue/attempt response incomplete')
+ if not runs:return None
+ row=runs[0]
+ if (not isinstance(row,dict) or type(row.get('id')) is not int or row['id']<=0 or row.get('head_branch')!='main'
+  or not isinstance(row.get('path'),str) or row['path'].split('@')[0]!='.github/workflows/'+name
+  or row.get('status') not in ('pending','queued','requested','waiting','in_progress','completed')):raise ValueError('rescue queue/attempt identity invalid')
+ if 'created' in filters:
+  if row.get('event')!='workflow_dispatch' or not f.utc(filters['created'][2:])<=f.utc(row['created_at'])<=datetime.now(timezone.utc):raise ValueError('rescue attempt filter mismatch')
+ # State can change after server filtering: a returned completed run also defers.
+ return row
+
+def dispatch_original_target_rescue(parent,jobs):
+ """One finite attempt, using existing CLOCK callbacks and frozen TARGET rescue."""
+ import quote_only_rescue as rescue
+ name='quote_only_rescue.yml';state=original_target_state();head,registry,scores=state;now=datetime.now(timezone.utc)
+ ids=rescue.eligible_ids(registry,scores,now)
+ result={'workflow':name,'candidate_head_sha':head,'candidate_ids':ids,'parent_run_id':parent['id']}
+ if not ids:return {**result,'status':'SKIP_NO_OPEN_ORIGINAL_TARGET'}
+ if len(ids)>100:raise ValueError('too many open original TARGET IDs')
+ if rescue.unsafe_aggregate_batch(registry,scores,now):return {**result,'status':'SKIP_UNSAFE_AGGREGATE_BATCH'}
+ if not jobs or any(j.get('run_id')!=parent['id'] or j.get('status')!='completed' or not j.get('completed_at') for j in jobs):raise ValueError('parent job completion evidence missing')
+ completed=max(f.utc(j['completed_at']) for j in jobs)
+ if not f.utc(parent['created_at'])<=completed<=now:raise ValueError('parent completion clock invalid')
+ for workflow in ('okx_hourly_extreme_history.yml',name):
+  for status in ('pending','queued','requested','waiting','in_progress'):
+   active=filtered_bridge_run(workflow,{'status':status})
+   if active is not None:return {**result,'status':'DEFERRED_ACTIVE_WORKFLOW','active_workflow':workflow,'active_run_id':active['id']}
+ # Rescue aggregates all current open targets. Any attempt since the parent or
+ # earliest target therefore blocks this whole batch, including failed attempts.
+ # GitHub creation stamps have second precision; floor conservatively, not later.
+ since=min(completed,min(f.utc(registry[fid]['target_utc']) for fid in ids)).replace(microsecond=0)
+ attempted=filtered_bridge_run(name,{'event':'workflow_dispatch','created':'>='+since.isoformat().replace('+00:00','Z')})
+ if attempted is not None:return {**result,'status':'ALREADY_ATTEMPTED_PARENT_OR_TARGET_WINDOW','previous_run_id':attempted['id']}
+ current=original_target_state(state);fresh_head,fresh_registry,fresh_scores=current;now=datetime.now(timezone.utc)
+ fresh_ids=rescue.eligible_ids(fresh_registry,fresh_scores,now)
+ result.update(dispatch_head_sha=fresh_head,checked_at_utc=now.isoformat(),expected_ids=fresh_ids)
+ if not fresh_ids:return {**result,'status':'SKIP_WINDOW_CLOSED_OR_SCORED'}
+ if len(fresh_ids)>100:raise ValueError('too many refreshed original TARGET IDs')
+ if any(fid not in ids or fresh_registry[fid]!=registry[fid] for fid in fresh_ids):return {**result,'status':'DEFERRED_TARGET_BATCH_CHANGED'}
+ if rescue.unsafe_aggregate_batch(fresh_registry,fresh_scores,now):return {**result,'status':'SKIP_UNSAFE_AGGREGATE_BATCH'}
+ from urllib.request import Request,urlopen
+ payload={'ref':'main','inputs':{'expected_ids_json':json.dumps(fresh_ids,separators=(',',':'))}}
+ req=Request('https://api.github.com/repos/'+f.old.REPO+'/actions/workflows/'+name+'/dispatches',data=json.dumps(payload).encode(),method='POST',headers={'Authorization':'Bearer '+os.environ['GITHUB_TOKEN'],'Accept':'application/vnd.github+json','User-Agent':'DOGE-Forward-Readiness'})
+ with urlopen(req,timeout=20) as response:
+  if response.status!=204:raise ValueError('original TARGET rescue dispatch not accepted')
+ return {**result,'status':'DISPATCH_ACCEPTED_COMPLETION_UNVERIFIED'}
+
 def run(mode):
  r.run('local');p,model,old,files=r.guard();now=datetime.now(timezone.utc);events=r.records('events');scores=r.records('scores');inspected=publication_events(events,now,p)
  extra=[e[k] for e in inspected for k in ('registration_run_id','source_run_id')]
@@ -200,6 +273,7 @@ def run(mode):
  if mode=='bridge':
   if os.environ.get('GITHUB_REF')!='refs/heads/main':raise ValueError('bridge dispatch only from main')
   event=json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_bytes()).get('workflow_run')
+  rescue_parent=None
   if event:
    runrow=r.frozen.api('/actions/runs/'+str(event['id']));match_event(event,runrow)
    jobs=terminal.pages(r.frozen.api,'/actions/runs/'+str(event['id'])+'/attempts/'+str(event['run_attempt'])+'/jobs','jobs')
@@ -207,7 +281,11 @@ def run(mode):
    if runrow['path'].split('@')[0]==SOURCE_WORKFLOW:result['parent_terminal_receipt']=terminal.audit(event,r.frozen.api)
    if runrow['path'].split('@')[0]==SOURCE_WORKFLOW:desired=[name for name in desired if name!='okx_hourly_extreme_history.yml']
    if not result['parent_trusted']:desired=[]
+   elif runrow['path'].split('@')[0] in CLOCK_WORKFLOWS:rescue_parent=(runrow,jobs)
   for name in dict.fromkeys(desired):result['dispatches'].append(dispatch_once(name))
+  if rescue_parent is not None:
+   if 'okx_hourly_extreme_history.yml' in desired:result['dispatches'].append({'workflow':'quote_only_rescue.yml','status':'DEFERRED_NORMAL_COLLECTOR_REQUESTED'})
+   else:result['dispatches'].append(dispatch_original_target_rescue(*rescue_parent))
  result['status']='OPERATIONS_ERRORS_PRESERVED' if result['errors'] else 'WAIT_ACTIVATION' if now<f.utc(p['effective_from_utc']) else 'OPERATIONS_CURRENT_WINDOW_CLEAR'
  result['runtime_status']=('CURRENT_OPERATIONAL_ERRORS' if result['runtime_errors'] else 'WAIT_ACTIVATION' if now<f.utc(p['effective_from_utc'])
   else 'CURRENT_WINDOW_CLEAR_WITH_HISTORICAL_GAPS' if result['errors'] else 'CURRENT_WINDOW_CLEAR')

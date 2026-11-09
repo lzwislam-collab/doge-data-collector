@@ -223,4 +223,248 @@ class CollectorQueueProtection(unittest.TestCase):
   self.assertEqual(result['status'],'DISPATCH_ACCEPTED_COMPLETION_UNVERIFIED');self.assertEqual(get.call_count,1)
   self.assertEqual(json.loads(post.call_args.args[0].data),{'ref':'main','inputs':{'mode':'publish'}})
 
+
+class OriginalTargetBridge(unittest.TestCase):
+ """Exercise the real bridge, CSV eligibility and Request payload; only remote I/O and unrelated model audits are doubled."""
+ def setUp(self):
+  from contextlib import ExitStack
+  import quote_only_rescue as rescue
+  self.a=importlib.import_module('forward_readiness');self.rescue=rescue
+  self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup);self.root=Path(self.tmp.name)
+  self.target=datetime(2026,11,9,3,22,30,940428,tzinfo=timezone.utc)
+  self.now=datetime(2026,11,9,3,24,57,901549,tzinfo=timezone.utc)
+  self.fid='DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1794186000000_1h'
+  self.parent={'id':42555437195,'run_attempt':1,'repository':{'full_name':f.old.REPO},
+   'head_repository':{'full_name':f.old.REPO},'head_branch':'main','head_sha':'a'*40,
+   'event':'workflow_run','status':'completed','conclusion':'success','pull_requests':[],
+   'path':'.github/workflows/phase2_forward_audit_v2.yml',
+   'created_at':'2026-11-09T03:16:01Z','updated_at':'2026-11-09T03:22:33Z'}
+  self.jobs=[{'id':128959965819,'run_id':42555437195,'status':'completed','conclusion':'success',
+   'started_at':'2026-11-09T03:16:03Z','completed_at':'2026-11-09T03:22:32Z',
+   'steps':[{'name':'Fail closed before writes on full-history or frozen protocol mutation','conclusion':'success'},
+    {'name':'Persist data and diagnostics','conclusion':'success'}]}]
+  self.active=[];self.attempts=[];self.posts=[];self.gets=[];self.override=None;self.on_get=None
+  self.remote_override=None;self.main_sha='c'*40
+  self.set_state([(self.fid,self.target)])
+  source=self.root/self.a.r.SOURCE;source.parent.mkdir(parents=True,exist_ok=True);source.write_bytes(b'upstream source fixture')
+  policy=self.root/f.old.POLICY;policy.parent.mkdir(parents=True,exist_ok=True)
+  policy.write_text(json.dumps({'effective_from_utc':'2026-10-20T00:00:00+00:00','horizons_hours':[1,24],
+   'slot_steps_hours':{'1':2,'24':25},'max_issue_delay_minutes':45,'target_window_minutes':25}))
+  self.stack=ExitStack();self.addCleanup(self.stack.close)
+  import learned_shadow_runtime as legacy
+  for obj,name,value in (
+   (self.a,'ROOT',self.root),(self.a.r,'run',lambda mode:None),
+   (self.a.r,'guard',lambda:(f.policy(),None,None,{})),(self.a.r,'records',lambda kind:[]),
+   (self.a.r,'runs_server',lambda extra:[]),(self.a.r,'publication',lambda *args:([],[])),
+   (self.a,'source_state',lambda *args:{'rows':81891,'asset_rows':{'DOGE-USDT':27297,'BTC-USDT':27297,'ETH-USDT':27297},
+    'latest_closed_utc':'2026-11-09T03:00:00+00:00','latest73_ready':True,'frame_errors':[]}),
+   (self.a.f,'witness',lambda *args:None),(legacy,'read_records',lambda *args:[]),
+   (legacy,'plan',lambda *args:{'issue':[],'score':[],'matured_missing_issuance':{}}),
+   (self.a,'actions',lambda *args:[]),(self.a.terminal,'audit',lambda *args:{})):
+   self.stack.enter_context(patch.object(obj,name,value))
+  owner=self
+  class Clock(datetime):
+   @classmethod
+   def now(cls,tz=None):return owner.now
+  self.stack.enter_context(patch.object(self.a,'datetime',Clock))
+  self.stack.enter_context(patch.object(self.a.r.frozen,'api',side_effect=self.api))
+  self.stack.enter_context(patch('urllib.request.urlopen',side_effect=self.post))
+  self.stack.enter_context(patch.dict(os.environ,{'GITHUB_REF':'refs/heads/main','GITHUB_TOKEN':'unit-test-token'}))
+ def set_state(self,entries,scored=()):
+  registry=self.root/self.rescue.base.REG;registry.parent.mkdir(parents=True,exist_ok=True)
+  with registry.open('w',newline='') as stream:
+   writer=csv.DictWriter(stream,fieldnames=self.rescue.frozen.FCOLS);writer.writeheader()
+   for fid,target in entries:
+    row={k:'' for k in self.rescue.frozen.FCOLS}
+    row.update(forecast_id=fid,issued_at_utc=(target-timedelta(hours=1)).isoformat(),
+     source_quote_utc=(target-timedelta(hours=1,seconds=1)).isoformat(),target_utc=target.isoformat(),
+     horizon_hours='1',reference_price='0.07')
+    writer.writerow(row)
+  scores=self.root/self.rescue.base.SCORES;scores.parent.mkdir(parents=True,exist_ok=True)
+  with scores.open('w',newline='') as stream:
+   writer=csv.DictWriter(stream,fieldnames=self.rescue.frozen.SCOLS);writer.writeheader()
+   for fid in scored:
+    row={k:'' for k in self.rescue.frozen.SCOLS};row.update(forecast_id=fid,status='scored');writer.writerow(row)
+  self.remote_files={self.rescue.base.REG:registry.read_bytes(),self.rescue.base.SCORES:scores.read_bytes()}
+  import hashlib
+  self.main_sha=hashlib.sha1(b''.join(self.remote_files.values())).hexdigest()
+ def runrow(self,workflow,status='completed',created=None,conclusion='failure'):
+  return {'id':42555000000,'run_attempt':1,'path':'.github/workflows/'+workflow,
+   'head_branch':'main','event':'workflow_dispatch','status':status,'conclusion':conclusion,
+   'created_at':(created or self.target+timedelta(seconds=30)).isoformat()}
+ def api(self,path):
+  from urllib.parse import parse_qs,urlsplit
+  if path=='/actions/runs/'+str(self.parent['id']):return copy.deepcopy(self.parent)
+  if path.startswith('/actions/runs/'+str(self.parent['id'])+'/attempts/'):
+   return {'jobs':copy.deepcopy(self.jobs)}
+  self.gets.append(path)
+  if self.on_get:self.on_get(path)
+  if path.startswith(('/git/ref/','/contents/')):
+   if self.remote_override:return self.remote_override(path)
+   if path=='/git/ref/heads/main':return {'object':{'type':'commit','sha':self.main_sha}}
+   import base64,hashlib
+   parsed=urlsplit(path);query=parse_qs(parsed.query);name=parsed.path[len('/contents/'):]
+   self.assertEqual(query,{'ref':[self.main_sha]});raw=self.remote_files[name]
+   return {'type':'file','path':name,'encoding':'base64','size':len(raw),
+    'sha':hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest(),
+    'content':base64.b64encode(raw).decode()}
+  if self.override is not None:return self.override(path)
+  parsed=urlsplit(path);query=parse_qs(parsed.query)
+  workflow=parsed.path.split('/')[3]
+  if query.get('branch')!=['main'] or query.get('per_page')!=['1']:
+   return {'total_count':11,'workflow_runs':[self.runrow(workflow)]*10}
+  if 'status' in query:
+   rows=[row for row in self.active if row['path']=='.github/workflows/'+workflow and row['status']==query['status'][0]]
+  else:
+   if query.get('event')!=['workflow_dispatch'] or len(query.get('created',[]))!=1:
+    raise AssertionError('attempt lookup must be server-filtered by dispatch and creation time: '+path)
+   bound=query['created'][0];self.assertTrue(bound.startswith('>='))
+   since=f.utc(bound[2:])
+   rows=[row for row in self.attempts if row['path']=='.github/workflows/'+workflow and f.utc(row['created_at'])>=since]
+  return {'total_count':len(rows),'workflow_runs':copy.deepcopy(rows[:1])}
+ def post(self,request,**kwargs):
+  from unittest.mock import MagicMock
+  self.posts.append(request);response=MagicMock();response.__enter__.return_value.status=204;return response
+ def invoke(self,mode='bridge',event=True):
+  path=self.root/'event.json';path.write_text(json.dumps({'workflow_run':copy.deepcopy(self.parent)} if event else {}))
+  with patch.dict(os.environ,{'GITHUB_EVENT_PATH':str(path)}):return self.a.run(mode)
+ def assert_rescue(self):
+  self.assertEqual(len(self.posts),1,'eligible original TARGET was not routed through the existing bridge')
+  request=self.posts[0]
+  self.assertEqual(request.get_method(),'POST')
+  self.assertTrue(request.full_url.endswith('/actions/workflows/quote_only_rescue.yml/dispatches'))
+  payload=json.loads(request.data)
+  self.assertEqual(payload,{'ref':'main','inputs':{'expected_ids_json':json.dumps([self.fid],separators=(',',':'))}})
+ def test_observed_clock_completions_route_open_original_target_with_actual_payload(self):
+  for stamp in ('2026-11-09T03:24:57.901549+00:00','2026-11-09T03:30:15.078246+00:00'):
+   with self.subTest(stamp=stamp):
+    self.posts.clear();self.now=f.utc(stamp);result=self.invoke();self.assert_rescue()
+    self.assertTrue(result['parent_trusted']);self.assertIn('MISSING_ISSUANCE',result['errors'])
+ def test_future_empty_and_scored_targets_do_not_post(self):
+  for entries,scored in ([],()),([(self.fid,self.now+timedelta(microseconds=1))],()),([(self.fid,self.target)],(self.fid,)):
+   with self.subTest(entries=entries,scored=scored):
+    self.posts.clear();self.set_state(entries,scored);self.invoke();self.assertEqual(self.posts,[])
+ def test_twenty_minute_boundary_preserves_existing_five_minute_reserve(self):
+  self.now=self.target+timedelta(minutes=20);self.invoke();self.assert_rescue()
+  self.posts.clear();self.now+=timedelta(microseconds=1);self.invoke();self.assertEqual(self.posts,[])
+ def test_unsafe_aggregate_batch_never_invokes_frozen_watch(self):
+  self.set_state([(self.fid,self.target),('older-target',self.now-timedelta(minutes=21))])
+  self.invoke();self.assertEqual(self.posts,[])
+ def test_more_than_one_hundred_current_ids_fails_closed(self):
+  self.set_state([(str(i),self.target) for i in range(101)])
+  with self.assertRaises(ValueError):self.invoke()
+  self.assertEqual(self.posts,[])
+ def test_all_active_normal_and_rescue_states_block_even_outside_recent_ten(self):
+  for workflow in ('okx_hourly_extreme_history.yml','quote_only_rescue.yml'):
+   for status in ('pending','queued','requested','waiting','in_progress'):
+    with self.subTest(workflow=workflow,status=status):
+     self.posts.clear();self.gets.clear();self.active=[self.runrow(workflow,status)]
+     self.invoke();self.assertEqual(self.posts,[])
+     from urllib.parse import parse_qs,urlsplit
+     queries=[parse_qs(urlsplit(path).query) for path in self.gets if 'status=' in path]
+     self.assertTrue(queries);self.assertTrue(all(q.get('branch')==['main'] and q.get('per_page')==['1'] for q in queries))
+ def test_prior_failed_or_cancelled_attempt_in_target_window_is_not_retried(self):
+  self.jobs[0]['completed_at']='2026-11-09T03:24:00Z'
+  for conclusion in ('failure','cancelled','success'):
+   with self.subTest(conclusion=conclusion):
+    self.posts.clear();self.attempts=[self.runrow('quote_only_rescue.yml',created=self.target+timedelta(seconds=30),conclusion=conclusion)]
+    self.invoke();self.assertEqual(self.posts,[])
+ def test_same_parent_is_not_reused_for_a_later_target(self):
+  self.attempts=[self.runrow('quote_only_rescue.yml',created=f.utc('2026-11-09T03:23:00Z'))]
+  self.set_state([(self.fid,f.utc('2026-11-09T03:24:00Z'))]);self.invoke();self.assertEqual(self.posts,[])
+ def test_attempt_before_parent_and_target_does_not_silence_new_target(self):
+  self.attempts=[self.runrow('quote_only_rescue.yml',created=f.utc('2026-11-09T03:20:00Z'))]
+  self.invoke();self.assert_rescue()
+ def test_final_clock_expiry_during_server_checks_prevents_post(self):
+  self.on_get=lambda path:setattr(self,'now',self.target+timedelta(minutes=20,microseconds=1)) if path.startswith('/actions/workflows/') else None
+  self.invoke();self.assertEqual(self.posts,[])
+ def test_score_added_during_server_checks_prevents_post(self):
+  candidate_head=self.main_sha
+  self.on_get=lambda path:self.set_state([(self.fid,self.target)],(self.fid,)) if path.startswith('/actions/workflows/') else None
+  result=self.invoke();self.assertEqual(self.posts,[])
+  rescue=result['dispatches'][0]
+  self.assertEqual(rescue['candidate_head_sha'],candidate_head)
+  self.assertEqual(rescue['dispatch_head_sha'],self.main_sha)
+  self.assertNotEqual(rescue['candidate_head_sha'],rescue['dispatch_head_sha'])
+  self.assertEqual(rescue['status'],'SKIP_WINDOW_CLOSED_OR_SCORED')
+ def test_parent_source_rescue_failure_and_manual_modes_never_route_rescue(self):
+  for path,conclusion,mode,event in (
+   (self.a.SOURCE_WORKFLOW,'success','bridge',True),
+   ('.github/workflows/quote_only_rescue.yml','success','bridge',True),
+   ('.github/workflows/phase2_forward_audit_v2.yml','failure','bridge',True),
+   ('.github/workflows/phase2_forward_audit_v2.yml','success','audit',True),
+   ('.github/workflows/phase2_forward_audit_v2.yml','success','bridge',False)):
+   with self.subTest(path=path,conclusion=conclusion,mode=mode,event=event):
+    self.parent['path']=path;self.parent['conclusion']=conclusion;self.posts.clear()
+    self.invoke(mode,event);self.assertEqual(self.posts,[])
+ def test_unknown_queue_api_failure_and_malformed_identity_do_not_post(self):
+  invalid=({}, {'total_count':1,'workflow_runs':[]}, {'total_count':0,'workflow_runs':[{}]},
+   {'total_count':'0','workflow_runs':[]},
+   {'total_count':1,'workflow_runs':[self.runrow('other.yml','pending')]})
+  for response in invalid:
+   with self.subTest(response=response):
+    self.posts.clear();self.override=lambda path:response
+    with self.assertRaises((ValueError,KeyError,TypeError)):self.invoke()
+    self.assertEqual(self.posts,[])
+  def unavailable(path):raise OSError('provider unavailable')
+  self.override=unavailable
+  with self.assertRaises(OSError):self.invoke()
+  self.assertEqual(self.posts,[])
+ def test_missing_parent_job_completion_cannot_claim_parent_deduplication(self):
+  self.jobs[0].pop('completed_at')
+  with self.assertRaises((ValueError,KeyError)):self.invoke()
+  self.assertEqual(self.posts,[])
+ def test_uses_current_main_files_instead_of_event_checkout(self):
+  (self.root/self.rescue.base.REG).write_text('stale event checkout has no current rows')
+  self.invoke();self.assert_rescue()
+  self.assertGreaterEqual(self.gets.count('/git/ref/heads/main'),2)
+ def test_invalid_main_identity_content_or_registry_fails_closed(self):
+  for response in ({'object':{'type':'commit','sha':'invalid'}},{'object':{'type':'tree','sha':'c'*40}},{}):
+   with self.subTest(response=response):
+    self.remote_override=lambda path:response
+    with self.assertRaises((ValueError,KeyError,TypeError)):self.invoke()
+    self.assertEqual(self.posts,[])
+  self.remote_override=None
+  self.remote_files[self.rescue.base.REG]=b'forecast_id,target_utc\nwrong,bad\n'
+  with self.assertRaises(ValueError):self.invoke()
+  self.assertEqual(self.posts,[])
+ def test_blob_mismatch_and_duplicate_forecast_ids_do_not_post(self):
+  name=self.rescue.base.REG
+  content=self.api('/contents/'+name+'?ref='+self.main_sha)
+  for changes in ({'sha':'f'*40},{'size':content['size']+1},{'content':'not base64'}):
+   with self.subTest(changes=changes):
+    self.remote_override=lambda path:({'object':{'type':'commit','sha':self.main_sha}} if path.startswith('/git/ref/') else {**content,**changes})
+    with self.assertRaises(ValueError):self.invoke()
+    self.assertEqual(self.posts,[])
+  self.remote_override=None
+  self.remote_files[name]+=self.remote_files[name].splitlines(keepends=True)[1]
+  with self.assertRaises(ValueError):self.invoke()
+  self.assertEqual(self.posts,[])
+ def test_attempt_response_must_match_dispatch_time_filter(self):
+  row=self.runrow('quote_only_rescue.yml')
+  for changes in ({'event':'schedule'},{'created_at':'2026-11-09T02:00:00Z'},
+   {'created_at':'2026-11-10T02:00:00Z'},{'status':'unknown'},{'id':True}):
+   with self.subTest(changes=changes):
+    self.override=lambda path:({'total_count':0,'workflow_runs':[]} if 'status=' in path
+     else {'total_count':1,'workflow_runs':[{**row,**changes}]})
+    with self.assertRaises(ValueError):self.invoke()
+    self.assertEqual(self.posts,[])
+ def test_normal_dispatch_requested_in_this_bridge_takes_priority(self):
+  with patch.object(self.a,'actions',return_value=['okx_hourly_extreme_history.yml']):result=self.invoke()
+  self.assertEqual(len(self.posts),1)
+  self.assertTrue(self.posts[0].full_url.endswith('/okx_hourly_extreme_history.yml/dispatches'))
+  self.assertEqual(result['dispatches'][-1]['status'],'DEFERRED_NORMAL_COLLECTOR_REQUESTED')
+  self.assertNotIn('/git/ref/heads/main',self.gets)
+ def test_fork_pr_or_changed_parent_attempt_never_posts(self):
+  for field,value in (('head_branch','feature'),('event','pull_request'),('head_repository',{'full_name':'untrusted/fork'})):
+   original=copy.deepcopy(self.parent)
+   with self.subTest(field=field):
+    self.parent[field]=value;self.invoke();self.assertEqual(self.posts,[])
+   self.parent=original
+  real_match=self.a.match_event
+  def different_attempt(event,run):return real_match(event,{**run,'run_attempt':run['run_attempt']+1})
+  with patch.object(self.a,'match_event',side_effect=different_attempt):
+   with self.assertRaises(ValueError):self.invoke()
+  self.assertEqual(self.posts,[])
+
 if __name__=='__main__':unittest.main()
