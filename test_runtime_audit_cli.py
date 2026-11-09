@@ -157,9 +157,9 @@ class RealGitLauncherTests(unittest.TestCase):
  def history(self,values):
   path=self.root/'data/test.csv';path.parent.mkdir(exist_ok=True);path.write_text('forecast_id,value\n'+''.join(str(i)+','+v+'\n' for i,v in enumerate(values)),encoding='utf-8')
   return {str(i):{'forecast_id':str(i),'value':v} for i,v in enumerate(values)}
- def run_script(self,script,body):
+ def run_script(self,script,body,stderr=None):
   path=self.root/script;path.write_text('def main():\n'+''.join(' '+l+'\n' for l in body.splitlines())+' return locals()\n\nif __name__=="__main__":raise SystemExit(main())\n',encoding='utf-8')
-  with mock.patch.dict(self.subject.SCRIPT_BLOBS,{script:self.subject._blob(path)}),contextlib.redirect_stderr(io.StringIO()):return self.subject.run_cli(self.root,script)
+  with mock.patch.dict(self.subject.SCRIPT_BLOBS,{script:self.subject._blob(path)}),contextlib.redirect_stderr(stderr if stderr is not None else io.StringIO()):return self.subject.run_cli(self.root,script)
  def test_real_csv_native_receipts_and_uncommitted_append_equal_frozen(self):
   self.history(['a']);self.commit();self.history(['a','b']);self.commit();current=self.history(['a','b','c'])
   expected=self.original_history(self.root,'data/test.csv',['forecast_id','value'],current);self.base.fixture_current=current
@@ -213,6 +213,15 @@ class RealGitLauncherTests(unittest.TestCase):
   with self.assertRaises(ValueError) as old:self.original_pair(self.root)
   with self.assertRaises(type(old.exception)) as new:self.run_script(SCRIPTS[2],"import paired_forward_cohort as c\nfrom pathlib import Path\nc.history_guard(Path(__file__).parent)\n")
   self.assertEqual(str(new.exception),str(old.exception));self.assertIs(self.cohort.history_guard,self.original_pair)
+ def test_real_launcher_native_git_output_reaches_bounded_worker_log(self):
+  current=self.history(['a']);relative='data/direction_v42/forward_registry.csv';path=self.root/relative;path.parent.mkdir(parents=True);shutil.copyfile(self.root/'data/test.csv',path);self.commit();self.base.fixture_current=current
+  stderr=io.StringIO();body="import forward_validation as b\nfrom pathlib import Path\nvalue=b.history_receipts(Path(__file__).parent,'data/direction_v42/forward_registry.csv',['forecast_id','value'],b.fixture_current)\n"
+  result=self.run_script(SCRIPTS[0],body,stderr=stderr);self.assertTrue(result['value'])
+  native=json.loads(stderr.getvalue());self.assertEqual(native['mode'],'native_batch');self.assertGreater(native['native_batch_calls'],0)
+  with mock.patch.dict(sys.modules,{'runtime_process':types.ModuleType('runtime_process')}):worker=load('real_transport_worker',HERE/'runtime_audit_worker.py')
+  args=(sys.executable,str(self.root/'runtime_audit_cli.py'),SCRIPTS[0]);done=subprocess.CompletedProcess(args,0,'original stdout',stderr.getvalue());out=io.StringIO()
+  with mock.patch.object(worker.subprocess,'run',return_value=done),contextlib.redirect_stdout(out):self.assertEqual(worker.command(*args,cwd=self.root),'original stdout')
+  row=json.loads(out.getvalue());self.assertEqual(row['kind'],'runtime_source_audit_transport');self.assertEqual(row['module_sha256'],native['module_sha256']);self.assertEqual(row['relative'],relative);self.assertGreater(row['native_batch_calls'],0)
 
 class WorkerSourceBindingTests(unittest.TestCase):
  def test_sources_are_bound_to_selected_head_and_tampering_is_rejected(self):
@@ -251,5 +260,56 @@ class WorkerSourceBindingTests(unittest.TestCase):
    with contextlib.redirect_stdout(io.StringIO()):result=worker.audit_snapshot(root,head,root)
    self.assertEqual(result['status'],'ok');self.assertEqual(json.loads(result['outputs'][worker.OUTPUTS[1]])['order'],list(SCRIPTS))
    self.assertEqual((root/'runtime_audit_cli.py').read_bytes(),fake);self.assertFalse((root/worker.OUTPUTS[0]).exists())
+
+class TransportDiagnosticTests(unittest.TestCase):
+ def setUp(self):
+  with mock.patch.dict(sys.modules,{'runtime_process':types.ModuleType('runtime_process')}):self.worker=load('transport_worker',HERE/'runtime_audit_worker.py')
+  self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup);self.root=Path(self.tmp.name)
+  self.args=(sys.executable,str(self.root/'runtime_audit_cli.py'),SCRIPTS[0])
+ def row(self,**updates):
+  result={'kind':'runtime_publication_state_validation','implementation':'runtime_publication_state_native_batch_v1','module_sha256':'a'*64,'mode':'native_batch','status':'ok','validation_status':'ok','attempted_commit_count':2,'native_batch_calls':1,'relative':'data/direction_v42/forward_registry.csv','ordered_oids_sha256':'b'*64}
+  result.update(updates);return result
+ def execute(self,stderr,args=None):
+  args=args or self.args;done=subprocess.CompletedProcess(args,0,'original stdout\n',stderr);out=io.StringIO()
+  with mock.patch.object(self.worker.subprocess,'run',return_value=done) as run,contextlib.redirect_stdout(out):result=self.worker.command(*args,cwd=self.root)
+  self.assertEqual(result,'original stdout\n');self.assertEqual(run.call_args.kwargs['timeout'],240)
+  return [json.loads(line) for line in out.getvalue().splitlines()]
+ def test_successful_native_stderr_is_forwarded_as_bound_transport_metadata(self):
+  rows=self.execute(json.dumps(self.row()));self.assertEqual(len(rows),1);row=rows[0]
+  self.assertEqual(row['kind'],'runtime_source_audit_transport');self.assertEqual(row['stage'],SCRIPTS[0]);self.assertEqual(row['mode'],'native_batch');self.assertEqual(row['native_batch_calls'],1);self.assertEqual(row['worker_pid'],os.getpid());self.assertTrue(row['at_utc'].endswith('+00:00'))
+ def test_unknown_json_text_traceback_and_fields_never_leak(self):
+  texts=['PRIVATE_TOKEN Traceback',json.dumps({'kind':'other','secret':'PRIVATE_TOKEN'}),json.dumps(self.row(secret='PRIVATE_TOKEN')),'{bad json',json.dumps(self.row(module_sha256='PRIVATE_TOKEN'))]
+  self.assertEqual(self.execute('\n'.join(texts)),[])
+ def test_every_untrusted_enum_path_hash_or_count_is_rejected(self):
+  bad=[{'implementation':'PRIVATE_TOKEN'},{'mode':'PRIVATE_TOKEN'},{'status':'PRIVATE_TOKEN'},{'validation_status':'PRIVATE_TOKEN'},{'relative':'/PRIVATE_TOKEN/path'},{'ordered_oids_sha256':'PRIVATE_TOKEN'},{'native_batch_calls':True},{'native_batch_calls':-1},{'attempted_commit_count':2147483648}]
+  for update in bad:
+   with self.subTest(update=update):self.assertEqual(self.execute(json.dumps(self.row(**update))),[])
+ def test_unknown_dynamic_fallback_reason_is_omitted_without_error_text(self):
+  rows=self.execute(json.dumps(self.row(mode='legacy_full_fallback',fallback_reason='PRIVATE_TOKEN /some/path')))
+  self.assertEqual(rows[0]['fallback_reason'],'UNRECOGNIZED_OMITTED');self.assertNotIn('PRIVATE_TOKEN',json.dumps(rows))
+ def test_own_launcher_fallback_is_safe_fixed_metadata(self):
+  row={'kind':'runtime_audit_cli_fallback','backend':'runtime_publication_state','reason':'backend_import_unavailable'}
+  result=self.execute(json.dumps(row));self.assertEqual(result[0]['mode'],'legacy_full_fallback');self.assertEqual(result[0]['fallback_reason'],'backend_import_unavailable')
+ def test_histories_depth_and_count_are_bounded(self):
+  child={'implementation':'runtime_publication_state_native_batch_v1','mode':'native_batch','status':'ok','native_batch_calls':1,'relative':'data/direction_v42/forward_scores.csv'}
+  self.assertEqual(len(self.execute(json.dumps(self.row(histories=[child]*3)))[0]['histories']),3)
+  self.assertEqual(self.execute(json.dumps(self.row(histories=[child]*4))),[])
+  self.assertEqual(self.execute(json.dumps(self.row(histories=[dict(child,histories=[child])]))),[])
+ def test_total_stderr_line_output_row_and_duplicate_key_limits(self):
+  self.assertEqual(self.execute('x'*65537),[])
+  rows=self.execute('\n'.join([json.dumps(self.row())]*100));self.assertLessEqual(len(rows),32);self.assertGreater(len(rows),0)
+  self.assertTrue(all(len(json.dumps(row).encode())<=4096 for row in rows))
+  self.assertEqual(self.execute('{"kind":"runtime_publication_state_validation","kind":"PRIVATE_TOKEN"}'),[])
+  self.assertEqual(self.execute(json.dumps(self.row(padding='x'*5000))),[])
+ def test_nonlauncher_or_wrong_root_commands_never_forward(self):
+  for args in ((sys.executable,SCRIPTS[0]),(sys.executable,str(self.root.parent/'runtime_audit_cli.py'),SCRIPTS[0]),('not-python',str(self.root/'runtime_audit_cli.py'),SCRIPTS[0])):
+   with self.subTest(args=args):self.assertEqual(self.execute(json.dumps(self.row()),args=args),[])
+ def test_failure_and_timeout_keep_original_exception_and_streams(self):
+  for error in (subprocess.CalledProcessError(1,self.args,output='{"status":"blocked"}',stderr='PRIVATE_TOKEN'),subprocess.TimeoutExpired(self.args,240,output='partial',stderr='PRIVATE_TOKEN')):
+   with self.subTest(error=type(error).__name__),mock.patch.object(self.worker.subprocess,'run',side_effect=error),contextlib.redirect_stdout(io.StringIO()) as out,self.assertRaises(type(error)) as got:self.worker.command(*self.args,cwd=self.root)
+   self.assertIs(got.exception,error);self.assertEqual(got.exception.stderr,'PRIVATE_TOKEN');self.assertEqual(out.getvalue(),'')
+ def test_diagnostic_failure_cannot_change_successful_command_result(self):
+  done=subprocess.CompletedProcess(self.args,0,'original stdout\n',json.dumps(self.row()))
+  with mock.patch.object(self.worker.subprocess,'run',return_value=done),mock.patch.object(self.worker,'forward_transport_diagnostics',side_effect=RuntimeError('bad parser')):self.assertEqual(self.worker.command(*self.args,cwd=self.root),'original stdout\n')
 
 if __name__=='__main__':unittest.main()

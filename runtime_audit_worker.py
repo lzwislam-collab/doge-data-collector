@@ -23,6 +23,19 @@ INPUTS = ('data/direction_v42/forward_registry.csv',
 OUTPUTS = ('data/p0_operations/latest.json', 'data/paired_forward_v1/audit_latest.json')
 SCRIPTS = ('forward_validation_v2.py', 'p0_operational_audit.py', 'paired_cohort_audit.py')
 CLI_HELPERS = ('runtime_audit_cli.py', 'runtime_publication_state.py', 'runtime_paired_history.py')
+TRANSPORT_IMPLEMENTATIONS = {
+    'runtime_publication_state_validation': 'runtime_publication_state_native_batch_v1',
+    'runtime_paired_history_validation': 'runtime_paired_history_native_batch_v1',
+}
+TRANSPORT_REASONS = frozenset(('dependency_identity_changed', 'dependency_identity_unavailable',
+    'git_read_error', 'history_fallback', 'log_framing', 'log_oid_sequence', 'log_encoding',
+    'object_resolution_count', 'object_resolution_identity', 'object_resolution_framing',
+    'blob_identity_or_order', 'blob_length_or_delimiter', 'blob_content_hash', 'unexpected_blob_tail',
+    'unsupported_path_framing', 'commit_time_format', 'framing', 'oid_sequence',
+    'nonempty_omission', 'patch_encoding', 'script_identity_changed', 'backend_identity_changed',
+    'backend_location_changed', 'backend_import_unavailable'))
+TRANSPORT_RELATIVES = frozenset(INPUTS + ('data/stage5/forward_validation/remote_witnesses.csv',
+                                        'data/stage5/forward_validation/verified_run_metadata.csv'))
 EXCLUDED_PREFIX = 'data/plus_evidence_v1_0/sources/'
 # Reviewed dependency closure at efe0857e. A change falls back to the original
 # full checkout; this is an optimization eligibility check, not a new freeze.
@@ -176,9 +189,99 @@ def elapsed(start):
     except Exception: return None
 
 
+def _diagnostic_object(pairs):
+    row = {}
+    for key, value in pairs:
+        if key in row: raise ValueError('duplicate diagnostic member')
+        row[key] = value
+    return row
+
+
+def _transport_fields(row, implementation, nested=False):
+    if not isinstance(row, dict): raise ValueError('diagnostic object required')
+    enums = {'implementation': (implementation,), 'mode': ('native_batch', 'legacy_full_fallback', 'not_started'),
+             'status': ('ok', 'error', 'running'), 'validation_status': ('ok', 'error')}
+    counts = ('attempted_commit_count', 'native_batch_calls', 'empty_fallback_show_calls')
+    hashes = ('module_sha256', 'ordered_oids_sha256')
+    allowed = set(enums) | set(counts) | set(hashes) | {'relative', 'fallback_reason'}
+    if not nested: allowed |= {'kind', 'histories'}
+    if set(row)-allowed: raise ValueError('unknown diagnostic member')
+    if not nested and not {'implementation','mode','status','validation_status','module_sha256'} <= set(row):
+        raise ValueError('incomplete native diagnostic')
+    out = {}
+    for key, choices in enums.items():
+        if key in row:
+            if row[key] not in choices: raise ValueError('unknown diagnostic enum')
+            out[key] = row[key]
+    for key in counts:
+        if key in row:
+            if type(row[key]) is not int or not 0 <= row[key] <= 2147483647:
+                raise ValueError('invalid diagnostic count')
+            out[key] = row[key]
+    for key in hashes:
+        if key in row:
+            if not isinstance(row[key], str) or not re.fullmatch('[0-9a-f]{64}', row[key]):
+                raise ValueError('invalid diagnostic hash')
+            out[key] = row[key]
+    if 'relative' in row:
+        if row['relative'] not in TRANSPORT_RELATIVES: raise ValueError('unknown diagnostic path')
+        out['relative'] = row['relative']
+    if 'fallback_reason' in row:
+        value = row['fallback_reason']
+        out['fallback_reason'] = value if isinstance(value,str) and value in TRANSPORT_REASONS else 'UNRECOGNIZED_OMITTED'
+    if 'histories' in row:
+        if not isinstance(row['histories'],list) or len(row['histories'])>3: raise ValueError('diagnostic history limit')
+        out['histories'] = [_transport_fields(child,implementation,nested=True) for child in row['histories']]
+    return out
+
+
+def forward_transport_diagnostics(stderr, stage):
+    """Forward only bounded fixed metadata; never raw subprocess stderr."""
+    try:
+        if stage not in SCRIPTS or not isinstance(stderr,str) or len(stderr)>65536:
+            return
+        if len(stderr.encode('utf-8'))>65536: return
+        emitted = 0; output_bytes = 0
+        for line in stderr.splitlines()[:128]:
+            if emitted >= 32: break
+            if len(line)>4096 or len(line.encode('utf-8'))>4096: continue
+            try:
+                source = json.loads(line,object_pairs_hook=_diagnostic_object)
+                if not isinstance(source,dict): continue
+                kind = source.get('kind')
+                if kind in TRANSPORT_IMPLEMENTATIONS:
+                    fields = _transport_fields(source,TRANSPORT_IMPLEMENTATIONS[kind])
+                elif kind == 'runtime_audit_cli_fallback':
+                    if set(source)!={'kind','backend','reason'} or source['backend'] not in ('original_cli','runtime_publication_state','runtime_paired_history'):
+                        continue
+                    value = source['reason']
+                    fields = {'backend':source['backend'],'mode':'legacy_full_fallback',
+                        'fallback_reason':value if isinstance(value,str) and value in TRANSPORT_REASONS else 'UNRECOGNIZED_OMITTED'}
+                else: continue
+                row = dict(fields,kind='runtime_source_audit_transport',schema_version=1,
+                    source_kind=kind,stage=stage,worker_pid=os.getpid(),
+                    at_utc=datetime.now(timezone.utc).isoformat())
+                output = json.dumps(row,sort_keys=True,allow_nan=False)
+                if len(output.encode('utf-8'))>4096: continue
+            except Exception:
+                continue
+            size = len(output.encode('utf-8'))+1
+            if output_bytes+size>65536: break
+            print(output,flush=True); emitted += 1; output_bytes += size
+    except Exception:
+        pass
+
+
 def command(*args, cwd):
-    return subprocess.run(args, cwd=cwd, check=True, capture_output=True,
-                          text=True, encoding='utf-8', timeout=240).stdout
+    completed = subprocess.run(args, cwd=cwd, check=True, capture_output=True,
+                               text=True, encoding='utf-8', timeout=240)
+    try:
+        if (len(args)==3 and Path(args[0]).resolve()==Path(sys.executable).resolve()
+                and Path(args[1]).resolve()==(Path(cwd).resolve()/CLI_HELPERS[0]) and args[2] in SCRIPTS):
+            forward_transport_diagnostics(completed.stderr,args[2])
+    except Exception:
+        pass
+    return completed.stdout
 
 
 def timed_command(phase, *args, cwd, **metadata):

@@ -187,6 +187,28 @@ def frozen_clock(at):
         datetime_module.datetime = original
 
 
+@contextmanager
+def paired_cpu_profile(enabled, fixture):
+    """Diagnostic only; profile overhead stays included in the measured trial."""
+    if not enabled:
+        yield
+        return
+    import cProfile
+    destination = Path(fixture).resolve().parent.parent / 'native-paired.cprofile'
+    profiler = cProfile.Profile()
+    profiler.enable()
+    try:
+        yield
+    finally:
+        active_error = sys.exc_info()[0] is not None
+        profiler.disable()
+        try:
+            profiler.dump_stats(str(destination))
+        except Exception:
+            if not active_error:
+                raise
+
+
 def child(root, script, mode, fixture, clock, optimized):
     root = Path(root).resolve()
     if script not in SCRIPTS:
@@ -196,7 +218,8 @@ def child(root, script, mode, fixture, clock, optimized):
     # This common diagnostic startup cost is included in both whole-CLI timings.
     import numpy  # noqa: F401; only the C extension required by these real CLIs
     at = datetime_module.datetime.fromisoformat(clock)
-    with transport(mode, fixture), frozen_clock(at):
+    with transport(mode, fixture), frozen_clock(at), paired_cpu_profile(
+            optimized and script == 'paired_cohort_audit.py', fixture):
         previous = sys.argv
         sys.argv = [script]
         try:
@@ -346,6 +369,9 @@ def worker(source, head, output, timeout_seconds, max_native_seconds):
               'clock_scope': 'diagnostic children only; no production override',
               'metadata': 'actual original GET replies; candidate replays equal measured latency',
               'production_dispatch': False, 'production_changes': False, 'trials': [],
+              'diagnostic_profiling': {'scope': 'native paired CLI only',
+                  'file': 'native-paired.cprofile', 'included_in_native_elapsed': True,
+                  'production_override': False},
               'comparison': 'JSON object keys canonicalized; numeric lexemes, every field and list order retained; other files exact bytes',
               'diagnostic_environment': {'PYTHONHASHSEED': '0', 'PYTHONUTF8': '1',
                   'OPENBLAS_NUM_THREADS': os.environ.get('OPENBLAS_NUM_THREADS'),

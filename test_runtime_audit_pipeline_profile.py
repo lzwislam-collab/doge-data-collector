@@ -22,6 +22,36 @@ class Response(io.BytesIO):
     def geturl(self): return URL
 
 
+
+class PairedProfilerTests(unittest.TestCase):
+    def test_disabled_diagnostic_has_no_output_file(self):
+        with tempfile.TemporaryDirectory() as name:
+            fixture = Path(name) / 'captured-get' / 'paired.json'
+            fixture.parent.mkdir()
+            with profile.paired_cpu_profile(False, fixture):
+                self.assertEqual(sum(range(10)), 45)
+            self.assertFalse((Path(name) / 'native-paired.cprofile').exists())
+
+    def test_enabled_diagnostic_writes_readable_real_profile(self):
+        import pstats
+        with tempfile.TemporaryDirectory() as name:
+            fixture = Path(name) / 'captured-get' / 'paired.json'
+            fixture.parent.mkdir()
+            with profile.paired_cpu_profile(True, fixture):
+                self.assertEqual(sum(range(10)), 45)
+            stats = pstats.Stats(str(Path(name) / 'native-paired.cprofile'))
+            self.assertGreater(stats.total_calls, 0)
+
+    def test_profile_is_saved_and_original_exception_preserved(self):
+        with tempfile.TemporaryDirectory() as name:
+            fixture = Path(name) / 'captured-get' / 'paired.json'
+            fixture.parent.mkdir()
+            with self.assertRaisesRegex(RuntimeError, 'original failure'):
+                with profile.paired_cpu_profile(True, fixture):
+                    raise RuntimeError('original failure')
+            self.assertTrue((Path(name) / 'native-paired.cprofile').is_file())
+
+
 class ProfileTests(unittest.TestCase):
     def test_record_replay_preserves_bytes_and_measured_network_latency(self):
         with tempfile.TemporaryDirectory() as name:

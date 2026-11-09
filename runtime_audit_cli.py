@@ -17,7 +17,7 @@ SCRIPT_BLOBS = {
     'paired_cohort_audit.py': 'a6bdf0c54ffcf648384c756d400e742ab57a1d61',
 }
 BACKEND_BLOBS = {
-    'runtime_publication_state': '4323d7464c90cd05c8c177078b06e71e15afffab',
+    'runtime_publication_state': 'f0f6b6c7dbe5d7e4c0995b4714a53957217fbac0',
     'runtime_paired_history': 'b27849b2761de895a33613230de9adbf4187df71',
 }
 
