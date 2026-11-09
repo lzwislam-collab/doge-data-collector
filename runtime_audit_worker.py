@@ -22,6 +22,7 @@ INPUTS = ('data/direction_v42/forward_registry.csv',
           'data/paired_forward_v1/pairs.jsonl', 'data/hourly_research/ohlc.csv')
 OUTPUTS = ('data/p0_operations/latest.json', 'data/paired_forward_v1/audit_latest.json')
 SCRIPTS = ('forward_validation_v2.py', 'p0_operational_audit.py', 'paired_cohort_audit.py')
+CLI_HELPERS = ('runtime_audit_cli.py', 'runtime_publication_state.py', 'runtime_paired_history.py')
 EXCLUDED_PREFIX = 'data/plus_evidence_v1_0/sources/'
 # Reviewed dependency closure at efe0857e. A change falls back to the original
 # full checkout; this is an optimization eligibility check, not a new freeze.
@@ -274,14 +275,33 @@ def result_metadata(directory):
     return metadata
 
 
+def verify_cli_sources(snapshot, head):
+    """Use only exact helper bytes from this isolated audit's selected Git head."""
+    launcher = command('git', 'ls-tree', '--full-tree', '--name-only', head,
+                       '--', CLI_HELPERS[0], cwd=snapshot).splitlines()
+    if not launcher:
+        return False
+    if launcher != [CLI_HELPERS[0]]:
+        raise ValueError('unexpected isolated audit launcher entry')
+    for relative in CLI_HELPERS:
+        expected = command('git', 'rev-parse', head+':'+relative, cwd=snapshot).strip()
+        actual = command('git', 'hash-object', '--no-filters', '--', relative, cwd=snapshot).strip()
+        if actual != expected:
+            raise ValueError('isolated audit helper differs from pinned source')
+    return True
+
+
 def audit_snapshot(root, head, temporary_parent=None, *, exclude_source_archive=True):
     with tempfile.TemporaryDirectory(prefix='doge-source-audit-', dir=temporary_parent) as name:
         snapshot = Path(name)/'snapshot'
         checkout = prepare_checkout(root, snapshot, head, exclude_source_archive=exclude_source_archive)
+        use_launcher = verify_cli_sources(snapshot, head)
         inputs = fingerprint(snapshot)
         timings = []
         for script in SCRIPTS:
-            _, seconds = timed_command(script, sys.executable, script, cwd=snapshot, input_head=head)
+            arguments = (str(snapshot/'runtime_audit_cli.py'), script) if use_launcher else (script,)
+            _, seconds = timed_command(script, sys.executable, *arguments,
+                                       cwd=snapshot, input_head=head)
             timings.append({'stage': script, 'seconds': seconds})
         outputs = {p: (snapshot/p).read_text(encoding='utf-8') for p in OUTPUTS}
         return {'status': 'ok', 'input_head': head, 'inputs': inputs,

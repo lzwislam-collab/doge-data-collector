@@ -42,6 +42,10 @@ on:
       - 'test_archive_capture_bridge.py'
       - 'p0_open_target_guard.py'
       - 'runtime_audit_worker.py'
+      - 'runtime_audit_cli.py'
+      - 'test_runtime_audit_cli.py'
+      - 'runtime_audit_pipeline_profile.py'
+      - 'test_runtime_audit_pipeline_profile.py'
       - 'runtime_audit_checkout_profile.py'
       - 'test_runtime_audit_checkout_profile.py'
       - 'test_runtime_audit_worker.py'
@@ -93,6 +97,10 @@ on:
       - 'test_archive_capture_bridge.py'
       - 'p0_open_target_guard.py'
       - 'runtime_audit_worker.py'
+      - 'runtime_audit_cli.py'
+      - 'test_runtime_audit_cli.py'
+      - 'runtime_audit_pipeline_profile.py'
+      - 'test_runtime_audit_pipeline_profile.py'
       - 'runtime_audit_checkout_profile.py'
       - 'test_runtime_audit_checkout_profile.py'
       - 'test_runtime_audit_worker.py'
@@ -265,3 +273,23 @@ jobs:
           retention-days: 7
 
 
+
+      - name: Compare whole original audit CLIs with native history transport
+        if: github.event_name == 'pull_request' && github.head_ref == 'fix/archive-audit-native-transport-20261110'
+        timeout-minutes: 11
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          OPENBLAS_NUM_THREADS: '1'
+          OMP_NUM_THREADS: '1'
+          PYTHONUTF8: '1'
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python -B runtime_audit_pipeline_profile.py --source-root "$GITHUB_WORKSPACE" --ref "$GITHUB_SHA" --output "$RUNNER_TEMP/source-audit-native-profile"
+      - name: Preserve whole audit CLI comparison
+        if: always() && github.event_name == 'pull_request' && github.head_ref == 'fix/archive-audit-native-transport-20261110'
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-audit-native-profile-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/source-audit-native-profile/
+          if-no-files-found: error
+          retention-days: 7
