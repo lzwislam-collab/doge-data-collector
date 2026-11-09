@@ -139,10 +139,27 @@ def actions(events,scores,now,source_ready,source_witnessed):
   else:result.append('phase2_forward_audit_v2.yml')
  return result
 
+def pending_normal_collector():
+ # Filter on the server: a waiting collector can be older than ten recent runs.
+ # This is a pre-dispatch guard, not an atomic lock or a workflow_run override.
+ for status in ('pending','queued','requested','waiting'):
+  result=r.frozen.api('/actions/workflows/okx_hourly_extreme_history.yml/runs?branch=main&status='+status+'&per_page=1')
+  runs=result['workflow_runs'];count=result['total_count']
+  if not isinstance(runs,list) or type(count) is not int or count<0 or len(runs)>1 or bool(count)!=bool(runs):raise ValueError('normal collector queue response incomplete')
+  if runs:
+   run=runs[0]
+   if not isinstance(run,dict) or run.get('head_branch')!='main' or run.get('path','').split('@')[0]!=SOURCE_WORKFLOW or type(run.get('id')) is not int or run['id']<=0 or run.get('status') not in ('pending','queued','requested','waiting','in_progress','completed'):raise ValueError('normal collector queue identity invalid')
+   # Conservatively defer if the filtered run changed state during the read.
+   return {'normal_collector_run_id':run['id'],'normal_collector_status':run['status']}
+ return None
+
 def dispatch_once(name):
  if name not in ('phase2_forward_live_v2.yml','phase2_forward_audit_v2.yml','okx_hourly_extreme_history.yml','learned_shadow_live.yml','learned_shadow_v1.yml'):raise ValueError('unapproved dispatcher target')
  runs=r.frozen.api('/actions/workflows/'+name+'/runs?per_page=10')['workflow_runs']
  if any(v['head_branch']=='main' and v['status'] in ('queued','in_progress','waiting','pending','requested') for v in runs):return {'workflow':name,'status':'ALREADY_PENDING'}
+ if name=='learned_shadow_live.yml':
+  pending=pending_normal_collector()
+  if pending is not None:return {'workflow':name,'status':'DEFERRED_NORMAL_COLLECTOR_PENDING',**pending}
  from urllib.request import Request,urlopen
  payload={'ref':'main'}
  if name=='phase2_forward_live_v2.yml':payload['inputs']={'mode':'publish'}

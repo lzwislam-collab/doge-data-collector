@@ -151,4 +151,76 @@ class CurrentReadiness(unittest.TestCase):
     with self.assertRaises(KeyError):self.a.main()
    self.assertIn('KeyError',json.loads((Path(tmp)/'forward-readiness-output/failure.json').read_text())['error'])
 
+class CollectorQueueProtection(unittest.TestCase):
+ def setUp(self):
+  self.a=importlib.import_module('forward_readiness')
+  self.collector='okx_hourly_extreme_history.yml'
+  self.research='learned_shadow_live.yml'
+ def api(self,blocking=None,own_pending=False):
+  from urllib.parse import parse_qs,urlsplit
+  def request(path):
+   if path.startswith('/actions/workflows/'+self.research+'/'):
+    return {'workflow_runs':[{'head_branch':'main','status':'pending'}] if own_pending else []}
+   if '/'+self.collector+'/' not in path:return {'workflow_runs':[]}
+   query=parse_qs(urlsplit(path).query)
+   # An old pending collector is deliberately absent from the recent-history page.
+   if query.get('branch')!=['main'] or not query.get('status'):
+    return {'total_count':11,'workflow_runs':[{'head_branch':'main','status':'completed'}]*10}
+   rows=[blocking] if blocking and query['status']==[blocking['status']] else []
+   return {'total_count':len(rows),'workflow_runs':rows}
+  return request
+ def post(self):
+  from unittest.mock import MagicMock
+  response=MagicMock();response.__enter__.return_value.status=204
+  return response
+ def collector_row(self,status):
+  return {'id':41,'head_branch':'main','status':status,'path':'.github/workflows/'+self.collector}
+ def test_each_waiting_collector_state_blocks_research_post_even_after_ten_newer_runs(self):
+  for status in ('pending','queued','requested','waiting'):
+   with self.subTest(status=status),patch.object(self.a.r.frozen,'api',side_effect=self.api(self.collector_row(status))),patch('urllib.request.urlopen',return_value=self.post()) as post,patch.dict(os.environ,{'GITHUB_TOKEN':'unit-test-token'}):
+    result=self.a.dispatch_once(self.research)
+    self.assertEqual(result['status'],'DEFERRED_NORMAL_COLLECTOR_PENDING')
+    self.assertEqual(result['normal_collector_run_id'],41);post.assert_not_called()
+ def test_running_collector_alone_does_not_block_existing_research_dispatch(self):
+  with patch.object(self.a.r.frozen,'api',side_effect=self.api(self.collector_row('in_progress'))),patch('urllib.request.urlopen',return_value=self.post()) as post,patch.dict(os.environ,{'GITHUB_TOKEN':'unit-test-token'}):
+   result=self.a.dispatch_once(self.research)
+  self.assertEqual(result,{'workflow':self.research,'status':'DISPATCH_ACCEPTED_COMPLETION_UNVERIFIED'})
+  post.assert_called_once();request=post.call_args.args[0]
+  self.assertEqual(request.get_method(),'POST');self.assertEqual(json.loads(request.data),{'ref':'main'})
+  self.assertTrue(request.full_url.endswith('/actions/workflows/'+self.research+'/dispatches'))
+ def test_empty_queue_uses_four_filtered_reads_and_original_post(self):
+  with patch.object(self.a.r.frozen,'api',side_effect=self.api()) as get,patch('urllib.request.urlopen',return_value=self.post()) as post,patch.dict(os.environ,{'GITHUB_TOKEN':'unit-test-token'}):
+   self.a.dispatch_once(self.research)
+  from urllib.parse import parse_qs,urlsplit
+  queries=[parse_qs(urlsplit(c.args[0]).query) for c in get.call_args_list if '/'+self.collector+'/' in c.args[0]]
+  self.assertEqual({q['status'][0] for q in queries},{'pending','queued','requested','waiting'})
+  self.assertTrue(all(q['branch']==['main'] and q['per_page']==['1'] for q in queries));post.assert_called_once()
+ def test_queue_lookup_failure_never_posts(self):
+  for failed_status in ('pending','queued','requested','waiting'):
+   normal=self.api()
+   def request(path):
+    if 'status='+failed_status+'&' in path:raise OSError('queue read unavailable')
+    return normal(path)
+   with self.subTest(status=failed_status),patch.object(self.a.r.frozen,'api',side_effect=request),patch('urllib.request.urlopen',return_value=self.post()) as post,patch.dict(os.environ,{'GITHUB_TOKEN':'unit-test-token'}):
+    with self.assertRaises(OSError):self.a.dispatch_once(self.research)
+    post.assert_not_called()
+ def test_unknown_queue_response_never_defaults_to_empty(self):
+  for response in ({},{'workflow_runs':None},{'workflow_runs':{}},{'workflow_runs':[None]},
+    {'total_count':1,'workflow_runs':[]},
+    {'total_count':1,'workflow_runs':[{'id':41,'head_branch':'feature','status':'pending','path':'.github/workflows/'+self.collector}]}):
+   def request(path):
+    return response if '/'+self.collector+'/' in path else {'workflow_runs':[]}
+   with self.subTest(response=response),patch.object(self.a.r.frozen,'api',side_effect=request),patch('urllib.request.urlopen',return_value=self.post()) as post,patch.dict(os.environ,{'GITHUB_TOKEN':'unit-test-token'}):
+    with self.assertRaises((ValueError,TypeError,KeyError)):self.a.dispatch_once(self.research)
+    post.assert_not_called()
+ def test_existing_research_pending_returns_without_collector_reads_or_post(self):
+  with patch.object(self.a.r.frozen,'api',side_effect=self.api(own_pending=True)) as get,patch('urllib.request.urlopen') as post:
+   self.assertEqual(self.a.dispatch_once(self.research),{'workflow':self.research,'status':'ALREADY_PENDING'})
+  self.assertEqual(get.call_count,1);post.assert_not_called()
+ def test_other_approved_dispatch_keeps_its_existing_payload_and_checks(self):
+  with patch.object(self.a.r.frozen,'api',return_value={'workflow_runs':[]}) as get,patch('urllib.request.urlopen',return_value=self.post()) as post,patch.dict(os.environ,{'GITHUB_TOKEN':'unit-test-token'}):
+   result=self.a.dispatch_once('phase2_forward_live_v2.yml')
+  self.assertEqual(result['status'],'DISPATCH_ACCEPTED_COMPLETION_UNVERIFIED');self.assertEqual(get.call_count,1)
+  self.assertEqual(json.loads(post.call_args.args[0].data),{'ref':'main','inputs':{'mode':'publish'}})
+
 if __name__=='__main__':unittest.main()
