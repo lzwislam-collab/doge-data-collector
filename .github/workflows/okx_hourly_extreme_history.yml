@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
     paths:
+      - 'clock_recovery_request.py'
+      - 'test_clock_recovery_request.py'
+      - 'data/p0_operations/clock_requests/hourly/*.json'
       - 'okx_hourly_research_history.py'
       - 'runtime_deadline_service.py'
       - 'runtime_p2_history.py'
@@ -122,29 +125,38 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Admit immutable independent clock requests
+        id: clock_request
+        run: python -B clock_recovery_request.py --kind hourly
       - name: Fail closed before writes on full-history or frozen protocol mutation
+        if: steps.clock_request.outputs.run == 'true'
         run: python forward_validation_v2.py --integrity-only
       - name: Score genuine due target quotes before long collection steps
+        if: steps.clock_request.outputs.run == 'true'
         id: quote_watch
         continue-on-error: true
         run: python quote_capture_retry.py watch
       - name: Fast-refresh confirmed 1H bars before prediction issuance
+        if: steps.clock_request.outputs.run == 'true'
         id: fast_hourly
         continue-on-error: true
         run: |
           DOGE_HOURLY_PAGE_BUDGET=0 python okx_hourly_research_history.py
       - name: Prepare UTC4H and causal feature context before original issuance
+        if: steps.clock_request.outputs.run == 'true'
         id: feature_prepare
         continue-on-error: true
         run: |
           python derived_four_hour.py
           python feature_ablation.py prepare
       - name: Prepare isolated minimal market rules before existing issuance
+        if: steps.clock_request.outputs.run == 'true'
         id: minimal_prepare
         continue-on-error: true
         timeout-minutes: 1
         run: python minimal_market_forward.py prepare
       - name: Issue and score DOGE UP/DOWN shadow forecasts from live ticker quote
+        if: steps.clock_request.outputs.run == 'true'
         id: direction
         continue-on-error: true
         run: |
@@ -152,12 +164,12 @@ jobs:
           python paired_forward_cohort.py issue
       - name: Bind only new originals to independent minimal market rules
         id: minimal_bind
-        if: always() && steps.minimal_prepare.outcome == 'success'
+        if: always() && steps.minimal_prepare.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         run: python minimal_market_forward.py bind
       - name: Bind genuinely new original events to isolated feature ablations
         id: feature_bind
-        if: always() && steps.feature_prepare.outcome == 'success'
+        if: always() && steps.feature_prepare.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         run: |
           python feature_ablation.py bind > "$RUNNER_TEMP/doge-feature-bind.json"
@@ -165,12 +177,12 @@ jobs:
           python feature_publication_gate.py < "$RUNNER_TEMP/doge-feature-bind.json" >> "$GITHUB_OUTPUT"
       - name: Verify benign late-registration skip without changing frozen deadline
         id: direction_late_audit
-        if: steps.direction.outcome != 'success'
+        if: steps.direction.outcome != 'success' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         run: python direction_lateness_gate.py verify "$RUNNER_TEMP/doge-direction-attempt.json"
       - name: Publish time-sensitive evidence and verify remote readback before backfill
         id: early_publish
-        if: always() && steps.quote_watch.outcome != 'skipped'
+        if: always() && steps.quote_watch.outcome != 'skipped' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -180,19 +192,19 @@ jobs:
           DOGE_HOURLY_REFRESH_FAILED="$refresh_failed" DOGE_VERIFY_HOURLY_PUBLICATION=1 python publication_recovery.py
       - name: Read back minimal contexts from the same original publication
         id: minimal_publication
-        if: steps.early_publish.outcome == 'success' && steps.minimal_bind.outcome == 'success'
+        if: steps.early_publish.outcome == 'success' && steps.minimal_bind.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         run: python minimal_market_forward.py publication
       - name: Verify staged feature archive on actual remote publication
         id: feature_publication
-        if: steps.early_publish.outcome == 'success' && steps.feature_bind.outcome == 'success' && steps.feature_bind.outputs.needs_publication == 'true'
+        if: steps.early_publish.outcome == 'success' && steps.feature_bind.outcome == 'success' && steps.feature_bind.outputs.needs_publication == 'true' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         run: python feature_ablation.py publication
       - name: Create pre-target public server witness using existing read-only CI
         id: public_witness
         # Recovery after a successful push but failed readback still needs a server witness.
         # Duplicate read-only witnesses never issue forecasts or backdate eligibility.
-        if: steps.early_publish.outcome == 'success'
+        if: steps.early_publish.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         uses: actions/github-script@v7
         with:
@@ -200,17 +212,27 @@ jobs:
             await github.rest.actions.createWorkflowDispatch({
               ...context.repo, workflow_id: 'test_forward_validation.yml', ref: 'main'
             });
+      - name: Install frozen prospective dependency after fast publication
+        if: always() && steps.early_publish.outcome == 'success' && steps.clock_request.outputs.run == 'true'
+        id: prospective_deps
+        continue-on-error: true
+        timeout-minutes: 2
+        run: python -m pip install --disable-pip-version-check numpy==2.3.5
       - name: Keep genuine target and depth capture alive before slow research
         id: deadline_service
-        if: always() && steps.early_publish.outcome == 'success'
+        if: always() && steps.early_publish.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         env:
+          OPENBLAS_NUM_THREADS: '1'
+          OMP_NUM_THREADS: '1'
+          PYTHONUTF8: '1'
+          DOGE_PROSPECTIVE_RUNTIME_BRIDGE: ${{ steps.prospective_deps.outcome == 'success' && '1' || '0' }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           python runtime_deadline_service.py --duration-seconds 2400 --archive-reserve-seconds 1800 \
             --workflow-started-at "$DOGE_WORKFLOW_STARTED_UTC" --workflow-timeout-seconds 3900
       - name: Preserve immutable deadline service receipts even on partial failure
-        if: always()
+        if: always() && steps.clock_request.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: doge-runtime-deadlines-${{ github.run_id }}-${{ github.run_attempt }}
@@ -218,17 +240,18 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
       - name: Stop subsequent writers on fatal runtime integrity or publication failure
-        if: always() && steps.deadline_service.outputs.fatal != 'false'
+        if: always() && steps.deadline_service.outputs.fatal != 'false' && steps.clock_request.outputs.run == 'true'
         run: exit 1
       - name: Recover optional hourly source with fresh bytes after deadline capture
         id: hourly_source_recovery
-        if: success() && steps.deadline_service.outputs.fatal == 'false' && steps.early_publish.outputs.hourly_source_failed == 'true'
+        if: success() && steps.deadline_service.outputs.fatal == 'false' && steps.early_publish.outputs.hourly_source_failed == 'true' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         timeout-minutes: 3
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python hourly_publication_recovery.py
       - name: Backfill confirmed UTC 1H data with source-ingestion timestamps
+        if: steps.clock_request.outputs.run == 'true'
         id: collect
         continue-on-error: true
         run: |
@@ -237,114 +260,116 @@ jobs:
           python okx_hourly_research_history.py
       - name: Evaluate hourly extreme-down alert precision and recall
         id: evaluate
-        if: steps.collect.outcome == 'success'
+        if: steps.collect.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         run: python evaluate_crash_warning.py
       - name: Register genuinely prospective hourly risk checkpoint and score matured alerts
         id: forward
-        if: steps.collect.outcome == 'success'
+        if: steps.collect.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         run: python crash_forward_watch.py
       - name: V4.2 forward-only one-hour-lead risk scoring
         id: v42
-        if: steps.forward.outcome == 'success'
+        if: steps.forward.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         run: python crash_v42_score.py
       - name: Independently score target outcomes using confirmed OKX 1m bars
         id: minute_shadow
-        if: steps.collect.outcome == 'success'
+        if: steps.collect.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         run: python stage5_minute_shadow.py
       - name: Review DOGE direction errors, source gaps and market co-movement without modifying frozen forecasts
         id: error_review
-        if: steps.collect.outcome == 'success'
+        if: steps.collect.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         run: python stage5_error_review.py
       - name: Recheck genuinely open target windows after slow collection steps
         id: open_target_guard
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.quote_watch.outcome != 'skipped'
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.quote_watch.outcome != 'skipped' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
           DOGE_TAIL_CAPTURE_BRIDGE: '1'
         run: python p0_open_target_guard.py
       - name: Stop writers on unsafe tail bridge or missing guard output
-        if: always() && steps.open_target_guard.outputs.tail_fatal != 'false'
+        if: always() && steps.open_target_guard.outputs.tail_fatal != 'false' && steps.clock_request.outputs.run == 'true'
         run: exit 1
       - name: Audit original quotes, publication receipts, baselines and prospective spot paper
+        if: steps.clock_request.outputs.run == 'true'
         id: validation
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python forward_validation_v2.py
       - name: Test hourly point-in-time registry causal restrictions after time-sensitive evidence capture
+        if: steps.clock_request.outputs.run == 'true'
         id: regression
         continue-on-error: true
         run: python -m unittest -v test_crash_forward_watch test_crash_v42_score test_direction_forward_v42 test_stage5_minute_shadow test_stage5_error_review test_spot_plus_quote_watch test_forward_validation test_quote_evidence_v2 test_forward_validation_v2 test_workflow_operational_order test_p0_operations test_publish_forward_evidence test_forward_diagnostics test_p0_open_target_guard test_paired_selection_v1 test_paired_forward_cohort test_paired_cohort_audit
       - name: Reconcile strict rolling seven-day issuance and target evidence
         id: operations
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.validation.outcome == 'success'
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.validation.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python p0_operational_audit.py
       - name: Independently audit same-event challengers and all NO_TRADE forecasts
         id: paired_audit
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.operations.outcome == 'success'
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.operations.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         run: python paired_cohort_audit.py
       - name: Verify real paired model preparation and live book without issuing smoke forecasts
         id: paired_smoke
-        if: github.event_name == 'push' && steps.operations.outcome == 'success'
+        if: github.event_name == 'push' && steps.operations.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         run: python paired_forward_cohort.py smoke
       - name: Capture public paired decisions into independent P2 spot paper portfolios
         id: p2_execution
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.paired_audit.outcome == 'success'
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.paired_audit.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         run: python p2_paired_execution_v2.py capture
       - name: Verify P2 raw book capacity and cost arithmetic without fake intervals
         id: p2_execution_smoke
-        if: github.event_name == 'push' && steps.paired_audit.outcome == 'success'
+        if: github.event_name == 'push' && steps.paired_audit.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         run: python p2_paired_execution_v2.py smoke
       - name: Test independent P2 chronology costs benchmarks and immutable evidence
         id: p2_execution_tests
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false'
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         run: python -m unittest -q test_p2_paired_execution_v2 test_p2_execution_records
       - name: Capture independent repaired V3 P2 paper evidence
         id: p2_execution_v3
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.paired_audit.outcome == 'success'
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.paired_audit.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         run: python p2_paired_execution_v3_1.py capture
       - name: Verify V3 live book without creating formal intervals
         id: p2_execution_v3_smoke
-        if: github.event_name == 'push' && steps.paired_audit.outcome == 'success'
+        if: github.event_name == 'push' && steps.paired_audit.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         run: python p2_paired_execution_v3_1.py smoke
       - name: Test V3 coverage tail gaps and preserved execution behavior
         id: p2_execution_v3_tests
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false'
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         run: python -m unittest -q test_p2_paired_execution_v3_1 test_p2_execution_records_v3_1 test_p2_paired_execution_v3_1_regressions test_p2_registration_deployed_bytes
       - name: Audit actual P2 book sampling gaps and preserve original source records
         id: p2_path
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.p2_execution_v3.outcome == 'success'
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.p2_execution_v3.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         run: |
           python -m unittest -q test_p2_path_quality
           python p2_path_quality.py
       - name: Evaluate preregistered independent P2 forward cohort without replacing V3.1
         id: locked_forward_cohort
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.p2_execution_v3.outcome == 'success' && steps.p2_path.outcome == 'success'
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.p2_execution_v3.outcome == 'success' && steps.p2_path.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         run: |
           python -m unittest -q test_p2_locked_forward_v1
           python p2_locked_forward_v1.py
       - name: Audit minimal future pairs and independent P2 acceptance
         id: minimal_audit
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.operations.outcome == 'success'
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.operations.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -355,19 +380,19 @@ jobs:
           python p1_regime_forward_v1.py
       - name: Audit isolated feature comparisons and net economics
         id: feature_audit
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.operations.outcome == 'success'
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.operations.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         run: |
           python -m unittest -q test_derived_four_hour test_feature_ablation
           python feature_ablation.py audit
       - name: Capture independent source versions and prospective post-publication depth
         id: supplemental_evidence
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.operations.outcome == 'success'
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.operations.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         run: python supplemental_evidence_audit.py --capture-execution
       - name: Audit deadline risk probability reliability and prospective cost stress separately
         id: diagnostics
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.supplemental_evidence.outcome == 'success'
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.supplemental_evidence.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         run: |
           python forward_diagnostics.py
@@ -382,7 +407,7 @@ jobs:
           PY
       - name: Prepare daily PIT retention inventory after original evidence capture
         id: pit_preparation
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.supplemental_evidence.outcome == 'success'
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.supplemental_evidence.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         timeout-minutes: 8 # observed full preparation took 364s; keep all shard verification
         run: |
@@ -395,12 +420,12 @@ jobs:
               f.write('generated='+str(r['generated_new_bundle']).lower()+'\n')
           PY
       - name: Save current PIT failure receipt including preparation timeout
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && (steps.pit_preparation.outcome == 'failure' || steps.pit_preparation.outcome == 'cancelled')
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && (steps.pit_preparation.outcome == 'failure' || steps.pit_preparation.outcome == 'cancelled') && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         run: python pit_retention_preparation.py record-failure
       - name: Persist data and diagnostics
         id: persist
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false'
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.clock_request.outputs.run == 'true'
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
@@ -450,13 +475,13 @@ jobs:
           fi
       - name: Freeze archive bytes and continue single-writer capture during upload
         id: archive_bridge_start
-        if: ${{ !cancelled() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.persist.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.persist.outcome == 'success' && steps.clock_request.outputs.run == 'true' }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python archive_capture_bridge.py start --snapshot archive-snapshot --control "$RUNNER_TEMP/doge-archive-bridge-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
       - name: Preserve per-run forecast and score evidence snapshot
         id: artifact
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.archive_bridge_start.outcome == 'success'
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.archive_bridge_start.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: doge-forward-evidence-${{ github.run_id }}-${{ github.run_attempt }}
@@ -509,7 +534,7 @@ jobs:
             archive-snapshot/system/current_p2_execution_shadow_v3_1.json
             archive-snapshot/system/versions/DOGE_P2_PAIRED_EXECUTION_V3_1_20261013_0000.json
       - name: Preserve new-version evidence separately from frozen forecast artifacts
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.archive_bridge_start.outcome == 'success'
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.archive_bridge_start.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: doge-plus-evidence-v1-0-${{ github.run_id }}-${{ github.run_attempt }}
@@ -524,7 +549,7 @@ jobs:
             archive-snapshot/reports/DOGE_PLUS_EVIDENCE_V1_0.md
       - name: Preserve newly prepared daily PIT package without claiming WORM
         id: pit_artifact
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.archive_bridge_start.outcome == 'success' && steps.pit_preparation.outputs.generated == 'true'
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.archive_bridge_start.outcome == 'success' && steps.pit_preparation.outputs.generated == 'true' && steps.clock_request.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: doge-pit-preparation-${{ github.run_id }}-${{ github.run_attempt }}
@@ -534,14 +559,14 @@ jobs:
             archive-snapshot/data/pit_retention_preparation_v1/
       - name: Drain archive capture before any subsequent writer or alert
         id: archive_bridge_stop
-        if: always() && steps.archive_bridge_start.outcome == 'success'
+        if: always() && steps.archive_bridge_start.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         timeout-minutes: 9
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python archive_capture_bridge.py stop --snapshot archive-snapshot --control "$RUNNER_TEMP/doge-archive-bridge-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
       - name: Record successful daily package upload only after artifact success
         id: pit_publication
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.archive_bridge_stop.outcome == 'success' && steps.pit_artifact.outcome == 'success' && steps.pit_preparation.outputs.generated == 'true'
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.archive_bridge_stop.outcome == 'success' && steps.pit_artifact.outcome == 'success' && steps.pit_preparation.outputs.generated == 'true' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         env:
           PIT_ARTIFACT_ID: ${{ steps.pit_artifact.outputs.artifact-id }}
@@ -550,7 +575,7 @@ jobs:
           python pit_retention_preparation.py record-artifact --artifact-id "$PIT_ARTIFACT_ID" --artifact-digest "$PIT_ARTIFACT_DIGEST" --run-id "$GITHUB_RUN_ID"
           python pit_artifact_publication.py
       - name: Preserve capture receipts produced during archive upload
-        if: always() && steps.archive_bridge_start.outcome == 'success'
+        if: always() && steps.archive_bridge_start.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: doge-archive-capture-${{ github.run_id }}-${{ github.run_attempt }}
@@ -561,43 +586,46 @@ jobs:
             archive-snapshot/manifest.json
             ${{ runner.temp }}/doge-archive-bridge-${{ github.run_id }}-${{ github.run_attempt }}/
       - name: Fail visibly on archive bridge or snapshot error
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && (steps.archive_bridge_start.outcome != 'success' || steps.archive_bridge_stop.outcome != 'success')
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && (steps.archive_bridge_start.outcome != 'success' || steps.archive_bridge_stop.outcome != 'success') && steps.clock_request.outputs.run == 'true'
         run: exit 1
       - name: Fail visibly on PIT preparation or package artifact error after saving core evidence
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && (steps.pit_preparation.outcome == 'failure' || steps.pit_preparation.outcome == 'cancelled' || steps.pit_artifact.outcome == 'failure' || steps.pit_publication.outcome == 'failure')
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && (steps.pit_preparation.outcome == 'failure' || steps.pit_preparation.outcome == 'cancelled' || steps.pit_artifact.outcome == 'failure' || steps.pit_publication.outcome == 'failure') && steps.clock_request.outputs.run == 'true'
         run: exit 1
       - name: Fail visibly on supplemental capture failure after preserving core evidence
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.supplemental_evidence.outcome != 'success'
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.supplemental_evidence.outcome != 'success' && steps.clock_request.outputs.run == 'true'
         run: exit 1
       - name: Fail visibly on open target guard or diagnostic errors after saving evidence
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && (steps.open_target_guard.outcome == 'failure' || steps.diagnostics.outcome == 'failure')
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && (steps.open_target_guard.outcome == 'failure' || steps.diagnostics.outcome == 'failure') && steps.clock_request.outputs.run == 'true'
         run: exit 1
       - name: Fail visibly on paired cohort audit error after saving original evidence
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && (steps.paired_audit.outcome == 'failure' || steps.paired_smoke.outcome == 'failure')
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && (steps.paired_audit.outcome == 'failure' || steps.paired_smoke.outcome == 'failure') && steps.clock_request.outputs.run == 'true'
         run: exit 1
       - name: Fail visibly on independent P2 execution or verification errors after evidence is saved
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && (steps.p2_execution.outcome == 'failure' || steps.p2_execution_smoke.outcome == 'failure' || steps.p2_execution_tests.outcome != 'success')
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && (steps.p2_execution.outcome == 'failure' || steps.p2_execution_smoke.outcome == 'failure' || steps.p2_execution_tests.outcome != 'success') && steps.clock_request.outputs.run == 'true'
         run: exit 1
       - name: Fail visibly on repaired V3 P2 errors after saving evidence
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && (steps.p2_execution_v3.outcome == 'failure' || steps.p2_execution_v3_smoke.outcome == 'failure' || steps.p2_execution_v3_tests.outcome != 'success' || steps.p2_path.outcome == 'failure' || steps.locked_forward_cohort.outcome == 'failure')
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && (steps.p2_execution_v3.outcome == 'failure' || steps.p2_execution_v3_smoke.outcome == 'failure' || steps.p2_execution_v3_tests.outcome != 'success' || steps.p2_path.outcome == 'failure' || steps.locked_forward_cohort.outcome == 'failure') && steps.clock_request.outputs.run == 'true'
         run: exit 1
       - name: Fail visibly on enhancement errors after preserving original evidence
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && (steps.feature_prepare.outcome == 'failure' || steps.feature_bind.outcome == 'failure' || steps.feature_publication.outcome == 'failure' || steps.feature_audit.outcome == 'failure')
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && (steps.feature_prepare.outcome == 'failure' || steps.feature_bind.outcome == 'failure' || steps.feature_publication.outcome == 'failure' || steps.feature_audit.outcome == 'failure') && steps.clock_request.outputs.run == 'true'
         run: exit 1
       - name: Fail visibly on independent minimal market errors after saving evidence
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && (steps.minimal_prepare.outcome == 'failure' || steps.minimal_bind.outcome == 'failure' || steps.minimal_publication.outcome == 'failure' || steps.minimal_audit.outcome == 'failure')
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && (steps.minimal_prepare.outcome == 'failure' || steps.minimal_bind.outcome == 'failure' || steps.minimal_publication.outcome == 'failure' || steps.minimal_audit.outcome == 'failure') && steps.clock_request.outputs.run == 'true'
         run: exit 1
       - name: Fail visibly on optional source refresh after preserving core publication and artifacts
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.early_publish.outputs.hourly_source_failed == 'true' && (steps.hourly_source_recovery.outcome != 'success' || steps.hourly_source_recovery.outputs.recovered != 'true')
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.early_publish.outputs.hourly_source_failed == 'true' && (steps.hourly_source_recovery.outcome != 'success' || steps.hourly_source_recovery.outputs.recovered != 'true') && steps.clock_request.outputs.run == 'true'
         run: exit 1
       - name: Fail on deadline service error after preserving evidence
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.deadline_service.outcome != 'success'
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.deadline_service.outcome != 'success' && steps.clock_request.outputs.run == 'true'
         run: exit 1
       - name: Fail on collector or quality error
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && (steps.validation.outcome != 'success' || steps.quote_watch.outcome != 'success' || steps.fast_hourly.outcome != 'success' || steps.collect.outcome != 'success' || steps.evaluate.outcome != 'success' || steps.forward.outcome != 'success' || steps.v42.outcome != 'success' || (steps.direction.outcome != 'success' && steps.direction_late_audit.outcome != 'success') || steps.minute_shadow.outcome != 'success' || steps.error_review.outcome != 'success' || steps.regression.outcome != 'success' || steps.early_publish.outcome != 'success' || steps.operations.outcome != 'success' || steps.persist.outcome != 'success' || steps.artifact.outcome != 'success' || steps.public_witness.outcome == 'failure')
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && (steps.validation.outcome != 'success' || steps.quote_watch.outcome != 'success' || steps.fast_hourly.outcome != 'success' || steps.collect.outcome != 'success' || steps.evaluate.outcome != 'success' || steps.forward.outcome != 'success' || steps.v42.outcome != 'success' || (steps.direction.outcome != 'success' && steps.direction_late_audit.outcome != 'success') || steps.minute_shadow.outcome != 'success' || steps.error_review.outcome != 'success' || steps.regression.outcome != 'success' || steps.early_publish.outcome != 'success' || steps.operations.outcome != 'success' || steps.persist.outcome != 'success' || steps.artifact.outcome != 'success' || steps.public_witness.outcome == 'failure') && steps.clock_request.outputs.run == 'true'
+        run: exit 1
+      - name: Fail on prospective dependency installation after preserving core evidence
+        if: always() && steps.early_publish.outcome == 'success' && steps.prospective_deps.outcome != 'success' && steps.clock_request.outputs.run == 'true'
         run: exit 1
       - name: Alert existing P0 issue on failed execution or newly closed missing slot
-        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false'
+        if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.clock_request.outputs.run == 'true'
         uses: actions/github-script@v7
         env:
           JOB_FAILED: ${{ job.status == 'failure' }}

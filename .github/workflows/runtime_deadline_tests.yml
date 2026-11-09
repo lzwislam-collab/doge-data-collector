@@ -2,6 +2,15 @@ name: Runtime deadline repair regression
 on:
   pull_request:
     paths:
+      - 'clock_recovery_request.py'
+      - 'test_clock_recovery_request.py'
+      - 'runtime_forward_bridge.py'
+      - 'runtime_r2_bridge.py'
+      - 'runtime_custody_bridge.py'
+      - 'test_runtime_forward_bridge.py'
+      - 'test_runtime_r2_bridge.py'
+      - 'test_runtime_custody_bridge.py'
+      - 'test_runtime_prospective_integration.py'
       - 'runtime_deadline_service.py'
       - 'runtime_process.py'
       - 'test_runtime_process_lifecycle.py'
@@ -36,10 +45,20 @@ on:
       - 'test_runtime_deadline_service.py'
       - 'test_qualified_archive_drain.py'
       - '.github/workflows/okx_hourly_extreme_history.yml'
+      - '.github/workflows/doge_history.yml'
       - '.github/workflows/runtime_deadline_tests.yml'
   push:
     branches: [main]
     paths:
+      - 'clock_recovery_request.py'
+      - 'test_clock_recovery_request.py'
+      - 'runtime_forward_bridge.py'
+      - 'runtime_r2_bridge.py'
+      - 'runtime_custody_bridge.py'
+      - 'test_runtime_forward_bridge.py'
+      - 'test_runtime_r2_bridge.py'
+      - 'test_runtime_custody_bridge.py'
+      - 'test_runtime_prospective_integration.py'
       - 'runtime_deadline_service.py'
       - 'runtime_process.py'
       - 'test_runtime_process_lifecycle.py'
@@ -73,6 +92,8 @@ on:
       - 'test_runtime_audit_worker.py'
       - 'test_runtime_deadline_service.py'
       - 'test_qualified_archive_drain.py'
+      - '.github/workflows/doge_history.yml'
+      - '.github/workflows/okx_hourly_extreme_history.yml'
       - '.github/workflows/runtime_deadline_tests.yml'
 permissions:
   contents: read
@@ -87,7 +108,32 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: python -m pip install numpy==2.3.5 oss2==2.19.1 aliyun-python-sdk-core==2.16.1
+      - run: python -m pip install numpy==2.3.5 oss2==2.19.1 aliyun-python-sdk-core==2.16.1 PyYAML==6.0.2
+      - name: Validate existing workflow syntax and prospective full guard
+        timeout-minutes: 2
+        env:
+          OPENBLAS_NUM_THREADS: '1'
+          OMP_NUM_THREADS: '1'
+          PYTHONUTF8: '1'
+        run: |
+          python - <<'PY'
+          import json, time
+          from pathlib import Path
+          import yaml
+          for path in ('.github/workflows/doge_history.yml',
+                       '.github/workflows/okx_hourly_extreme_history.yml',
+                       '.github/workflows/runtime_deadline_tests.yml'):
+              document = yaml.load(Path(path).read_text(), Loader=yaml.BaseLoader)
+              assert isinstance(document, dict) and document.get('on') and document.get('jobs'), path
+              print('WORKFLOW_YAML_PARSED', path)
+          from runtime_forward_bridge import validate_original18
+          started = time.monotonic()
+          result = validate_original18(Path('.'))
+          elapsed = time.monotonic() - started
+          assert result['status'] == 'ORIGINAL18_LOCAL_APPEND_ONLY_VALIDATED', result
+          assert elapsed < 90, elapsed
+          print(json.dumps({'original18_full_guard': result, 'cold_seconds': elapsed}, sort_keys=True))
+          PY
       - run: python -m unittest discover -q
       - run: python forward_validation_v2.py --integrity-only
 

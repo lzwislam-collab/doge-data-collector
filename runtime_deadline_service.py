@@ -27,12 +27,15 @@ COMMAND_TIMEOUT_SECONDS = 240
 PUBLICATION_PROFILE_SCOPE = 'nested_publisher_totals_include_callbacks_do_not_sum'
 PUBLICATION_PHASES = frozenset(
     ['preflight_validate_p2', 'preflight_validate_state', 'preflight_pair_guard',
-     'preflight_pair_history_guard', 'data_publisher_total', 'supplementary_readback',
+     'preflight_pair_history_guard', 'preflight_original18_guard',
+     'data_publisher_total', 'supplementary_readback',
      'receipt_publisher_total', 'receipt_readback'] +
     [scope+'_post_rebase_'+stage for scope in ('data', 'receipt')
-     for stage in ('validate_state', 'pair_guard', 'pair_history_guard', 'validate_p2')])
+     for stage in ('validate_state', 'pair_guard', 'pair_history_guard', 'validate_p2', 'original18_guard')])
 PROGRESS_ACTIONS = frozenset(('watch', 'publish', 'witness', 'prepare', 'issue',
-                              'source_audit', 'book', 'preserve_smoke'))
+                              'source_audit', 'book', 'preserve_smoke',
+                              'original18_capture', 'original18_witness',
+                              'custody_prepare', 'custody_dispatch', 'r2_dispatch'))
 _PROGRESS_CYCLE_ID = ContextVar('runtime_progress_cycle_id', default=None)
 
 
@@ -283,6 +286,10 @@ def cycle(adapter, state, clock):
     issuance_publication_complete = False
     prepared_this_cycle = False
     audit_pending = False
+    prospective_enabled = state.get('_prospective_enabled') is True
+    prospective_publication_required = False
+    prospective_prepared = False
+    prepared_dispatches_attempted = False
     progress_invocations = {}
 
     def action(name):
@@ -328,12 +335,22 @@ def cycle(adapter, state, clock):
                 pass
 
     def publish():
+        nonlocal prepared_dispatches_attempted
         if not action('publish'):
             out['fatal'] = True
             return False
         out['this_cycle_deferred_smoke_pending_at_end'] = False
         # Dispatch is only a request, never claimed to be an exact-head witness.
         action('witness')
+        if prospective_enabled and prospective_prepared:
+            # This also covers evidence-preserving early returns after a source
+            # audit error. A public at-most-once intent must not be abandoned.
+            if prospective_prepared and not prepared_dispatches_attempted:
+                prepared_dispatches_attempted = True
+                # Immutable custody intents get the remaining shared transport first.
+                action('custody_dispatch')
+                action('original18_witness')
+                action('r2_dispatch')
         return True
 
     registry, scores = adapter.state()
@@ -372,6 +389,38 @@ def cycle(adapter, state, clock):
         action('watch')
         if not publish(): return out
 
+    if prospective_enabled:
+        if hasattr(adapter, 'begin_prospective_cycle'):
+            adapter.begin_prospective_cycle()
+        # The existing collector owns the shared writer lock. Never queue the
+        # original18 writer behind this same long-running job.
+        if not action('original18_capture'):
+            out['fatal'] = True
+            return out
+        captured = out['actions'][-1]['result']
+        if not isinstance(captured, dict) or not isinstance(captured.get('errors'), dict):
+            out['errors'].append({'stage': 'original18_capture', 'error': 'invalid capture contract'})
+            out['fatal'] = True
+            return out
+        for key, error in captured['errors'].items():
+            out['errors'].append({'stage': 'original18_capture', 'item': str(key),
+                                  'error': diagnostic_text(error)})
+        prospective_publication_required = bool(captured.get('requires_publication')
+                                               or captured.get('request_witness'))
+        if not action('custody_prepare'):
+            out['fatal'] = True
+            return out
+        prepared = out['actions'][-1]['result']
+        if not isinstance(prepared, dict):
+            out['errors'].append({'stage': 'custody_prepare', 'error': 'invalid intent contract'})
+            out['fatal'] = True
+            return out
+        for key, error in prepared.get('errors', {}).items():
+            out['errors'].append({'stage': 'custody_prepare', 'item': str(key),
+                                  'error': diagnostic_text(error)})
+        prospective_publication_required |= bool(prepared.get('requires_publication'))
+        prospective_prepared = True
+
     # Verify public pair context before recording its eligibility at capture.
     # No later replay may retrofit a previously unverified book into eligibility.
     now = utc(clock())
@@ -394,7 +443,7 @@ def cycle(adapter, state, clock):
     # Preparation writes source context even if a fresh-clock deadline skips
     # issuance. Keep that context on the original immediate publication path.
     may_defer = ((not prepared_this_cycle or issuance_publication_complete)
-                 and not out['errors'] and audit_pending
+                 and not out['errors'] and audit_pending and not prospective_publication_required
                  and book_succeeded and book.get('mode') == 'smoke'
                  and book.get('formal_eligibility') is False)
     if may_defer and action('preserve_smoke'):
@@ -403,6 +452,11 @@ def cycle(adapter, state, clock):
         # A later required publication or finish() publishes both; this is no remote claim.
         out['this_cycle_smoke_publication_deferred'] = True
         out['this_cycle_deferred_smoke_pending_at_end'] = True
+        if prospective_enabled and prospective_prepared and not prepared_dispatches_attempted:
+            # R2 independently proves the fresh remote main; no unpublished
+            # journal or custody intent exists on this safe-defer branch.
+            prepared_dispatches_attempted = True
+            action('r2_dispatch')
     elif not publish():
         return out
 
@@ -494,7 +548,11 @@ def run(root, adapter, duration_seconds=2400, clock=None, sleep=None, stop_file=
     sleep = sleep or time.sleep
     start = utc(clock())
     end = start + timedelta(seconds=duration_seconds)
-    state = {}
+    bridge_enabled = (os.environ.get('DOGE_PROSPECTIVE_RUNTIME_BRIDGE') == '1'
+                      and not stop_file and not require_qualified_stop)
+    state = {'_prospective_enabled': bridge_enabled}
+    if hasattr(adapter, 'prospective_enabled'):
+        adapter.prospective_enabled = bridge_enabled
     count = errors = 0
     maximum = 0
     fatal = False
@@ -521,6 +579,7 @@ def run(root, adapter, duration_seconds=2400, clock=None, sleep=None, stop_file=
               'status': 'CAPTURE_LOOP_COMPLETED' if not errors and maximum <= 300 else 'DEGRADED',
               'economic_acceptance_passed': False, 'historical_gaps_repaired': False,
               'real_orders_authorized': False, 'new_economic_cohort_activated': False}
+    result['prospective_bridge_enabled'] = bridge_enabled
     if require_qualified_stop:
         result['qualified_stop_required'] = True
         result['qualified_stop_satisfied'] = bool(stop_requested() and adapter.can_stop() and not fatal)
@@ -545,6 +604,59 @@ class LiveAdapter:
         from runtime_audit_worker import Auditor
         self.auditor = Auditor(self.root)
         self.last_qualified_book = {}
+        # Only run() may admit foreground prospective work. Archive stop also
+        # constructs this adapter directly for publication, bypassing run().
+        self.prospective_enabled = False
+        self.prospective_state = {}
+        self.original18_capture = {}
+        self.custody_prepared = None
+        self.last_verified_publication = None
+        self.prospective_client = None
+
+    def begin_prospective_cycle(self):
+        # One total transport budget for all optional namespaces, not three
+        # independent forty-second budgets added to each primary capture tick.
+        import runtime_custody_bridge as custody
+        self.prospective_client = custody.GitHubClient()
+        self.original18_capture = {}
+        self.custody_prepared = None
+
+    @staticmethod
+    def _prospective_env(**extra):
+        return dict(os.environ, OPENBLAS_NUM_THREADS='1', OMP_NUM_THREADS='1', PYTHONUTF8='1', **extra)
+
+    def original18_state_owned(self):
+        # Frozen readers perform Git history I/O. Keep it out of the parent
+        # writer and preserve owned-process cancellation for every descendant.
+        code = ("import json,sys;from pathlib import Path;"
+                "from runtime_forward_bridge import original18_state;"
+                "s=original18_state(Path('.'));"
+                "v={'policy':s['policy'],'events':[{k:e[k] for k in "
+                "('event_id','slot_utc','issued_at_utc','target_utc','horizon_hours')} for e in s['events']],"
+                "'scores':dict.fromkeys(s['scores'],True),'bindings':dict.fromkeys(s['bindings'],True)};"
+                "Path(sys.argv[1]).write_text(json.dumps(v),encoding='utf-8');"
+                "print('ORIGINAL18_STATE_READY')")
+        with tempfile.TemporaryDirectory(prefix='doge-original18-state-') as folder:
+            target = Path(folder)/'state.json'
+            output = runtime_process.command((sys.executable, '-c', code, str(target)),
+                cwd=self.root, env=self._prospective_env(), timeout=60)
+            if (output.strip().splitlines()[-1:] != ['ORIGINAL18_STATE_READY']
+                    or target.is_symlink() or not target.is_file()
+                    or target.stat().st_size > 16*1024*1024):
+                raise ValueError('owned original18 state result invalid')
+            value = json.loads(target.read_bytes())
+        if not isinstance(value, dict) or set(value) != {'policy','events','scores','bindings'}:
+            raise ValueError('owned original18 state schema invalid')
+        return value
+
+    def validate_original18_owned(self, root):
+        code = ("from pathlib import Path;from runtime_forward_bridge import validate_original18;"
+                "validate_original18(Path('.'));print('ORIGINAL18_FULL_GUARD_VERIFIED')")
+        output = runtime_process.command((sys.executable, '-c', code), cwd=root,
+                                         env=self._prospective_env(), timeout=90)
+        if output.strip().splitlines()[-1:] != ['ORIGINAL18_FULL_GUARD_VERIFIED']:
+            raise ValueError('owned original18 full guard result missing')
+        return {'status': 'verified', 'owned_timeout_seconds': 90}
 
     def command(self, *args, env=None):
         return runtime_process.command(args, cwd=self.root,
@@ -562,7 +674,51 @@ class LiveAdapter:
         return reg, scores
 
     def action(self, name):
-        if name == 'watch':
+        if name in ('original18_capture', 'original18_witness', 'custody_prepare',
+                    'custody_dispatch', 'r2_dispatch') and not self.prospective_enabled:
+            return {'status': 'DISABLED_OUTSIDE_FOREGROUND'}
+        if name == 'original18_capture':
+            import runtime_forward_bridge as bridge
+            def produce(timeout_seconds):
+                # Isolate the child output contract; it cannot write parent job outputs.
+                with tempfile.TemporaryDirectory(prefix='doge-original18-') as folder:
+                    env = self._prospective_env(GITHUB_OUTPUT=str(Path(folder)/'outputs'))
+                    output = runtime_process.command(
+                        (sys.executable, 'learned_shadow_runtime.py', 'publish'),
+                        cwd=self.root, env=env, timeout=timeout_seconds)
+                lines = output.strip().splitlines()
+                if not lines: raise ValueError('original18 current producer output missing')
+                return lines[-1]
+            self.original18_capture = bridge.capture_original18(
+                self.root, produce, state_reader=lambda root: self.original18_state_owned())
+            return self.original18_capture
+        elif name == 'original18_witness':
+            import runtime_forward_bridge as bridge
+            return bridge.request_original18_witness(
+                self.original18_capture, self.last_verified_publication, self.prospective_state,
+                client=self.prospective_client)
+        elif name == 'custody_prepare':
+            import runtime_custody_bridge as custody
+            self.custody_prepared = None
+            try:
+                self.custody_prepared = custody.prepare(self.root, api=self.prospective_client.api)
+            except custody.ObservationUnavailable as exc:
+                # The helper guarantees this transport failure preceded every
+                # local write. Keep primary collection alive and report the gap.
+                return {'status': 'OBSERVATION_UNAVAILABLE', 'requires_publication': False,
+                        'errors': {'observation': diagnostic_text(str(exc))}}
+            return dict(self.custody_prepared['report'],
+                        requires_publication=bool(self.custody_prepared['candidates']))
+        elif name == 'custody_dispatch':
+            import runtime_custody_bridge as custody
+            if self.custody_prepared is None: return {'status': 'SKIP_NO_PREPARED_INTENT'}
+            return custody.after_publish(self.root, self.custody_prepared,
+                                         api=self.prospective_client.api, post=self.prospective_client.post)
+        elif name == 'r2_dispatch':
+            import runtime_forward_bridge as bridge
+            return bridge.route_r2(self.root, None, self.prospective_state,
+                                   client=self.prospective_client)
+        elif name == 'watch':
             self.python('quote_capture_retry.py', 'watch')
         elif name == 'prepare':
             self.python('okx_hourly_research_history.py', env={'DOGE_HOURLY_PAGE_BUDGET': '0'})
@@ -619,6 +775,8 @@ class LiveAdapter:
                 paths = ['data/hourly_research', 'data/derived_4h_v1', 'data/feature_ablation_v1',
                          'data/minimal_market_forward_v1', 'data/p0_operations',
                          'data/p2_paired_execution_v3_1', 'data/paired_forward_v1', BASE]
+                if self.prospective_enabled:
+                    paths.append('data/learned_shadow_v1')
                 existing = [p for p in paths if (self.root/p).exists()]
                 # Source histories can only be appended by their existing producers.
                 # Stage an explicit allowlist; never git add the entire checkout.
@@ -628,12 +786,18 @@ class LiveAdapter:
                 if any(not p.startswith(allowed) for p in staged):
                     raise ValueError('unexpected staged path outside runtime evidence allowlist')
                 expected = {p: (self.root/p).read_bytes() for p in staged}
+                legacy_staged = any(p.startswith('data/learned_shadow_v1/') for p in staged)
+                if self.prospective_enabled and legacy_staged:
+                    profile.call('preflight_original18_guard', self.validate_original18_owned, self.root)
                 publication_scope = 'data'
                 def validate(current_root):
                     profile.call(publication_scope+'_post_rebase_validate_state', validate_publication_state, current_root)
                     profile.call(publication_scope+'_post_rebase_pair_guard', pair.guard, current_root)
                     profile.call(publication_scope+'_post_rebase_pair_history_guard', validate_paired_history, current_root)
                     profile.call(publication_scope+'_post_rebase_validate_p2', validate_p2, current_root)
+                    if self.prospective_enabled and legacy_staged:
+                        profile.call(publication_scope+'_post_rebase_original18_guard',
+                                     self.validate_original18_owned, current_root)
                 publication = profile.call('data_publisher_total', publisher.publish, self.root, validate=validate)
                 if not profile.call('supplementary_readback', publisher.verify_readback, self.root, 'FETCH_HEAD', expected):
                     raise ValueError('runtime supplementary evidence remote readback mismatch')
@@ -652,8 +816,10 @@ class LiveAdapter:
                         or not profile.call('receipt_readback', publisher.verify_readback, self.root, 'FETCH_HEAD', expected)):
                     raise ValueError('runtime publication receipt remote readback mismatch')
                 self.public_head = receipt_publication['remote_head']
-                return {'status': 'verified_remote_readback', 'head': self.public_head,
-                        'publication_profile': profile.snapshot('ok')}
+                self.last_verified_publication = {
+                    'status': 'verified_remote_readback', 'head': self.public_head,
+                    'verified_paths': sorted(expected), 'publication_profile': profile.snapshot('ok')}
+                return self.last_verified_publication
         elif name == 'witness':
             from urllib.request import Request, urlopen
             if not self.core_witness_pending: return {'status': 'no_new_core_evidence'}
