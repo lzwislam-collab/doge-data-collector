@@ -225,7 +225,7 @@ class WorkflowAdmissionTests(unittest.TestCase):
   idx=lambda marker:next((i for i,b in enumerate(blocks) if any(marker in line for line in b)),-1)
   early=idx('id: early_publish');install=idx('id: prospective_deps');capture=idx('id: deadline_service')
   self.assertGreater(install,early);self.assertLess(install,capture)
-  body='\n'.join(blocks[install]);self.assertIn('python -m pip install --disable-pip-version-check numpy==2.3.5',body);self.assertIn('timeout-minutes: 2',body);self.assertIn('continue-on-error: true',body);self.assertIn("steps.early_publish.outcome == 'success'",body)
+  body='\n'.join(blocks[install]);self.assertIn('python -m pip install --disable-pip-version-check numpy==2.3.5',body);self.assertIn('python -B runtime_history_graph.py',body);self.assertLess(body.index('python -m pip install'),body.index('python -B runtime_history_graph.py'));self.assertIn('timeout-minutes: 2',body);self.assertIn('continue-on-error: true',body);self.assertIn("steps.early_publish.outcome == 'success'",body)
   failure=idx('name: Fail on prospective dependency installation after preserving core evidence')
   self.assertGreater(failure,max(i for i,b in enumerate(blocks) if any('uses: actions/upload-artifact@' in line for line in b)))
   tail='\n'.join(blocks[failure]);self.assertIn("steps.prospective_deps.outcome != 'success'",tail);self.assertIn('always()',tail);self.assertIn('run: exit 1',tail)

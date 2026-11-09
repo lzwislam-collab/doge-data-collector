@@ -6,6 +6,8 @@ on:
     paths:
       - 'clock_recovery_request.py'
       - 'test_clock_recovery_request.py'
+      - 'runtime_history_graph.py'
+      - 'test_runtime_history_graph.py'
       - 'data/p0_operations/clock_requests/hourly/*.json'
       - 'okx_hourly_research_history.py'
       - 'runtime_deadline_service.py'
@@ -212,12 +214,14 @@ jobs:
             await github.rest.actions.createWorkflowDispatch({
               ...context.repo, workflow_id: 'test_forward_validation.yml', ref: 'main'
             });
-      - name: Install frozen prospective dependency after fast publication
+      - name: Install frozen prospective dependency and index local history after fast publication
         if: always() && steps.early_publish.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         id: prospective_deps
         continue-on-error: true
         timeout-minutes: 2
-        run: python -m pip install --disable-pip-version-check numpy==2.3.5
+        run: |
+          python -m pip install --disable-pip-version-check numpy==2.3.5
+          python -B runtime_history_graph.py
       - name: Keep genuine target and depth capture alive before slow research
         id: deadline_service
         if: always() && steps.early_publish.outcome == 'success' && steps.clock_request.outputs.run == 'true'
