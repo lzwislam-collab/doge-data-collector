@@ -314,12 +314,12 @@ class ProspectiveIntegration(unittest.TestCase):
             adapter.root = Path(folder)
             self.assertEqual(adapter.original18_state_owned()['events'], [])
             self.assertEqual(adapter.validate_original18_owned(Path(folder))['status'], 'verified')
-        self.assertEqual([kw['timeout'] for _, kw in calls], [60, 90])
+        self.assertEqual([kw['timeout'] for _, kw in calls], [60, service.COMMAND_TIMEOUT_SECONDS])
         self.assertTrue(all(kw['env']['OPENBLAS_NUM_THREADS'] == '1' for _, kw in calls))
 
     def test_full_guard_timeout_is_not_a_cached_success(self):
         with tempfile.TemporaryDirectory() as folder, patch.object(service.runtime_process, 'command',
-                side_effect=subprocess.TimeoutExpired('read-only validation', 90)):
+                side_effect=subprocess.TimeoutExpired('read-only validation', service.COMMAND_TIMEOUT_SECONDS)):
             adapter = service.LiveAdapter.__new__(service.LiveAdapter)
             adapter.root = Path(folder)
             with self.assertRaises(subprocess.TimeoutExpired):

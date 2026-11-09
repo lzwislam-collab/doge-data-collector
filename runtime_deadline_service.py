@@ -655,10 +655,10 @@ class LiveAdapter:
         code = ("from pathlib import Path;from runtime_forward_bridge import validate_original18;"
                 "validate_original18(Path('.'));print('ORIGINAL18_FULL_GUARD_VERIFIED')")
         output = runtime_process.command((sys.executable, '-c', code), cwd=root,
-                                         env=self._prospective_env(), timeout=90)
+                                         env=self._prospective_env(), timeout=COMMAND_TIMEOUT_SECONDS)
         if output.strip().splitlines()[-1:] != ['ORIGINAL18_FULL_GUARD_VERIFIED']:
             raise ValueError('owned original18 full guard result missing')
-        return {'status': 'verified', 'owned_timeout_seconds': 90}
+        return {'status': 'verified', 'owned_timeout_seconds': COMMAND_TIMEOUT_SECONDS}
 
     def command(self, *args, env=None):
         return runtime_process.command(args, cwd=self.root,
