@@ -157,7 +157,7 @@ jobs:
           def cold(label, disable_index=False):
               child_env = dict(os.environ)
               if disable_index:
-                  count = int(child_env.get('GIT_CONFIG_COUNT','0'))
+                  count = int(child_env.get('GIT_CONFIG_COUNT') or '0')
                   child_env.update({'GIT_CONFIG_COUNT':str(count+1),
                       'GIT_CONFIG_KEY_'+str(count):'core.commitGraph',
                       'GIT_CONFIG_VALUE_'+str(count):'false'})
