@@ -1,3 +1,4 @@
+import re
 import csv, copy, importlib.util, json, os, shutil, subprocess, tempfile, unittest
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -228,5 +229,15 @@ class WorkflowAdmissionTests(unittest.TestCase):
   failure=idx('name: Fail on prospective dependency installation after preserving core evidence')
   self.assertGreater(failure,max(i for i,b in enumerate(blocks) if any('uses: actions/upload-artifact@' in line for line in b)))
   tail='\n'.join(blocks[failure]);self.assertIn("steps.prospective_deps.outcome != 'success'",tail);self.assertIn('always()',tail);self.assertIn('run: exit 1',tail)
+
+ def test_workflow_plain_scalars_do_not_hide_mapping_colons(self):
+  for filename in ('doge_history.yml','okx_hourly_extreme_history.yml','runtime_deadline_tests.yml'):
+   text=(Path(__file__).parent/'.github/workflows'/filename).read_text(encoding='utf-8')
+   for number,line in enumerate(text.splitlines(),1):
+    match=re.match(r'^\s*(?:- )?[A-Za-z_][A-Za-z0-9_-]*: (.*)$',line)
+    if match:
+     value=match.group(1)
+     if value and value[0] not in (chr(34),chr(39),'|','>'):
+      self.assertNotIn(': ',value,filename+':'+str(number)+' ambiguous unquoted YAML scalar')
 
 if __name__=='__main__':unittest.main()
