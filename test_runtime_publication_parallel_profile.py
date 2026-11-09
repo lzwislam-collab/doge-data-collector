@@ -45,7 +45,11 @@ class ParallelProfileTests(unittest.TestCase):
 
     def test_real_barrier_proves_overlap_and_second_group_keeps_original_order(self):
         # Serializing either group or reordering B breaks the barrier/order assertions.
-        barrier = threading.Barrier(2, timeout=2)
+        active = set()
+        overlap = []
+        lock = threading.Lock()
+        barrier = threading.Barrier(2, timeout=2,
+                                    action=lambda: overlap.append(sorted(active)))
         counts = [0] * 4
         events = []
         def validator(index):
@@ -53,8 +57,14 @@ class ParallelProfileTests(unittest.TestCase):
                 counts[index] += 1
                 if counts[index] == 2:
                     if index < 2:
-                        barrier.wait()
-                        time.sleep(.08)
+                        with lock:
+                            active.add(index)
+                        try:
+                            barrier.wait()
+                            time.sleep(.08)
+                        finally:
+                            with lock:
+                                active.remove(index)
                     events.append(index)
             return run
         prepared = self.experiment([validator(i) for i in range(4)])
@@ -64,7 +74,7 @@ class ParallelProfileTests(unittest.TestCase):
         self.assertEqual([t['status'] for t in trials], ['completed'] * 3)
         self.assertEqual(counts, [3, 3, 3, 3])
         self.assertEqual([i for i in events if i != 0], [1, 2, 3])
-        self.assertLess(trials[1]['validation_wall_seconds'], trials[1]['phase_seconds_sum'])
+        self.assertEqual(overlap, [[0, 1]])
         self.assertEqual(len(trials[1]['groups']), 2)
         self.assertTrue(all(g['wall_seconds'] >= .08 for g in trials[1]['groups']))
         self.assertEqual([len(t['phases']) for t in trials], [5, 5, 5])
@@ -376,3 +386,4 @@ class ParallelProfileTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
