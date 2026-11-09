@@ -181,6 +181,69 @@ class ReceiverTests(unittest.TestCase):
  def test_continuity_final_clock_recheck_keeps_ten_minute_target_reserve(self):
   fid,target=self.continuity();self.cli_slow_read(target+timedelta(minutes=15))
 
+ def actual_16z_request(self,offset=9,commit_at=None,update=None):
+  # Exact natural request cd9c2c381a9d03df7fd832529557189cd1823973;
+  # registry row is copied from that pinned commit, never generated in production.
+  self.kind='hourly';self.now=dt('2026-11-09T16:24:19.380Z');self.period=dt('2026-11-09T16:00:00Z');self.key='2026-11-09T16'
+  self.path='data/p0_operations/clock_requests/hourly/'+self.key+'.json';self.registry='data/direction_v42/forward_registry.csv'
+  raw='{"schema_version":1,"kind":"hourly","source_task_id":"doge","source_thread_id":"01a17272-26ad-7803-92f6-dd5796248d34","observed_task_run_id":"01a1c11b-1949-7c53-aeec-8b846ab11043","requested_at_utc":"2026-11-09T16:21:27.954Z","expires_at_utc":"2026-11-09T16:35:00Z","missing_ids":["DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1794236400000_1h"],"slot_start_utc":"2026-11-09T16:00:00Z","reason":"TARGET_CONTINUITY"}\n'
+  self.request=json.loads(raw)
+  row='DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1_1794236400000_1h,DOGE_DIRECTION_ISSUED_QUOTE_SHADOW_V42_1,2026-11-09T16:05:56.844770+00:00,2026-11-09T16:05:56.570000+00:00,2026-11-09T16:00:00+00:00,0.07056,1,2026-11-09T17:05:56.844770+00:00,0.5031672220,UP,DOWN,UP,c6ba779b91b79b83fae3faa7a361003d8c17c43bd60c4783129d8293e458da71\n'
+  self.write(self.registry,','.join(TEST_COLUMNS['hourly'])+'\n'+row)
+  self.write('data/direction_v42/forward_scores.csv',','.join(TEST_SCORE_COLUMNS)+'\n')
+  self.before=self.commit('fixture pinned 16Z registry',dt('2026-11-09T16:19:19Z'))
+  if update:self.request.update(update);raw=json.dumps(self.request,separators=(',',':'))+'\n'
+  request_file=self.root/self.path;request_file.parent.mkdir(parents=True,exist_ok=True);request_file.write_bytes(raw.encode('utf-8'))
+  instant=commit_at or dt('2026-11-09T16:21:36Z')
+  self.after=self.commit('data: clock recovery request hourly '+self.key,instant.astimezone(timezone(timedelta(hours=offset))))
+  return {'repository':{'full_name':'lzwislam-collab/doge-data-collector'},'ref':'refs/heads/main','before':self.before,'after':self.after,'forced':False,'deleted':False,'sender':{'login':'lzwislam-collab'},'head_commit':{'id':self.after,'message':'data: clock recovery request hourly '+self.key}}
+ def test_actual_412byte_z_request_with_raw_plus09_committer_is_admitted(self):
+  event=self.actual_16z_request();raw=self.git('cat-file','-p',self.after)
+  self.assertIn('1794241296 +0900',raw);self.assertEqual(self.git('show','-s','--format=%cI',self.after),'2026-11-10T01:21:36+09:00')
+  self.assertEqual(len((self.root/self.path).read_bytes()),412)
+  result=self.admit(event);self.assertTrue(result['run']);self.assertEqual(result['pending_target_ids'],self.request['missing_ids'])
+  self.assertEqual(result['admission_deadline_utc'],'2026-11-09T16:35:00+00:00')
+ def test_plus08_committer_same_instant_is_admitted(self):
+  event=self.actual_16z_request(offset=8);self.assertTrue(self.git('show','-s','--format=%cI',self.after).endswith('+08:00'));self.assertTrue(self.admit(event)['run'])
+ def test_minus08_committer_same_instant_is_admitted(self):
+  event=self.actual_16z_request(offset=-8);self.assertTrue(self.git('show','-s','--format=%cI',self.after).endswith('-08:00'));self.assertTrue(self.admit(event)['run'])
+ def test_offset_committer_future_instant_is_still_rejected(self):
+  event=self.actual_16z_request(commit_at=dt('2026-11-09T16:24:20Z'))
+  with self.assertRaisesRegex(receiver.Rejected,'CLOCK_INTENT_EXPIRED_OR_FUTURE'):self.admit(event)
+ def test_offset_committer_before_request_is_still_rejected(self):
+  event=self.actual_16z_request(commit_at=dt('2026-11-09T16:21:27Z'))
+  with self.assertRaisesRegex(receiver.Rejected,'CLOCK_INTENT_EXPIRED_OR_FUTURE'):self.admit(event)
+ def test_offset_committer_before_period_is_still_rejected(self):
+  event=self.actual_16z_request(commit_at=dt('2026-11-09T15:59:59Z'))
+  with self.assertRaisesRegex(receiver.Rejected,'CLOCK_WINDOW_CLOSED'):self.admit(event)
+ def test_offset_committer_at_producer_end_is_still_rejected(self):
+  event=self.actual_16z_request(commit_at=dt('2026-11-09T16:35:00Z'))
+  with self.assertRaisesRegex(receiver.Rejected,'CLOCK_WINDOW_CLOSED'):self.admit(event,now=dt('2026-11-09T16:34:00Z'))
+ def test_offset_committer_does_not_allow_expired_or_overlong_request(self):
+  event=self.actual_16z_request(update={'expires_at_utc':'2026-11-09T16:24:19.380Z'})
+  with self.assertRaisesRegex(receiver.Rejected,'CLOCK_INTENT_EXPIRED_OR_FUTURE'):self.admit(event)
+ def test_offset_committer_does_not_allow_overlong_ttl(self):
+  event=self.actual_16z_request(update={'expires_at_utc':'2026-11-09T16:42:00Z'})
+  with self.assertRaisesRegex(receiver.Rejected,'CLOCK_INTENT_EXPIRED_OR_FUTURE'):self.admit(event)
+ def test_offset_committer_does_not_allow_non_utc_request(self):
+  event=self.actual_16z_request(update={'requested_at_utc':'2026-11-10T01:21:27.954+09:00'})
+  with self.assertRaisesRegex(receiver.Rejected,'CLOCK_UTC_FORMAT'):self.admit(event)
+ def test_invalid_internal_commit_epoch_fails_closed(self):
+  from unittest.mock import patch
+  event=self.actual_16z_request();real_git=receiver.git
+  for invalid in ('not-an-epoch','999999999999999999999999999999999999999999'):
+   with self.subTest(epoch=invalid):
+    def fake_git(root,*args):return invalid if args==('show','-s','--format=%ct',self.after) else real_git(root,*args)
+    with patch.object(receiver,'git',fake_git),self.assertRaisesRegex(receiver.Rejected,'CLOCK_COMMIT_TIME'):self.admit(event)
+
+class ExternalUtcFormatTests(unittest.TestCase):
+ def test_utc_z_and_zero_offset_equivalent_with_valid_fractions(self):
+  for fraction in ('','.1','.954','.123456'):
+   with self.subTest(fraction=fraction):self.assertEqual(receiver.utc('2026-11-09T16:21:27'+fraction+'Z'),receiver.utc('2026-11-09T16:21:27'+fraction+'+00:00'))
+ def test_non_utc_naive_bad_fraction_and_suffix_still_rejected(self):
+  for value in ('2026-11-10T01:21:27.954+09:00','2026-11-09T08:21:27-08:00','2026-11-09T16:21:27','2026-11-09T16:21:27.Z','2026-11-09T16:21:27.1234567Z','2026-11-09T16:21:27,954Z','2026-11-09T16:21:27Z+00:00','2026-11-09T16:21:27+00:00Z','2026-11-09T16:21:27z','2026-11-09T16:21:27Zjunk','2026-02-30T16:21:27Z'):
+   with self.subTest(value=value),self.assertRaisesRegex(receiver.Rejected,'CLOCK_UTC_FORMAT'):receiver.utc(value)
+
 class WorkflowAdmissionTests(unittest.TestCase):
  def blocks(self,text):
   lines=text.splitlines();i=next(i for i,l in enumerate(lines) if l.strip()=='steps:');blocks=[]

@@ -104,7 +104,8 @@ def admit(root,kind,event_name,event,now,event_sha=None):
   if utc(request['slot_start_utc'])!=period or now.replace(minute=0,second=0,microsecond=0)!=period:reject('SLOT')
   producer_end=receiver_end=period+timedelta(minutes=35)
  requested=utc(request['requested_at_utc']);expires=utc(request['expires_at_utc'])
- commit_time=utc(git(root,'show','-s','--format=%cI',after).strip())
+ try:commit_time=datetime.fromtimestamp(int(git(root,'show','-s','--format=%ct',after).strip()),timezone.utc)
+ except (ValueError,OverflowError,OSError):reject('COMMIT_TIME')
  if not period<=requested<producer_end or not period<=commit_time<producer_end or now>=receiver_end:reject('WINDOW_CLOSED')
  if not requested<=commit_time<=now or not timedelta(0)<expires-requested<=timedelta(minutes=20) or now>=expires:reject('INTENT_EXPIRED_OR_FUTURE')
  wanted=expected(kind,period);missing=request['missing_ids'];reason='ISSUANCE' if kind=='daily' else request['reason']
