@@ -27,13 +27,14 @@ class TestOperationalOrder(unittest.TestCase):
   # Characterize our emitted GitHub gate, including cancellation after persist.
   # always() previously launched a fresh 600-second producer during the
   # platform's five-minute forced-cancellation grace period.
-  def condition(step_id, cancelled, fatal='false', tail_fatal='false', persist='success'):
+  def condition(step_id, cancelled, fatal='false', tail_fatal='false', persist='success', run='true'):
    start=self.offset('id: '+step_id)
    expression=self.lines[start+1].strip().removeprefix('if: ').strip()
    if expression.startswith('${{'):
     expression=expression[3:-2].strip()
    expression=expression.replace('&&',' and ').replace('!cancelled()','not cancelled()')
    steps=SimpleNamespace(
+    clock_request=SimpleNamespace(outputs=SimpleNamespace(run=run)),
     deadline_service=SimpleNamespace(outputs=SimpleNamespace(fatal=fatal)),
     open_target_guard=SimpleNamespace(outputs=SimpleNamespace(tail_fatal=tail_fatal)),
     persist=SimpleNamespace(outcome=persist),
@@ -49,6 +50,12 @@ class TestOperationalOrder(unittest.TestCase):
     self.assertFalse(condition('archive_bridge_start',False,**arguments))
   self.assertTrue(condition('archive_bridge_stop',True),
                   'an already-started writer still requires drain on cancellation')
+  for step in ('archive_bridge_start','archive_bridge_stop'):
+   for cancelled in (False,True):
+    for run in ('false',''):
+     with self.subTest(step=step,cancelled=cancelled,run=run):
+      self.assertFalse(condition(step,cancelled,run=run),
+                       'a rejected or missing admission must not start downstream work')
 
  def test_frozen_integrity_check_precedes_all_quote_source_writes(self):
   a=self.offset('Fail closed before writes on full-history or frozen protocol mutation')
@@ -63,11 +70,12 @@ class TestOperationalOrder(unittest.TestCase):
   # Run 42458999547 saved a bundle but was cancelled before artifact upload.
   # A cancelled preparation needs the same truthful terminal receipt as a
   # failed preparation, while skipped work must not be reported as attempted.
-  def condition(step_name, outcome, fatal='false', tail_fatal='false'):
+  def condition(step_name, outcome, fatal='false', tail_fatal='false', run='true'):
    start=self.offset('- name: '+step_name)
    expression=self.lines[start+1].strip().removeprefix('if: ').strip()
    expression=expression.replace('&&',' and ').replace('||',' or ')
    steps=SimpleNamespace(
+    clock_request=SimpleNamespace(outputs=SimpleNamespace(run=run)),
     deadline_service=SimpleNamespace(outputs=SimpleNamespace(fatal=fatal)),
     open_target_guard=SimpleNamespace(outputs=SimpleNamespace(tail_fatal=tail_fatal)),
     pit_preparation=SimpleNamespace(outcome=outcome),
@@ -84,6 +92,11 @@ class TestOperationalOrder(unittest.TestCase):
    for outcome in ('success','skipped'):
     with self.subTest(step=step,outcome=outcome):
      self.assertFalse(condition(step,outcome))
+   for outcome in ('failure','cancelled','success','skipped'):
+    for run in ('false',''):
+     with self.subTest(step=step,outcome=outcome,run=run):
+      self.assertFalse(condition(step,outcome,run=run),
+                       'a rejected or missing admission must not write PIT receipts')
 
  def test_time_sensitive_scoring_and_issuance_precede_fixture_tests(self):
   a=self.offset('Score genuine due target quotes before long collection steps')

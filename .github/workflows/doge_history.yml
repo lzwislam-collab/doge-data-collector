@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
     paths:
+      - 'clock_recovery_request.py'
+      - 'test_clock_recovery_request.py'
+      - 'data/p0_operations/clock_requests/daily/*.json'
       - 'doge_history.py'
       - 'stored_history_integrity.py'
       - 'report_v41.py'
@@ -26,40 +29,47 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: >-
+            ${{ github.event_name == 'push' && startsWith(github.event.head_commit.message, 'data: clock recovery request daily ') && 'main' || github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Admit immutable independent clock requests
+        id: clock_request
+        run: python -B clock_recovery_request.py --kind daily
       - name: Test registry and scoring integrity
+        if: steps.clock_request.outputs.run == 'true'
         run: python -m unittest -v test_daily_history_quality test_prospective_score test_prospective_integrity test_forecast_v41 test_calibration_v41 test_ops_v41
       # Exclusive automatic writer for prospective registry and scoring.
       - name: Backfill historical UTC close data and audit
+        if: steps.clock_request.outputs.run == 'true'
         id: collect
         continue-on-error: true
         run: python doge_history.py
       # Legacy baseline registry remains frozen; old eligible forecasts continue to be scored.
       - name: Score matured prospective entries
         id: score
-        if: steps.collect.outcome == 'success'
+        if: steps.collect.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         run: python prospective_score.py
       - name: Generate V4.1 price intervals, append forecast, and walk-forward audit
         id: v41
-        if: steps.collect.outcome == 'success'
+        if: steps.collect.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         run: python forecast_v41.py
       - name: Score matured V4.1 prospective intervals
         id: v41_score
-        if: steps.collect.outcome == 'success'
+        if: steps.collect.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         run: python score_v41.py
       - name: Evaluate research-only historical interval calibration challenger
         id: v41_calibration
-        if: steps.collect.outcome == 'success'
+        if: steps.collect.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         run: python research_interval_calibration.py
       - name: Render V4.1 complete 11-section report with freshness labels
         id: v41_report
-        if: steps.v41.outcome == 'success' && steps.v41_score.outcome == 'success'
+        if: steps.v41.outcome == 'success' && steps.v41_score.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -71,7 +81,7 @@ jobs:
           python -m pip install numpy==2.3.5 scipy==1.16.3 scikit-learn==1.7.2 joblib==1.5.2 threadpoolctl==3.6.0 botocore==1.43.112
           python report_v41.py
       - uses: actions/upload-artifact@v4
-        if: always() && steps.v41_report.outcome == 'success'
+        if: always() && steps.v41_report.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         with:
           name: doge-integrated-report-${{ github.run_id }}
           path: |
@@ -81,11 +91,11 @@ jobs:
           retention-days: 90
       - name: Audit daily V4.1 completeness and missing forecast registration
         id: v41_ops
-        if: steps.v41_report.outcome == 'success'
+        if: steps.v41_report.outcome == 'success' && steps.clock_request.outputs.run == 'true'
         continue-on-error: true
         run: python audit_v41_operations.py
       - name: Commit data and diagnostics
-        if: always()
+        if: always() && steps.clock_request.outputs.run == 'true'
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
@@ -102,5 +112,5 @@ jobs:
             done
           fi
       - name: Fail on data collection errors
-        if: steps.collect.outcome != 'success' || steps.score.outcome != 'success' || steps.v41.outcome != 'success' || steps.v41_score.outcome != 'success' || steps.v41_report.outcome != 'success' || steps.v41_calibration.outcome != 'success' || steps.v41_ops.outcome != 'success'
+        if: (steps.collect.outcome != 'success' || steps.score.outcome != 'success' || steps.v41.outcome != 'success' || steps.v41_score.outcome != 'success' || steps.v41_report.outcome != 'success' || steps.v41_calibration.outcome != 'success' || steps.v41_ops.outcome != 'success') && steps.clock_request.outputs.run == 'true'
         run: exit 1
