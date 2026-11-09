@@ -216,10 +216,15 @@ class P2EquivalenceTests(unittest.TestCase):
         fixed=self.commit('actual candidate integration fixed history')
         (self.source/'runtime_p2_history.py').write_bytes(Path(actual_helper.__file__).read_bytes())
         (self.source/'runtime_deadline_service.py').write_bytes((support/'runtime_deadline_service.py').read_bytes())
+        process_helper=(support/'runtime_process.py').read_bytes()
+        (self.source/'runtime_process.py').write_bytes(process_helper)
         (self.source/'p2_paired_execution_v3_1.py').write_text("raise AssertionError('must use fixed engine')\n")
         objects=self.object_bytes()
         code,report=self.run_case(fixed)
         self.assertEqual(code,0,report)
+        self.assertEqual(report['implementation_overlays']['runtime_process.py']['measured_sha256'],
+                         hashlib.sha256(process_helper).hexdigest())
+        self.assertIsNone(report['implementation_overlays']['runtime_process.py']['fixed_sha256'])
         trials=report['p2_equivalence_experiment']['trials']
         self.assertEqual([t['events']['count'] for t in trials],[2,2,2])
         self.assertEqual(trials[1]['candidate_diagnostics']['mode'],'native_batch')

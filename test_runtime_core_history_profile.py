@@ -355,6 +355,22 @@ def validate_paired_history(root):
         self.assertTrue(report['overlays_restored'])
         self.assertEqual(hashlib.sha256(runtime.read_bytes()).hexdigest(), measured)
 
+    def test_current_runtime_process_dependency_is_isolated_measured_and_restored(self):
+        fixed = self.fixture()
+        runtime = self.source/'runtime_deadline_service.py'
+        runtime.write_bytes(b'import runtime_process\n'+runtime.read_bytes())
+        raw = Path(__file__).with_name('runtime_process.py').read_bytes()
+        (self.source/'runtime_process.py').write_bytes(raw)
+        measured = hashlib.sha256(raw).hexdigest()
+        code, report = self.run_probe(fixed)
+        self.assertEqual(code, 0, report)
+        self.assertEqual(report['implementation_sha256']['runtime_process.py'], measured)
+        self.assertEqual(report['implementation_overlays']['runtime_process.py'],
+                         {'fixed_sha256': None, 'measured_sha256': measured})
+        self.assertTrue(report['overlays_restored'])
+        self.assertTrue(report['source_unchanged'])
+        self.assertEqual((self.source/'runtime_process.py').read_bytes(), raw)
+
 
 if __name__ == '__main__':
     unittest.main()

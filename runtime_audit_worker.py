@@ -9,13 +9,13 @@ import json
 import math
 import os
 import re
-import signal
 import subprocess
 import sys
 import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+import runtime_process
 
 INPUTS = ('data/direction_v42/forward_registry.csv',
           'data/direction_v42/forward_scores.csv', 'data/quote_evidence_v2/bindings.csv',
@@ -147,7 +147,8 @@ def emit_progress(phase, event, **metadata):
         for key in ('worker_pid', 'worker_returncode', 'result_bytes'):
             value = metadata.get(key)
             if type(value) is int: row[key] = value
-        for key in ('result_present', 'result_json_valid', 'termination_requested'):
+        for key in ('result_present', 'result_json_valid', 'termination_requested',
+                    'kill_requested', 'leader_reaped'):
             if type(metadata.get(key)) is bool: row[key] = metadata[key]
         seconds = metadata.get('seconds')
         if type(seconds) in (float, int) and math.isfinite(seconds) and seconds >= 0:
@@ -333,10 +334,12 @@ class Auditor:
         self.directory = tempfile.TemporaryDirectory(prefix='doge-audit-result-')
         self.started = time.monotonic()
         self.inputs = fingerprint(self.root)
-        self.process = subprocess.Popen([sys.executable, str(Path(__file__).resolve()),
-            str(self.root), head, str(Path(self.directory.name)/'result.json')],
-            cwd=self.root,
-            start_new_session=True)
+        # main() can only close a newly started group once its handle is owned.
+        with runtime_process.defer_cancellation():
+            self.process = subprocess.Popen([sys.executable, str(Path(__file__).resolve()),
+                str(self.root), head, str(Path(self.directory.name)/'result.json')],
+                cwd=self.root,
+                start_new_session=True)
         emit_progress('worker', 'begin', input_head=head, worker_pid=self.process.pid,
                       input_fingerprints=self.inputs)
         return {'status': 'pending', 'input_head': head}
@@ -350,14 +353,8 @@ class Auditor:
             metadata.update(result_metadata(self.directory))
             emit_progress('parent_close', 'begin', **metadata)
             try:
-                if running:
-                    try:
-                        if os.name == 'posix': os.killpg(process.pid, signal.SIGTERM)
-                        else: process.terminate()
-                        metadata['termination_requested'] = True
-                    except ProcessLookupError:
-                        pass  # It finished between poll() and the termination request.
-                    process.wait(timeout=10)
+                if process is not None:
+                    metadata.update(runtime_process.terminate_group(process))
                 # Capture the final result again before cleanup, including a
                 # completion racing with shutdown; never install it here.
                 metadata.update(result_metadata(self.directory))
@@ -367,6 +364,8 @@ class Auditor:
                 if self.directory is not None: self.directory.cleanup()
                 self.directory = None
             except BaseException as exc:
+                cleanup = getattr(exc, 'process_cleanup', None)
+                if isinstance(cleanup, dict): metadata.update(cleanup)
                 emit_progress('parent_close', 'end', status='error', error=exc, **metadata)
                 raise
             emit_progress('parent_close', 'end', status='ok', **metadata)

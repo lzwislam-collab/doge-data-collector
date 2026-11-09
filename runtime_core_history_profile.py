@@ -26,7 +26,7 @@ support = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(support)
 ProfileError = support.ProfileError
 OVERLAYS = ('runtime_deadline_service.py', 'runtime_publication_state.py',
-            'runtime_paired_history.py', 'runtime_p2_history.py')
+            'runtime_paired_history.py', 'runtime_p2_history.py', 'runtime_process.py')
 AUDIT_INPUTS = ('data/direction_v42/forward_registry.csv',
                 'data/direction_v42/forward_scores.csv', 'data/quote_evidence_v2/bindings.csv',
                 'data/paired_forward_v1/pairs.jsonl', 'data/hourly_research/ohlc.csv')
@@ -212,14 +212,19 @@ def _install(checkout, source, report, originals):
     for name in OVERLAYS:
         target, current = checkout/name, source/name
         measured = support.file_sha256(current)
-        if measured is None:
+        if measured is None and name != 'runtime_process.py':
             raise ProfileError('current runtime implementation is missing: ' + name)
         fixed = support.file_sha256(target)
         originals[name] = target.read_bytes() if fixed is not None else None
-        raw = current.read_bytes()
-        if hashlib.sha256(raw).hexdigest() != measured:
-            raise ProfileError('source implementation changed during overlay installation')
-        target.write_bytes(raw)
+        if measured is None:
+            # Older runtimes do not import this dependency; remove any fixed
+            # version so a newer runtime with a missing helper fails closed.
+            target.unlink(missing_ok=True)
+        else:
+            raw = current.read_bytes()
+            if hashlib.sha256(raw).hexdigest() != measured:
+                raise ProfileError('source implementation changed during overlay installation')
+            target.write_bytes(raw)
         report['implementation_overlays'][name] = {'fixed_sha256': fixed, 'measured_sha256': measured}
     report['runtime_code_sha256'] = report['implementation_overlays']['runtime_deadline_service.py']['measured_sha256']
 
@@ -363,6 +368,8 @@ def worker(source, source_sha, output, workspace):
                  'quote_evidence_v2', 'runtime_publication_state', 'runtime_paired_history',
                  'runtime_p2_history')
         modules = {name: importlib.import_module(name) for name in names}
+        if (checkout/'runtime_process.py').exists():
+            modules['runtime_process'] = importlib.import_module('runtime_process')
         for name, module in modules.items():
             if Path(module.__file__).resolve() != (checkout/(name+'.py')).resolve():
                 raise ProfileError('implementation imported outside the isolated fixed checkout')

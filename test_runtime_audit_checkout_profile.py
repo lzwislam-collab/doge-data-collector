@@ -157,6 +157,8 @@ class AuditCheckoutProfileTests(unittest.TestCase):
                    + 'prepare_checkout=_worker.prepare_checkout\n')
         measured = self.source / 'runtime_audit_worker.py'
         measured.write_text(wrapper)
+        dependency = self.helper_path.with_name('runtime_process.py').read_bytes()
+        (self.source / 'runtime_process.py').write_bytes(dependency)
         current = self.commit('current candidate helper, original target remains pinned')
         output = self.base / 'cli.json'
         result = subprocess.run([sys.executable, str(Path(profile.__file__).resolve()),
@@ -170,6 +172,8 @@ class AuditCheckoutProfileTests(unittest.TestCase):
         self.assertNotEqual(report['actual_source_head'], self.pinned)
         self.assertTrue(report['candidate_helper_matches_actual_source_commit'])
         self.assertEqual(report['candidate_helper_sha256'], hashlib.sha256(wrapper.encode()).hexdigest())
+        self.assertEqual(report['process_helper_sha256'], hashlib.sha256(dependency).hexdigest())
+        self.assertTrue(report['process_helper_matches_actual_source_commit'])
         self.assertEqual(report['pinned_original_worker_sha256'], hashlib.sha256(self.files['runtime_audit_worker.py']).hexdigest())
         self.assertTrue(report['sparse_optimization_verified'])
         self.assertTrue(report['source_state_unchanged'])

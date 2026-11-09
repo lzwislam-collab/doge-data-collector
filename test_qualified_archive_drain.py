@@ -6,7 +6,7 @@ import time
 import unittest
 from datetime import timedelta
 from pathlib import Path
-from unittest.mock import patch, Mock
+from unittest.mock import patch
 
 import runtime_deadline_service as runtime
 import runtime_audit_worker as audit
@@ -67,7 +67,9 @@ class QualifiedDrainTests(unittest.TestCase):
             worker.process=subprocess.Popen([sys.executable,'-c','import time;time.sleep(10)'],start_new_session=True)
             old=worker.process;worker.started=time.monotonic()
             (root/audit.INPUTS[0]).write_text('new genuine issue')
-            fake=Mock();fake.poll.return_value=0;fake.returncode=0
+            # Use a real reaped leader: cleanup now also checks its former group.
+            fake=subprocess.Popen([sys.executable,'-c','pass'],start_new_session=True)
+            fake.wait(timeout=2)
             try:
                 with patch.object(audit.subprocess,'check_output',return_value=b'a'*40),patch.object(audit.subprocess,'Popen',return_value=fake):
                     result=worker.poll()

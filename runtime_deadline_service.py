@@ -18,10 +18,12 @@ import uuid
 from contextvars import ContextVar
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import runtime_process
 
 BASE = 'data/runtime_deadline_v1'
 REPO = 'lzwislam-collab/doge-data-collector'
 PUBLICATION_PROFILE_LIMIT = 64
+COMMAND_TIMEOUT_SECONDS = 240
 PUBLICATION_PROFILE_SCOPE = 'nested_publisher_totals_include_callbacks_do_not_sum'
 PUBLICATION_PHASES = frozenset(
     ['preflight_validate_p2', 'preflight_validate_state', 'preflight_pair_guard',
@@ -215,13 +217,31 @@ def exception_details(exc):
     prefix = type(exc).__name__ + ': '
     try:
         result = {'error': prefix + diagnostic_text(str(exc), 500)}
-        if isinstance(exc, subprocess.CalledProcessError):
-            if type(exc.returncode) is int:
+        if isinstance(exc, subprocess.TimeoutExpired):
+            # A TimeoutExpired string includes the whole command/arguments.
+            result['error'] = prefix + 'subprocess exceeded its time limit'
+            if finite_seconds(exc.timeout): result['timeout_seconds'] = exc.timeout
+        if isinstance(exc, (subprocess.CalledProcessError, subprocess.TimeoutExpired,
+                            KeyboardInterrupt, runtime_process.RuntimeCancelled)):
+            if isinstance(exc, subprocess.CalledProcessError) and type(exc.returncode) is int:
                 result['returncode'] = exc.returncode
             for name in ('stdout', 'stderr'):
                 value = getattr(exc, name, None)
                 if isinstance(value, (str, bytes)):
                     result[name] = diagnostic_text(value)
+        cleanup = getattr(exc, 'process_cleanup', None)
+        if type(cleanup) is dict:
+            safe = {key: cleanup[key] for key in ('termination_requested', 'kill_requested',
+                    'leader_reaped', 'pipes_drained') if type(cleanup.get(key)) is bool}
+            if cleanup.get('scope') in ('process_group', 'process'): safe['scope'] = cleanup['scope']
+            for key in ('cleanup_error_type', 'drain_error_type', 'pipe_close_error_type'):
+                value = cleanup.get(key)
+                if type(value) is str and re.fullmatch('[A-Za-z][A-Za-z0-9_]{0,63}', value):
+                    safe[key] = value
+            if safe: result['process_cleanup'] = safe
+        original = getattr(exc, 'original_failure', None)
+        if isinstance(exc, (KeyboardInterrupt, runtime_process.RuntimeCancelled)) and isinstance(original, Exception):
+            result['original_failure'] = exception_details(original)
     except Exception:
         result = {'error': prefix + '[diagnostic unavailable]'}
     try:
@@ -244,6 +264,13 @@ def open_targets(registry, scores, now):
     return sorted(row['forecast_id'] for row in registry
                   if row['forecast_id'] not in scores
                   and utc(row['target_utc']) <= now <= utc(row['target_utc']) + timedelta(minutes=25))
+
+
+def requires_runtime_stop(exc):
+    """A timed-out writer or failed cleanup cannot be followed by publication."""
+    cleanup = getattr(exc, 'process_cleanup', None)
+    return (isinstance(exc, subprocess.TimeoutExpired)
+            or (type(cleanup) is dict and bool(cleanup.get('cleanup_error_type'))))
 
 
 def cycle(adapter, state, clock):
@@ -281,6 +308,10 @@ def cycle(adapter, state, clock):
             out['errors'].append({'stage': name, **exception_details(exc),
                                   'started_at_utc': before.isoformat(),
                                   'seconds': (utc(clock())-before).total_seconds()})
+            # An interrupted writer may have left incomplete bytes. Keep the
+            # original failure and stop the service before another mutation.
+            if requires_runtime_stop(exc):
+                raise
             return False
         except BaseException as exc:
             failure = exc
@@ -516,11 +547,8 @@ class LiveAdapter:
         self.last_qualified_book = {}
 
     def command(self, *args, env=None):
-        result = subprocess.run(args, cwd=self.root, env=dict(os.environ, **(env or {})),
-                                capture_output=True, text=True, encoding='utf-8')
-        if result.returncode:
-            raise RuntimeError(' '.join(args[:3])+': '+(result.stderr or result.stdout)[-1000:])
-        return result.stdout
+        return runtime_process.command(args, cwd=self.root,
+            env=dict(os.environ, **(env or {})), timeout=COMMAND_TIMEOUT_SECONDS)
 
     def python(self, *args, env=None):
         return self.command(sys.executable, *args, env=env)
@@ -758,6 +786,7 @@ def finish_due_on_budget_exhaustion(root, adapter, error):
                 receipt['errors'].append({'stage': name, **exception_details(exc),
                     'started_at_utc': before.isoformat(),
                     'seconds': (datetime.now(timezone.utc)-before).total_seconds()})
+                if requires_runtime_stop(exc): break
     receipt['completed_at_utc'] = datetime.now(timezone.utc).isoformat()
     # This degraded receipt is preserved locally/by the existing artifact step;
     # finish() must not republish or clear the fatal downstream-writer gate.
@@ -780,42 +809,78 @@ def main():
     args = parser.parse_args()
     root = Path(__file__).resolve().parent
     adapter = LiveAdapter(root)
-    try:
-        if ((args.workflow_started_at is not None or args.workflow_timeout_seconds is not None)
-                and args.archive_reserve_seconds is None):
-            raise ValueError('workflow budget applies only to foreground archive reserve')
-        adapter.python('forward_validation_v2.py', '--integrity-only')
-        adapter.command('git', 'config', 'user.name', 'github-actions[bot]')
-        adapter.command('git', 'config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com')
-        duration = args.duration_seconds
-        budget = None
-        budget_exhausted = None
-        if args.archive_reserve_seconds is not None:
-            if args.stop_file or args.require_qualified_stop:
-                raise ValueError('archive reserve applies only to foreground service')
-            from archive_window_budget import WorkflowBudgetExhausted, from_root
-            try:
-                budget = from_root(root, datetime.now(timezone.utc), duration, args.archive_reserve_seconds,
-                                   workflow_started_at=args.workflow_started_at,
-                                   workflow_timeout_seconds=args.workflow_timeout_seconds)
-            except WorkflowBudgetExhausted as exc:
-                budget_exhausted = exc
+    def cancelled(result, exc, cancellation):
+        cancellation['cancelled'] = True
+        result.update(fatal=True, status='DEGRADED', fatal_reason='RUNTIME_CANCELLED',
+                      cancellation_type=type(exc).__name__)
+        signum = cancellation.get('signum') or getattr(exc, 'signum', None)
+        if type(signum) is int: result['cancellation_signal'] = signum
+        result.setdefault('error', type(exc).__name__+': runtime cancellation requested')
+        return result
+    with runtime_process.cancellation_signals() as cancellation:
+        try:
+            result = _run_main(root, adapter, args)
+        except (KeyboardInterrupt, runtime_process.RuntimeCancelled) as exc:
+            result = cancelled({'observed_at_utc': datetime.now(timezone.utc).isoformat(),
+                'economic_acceptance_passed': False, **exception_details(exc)}, exc, cancellation)
+        except Exception as exc:
+            result = {'fatal': True, 'status': 'DEGRADED', **exception_details(exc),
+                      'observed_at_utc': datetime.now(timezone.utc).isoformat(), 'economic_acceptance_passed': False}
+        try:
+            adapter.auditor.close()
+        except (KeyboardInterrupt, runtime_process.RuntimeCancelled) as exc:
+            result = cancelled(result, exc, cancellation)
+            with runtime_process.defer_cancellation():
+                try: adapter.auditor.close()
+                except Exception as cleanup_error:
+                    result['cleanup_error'] = exception_details(cleanup_error)
+        except Exception as exc:
+            result.update(fatal=True, status='DEGRADED', cleanup_error=exception_details(exc))
+        if cancellation['cancelled'] and result.get('fatal_reason') != 'RUNTIME_CANCELLED':
+            result = cancelled(result, runtime_process.RuntimeCancelled(cancellation['signum']), cancellation)
+        try:
+            if result.get('fatal'):
+                with runtime_process.defer_cancellation(): result = finish(root, adapter, result)
             else:
-                duration = budget['duration_seconds']
-                print(json.dumps({'archive_window_budget': budget}), flush=True)
-        if budget_exhausted is not None:
-            result = finish_due_on_budget_exhaustion(root, adapter, budget_exhausted)
-        else:
-            result = run(root, adapter, duration, stop_file=args.stop_file,
-                         require_qualified_stop=args.require_qualified_stop)
-            if budget is not None: result['archive_window_budget'] = budget
-    except Exception as exc:
-        result = {'fatal': True, 'status': 'DEGRADED', **exception_details(exc),
-                  'observed_at_utc': datetime.now(timezone.utc).isoformat(), 'economic_acceptance_passed': False}
-    adapter.auditor.close()
-    result = finish(root, adapter, result)
-    print(json.dumps(result))
+                result = finish(root, adapter, result)
+        except (KeyboardInterrupt, runtime_process.RuntimeCancelled) as exc:
+            result = cancelled(result, exc, cancellation)
+            with runtime_process.defer_cancellation(): result = finish(root, adapter, result)
+        print(json.dumps(result))
     return 0 if result['status'] == 'CAPTURE_LOOP_COMPLETED' else 1
+
+
+def _run_main(root, adapter, args):
+    """Existing setup and budget selection, under the main cancellation boundary."""
+    if ((args.workflow_started_at is not None or args.workflow_timeout_seconds is not None)
+            and args.archive_reserve_seconds is None):
+        raise ValueError('workflow budget applies only to foreground archive reserve')
+    adapter.python('forward_validation_v2.py', '--integrity-only')
+    adapter.command('git', 'config', 'user.name', 'github-actions[bot]')
+    adapter.command('git', 'config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com')
+    duration = args.duration_seconds
+    budget = None
+    budget_exhausted = None
+    if args.archive_reserve_seconds is not None:
+        if args.stop_file or args.require_qualified_stop:
+            raise ValueError('archive reserve applies only to foreground service')
+        from archive_window_budget import WorkflowBudgetExhausted, from_root
+        try:
+            budget = from_root(root, datetime.now(timezone.utc), duration, args.archive_reserve_seconds,
+                               workflow_started_at=args.workflow_started_at,
+                               workflow_timeout_seconds=args.workflow_timeout_seconds)
+        except WorkflowBudgetExhausted as exc:
+            budget_exhausted = exc
+        else:
+            duration = budget['duration_seconds']
+            print(json.dumps({'archive_window_budget': budget}), flush=True)
+    if budget_exhausted is not None:
+        result = finish_due_on_budget_exhaustion(root, adapter, budget_exhausted)
+    else:
+        result = run(root, adapter, duration, stop_file=args.stop_file,
+                     require_qualified_stop=args.require_qualified_stop)
+        if budget is not None: result['archive_window_budget'] = budget
+    return result
 
 
 if __name__ == '__main__': raise SystemExit(main())
