@@ -126,6 +126,8 @@ class ArchiveBridgeTests(unittest.TestCase):
             (root/'data/ledger.jsonl').write_text('old evidence\n')
             script=root/'archive_capture_bridge.py'
             shutil.copyfile(bridge.__file__,script)
+            for helper in ("archive_process.py", "runtime_process.py"):
+                shutil.copyfile(Path(bridge.__file__).with_name(helper),root/helper)
             stub='''import argparse, os, time
 from pathlib import Path
 class LiveAdapter:

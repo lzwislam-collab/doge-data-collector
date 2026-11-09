@@ -86,6 +86,7 @@ def trusted():
 
 
 def start(root, snapshot, control):
+    import archive_process
     trusted()
     control.mkdir(exist_ok=False)
     freeze(root,snapshot)
@@ -98,7 +99,8 @@ def start(root, snapshot, control):
             '--control',str(control)],cwd=root,env=env,stdout=log,stderr=log,start_new_session=True)
     with (control/'started.json').open('x',encoding='utf-8') as stream:
         json.dump({'pid':process.pid,'started_at_utc':datetime.now(timezone.utc).isoformat(),
-                   'qualified_stop_required':os.environ.get('DOGE_ARCHIVE_QUALIFIED_DRAIN')=='1'},stream)
+                   'qualified_stop_required':os.environ.get('DOGE_ARCHIVE_QUALIFIED_DRAIN')=='1',
+                   'process_identity':archive_process.identity(process.pid)},stream)
 
 
 def worker(root, control):
@@ -107,8 +109,51 @@ def worker(root, control):
         '--duration-seconds','600','--stop-file',str(control/'stop')]
     if os.environ.get('DOGE_ARCHIVE_QUALIFIED_DRAIN') == '1': args.append('--require-qualified-stop')
     env = dict(os.environ, DOGE_ARCHIVE_RUNTIME_PROGRESS='1')
-    code = subprocess.call(args,cwd=root,env=env)
+    import runtime_process
+    import signal
+    process = None
+    code = 1
+    with runtime_process.cancellation_signals():
+        try:
+            with runtime_process.defer_cancellation():
+                process = subprocess.Popen(args,cwd=root,env=env)
+            code = process.wait()
+        except (KeyboardInterrupt, runtime_process.RuntimeCancelled):
+            # The wrapper remains alive to own/reap the runtime while its
+            # existing cancellation path cleans detached commands and auditor.
+            if process is not None:
+                try:
+                    process.send_signal(signal.SIGTERM)
+                    process.wait()
+                except ProcessLookupError:
+                    process.wait()
+            code = 1
     atomic_json(control/'completed.json',{'exit_code':code,'ended_at_utc':datetime.now(timezone.utc).isoformat()})
+
+
+def cancelled_runtime_confirmed(root, control, started, cleanup):
+    """Confirm the known collector's own cancellation finally block completed."""
+    if not cleanup.get('registered_processes_exit_verified') or cleanup.get('kill_requested'):
+        return False
+    try:
+        completed = json.loads((control/'completed.json').read_text(encoding='utf-8'))
+        receipt = json.loads((root/'data/runtime_deadline_v1/latest.json').read_text(encoding='utf-8'))
+        outputs = (control/'runtime.outputs').read_text(encoding='utf-8').splitlines()
+        began = datetime.fromisoformat(started['started_at_utc'])
+        observed = datetime.fromisoformat(receipt['observed_at_utc'])
+        ended = datetime.fromisoformat(completed['ended_at_utc'])
+        if (any(t.utcoffset() is None for t in (began,observed,ended))
+                or not began <= observed <= ended): return False
+        process = receipt.get('process_cleanup')
+        if process is not None and (type(process) is not dict
+                or process.get('leader_reaped') is not True or process.get('pipes_drained') is not True
+                or process.get('cleanup_error_type')): return False
+        return (type(completed.get('exit_code')) is int and completed['exit_code'] != 0
+                and receipt.get('fatal') is True and receipt.get('status') == 'DEGRADED'
+                and receipt.get('fatal_reason') == 'RUNTIME_CANCELLED'
+                and not receipt.get('cleanup_error') and outputs[-1:] == ['fatal=true'])
+    except (OSError,KeyError,ValueError,TypeError):
+        return False
 
 
 def stop(root, snapshot, control):
@@ -119,7 +164,28 @@ def stop(root, snapshot, control):
     required = started.get('qualified_stop_required') is True
     deadline = time.monotonic()+(420 if required else 180)
     while not (control/'completed.json').exists():
-        if time.monotonic() >= deadline: raise TimeoutError('archive capture has not drained; no success claimed')
+        if time.monotonic() >= deadline:
+            error = TimeoutError('archive capture has not drained; no success claimed')
+            import archive_process
+            import runtime_process
+            # Preserve the original 420s deadline and failure classification.
+            # Cleanup plans at most 26s of the existing 120s finalization reserve; no
+            # snapshot verification or publication follows this failure.
+            cleanup = {'status':'UNVERIFIED','cleanup_verified':False}
+            try:
+                with runtime_process.defer_cancellation():
+                    cleanup = archive_process.cancel(started.get('process_identity'))
+                    if cancelled_runtime_confirmed(root,control,started,cleanup):
+                        cleanup.update(status='COLLECTOR_CANCELLATION_VERIFIED',cleanup_verified=True,
+                            scope='known_collector_runtime_ownership',reason=None)
+                    try: atomic_json(control/'shutdown.json', cleanup)
+                    except Exception as receipt_error:
+                        cleanup['receipt_error_type'] = type(receipt_error).__name__
+                    error.process_cleanup = cleanup
+            except (KeyboardInterrupt, runtime_process.RuntimeCancelled) as cancellation:
+                error.process_cleanup = cleanup
+                raise error from cancellation
+            raise error
         time.sleep(1)
     result = json.loads((control/'completed.json').read_text(encoding='utf-8'))
     if result['exit_code'] != 0: raise ValueError('archive capture service failed')
