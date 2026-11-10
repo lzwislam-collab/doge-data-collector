@@ -415,7 +415,9 @@ jobs:
         continue-on-error: true
         timeout-minutes: 8 # observed full preparation took 364s; keep all shard verification
         run: |
+          python pit_prepared_publication.py capture
           python pit_retention_preparation.py prepare --latest --daily
+          python pit_prepared_publication.py bind
           python - <<'PY'
           import json, os
           from pathlib import Path
@@ -576,7 +578,7 @@ jobs:
           PIT_ARTIFACT_ID: ${{ steps.pit_artifact.outputs.artifact-id }}
           PIT_ARTIFACT_DIGEST: ${{ steps.pit_artifact.outputs.artifact-digest }}
         run: |
-          python pit_retention_preparation.py record-artifact --artifact-id "$PIT_ARTIFACT_ID" --artifact-digest "$PIT_ARTIFACT_DIGEST" --run-id "$GITHUB_RUN_ID"
+          python pit_prepared_publication.py record-artifact --artifact-id "$PIT_ARTIFACT_ID" --artifact-digest "$PIT_ARTIFACT_DIGEST" --run-id "$GITHUB_RUN_ID"
           python pit_artifact_publication.py
       - name: Preserve capture receipts produced during archive upload
         if: always() && steps.archive_bridge_start.outcome == 'success' && steps.clock_request.outputs.run == 'true'
@@ -589,6 +591,7 @@ jobs:
             data/runtime_deadline_v1/
             archive-snapshot/manifest.json
             ${{ runner.temp }}/doge-archive-bridge-${{ github.run_id }}-${{ github.run_attempt }}/
+            ${{ runner.temp }}/doge-pit-prepared-${{ github.run_id }}-${{ github.run_attempt }}/
       - name: Fail visibly on archive bridge or snapshot error
         if: always() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && (steps.archive_bridge_start.outcome != 'success' || steps.archive_bridge_stop.outcome != 'success') && steps.clock_request.outputs.run == 'true'
         run: exit 1
