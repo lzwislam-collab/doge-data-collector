@@ -67,7 +67,7 @@ class _CanonicalBytes:
 
     def digest(self, value):
         self.stats['calls'] += 1
-        try: key = marshal.dumps(value,4)
+        try: key = marshal.dumps(value,2)
         except Exception: return self._fallback(value)
         if len(key) > self.max_bytes: return self._fallback(value)
         canonical = self.entries.get(key)
@@ -86,7 +86,7 @@ class _CanonicalBytes:
             if size > self.max_bytes: return self._fallback(value)
             # A signal/thread mutation during a miss must never associate bytes
             # from different object states. Recheck only before storing the miss.
-            try: unchanged = marshal.dumps(value,4) == key
+            try: unchanged = marshal.dumps(value,2) == key
             except Exception: unchanged = False
             if unchanged:
                 while self.entries and (len(self.entries)>=self.max_entries or

@@ -331,6 +331,31 @@ class CanonicalTransportTests(unittest.TestCase):
    value['a'][0]['x']=replacement;self.assertEqual(cache.digest(value),self.original(value))
   value['a'].append({'x':'new'});self.assertEqual(cache.digest(value),self.original(value))
   self.assertGreaterEqual(cache.stats['misses'],8)
+ def test_frozen_candidate_local_reference_change_reuses_exact_current_content(self):
+  cache=self.cache();prepared={'candidates':{'1':{'fit_examples':{'a':[{'x':1,'y':0.5}]}},'24':{'p_up':0.4}}}
+  expected=self.original(prepared);encoder=json.dumps;sha=hashlib.sha256
+  with mock.patch.object(self.subject.json,'dumps',wraps=encoder) as encoded,mock.patch.object(self.subject.hashlib,'sha256',wraps=sha) as hashes:
+   self.assertEqual(cache.digest(prepared),expected)
+   candidate=prepared['candidates']['1']
+   self.assertEqual(cache.digest(prepared),expected)
+   del candidate
+   self.assertEqual(cache.digest(prepared),expected)
+  self.assertEqual(encoded.call_count,1);self.assertEqual(hashes.call_count,3);self.assertEqual(cache.stats['hits'],2)
+ def test_equal_alias_graphs_reuse_bytes_but_still_rehash_each_call(self):
+  cache=self.cache();shared={'label':[1,2.5]};aliased={'a':shared,'b':shared};expanded={'a':{'label':[1,2.5]},'b':{'label':[1,2.5]}}
+  expected=self.original(aliased);self.assertEqual(expected,self.original(expanded));encoder=json.dumps;sha=hashlib.sha256
+  with mock.patch.object(self.subject.json,'dumps',wraps=encoder) as encoded,mock.patch.object(self.subject.hashlib,'sha256',wraps=sha) as hashes:
+   self.assertEqual(cache.digest(aliased),expected);self.assertEqual(cache.digest(expanded),expected)
+  self.assertEqual(encoded.call_count,1);self.assertEqual(hashes.call_count,2);self.assertEqual(cache.stats['hits'],1)
+ def test_string_interning_does_not_change_json_content_key(self):
+  cache=self.cache();text=''.join(['canonical key fixture value ',str(20261110),' é']);value={'x':text};expected=self.original(value);encoder=json.dumps
+  with mock.patch.object(self.subject.json,'dumps',wraps=encoder) as encoded:
+   self.assertEqual(cache.digest(value),expected);value['x']=sys.intern(text);self.assertEqual(cache.digest(value),expected)
+  self.assertEqual(encoded.call_count,1);self.assertEqual(cache.stats['hits'],1)
+ def test_dict_order_difference_may_miss_but_nested_mutation_never_uses_old_bytes(self):
+  cache=self.cache();a={'z':[1],'a':False};b={'a':False,'z':[1]}
+  for value in (a,b,a,b):self.assertEqual(cache.digest(value),self.original(value))
+  b['z'][0]=True;self.assertEqual(cache.digest(b),self.original(b));self.assertNotEqual(cache.digest(a),cache.digest(b))
  def test_aliases_and_equal_new_objects_preserve_exact_canonical_results(self):
   cache=self.cache();shared=['x',1];values=[[shared,shared],[['x',1],['x',1]],{'z':shared,'a':shared},{'a':['x',1],'z':['x',1]}]
   for value in values:
