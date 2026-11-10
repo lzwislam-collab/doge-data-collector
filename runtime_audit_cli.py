@@ -13,77 +13,6 @@ import marshal
 from pathlib import Path
 import runpy
 import sys
-import types
-
-_STANDARD_JSON_DUMPS = json.dumps
-
-
-def _namespace_state(namespace, excluded=()):
-    return tuple((key, value) for key, value in namespace.items() if key not in excluded)
-
-
-def _same_namespace(namespace, state, excluded=()):
-    return (len(namespace) - sum(key in namespace for key in excluded) == len(state)
-            and all(key in namespace and namespace[key] is value for key, value in state))
-
-
-def _standard_json_state():
-    """Capture the actual standard encoder chain before installing any hooks."""
-    import _json
-    encoder = json.encoder
-    if not (encoder.c_make_encoder is _json.make_encoder
-            and encoder.encode_basestring_ascii is _json.encode_basestring_ascii
-            and isinstance(encoder.encode_basestring_ascii, types.BuiltinFunctionType)
-            and type(encoder.c_make_encoder) is type
-            and encoder.c_make_encoder.__module__ == '_json'
-            and json.JSONEncoder.__module__ == 'json.encoder'
-            and json.JSONEncoder.__name__ == 'JSONEncoder'):
-        return None
-    for namespace, filename in ((json.__dict__, json.__file__),
-                                (encoder.__dict__, encoder.__file__),
-                                (json.JSONEncoder.__dict__, encoder.__file__)):
-        if any(Path(value.__code__.co_filename).resolve() != Path(filename).resolve()
-               for value in namespace.values() if isinstance(value, types.FunctionType)):
-            return None
-    namespaces = ((json.__dict__, _namespace_state(json.__dict__, ('dumps',)), ('dumps',)),
-                  (encoder.__dict__, _namespace_state(encoder.__dict__), ()),
-                  (json.JSONEncoder.__dict__, _namespace_state(json.JSONEncoder.__dict__), ()),
-                  (json._default_encoder.__dict__, _namespace_state(json._default_encoder.__dict__), ()),
-                  (_json.__dict__, _namespace_state(_json.__dict__), ()))
-    functions = {}
-    for namespace, _, _ in namespaces:
-        for value in namespace.values():
-            if isinstance(value, types.FunctionType):
-                functions[id(value)] = (value, value.__code__, value.__defaults__,
-                    None if value.__kwdefaults__ is None else _namespace_state(value.__kwdefaults__))
-    return namespaces, tuple(functions.values())
-
-
-try:
-    _STANDARD_JSON_STATE = _standard_json_state()
-except Exception:
-    _STANDARD_JSON_STATE = None
-
-
-def _standard_json_unchanged():
-    """Any changed encoder code/default/class/global uses the complete original."""
-    if json.dumps is not _STANDARD_JSON_DUMPS or _STANDARD_JSON_STATE is None:
-        return False
-    try:
-        namespaces, functions = _STANDARD_JSON_STATE
-        if not all(_same_namespace(namespace, state, excluded)
-                   for namespace, state, excluded in namespaces):
-            return False
-        for function, code, defaults, keywords in functions:
-            if function.__code__ is not code or function.__defaults__ is not defaults:
-                return False
-            actual = function.__kwdefaults__
-            if ((keywords is None and actual is not None) or
-                    (keywords is not None and (actual is None or not _same_namespace(actual, keywords)))):
-                return False
-        return True
-    except Exception:
-        return False
 
 SCRIPT_BLOBS = {
     'forward_validation_v2.py': '3adbdcc43c5dbdb57ecd482b1d4138e720146ba1',
@@ -93,7 +22,7 @@ SCRIPT_BLOBS = {
 BACKEND_BLOBS = {
     'runtime_publication_state': 'f0f6b6c7dbe5d7e4c0995b4714a53957217fbac0',
     'runtime_paired_history': 'b27849b2761de895a33613230de9adbf4187df71',
-    'runtime_p0_inventory_transport': '139cde4b032f50ec83fb1a35dac3ff0856147d70',
+    'runtime_p0_inventory_transport': 'e55c50a610a58439211b076b95020ae83810954b',
 }
 CANONICAL_BLOBS = {
     'paired_forward_cohort.py': '02e6b3ba51f063ba17cddcb98ff6445a08235c97',
@@ -104,22 +33,31 @@ CANONICAL_BLOBS = {
 
 def _json_closed(value):
     """Eligibility only: unknown, cyclic or very deep values use original JSON."""
-    active = set(); remaining = [1000000]
-    def visit(item, depth):
-        remaining[0] -= 1
-        if remaining[0] < 0 or depth > 100: return False
+    active = set(); remaining = 1000000
+    atomic = (str, int, float, bool, type(None))
+    containers = (dict, list, tuple)
+    end = object(); stack = []
+    iterator, depth, container_id, dictionary = iter((value,)), 0, None, False
+    while True:
+        item = next(iterator, end)
+        if item is end:
+            if container_id is not None: active.remove(container_id)
+            if not stack: return True
+            iterator, depth, container_id, dictionary = stack.pop()
+            continue
+        if dictionary:
+            key, item = item
+            if type(key) not in atomic: return False
+        remaining -= 1
+        if remaining < 0 or depth > 100: return False
         kind = type(item)
-        if kind in (str, int, float, bool, type(None)): return True
-        if kind not in (dict, list, tuple) or id(item) in active: return False
-        active.add(id(item))
-        try:
-            if kind is dict:
-                return all(type(k) in (str,int,float,bool,type(None)) and visit(v,depth+1)
-                           for k,v in item.items())
-            return all(visit(v,depth+1) for v in item)
-        finally:
-            active.remove(id(item))
-    return visit(value,0)
+        if kind in atomic: continue
+        if kind not in containers or id(item) in active: return False
+        child_id = id(item); active.add(child_id)
+        stack.append((iterator, depth, container_id, dictionary))
+        dictionary = kind is dict
+        iterator = iter(item.items()) if dictionary else iter(item)
+        depth += 1; container_id = child_id
 
 
 class _CanonicalBytes:
@@ -139,39 +77,27 @@ class _CanonicalBytes:
 
     def digest(self, value):
         self.stats['calls'] += 1
-        if not _standard_json_unchanged(): return self._fallback(value)
         try: key = marshal.dumps(value,2)
         except Exception: return self._fallback(value)
-        if not _standard_json_unchanged(): return self._fallback(value)
         if len(key) > self.max_bytes: return self._fallback(value)
         canonical = self.entries.get(key)
         if canonical is not None:
-            # marshal has type tags and rejects builtin subclasses. An exact hit
-            # reconstructs a previously checked builtin JSON graph; no id is kept.
+            # Typed key bytes match a previously checked JSON graph;
+            # its exact canonical bytes are reused without retaining object IDs.
             self.entries.move_to_end(key); self.stats['hits'] += 1
         else:
             self.stats['misses'] += 1
-            try:
-                # Only decode our own bounded, successfully marshalled bytes.
-                # Unknown buffer exporters decode as bytes and fail JSON, so
-                # np.float64/bytes collisions cannot seed a canonical cache hit.
-                snapshot = marshal.loads(key)
+            try: closed = _json_closed(value)
             except Exception: return self._fallback(value)
-            if not _standard_json_unchanged(): return self._fallback(value)
-            try:
-                self.stats['encoded_calls'] += 1
-                canonical = json.dumps(snapshot,sort_keys=True,
-                    separators=(',', ':'),allow_nan=False).encode()
-            except Exception: return self._fallback(value)
-            if not _standard_json_unchanged(): return self._fallback(value)
+            if not closed: return self._fallback(value)
+            self.stats['encoded_calls'] += 1
+            canonical = json.dumps(value,sort_keys=True,separators=(',', ':'),allow_nan=False).encode()
             size = len(key)+len(canonical)
             if size > self.max_bytes: return self._fallback(value)
             # A signal/thread mutation during a miss must never associate bytes
             # from different object states. Recheck only before storing the miss.
-            try: unchanged = (marshal.dumps(value,2) == key and
-                              marshal.dumps(snapshot,2) == key)
+            try: unchanged = marshal.dumps(value,2) == key
             except Exception: unchanged = False
-            if not unchanged or not _standard_json_unchanged(): return self._fallback(value)
             if unchanged:
                 while self.entries and (len(self.entries)>=self.max_entries or
                         self.stats['cached_bytes']+size>self.max_bytes):

@@ -4,7 +4,6 @@ The successful inventory path has the same request multiset. Only first-page
 GETs may look ahead, at most three days. Later pages wait for their original
 day order, so even an early pagination error has at most three extra GETs.
 """
-import ast
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
@@ -34,11 +33,14 @@ def eligible(original):
         actual = hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
         if actual != P0_BLOB:
             return False
-        node = next(n for n in ast.parse(raw).body
-                    if isinstance(n, ast.FunctionDef) and n.name == 'fetch_operational_runs')
-        namespace = {}
-        exec(compile(ast.Module(body=[node], type_ignores=[]), str(path), 'exec'), namespace)
-        return original.__code__ == namespace['fetch_operational_runs'].__code__
+        # Whole-module compilation preserves the compiler's real global-name
+        # context. Extracting just this AST changes bytecode for datetime.now.
+        # Compile only: do not execute imports, main, or any scientific function.
+        module_code = compile(raw, str(path), 'exec', dont_inherit=True)
+        expected = [value for value in module_code.co_consts
+                    if isinstance(value, types.CodeType)
+                    and value.co_name == 'fetch_operational_runs']
+        return len(expected) == 1 and original.__code__ == expected[0]
     except (OSError, ValueError, TypeError, StopIteration, SyntaxError):
         return False
 

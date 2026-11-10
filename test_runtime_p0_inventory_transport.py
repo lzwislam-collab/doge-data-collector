@@ -3,6 +3,8 @@ import ast
 import contextlib
 import importlib.util
 import io
+import runpy
+import tempfile
 from pathlib import Path
 import threading
 import types
@@ -14,9 +16,10 @@ from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlparse
 
 HERE = Path(__file__).resolve().parent
-PIN = HERE.parent / 'pinned' / 'p0_operational_audit.py'
-if not PIN.is_file():
-    PIN = HERE / 'p0_operational_audit.py'
+PIN = next((p for p in (HERE/'p0_operational_audit.py',
+                       HERE.parent/'pinned/p0_operational_audit.py',
+                       HERE.parent.parent/'pinned/p0_operational_audit.py') if p.is_file()),
+           HERE/'p0_operational_audit.py')
 HELPER = HERE / 'runtime_p0_inventory_transport.py'
 UTC = timezone.utc
 START = datetime(2026, 10, 12, 2, tzinfo=UTC)
@@ -24,11 +27,13 @@ WORKFLOW = '/actions/workflows/okx_hourly_extreme_history.yml'
 
 
 def original(request):
-    node = next(n for n in ast.parse(PIN.read_text(encoding='utf8')).body
-                if isinstance(n, ast.FunctionDef) and n.name == 'fetch_operational_runs')
+    whole = compile(PIN.read_bytes(), str(PIN), 'exec', dont_inherit=True)
+    code = next(n for n in whole.co_consts if isinstance(n, types.CodeType)
+                and n.co_name == 'fetch_operational_runs')
     env = {'base': types.SimpleNamespace(github_json=request), 'datetime': datetime,
            'timezone': timezone, 'timedelta': timedelta}
-    exec(compile(ast.Module(body=[node], type_ignores=[]), str(PIN), 'exec'), env)
+    env['fetch_operational_runs'] = types.FunctionType(
+        code, env, 'fetch_operational_runs', argdefs=(None, None))
     return env['fetch_operational_runs']
 
 
@@ -61,6 +66,38 @@ class InventoryTransport(unittest.TestCase):
         spec = importlib.util.spec_from_file_location('p0_inventory_under_test', HELPER)
         self.helper = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(self.helper)
+
+    def test_actual_whole_pinned_runpy_function_is_eligible_and_installed(self):
+        request = Requests()
+        modules = {name: types.ModuleType(name) for name in
+                   ('forward_validation', 'forward_validation_v2',
+                    'direction_forward_v42', 'quote_evidence_v2')}
+        modules['forward_validation'].github_json = request
+        modules['direction_forward_v42'].ROOT = HERE
+        with patch.dict(__import__('sys').modules, modules):
+            namespace = runpy.run_path(str(PIN), run_name='_p0_actual_source_fixture_no_main')
+        real = namespace['fetch_operational_runs']
+        self.assertTrue(self.helper.eligible(real),
+                        'pinned whole-module function must not be rejected by isolated AST compilation')
+        with self.helper.installed(namespace['main'].__globals__) as report:
+            actual = namespace['main'].__globals__['fetch_operational_runs'](
+                START, until=START + timedelta(days=3))
+            self.assertTrue(report['installed'])
+            self.assertEqual(report['native_calls'], 1)
+            self.assertEqual(report['real_gets'], 4)
+            self.assertEqual(len(actual), 4)
+        self.assertIs(namespace['main'].__globals__['fetch_operational_runs'], real)
+
+    def test_changed_whole_source_even_outside_function_remains_ineligible(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'p0_operational_audit.py'
+            path.write_bytes(PIN.read_bytes() + b'\n# unregistered source change\n')
+            whole = compile(path.read_bytes(), str(path), 'exec', dont_inherit=True)
+            code = next(n for n in whole.co_consts if isinstance(n, types.CodeType)
+                        and n.co_name == 'fetch_operational_runs')
+            env = original(Requests()).__globals__
+            changed = types.FunctionType(code, env, 'fetch_operational_runs', argdefs=(None, None))
+            self.assertFalse(self.helper.eligible(changed))
 
     def test_success_exact_original_results_url_multiset_and_midnight_duplicates(self):
         serial = Requests()
