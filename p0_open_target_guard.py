@@ -48,7 +48,36 @@ def needs_tail_bridge(root, now):
     missing_hour = now < hour+timedelta(minutes=40) and not any(
         int(r['horizon_hours']) == 1 and utc(r['source_hour_start_utc']) == hour for r in reg)
     imminent = any(r['forecast_id'] not in scored and now <= utc(r['target_utc']) <= now+timedelta(minutes=5) for r in reg)
-    return missing_hour or imminent
+    if missing_hour or imminent: return True
+    if os.environ.get('DOGE_PROSPECTIVE_RUNTIME_BRIDGE') != '1': return False
+    return _original18_tail_obligation(root, prior['ended_at_utc'])
+
+
+def _original18_tail_obligation(root, ended_at_utc):
+    """Read-only admission through the existing owned frozen journal reader."""
+    from types import SimpleNamespace
+    import runtime_process
+    from runtime_deadline_service import LiveAdapter, utc
+    consumer = SimpleNamespace(root=Path(root), _prospective_env=LiveAdapter._prospective_env)
+    with runtime_process.cancellation_signals():
+        state = LiveAdapter.original18_state_owned(consumer)
+    # The owned read can take time. A stale completed foreground never admits
+    # a new tail from the old pre-read clock.
+    from runtime_forward_bridge import original
+    at = datetime.now(timezone.utc)
+    if not 0 <= (at-utc(ended_at_utc)).total_seconds() <= 180: return False
+    policy, events, scores, bindings = (state[key] for key in ('policy','events','scores','bindings'))
+    todo = original.plan(policy, events, scores, at)
+    if todo['issue'] or todo['score']: return True
+    for event in events:
+        if at >= original.shadow.target_deadline(event, policy): continue
+        key = event['event_id']
+        target = original.shadow.utc(event['target_utc'])
+        if key not in scores and at <= target <= at+timedelta(minutes=5): return True
+        # Same pending-binding condition as the existing sequential bridge.
+        if (key+'_prediction' not in bindings
+                or key in scores and key+'_target' not in bindings): return True
+    return False
 
 
 def tail_bridge(root, now):
