@@ -9,6 +9,7 @@ import phase2_forward_v2 as f
 import learned_shadow_bundle as frozen
 import evidence_append_guard
 import phase1_research as prior
+import phase2_runtime_engineering_v1 as engineering
 
 ROOT=f.ROOT;SOURCE=frozen.SOURCE
 CODE={'phase2_forward_v2.py','phase2_forward_runtime_v2.py','test_phase2_forward_v2.py','test_phase2_forward_runtime_v2.py',
@@ -44,8 +45,7 @@ def verify_files(root,registration):
  hashes=registration.get('sha256_lf',{})
  if set(hashes)!=FIXED:raise ValueError('exact registered file set required')
  files={p:frozen.file_bytes(root,p) for p in FIXED}
- if any(f.old.sha(files[p])!=hashes[p] for p in FIXED):raise ValueError('registered source changed')
- return files
+ return engineering.verify_files(root,registration,files,frozen.file_bytes)
 
 def guard():
  _,old,_=frozen.guard();p=json.loads((ROOT/f.POLICY).read_bytes());f.check_policy(p)
@@ -104,8 +104,8 @@ def plan(p,events,scores,at):
   'matured_missing_issuance':len(due-issued),'matured_missing_targets':len(targets-scored),
   'canary_issued':sum(e['cohort']=='canary' for e in events),'promotion_authorized':False,'validated_70pct':False}
 
-def read_at(head,path):
- if not re.fullmatch('[a-f0-9]{40}',head) or path not in FIXED|{f.REGISTRATION,SOURCE} and not re.fullmatch(f.BASE+r'/(events|scores)/[0-9]+_(formal|canary)\.json',path):raise ValueError('unsafe server read')
+def _read_at_original(head,path):
+ if not re.fullmatch('[a-f0-9]{40}',head) or path not in FIXED|{f.REGISTRATION,SOURCE,engineering.HELPER,engineering.MANIFEST} and not re.fullmatch(f.BASE+r'/(events|scores)/[0-9]+_(formal|canary)\.json',path):raise ValueError('unsafe server read')
  try:return subprocess.check_output(['git','-c','safe.directory=*','show',head+':'+path],cwd=ROOT,stderr=subprocess.DEVNULL)
  except subprocess.CalledProcessError:
   request=Request('https://raw.githubusercontent.com/'+f.old.REPO+'/'+head+'/'+path,headers={'User-Agent':'DOGE-Phase2-Forward'})
@@ -114,6 +114,9 @@ def read_at(head,path):
    raw=response.read(32000001)
   if len(raw)>32000000:raise ValueError('oversize public file')
   return raw
+
+def read_at(head,path):
+ return engineering.read_at(_read_at_original,ROOT,head,path)
 
 def runs_server(extra=()):
  found=frozen.api('/actions/workflows/phase2_forward_audit_v2.yml/runs?per_page=30')['workflow_runs']
@@ -140,10 +143,10 @@ def provenance(e,files,runs):
  if not required<=set(e):raise ValueError('mandatory per-event source/registration proof missing')
  if any(type(e[k]) is not int or e[k]<=0 for k in ('registration_run_id','source_run_id')):raise ValueError('invalid proof locator')
  at=f.utc(e['issued_at_utc'])
- reg=f.witness(files,[r for r in runs if r['id']==e['registration_run_id']],read_at,min(at,f.utc(f.policy()['effective_from_utc'])))
+ reg=f.witness(engineering.original_files(files),[r for r in runs if r['id']==e['registration_run_id']],read_at,min(at,f.utc(f.policy()['effective_from_utc'])))
  if not reg:raise ValueError('exact registration not witnessed before issuance')
  raw=read_at(e['input_source_commit'],SOURCE)
- src=f.witness({SOURCE:raw},[r for r in runs if r['id']==e['source_run_id']],read_at,at)
+ src=f.witness(engineering.source_files(e,files,raw,SOURCE,f.utc,f.encode),[r for r in runs if r['id']==e['source_run_id']],read_at,at,engineering.source_after(e,files,f.encode))
  source_sha,frame=source_frame(e['input_source_commit'],e['issued_at_utc'])
  if not src or src['head_sha']!=e['input_source_commit'] or source_sha!=e['input_source_sha256'] or frame!=e['frame']:raise ValueError('exact source/frame not witnessed before issuance')
  return {'registration':reg,'source':src}
@@ -152,16 +155,16 @@ def publication(p,events,scores,files,runs):
  attempts=records('attempts')
  scores={s['event_id']:s for s in scores};verified=[];rejected={}
  for e in events:
-  key=e['event_id']
+  key=e['event_id'];proof_files=engineering.event_files(e,files,f.utc,f.encode)
   try:provenance(e,files,runs)
   except ValueError as exc:rejected[key]=str(exc);continue
-  prediction=f.witness({**files,f.BASE+'/events/'+key+'.json':f.encode(e)},runs,read_at,f.utc(e['target_utc']),f.utc(e['issued_at_utc']))
+  prediction=f.witness({**proof_files,f.BASE+'/events/'+key+'.json':f.encode(e)},runs,read_at,f.utc(e['target_utc']),f.utc(e['issued_at_utc']))
   if not prediction:rejected[key]='MISSING_PREDICTION_PUBLIC_WITNESS';continue
   s=scores.get(key)
   if not s:rejected[key]='MISSING_REAL_TARGET';continue
   try:verify_attempt_binding(s,attempts)
   except ValueError as exc:rejected[key]=str(exc);continue
-  target=f.witness({**files,f.BASE+'/scores/'+key+'.json':f.encode(s)},runs,read_at,f.deadline(e,p),f.utc(e['target_utc']))
+  target=f.witness({**proof_files,f.BASE+'/scores/'+key+'.json':f.encode(s)},runs,read_at,f.deadline(e,p),f.utc(e['target_utc']))
   if not target:rejected[key]='MISSING_TARGET_PUBLIC_WITNESS';continue
   verified.append({'event_id':key,'cohort':e['cohort'],'prediction':prediction,'target':target,
    'formal_eligible':e['cohort']=='formal' and e['included_in_formal_statistics'] and s['included_in_formal_statistics'],
@@ -169,7 +172,7 @@ def publication(p,events,scores,files,runs):
  return verified,rejected
 
 def run(mode):
- p,model,old,files=guard();now=datetime.now(timezone.utc);events=records('events');scores=records('scores');bindings=records('bindings');attempts=records('attempts')
+ p,model,old,files=guard();engineering.require_execution_mode(files,mode);now=datetime.now(timezone.utc);events=records('events');scores=records('scores');bindings=records('bindings');attempts=records('attempts')
  if len({e['event_id'] for e in events})!=len(events) or len({s['event_id'] for s in scores})!=len(scores):raise ValueError('duplicate journal identity')
  if sum(e['cohort']=='canary' for e in events)>1:raise ValueError('engineering canary count exceeded')
  emap={e['event_id']:e for e in events};smap={s['event_id']:s for s in scores}
@@ -202,7 +205,7 @@ def run(mode):
    path=ROOT/f.BASE/'bindings'/(e['event_id']+'_'+kind+'.json')
    if path.exists():extra.append(json.loads(path.read_bytes())['run_id'])
  runs=runs_server(extra) if mode!='local' else []
- registration=f.witness(files,runs,read_at,min(now,f.utc(p['effective_from_utc'])))
+ registration=f.witness(engineering.original_files(files),runs,read_at,min(now,f.utc(p['effective_from_utc'])))
  qualified,rejected=publication(p,inspected,[s for s in scores if s['event_id'] in inspected_ids],files,runs) if mode!='local' else ([],{})
  result={'status':'WAIT_PUBLIC_REGISTRATION' if not registration else 'WAIT_ACTIVATION' if now<f.utc(p['effective_from_utc']) else 'FORWARD_PAPER_ONLY',
   'at_utc':now.isoformat(),'model_identity':model['trial_model_identity'],'registration':registration,
@@ -217,15 +220,15 @@ def run(mode):
  for e in inspected:provenance(e,files,runs)
  # Save only actual server locators; these are re-read, never trusted flags.
  for e in inspected:
-  key=e['event_id']
+  key=e['event_id'];proof_files=engineering.event_files(e,files,f.utc,f.encode)
   for kind,path,after,before in [('prediction',f.BASE+'/events/'+key+'.json',f.utc(e['issued_at_utc']),f.utc(e['target_utc'])),('target',f.BASE+'/scores/'+key+'.json',f.utc(e['target_utc']),f.deadline(e,p))]:
    value=e if kind=='prediction' else smap.get(key)
    if value is None:continue
-   bound=f.witness({**files,path:f.encode(value)},runs,read_at,before,after)
+   bound=f.witness({**proof_files,path:f.encode(value)},runs,read_at,before,after)
    if bound and not (ROOT/f.BASE/'bindings'/(key+'_'+kind+'.json')).exists():append(ROOT,'bindings',key+'_'+kind,bound)
  for key,e in emap.items():
   if key in smap or not f.utc(e['target_utc'])<=now<f.deadline(e,p):continue
-  proof=f.witness({**files,f.BASE+'/events/'+key+'.json':f.encode(e)},runs,read_at,f.utc(e['target_utc']),f.utc(e['issued_at_utc']))
+  proof=f.witness({**engineering.event_files(e,files,f.utc,f.encode),f.BASE+'/events/'+key+'.json':f.encode(e)},runs,read_at,f.utc(e['target_utc']),f.utc(e['issued_at_utc']))
   if not proof:continue
   try:
    packet=capture_target();attempt=key+'_attempt_'+str(int(f.utc(packet['requested_at_utc']).timestamp()*1000))
@@ -236,10 +239,12 @@ def run(mode):
   except Exception as exc:result['errors'][key]=type(exc).__name__+': '+str(exc)
  cohort='canary' if mode=='canary' else 'formal'
  eligible=not any(e['cohort']=='canary' for e in events) if cohort=='canary' else f.utc(p['effective_from_utc'])<=now<f.utc(p['observation_end_utc'])
+ if eligible and not engineering.can_issue(files,now,f.utc):
+  result['status']='WAIT_ENGINEERING_ACTIVATION';eligible=False
  if eligible:
   try:
    raw=read_at(subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),SOURCE)
-   source=f.witness({SOURCE:raw},runs,read_at,now)
+   source=f.witness(engineering.issuance_source_files(files,raw,SOURCE,now,f.utc),runs,read_at,now,engineering.issuance_source_after(files))
    if not source:result['status']='WAIT_EXACT_INPUT_WITNESS';result['request_witness']=True
    else:
     packet=frozen.capture();at=datetime.now(timezone.utc);frame=f.frame_from_raw(raw,at)
@@ -262,7 +267,7 @@ def dispatch():
 
 def main():
  p=argparse.ArgumentParser();p.add_argument('mode',choices=['audit','audit_all','local','publish','canary','dispatch']);a=p.parse_args()
- if a.mode=='dispatch':dispatch();return
+ if a.mode=='dispatch':engineering.require_dispatch(ROOT,frozen.file_bytes);dispatch();return
  out=ROOT/'phase2-forward-output';out.mkdir(exist_ok=True)
  try:result=run(a.mode)
  except Exception as exc:
