@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import re
+import sys
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -31,13 +32,17 @@ def _main_only():
         raise ValueError('R2 bridge requires existing main collector')
 
 
-def _active(api, workflow):
+class _QueueSnapshotChanged(ValueError):
+    """Valid page/count fields disagree; no empty/active decision is trusted."""
+
+
+def _active_once(api, workflow):
     for state in STATES:
         result = api('/actions/workflows/'+workflow+'/runs?'+urlencode({
             'branch': 'main', 'status': state, 'per_page': 1}))
         rows, count = result['workflow_runs'], result['total_count']
         if (not isinstance(rows, list) or type(count) is not int or count < 0
-                or len(rows) > 1 or bool(rows) != bool(count)):
+                or len(rows) > 1):
             raise ValueError('incomplete workflow queue response')
         if rows:
             row = rows[0]
@@ -46,8 +51,28 @@ def _active(api, workflow):
                     or row.get('path', '').split('@')[0] != '.github/workflows/'+workflow
                     or row.get('status') not in STATES+('completed',)):
                 raise ValueError('invalid active workflow identity')
+        if bool(rows) != bool(count):
+            raise _QueueSnapshotChanged('incomplete workflow queue response')
+        if rows:
             return row
     return None
+
+
+def _active(api, workflow):
+    # Retry only one typed count/page disagreement, from the first state again.
+    # The same existing 40-second client owns every read and its original cap.
+    for attempt in range(2):
+        try:
+            return _active_once(api, workflow)
+        except _QueueSnapshotChanged:
+            if attempt:
+                raise ValueError('incomplete workflow queue response') from None
+            try:
+                print(json.dumps({'kind':'runtime_workflow_queue_consistency',
+                    'workflow':workflow,'reason':'count_page_disagreement',
+                    'next_attempt':2}),file=sys.stderr,flush=True)
+            except Exception:
+                pass
 
 
 def dispatch_existing(workflow, mode=None, *, client=None, before_post=None):
