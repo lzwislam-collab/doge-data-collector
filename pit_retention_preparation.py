@@ -3,9 +3,36 @@
 Never changes a frozen model, activates inputs, backdates availability, creates
 storage, uploads, deletes, changes retention or grants performance acceptance.
 """
-import argparse, copy, hashlib, json, math, re, zipfile
+import argparse, copy, hashlib, json, math, re, zipfile, sys, time
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+
+@contextmanager
+def _preparation_stage(phase):
+    """Bounded stderr timing only; all original results and errors survive."""
+    try:started=time.monotonic()
+    except Exception:started=None
+    def emit(event,status=None,error=None):
+        try:
+            row={'kind':'pit_preparation_progress','phase':phase,'event':event,
+                 'at_utc':datetime.now(timezone.utc).isoformat()}
+            if status is not None:
+                row['status']=status
+                if started is not None:row['seconds']=time.monotonic()-started
+            if error is not None:row['error_type']=type(error).__name__
+            print(json.dumps(row,sort_keys=True),file=sys.stderr,flush=True)
+        except Exception:
+            pass
+    emit('begin')
+    try:
+        yield
+    except BaseException as error:
+        emit('end','error',error)
+        raise
+    else:
+        emit('end','ok')
 
 BASE='data/pit_retention_preparation_v1'
 LIMIT_BYTES=256*1024*1024
@@ -86,10 +113,11 @@ def prepare_bundle(root,objects,now=None):
     folder=safe(root,BASE+'/bundles');folder.mkdir(parents=True,exist_ok=True)
     import io
     stream=io.BytesIO()
-    with zipfile.ZipFile(stream,'w',compression=zipfile.ZIP_DEFLATED) as archive:
-        for name,raw in [('bundle_manifest.json',canonical(manifest))]+list(content.items()):
-            info=zipfile.ZipInfo(name,date_time=(1980,1,1,0,0,0));info.compress_type=zipfile.ZIP_DEFLATED
-            archive.writestr(info,raw)
+    with _preparation_stage('compress_exact_part'):
+        with zipfile.ZipFile(stream,'w',compression=zipfile.ZIP_DEFLATED) as archive:
+            for name,raw in [('bundle_manifest.json',canonical(manifest))]+list(content.items()):
+                info=zipfile.ZipInfo(name,date_time=(1980,1,1,0,0,0));info.compress_type=zipfile.ZIP_DEFLATED
+                archive.writestr(info,raw,compresslevel=1)
     raw=stream.getvalue();sha=digest(raw);path=safe(root,BASE+'/bundles/'+sha+'.zip')
     if path.exists():
         if path.read_bytes()!=raw:raise ValueError('existing package mismatch')
@@ -199,7 +227,8 @@ def prepare_inventory_bundle(root,objects,now=None):
         'upload_performed':False,'storage_provisioned':False,'credentials_required_in_chat':False,
         'bundle_kind':'SHARDED_INVENTORY_INDEX','part_count':len(parts),
         'all_part_versions_and_retention_required':True}
-    verify_inventory_bundle(root,result)
+    with _preparation_stage('verify_prepared_inventory'):
+        verify_inventory_bundle(root,result)
     return path,result
 
 def verify_inventory_bundle(root,receipt):
@@ -236,7 +265,8 @@ def implementation_hash():
 def latest_manifest(root,now):
     import source_evidence_snapshot as snapshots
     root=Path(root).resolve();now=clock(now)
-    _,tip,expected,_=snapshots.prior_versions(root,now,snapshots.PLUS_STORAGE_NAMESPACE)
+    with _preparation_stage('verify_inventory_history'):
+        _,tip,expected,_=snapshots.prior_versions(root,now,snapshots.PLUS_STORAGE_NAMESPACE)
     if not tip:raise ValueError('no actual source inventory')
     path=safe(root,tip);raw=path.read_bytes()
     if digest(raw)!=expected:raise ValueError('latest inventory hash mismatch')
@@ -322,7 +352,8 @@ def prepare_existing(root,manifest,now=None):
     namespace=json.loads(manifest.read_bytes()).get('storage_namespace','data/evidence_snapshot')
     safe(root,namespace+'/retention_exports')
     import evidence_retention
-    export_path,export=evidence_retention.export_manifest(root,manifest)
+    with _preparation_stage('export_verified_objects'):
+        export_path,export=evidence_retention.export_manifest(root,manifest)
     objects={obj['local_path']:obj['sha256'] for obj in export['objects']}
     # Include actual candidate inputs and enhancement originals omitted by the
     # old supporting inventory. This does not retroactively certify their PIT.
@@ -338,8 +369,10 @@ def prepare_existing(root,manifest,now=None):
     objects['pit_retention_preparation.py']=digest(safe(root,'pit_retention_preparation.py').read_bytes())
     ledger=root/'data/enhancement_sources_v1/observations.jsonl'
     rows=[json.loads(line) for line in ledger.read_text(encoding='utf-8').splitlines()] if ledger.exists() else []
-    selected=select_asof(root,rows,now,48*3600)
-    bundle,result=prepare_inventory_bundle(root,objects,now)
+    with _preparation_stage('verify_source_ledger'):
+        selected=select_asof(root,rows,now,48*3600)
+    with _preparation_stage('prepare_exact_shards'):
+        bundle,result=prepare_inventory_bundle(root,objects,now)
     result.update(source_ledger_rows=len(rows),receipt_fresh_asof_rows=len(selected),receipt_freshness_hours=48,
         source_observation_age_limits_verified=False,model_use_authorized=False,historical_first_publication_verified=False,
         retention_export_path=export_path.relative_to(root).as_posix())
