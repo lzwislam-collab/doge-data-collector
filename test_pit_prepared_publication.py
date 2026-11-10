@@ -1,5 +1,5 @@
 """Real original guard and two real Git code versions; no production/network CLI."""
-import ast,hashlib,importlib.util,json,os,subprocess,sys,tempfile,unittest,zipfile
+import ast,hashlib,importlib.util,json,os,shutil,subprocess,sys,tempfile,unittest,zipfile
 from datetime import datetime,timezone
 from pathlib import Path
 from unittest import mock
@@ -35,10 +35,13 @@ class PreparedPublicationTests(unittest.TestCase):
   self.prior=(json.dumps(r,indent=2)+'\n').encode();self.path=self.root/module.BASE;self.path.mkdir(parents=True,exist_ok=True)
   for name in ('latest.json','run_latest.json'):(self.path/name).write_bytes(self.prior)
   if self.helper:self.helper.seal(self.root)
-  snap=self.root/'archive-snapshot'/module.BASE;snap.mkdir(parents=True);(snap/'latest.json').write_bytes(self.prior)
-  (self.root/'archive-snapshot/manifest.json').write_text(json.dumps({'file_sha256':{module.BASE+'/latest.json':hashlib.sha256(self.prior).hexdigest()}}))
+  self.snapshot_copy()
   (self.root/'pit_retention_preparation.py').write_bytes(self.new);self.git('add','pit_retention_preparation.py');self.git('commit','-m','actual later engineering version after rebase')
  def git(self,*args):return subprocess.run(['git',*args],cwd=self.root,check=True,capture_output=True).stdout
+ def snapshot_copy(self):
+  snap=self.root/'archive-snapshot';shutil.copytree(self.path,snap/self.module.BASE,dirs_exist_ok=True)
+  hashes={p.relative_to(snap).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in snap.rglob('*') if p.is_file() and p.name!='manifest.json'}
+  (snap/'manifest.json').write_text(json.dumps({'file_sha256':hashes}))
  def command(self):
   if self.helper:return [sys.executable,str(HERE/'pit_prepared_publication.py'),'--root',str(self.root),'record-artifact','--artifact-id','456','--artifact-digest','sha256:'+'a'*64,'--run-id','123']
   return [sys.executable,str(self.root/'pit_retention_preparation.py'),'--root',str(self.root),'record-artifact','--artifact-id','456','--artifact-digest','sha256:'+'a'*64,'--run-id','123']
@@ -53,6 +56,15 @@ class PreparedPublicationTests(unittest.TestCase):
   self.assertFalse((self.path/'artifact_publication.json').exists())
  def test_uploaded_prior_and_workspace_prior_must_match_exactly(self):
   (self.root/'archive-snapshot'/self.helper.BASE/'latest.json').write_bytes(self.prior+b' ')
+  with self.assertRaises(ValueError):self.helper.record_command(self.root,'456','a'*64)
+ def test_missing_actual_uploaded_bundle_never_records(self):
+  p=json.loads(self.prior);(self.root/'archive-snapshot'/p['bundle_path']).unlink()
+  with self.assertRaises((ValueError,FileNotFoundError)):self.helper.record_command(self.root,'456','a'*64)
+ def test_changed_actual_uploaded_bundle_never_records(self):
+  p=json.loads(self.prior);path=self.root/'archive-snapshot'/p['bundle_path'];raw=bytearray(path.read_bytes());raw[len(raw)//2]^=1;path.write_bytes(raw)
+  with self.assertRaises(ValueError):self.helper.record_command(self.root,'456','a'*64)
+ def test_uploaded_bundle_must_belong_to_the_actual_freeze_manifest(self):
+  p=json.loads(self.prior);path=self.root/'archive-snapshot/manifest.json';m=json.loads(path.read_bytes());m['file_sha256'].pop(p['bundle_path']);path.write_text(json.dumps(m))
   with self.assertRaises(ValueError):self.helper.record_command(self.root,'456','a'*64)
  def test_cross_attempt_or_missing_capture_fails_closed(self):
   with mock.patch.dict(os.environ,{'GITHUB_RUN_ATTEMPT':'2'}):
@@ -112,8 +124,14 @@ class PreparedPublicationTests(unittest.TestCase):
   self.prior=(json.dumps(r,indent=2)+'\n').encode()
   for name in ('latest.json','run_latest.json'):(self.path/name).write_bytes(self.prior)
   self.helper.seal(self.root)
-  (self.root/'archive-snapshot'/m.BASE/'latest.json').write_bytes(self.prior);(self.root/'archive-snapshot/manifest.json').write_text(json.dumps({'file_sha256':{m.BASE+'/latest.json':hashlib.sha256(self.prior).hexdigest()}}))
+  self.snapshot_copy()
   (self.root/'pit_retention_preparation.py').write_bytes(self.new);self.git('add','pit_retention_preparation.py');self.git('commit','-m','later version after second true source binding')
+  missing=self.root/'archive-snapshot'/part2['bundle_path'];saved=missing.read_bytes();missing.unlink()
+  with self.assertRaises((ValueError,FileNotFoundError)):self.helper.record_command(self.root,'456','a'*64)
+  missing.write_bytes(saved)
+  changed=bytearray(saved);changed[len(changed)//2]^=1;missing.write_bytes(changed)
+  with self.assertRaises(ValueError):self.helper.record_command(self.root,'456','a'*64)
+  missing.write_bytes(saved)
   r=subprocess.run(self.command(),cwd=self.root,env=self.env,capture_output=True,text=True);self.assertEqual(r.returncode,0,r.stderr)
   # The original verifier must still reject a changed non-source shard.
   (self.path/'artifact_publication.json').unlink();bad=self.root/part2['bundle_path'];body=bytearray(bad.read_bytes());body[len(body)//2]^=1;bad.write_bytes(body)

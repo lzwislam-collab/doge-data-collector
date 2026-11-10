@@ -127,6 +127,25 @@ def seal(root):
       'implementation_sha256':m['implementation_sha256'],'preparation_sha256':digest(raw),'bundle_sha256':p['bundle_sha256']}
  exclusive(c/'sealed.json',json_bytes(out));return {'status':'EXACT_PREPARED_IMPLEMENTATION_BOUND'}
 
+def snapshot_bundle(snapshot,p,freeze):
+ """Prove the uploaded compressed bytes equal the original verified inventory."""
+ hashes=freeze.get('file_sha256',{})
+ if not isinstance(hashes,dict):raise ValueError('invalid actual snapshot manifest')
+ seen=set()
+ def verify(part):
+  name=part['bundle_path'];sha=part.get('bundle_sha256','');size=part.get('byte_count')
+  if (name in seen or not isinstance(sha,str) or not SHA.fullmatch(sha)
+      or type(size) is not int or size<=0 or hashes.get(name)!=sha):raise ValueError('actual snapshot bundle identity missing or inconsistent')
+  seen.add(name);path=bundle_path(snapshot,name)
+  if not path.is_file() or path.stat().st_size!=size or file_digest(path)!=sha:raise ValueError('actual uploaded snapshot bundle bytes changed')
+  return path
+ descriptor=verify(p)
+ if p.get('bundle_kind')=='SHARDED_INVENTORY_INDEX':
+  index=parse(read_json(descriptor,32*1024*1024));parts=index.get('parts')
+  if (index.get('bundle_kind')!='SHARDED_INVENTORY_INDEX' or not isinstance(parts,list)
+      or not 2<=len(parts)<=64):raise ValueError('invalid actual snapshot shard index')
+  for part in parts:verify(part)
+
 def record_command(root,artifact_id,artifact_digest):
  root=plain(root);c,m,meta_raw,code=binding(root);sealed=parse(read_json(c/'sealed.json'));raw,p=prior(root,m)
  if (sealed.get('schema_version')!=1 or sealed.get('run_id')!=m['run_id'] or sealed.get('run_attempt')!=m['run_attempt']
@@ -137,6 +156,7 @@ def record_command(root,artifact_id,artifact_digest):
  if uploaded!=raw or freeze.get('file_sha256',{}).get(BASE+'/latest.json')!=digest(raw):raise ValueError('actual uploaded snapshot preparation differs')
  aid=str(artifact_id);ad=str(artifact_digest).removeprefix('sha256:')
  if not re.fullmatch('[1-9][0-9]*',aid) or not SHA.fullmatch(ad):raise ValueError('valid successful upload outputs required')
+ snapshot_bundle(snap,p,freeze)
  bundle_source(root,p,code)
  return [sys.executable,str(c/'implementation.py'),'--root',str(root),'record-artifact','--artifact-id',aid,'--artifact-digest',str(artifact_digest),'--run-id',m['run_id']]
 
