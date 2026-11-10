@@ -79,6 +79,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install numpy==2.3.5 scipy==1.16.3 scikit-learn==1.7.2 joblib==1.5.2 threadpoolctl==3.6.0 botocore==1.43.112
+          python -B runtime_history_graph.py
           python report_v41.py
       - uses: actions/upload-artifact@v4
         if: always() && steps.v41_report.outcome == 'success' && steps.clock_request.outputs.run == 'true'
