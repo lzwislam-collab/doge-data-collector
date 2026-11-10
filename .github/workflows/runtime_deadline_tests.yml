@@ -3,6 +3,8 @@ on:
   pull_request:
     paths:
       - 'pit_retention_preparation.py'
+      - 'pit_prepared_publication.py'
+      - 'test_pit_prepared_publication.py'
       - 'test_pit_preparation_progress.py'
       - 'test_pit_retention_preparation.py'
       - 'test_pit_retention_daily.py'
@@ -51,6 +53,9 @@ on:
       - 'test_runtime_audit_cli.py'
       - 'test_runtime_canonical_walk.py'
       - 'runtime_p0_inventory_transport.py'
+      - 'runtime_witness_git_transport.py'
+      - 'test_runtime_witness_git_transport.py'
+      - 'test_runtime_witness_launcher.py'
       - 'test_runtime_p0_inventory_transport.py'
       - 'test_runtime_p0_launcher.py'
       - 'test_runtime_p0_profile_receipt.py'
@@ -68,6 +73,8 @@ on:
     branches: [main]
     paths:
       - 'pit_retention_preparation.py'
+      - 'pit_prepared_publication.py'
+      - 'test_pit_prepared_publication.py'
       - 'test_pit_preparation_progress.py'
       - 'test_pit_retention_preparation.py'
       - 'test_pit_retention_daily.py'
@@ -116,6 +123,9 @@ on:
       - 'test_runtime_audit_cli.py'
       - 'test_runtime_canonical_walk.py'
       - 'runtime_p0_inventory_transport.py'
+      - 'runtime_witness_git_transport.py'
+      - 'test_runtime_witness_git_transport.py'
+      - 'test_runtime_witness_launcher.py'
       - 'test_runtime_p0_inventory_transport.py'
       - 'test_runtime_p0_launcher.py'
       - 'test_runtime_p0_profile_receipt.py'
@@ -217,7 +227,7 @@ jobs:
           # This PR also requires the unchanged complete scientific-evidence suite.
           # Avoid repeating that suite before the isolated six-CLI comparison.
           if [ "$NATIVE_TRANSPORT_PR" = 'true' ]; then
-            python -m unittest -q test_runtime_audit_cli test_runtime_history_prefix_transport test_runtime_audit_pipeline_profile test_runtime_canonical_walk test_runtime_p0_inventory_transport test_runtime_p0_launcher test_runtime_p0_profile_receipt
+            python -m unittest -q test_runtime_audit_cli test_runtime_history_prefix_transport test_runtime_audit_pipeline_profile test_runtime_canonical_walk test_runtime_p0_inventory_transport test_runtime_p0_launcher test_runtime_p0_profile_receipt test_runtime_witness_git_transport test_runtime_witness_launcher
           else
             python -m unittest discover -q
           fi

@@ -246,10 +246,12 @@ class ProfileTests(unittest.TestCase):
             launcher += " for kind in kinds: print(json.dumps({'kind':kind,'mode':'native_batch','status':'ok','validation_status':'ok','native_batch_calls':1}),file=sys.stderr)\n"
             launcher += " if script=='paired_cohort_audit.py': print(json.dumps({'kind':'runtime_canonical_json_transport','implementation':'paired_canonical_utf8_lru_v1','mode':'canonical_bytes_lru','status':'ok','module_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),'calls':2,'hits':1,'misses':1,'fallback_calls':0,'sha256_calls':2,'encoded_calls':1,'evictions':0,'entries':1,'cached_bytes':10}),file=sys.stderr)\n"
             launcher += " if script=='p0_operational_audit.py': print(json.dumps({'kind':'runtime_p0_inventory_transport','implementation':'p0_fresh_inventory_window4_v1','mode':'fresh_bounded_inventory','status':'ok','installed':True,'window':4,'native_calls':1,'fallback_calls':0,'real_gets':2,'days':1,'module_sha256':hashlib.sha256((root/'runtime_p0_inventory_transport.py').read_bytes()).hexdigest()}),file=sys.stderr)\n"
+            launcher += " if script in ('forward_validation_v2.py','p0_operational_audit.py'): print(json.dumps({'kind':'runtime_witness_git_transport','implementation':'witness_git_raw_lru_v1','mode':'immutable_git_raw_lru','status':'ok','installed':True,'module_sha256':hashlib.sha256((root/'runtime_witness_git_transport.py').read_bytes()).hexdigest(),'native_calls':1,'fallback_calls':0,'hits':1,'misses':1,'successful_reads':1,'evictions':0,'entries':0,'cached_bytes':0,'view_invalidations':0,'max_bytes':8*1024*1024,'max_entries':16,'peak_bytes':100,'peak_entries':1}),file=sys.stderr)\n"
             launcher += " runpy.run_path(str(root/script),run_name='__main__')\n"
             (source / 'runtime_audit_cli.py').write_text(launcher)
             (source / 'runtime_audit_worker.py').write_text('# fixture helper\n')
             (source / 'runtime_p0_inventory_transport.py').write_text('# fixture P0 helper identity only\n')
+            (source / 'runtime_witness_git_transport.py').write_text('# fixture witness helper identity only\n')
             subprocess.run(['git', 'init', '-q'], cwd=source, check=True)
             subprocess.run(['git', 'add', '.'], cwd=source, check=True)
             subprocess.run(['git', '-c', 'user.name=test', '-c', 'user.email=test@example.com',

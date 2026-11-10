@@ -23,7 +23,7 @@ INPUTS = ('data/direction_v42/forward_registry.csv',
 OUTPUTS = ('data/p0_operations/latest.json', 'data/paired_forward_v1/audit_latest.json')
 SCRIPTS = ('forward_validation_v2.py', 'p0_operational_audit.py', 'paired_cohort_audit.py')
 CLI_HELPERS = ('runtime_audit_cli.py', 'runtime_publication_state.py', 'runtime_paired_history.py',
-               'runtime_p0_inventory_transport.py')
+               'runtime_p0_inventory_transport.py', 'runtime_witness_git_transport.py')
 TRANSPORT_IMPLEMENTATIONS = {
     'runtime_publication_state_validation': 'runtime_publication_state_native_batch_v1',
     'runtime_paired_history_validation': 'runtime_paired_history_native_batch_v1',
@@ -265,6 +265,23 @@ def forward_transport_diagnostics(stderr, stage):
                             or any(type(source[k]) is not int or not 0<=source[k]<=2147483647 for k in counts)):
                         continue
                     fields = {k:v for k,v in source.items() if k != 'kind'}
+
+                elif kind == 'runtime_witness_git_transport':
+                    counts = ('native_calls','fallback_calls','hits','misses','successful_reads','evictions',
+                              'entries','cached_bytes','view_invalidations','max_bytes','max_entries','peak_bytes','peak_entries')
+                    if (stage not in ('forward_validation_v2.py','p0_operational_audit.py') or set(source) !=
+                            set(counts)|{'kind','implementation','mode','status','installed','module_sha256'}
+                            or source['implementation'] != 'witness_git_raw_lru_v1'
+                            or source['mode'] != 'immutable_git_raw_lru' or source['status'] not in ('ok','error')
+                            or type(source['installed']) is not bool
+                            or not isinstance(source['module_sha256'],str)
+                            or not re.fullmatch('[0-9a-f]{64}',source['module_sha256'])
+                            or any(type(source[k]) is not int or not 0<=source[k]<=2147483647 for k in counts)
+                            or source['max_bytes'] != 8*1024*1024 or source['max_entries'] != 16
+                            or source['peak_bytes'] > source['max_bytes'] or source['peak_entries'] > source['max_entries']
+                            or source['cached_bytes'] > source['max_bytes'] or source['entries'] > source['max_entries']):
+                        continue
+                    fields = {k:v for k,v in source.items() if k != 'kind'}
                 elif kind == 'runtime_p0_inventory_transport':
                     counts = ('native_calls','fallback_calls','real_gets','days')
                     if (stage != 'p0_operational_audit.py' or set(source) !=
@@ -280,7 +297,7 @@ def forward_transport_diagnostics(stderr, stage):
                         continue
                     fields = {k:v for k,v in source.items() if k != 'kind'}
                 elif kind == 'runtime_audit_cli_fallback':
-                    if set(source)!={'kind','backend','reason'} or source['backend'] not in ('original_cli','runtime_publication_state','runtime_paired_history','runtime_p0_inventory_transport'):
+                    if set(source)!={'kind','backend','reason'} or source['backend'] not in ('original_cli','runtime_publication_state','runtime_paired_history','runtime_p0_inventory_transport','runtime_witness_git_transport'):
                         continue
                     value = source['reason']
                     fields = {'backend':source['backend'],'mode':'legacy_full_fallback',

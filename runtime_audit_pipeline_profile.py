@@ -17,6 +17,7 @@ import math
 import os
 from pathlib import Path
 import runpy
+import re
 import shutil
 import subprocess
 import sys
@@ -383,13 +384,13 @@ def source_control_state(source, helper):
     return state
 
 
-def validate_native_diagnostics(stderr, script, expected_launcher_sha256=None, expected_p0_sha256=None):
+def validate_native_diagnostics(stderr, script, expected_launcher_sha256=None, expected_p0_sha256=None, expected_witness_sha256=None):
     if len(stderr.encode('utf-8')) > 1024 * 1024:
         raise ProfileError('oversize native diagnostics')
     required = {'runtime_publication_state_validation'}
     if script == 'paired_cohort_audit.py':
         required.add('runtime_paired_history_validation')
-    rows, canonical, inventory = [], [], []
+    rows, canonical, inventory, witness = [], [], [], []
     counts = {'calls', 'hits', 'misses', 'fallback_calls', 'sha256_calls',
               'encoded_calls', 'evictions', 'entries', 'cached_bytes'}
     for line in stderr.splitlines():
@@ -399,6 +400,27 @@ def validate_native_diagnostics(stderr, script, expected_launcher_sha256=None, e
         if not isinstance(row, dict): continue
         if row.get('kind') == 'runtime_audit_cli_fallback':
             raise ProfileError('legacy CLI/backend fallback cannot establish native performance')
+
+        if row.get('kind') == 'runtime_witness_git_transport':
+            fields = {'native_calls','fallback_calls','hits','misses','successful_reads','evictions',
+                      'entries','cached_bytes','view_invalidations','max_bytes','max_entries','peak_bytes','peak_entries'}
+            if (script not in ('forward_validation_v2.py','p0_operational_audit.py') or set(row) != fields |
+                    {'kind','implementation','mode','status','installed','module_sha256'}
+                    or row.get('implementation') != 'witness_git_raw_lru_v1'
+                    or row.get('mode') != 'immutable_git_raw_lru' or row.get('status') != 'ok'
+                    or row.get('installed') is not True
+                    or not isinstance(row.get('module_sha256'),str)
+                    or not re.fullmatch('[0-9a-f]{64}',row['module_sha256'])
+                    or (expected_witness_sha256 is not None and row['module_sha256'] != expected_witness_sha256)
+                    or any(type(row[k]) is not int or not 0 <= row[k] <= 10**9 for k in fields)
+                    or row['max_bytes'] != 8*1024*1024 or row['max_entries'] != 16
+                    or row['peak_bytes'] > row['max_bytes'] or row['peak_entries'] > row['max_entries']
+                    or row['cached_bytes'] != 0 or row['entries'] != 0
+                    or row['native_calls'] == 0 or row['hits'] == 0 or row['fallback_calls'] != 0
+                    or row['view_invalidations'] != 0 or row['successful_reads'] != row['misses']):
+                raise ProfileError('invalid actual immutable Git raw transport evidence')
+            witness.append(row)
+            continue
         if row.get('kind') == 'runtime_p0_inventory_transport':
             fields = {'native_calls','fallback_calls','real_gets','days'}
             if (script != 'p0_operational_audit.py' or set(row) != fields |
@@ -446,7 +468,9 @@ def validate_native_diagnostics(stderr, script, expected_launcher_sha256=None, e
         raise ProfileError('exactly one canonical paired transport receipt required')
     if script == 'p0_operational_audit.py' and expected_p0_sha256 is not None and len(inventory) != 1:
         raise ProfileError('exactly one actual P0 inventory receipt required')
-    return rows + canonical + inventory
+    if script in ('forward_validation_v2.py','p0_operational_audit.py') and expected_witness_sha256 is not None and len(witness) != 1:
+        raise ProfileError('exactly one actual immutable Git transport receipt required')
+    return rows + canonical + inventory + witness
 
 
 def fingerprint(root):
@@ -594,7 +618,8 @@ def worker(source, head, output, timeout_seconds, max_native_seconds):
                     if optimized:
                         trial['phases'][-1]['native_diagnostics'] = validate_native_diagnostics(
                             result.stderr, script, original_code['runtime_audit_cli.py'],
-                            expected_p0_sha256=original_code['runtime_p0_inventory_transport.py'])
+                            expected_p0_sha256=original_code['runtime_p0_inventory_transport.py'],
+                            expected_witness_sha256=original_code['runtime_witness_git_transport.py'])
                     trial['phases'][-1]['stdout_sha256'] = digest(result.stdout.encode('utf-8'))
                     write_json(output / 'summary.json', report)
                     if result.returncode != 0:
