@@ -1,7 +1,8 @@
 """Actual-clock operational monitor and bounded bridge; no forecast rewriting."""
-import argparse,base64,csv,hashlib,io,json,math,os,re
+import argparse,base64,csv,hashlib,io,json,math,os,re,subprocess
 from datetime import datetime,timedelta,timezone
 from pathlib import Path
+from urllib.error import HTTPError
 import phase2_forward_v2 as f
 import phase2_forward_runtime_v2 as r
 import engineering_run_receipt as terminal
@@ -243,6 +244,35 @@ def dispatch_original_target_rescue(parent,jobs):
   if response.status!=204:raise ValueError('original TARGET rescue dispatch not accepted')
  return {**result,'status':'DISPATCH_ACCEPTED_COMPLETION_UNVERIFIED'}
 
+class WitnessObjectAbsent(ValueError):
+ """An exact immutable candidate tree has no requested event/score object."""
+
+def _verified_candidate_absence(head,path):
+ # A raw HTTP404 alone cannot distinguish absence from permission/transport
+ # failures. Require the exact local commit and a successful full-tree lookup.
+ if not isinstance(head,str) or not re.fullmatch('[0-9a-f]{40}',head):return False
+ if not isinstance(path,str) or not re.fullmatch(re.escape(f.BASE)+r'/(events|scores)/[0-9]+_(formal|canary)\.json',path):return False
+ try:
+  commit=subprocess.run(['git','--no-replace-objects','-c','safe.directory=*','cat-file','-e',head+'^{commit}'],cwd=ROOT,capture_output=True,timeout=5)
+  if commit.returncode!=0:return False
+  tree=subprocess.run(['git','--no-replace-objects','-c','safe.directory=*','ls-tree','--full-tree','-z',head,'--',path],cwd=ROOT,capture_output=True,timeout=5)
+  return tree.returncode==0 and tree.stdout==b''
+ except (OSError,subprocess.SubprocessError):return False
+
+def publication_with_presence(*args):
+ # Limit the adapter to this one original publication call. The frozen witness
+ # loop already catches ValueError per candidate and checks every next run.
+ original=r.read_at
+ def read_candidate(head,path):
+  try:return original(head,path)
+  except HTTPError as exc:
+   if exc.code==404 and _verified_candidate_absence(head,path):
+    raise WitnessObjectAbsent('immutable witness event/score object absent') from exc
+   raise
+ r.read_at=read_candidate
+ try:return r.publication(*args)
+ finally:r.read_at=original
+
 def run(mode):
  r.run('local');p,model,old,files=r.guard();now=datetime.now(timezone.utc);events=r.records('events');scores=r.records('scores');inspected=publication_events(events,now,p)
  extra=[e[k] for e in inspected for k in ('registration_run_id','source_run_id')]
@@ -250,7 +280,7 @@ def run(mode):
   for kind in ('prediction','target'):
    path=ROOT/f.BASE/'bindings'/(e['event_id']+'_'+kind+'.json')
    if path.exists():extra.append(json.loads(path.read_bytes())['run_id'])
- runs=r.runs_server(extra);qualified,rejected=r.publication(p,inspected,[s for s in scores if s['event_id'] in {e['event_id'] for e in inspected}],files,runs)
+ runs=r.runs_server(extra);qualified,rejected=publication_with_presence(p,inspected,[s for s in scores if s['event_id'] in {e['event_id'] for e in inspected}],files,runs)
  raw=(ROOT/r.SOURCE).read_bytes();source=source_state(raw,now);h=health(events,scores,now,f.utc(source['latest_closed_utc']),qualified)
  # Preserve the historical summary's original latest-event scope. The separate
  # runtime gate additionally checks the latest matured formal event online.
