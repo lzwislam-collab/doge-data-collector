@@ -36,7 +36,7 @@ class _QueueSnapshotChanged(ValueError):
     """Valid page/count fields disagree; no empty/active decision is trusted."""
 
 
-def _active_once(api, workflow):
+def _active_once(api, workflow, *, running=None):
     for state in STATES:
         result = api('/actions/workflows/'+workflow+'/runs?'+urlencode({
             'branch': 'main', 'status': state, 'per_page': 1}))
@@ -54,6 +54,10 @@ def _active_once(api, workflow):
         if bool(rows) != bool(count):
             raise _QueueSnapshotChanged('incomplete workflow queue response')
         if rows:
+            if (running is not None and state == 'in_progress'
+                    and row['status'] == 'in_progress' and count == 1):
+                running.append(row)
+                return None
             return row
     return None
 
@@ -75,7 +79,62 @@ def _active(api, workflow):
                 pass
 
 
-def dispatch_existing(workflow, mode=None, *, client=None, before_post=None):
+def _source_blob_metadata(api, head):
+    source = 'data/hourly_research/ohlc.csv'
+    value = api('/contents/'+source+'?'+urlencode({'ref': head}))
+    if (not isinstance(value, dict) or value.get('type') != 'file' or value.get('path') != source
+            or not isinstance(value.get('sha'), str) or not HEX.fullmatch(value['sha'])
+            or type(value.get('size')) is not int or not 0 <= value['size'] <= 32000000):
+        raise ValueError('invalid pinned original18 source metadata')
+    return {'sha': value['sha'], 'size': value['size']}
+
+
+def _original18_run_identity(row):
+    if (not isinstance(row, dict) or type(row.get('id')) is not int or row['id'] <= 0
+            or row.get('head_branch') != 'main'
+            or row.get('path') != '.github/workflows/learned_shadow_v1.yml'
+            or row.get('status') != 'in_progress'
+            or row.get('event') not in ('push', 'workflow_dispatch')
+            or not isinstance(row.get('head_sha'), str) or not HEX.fullmatch(row['head_sha'])
+            or row.get('repository', {}).get('full_name') != frozen.f.old.REPO
+            or row.get('head_repository', {}).get('full_name') != frozen.f.old.REPO):
+        raise ValueError('invalid running original18 audit identity')
+    return tuple(row[k] for k in ('id', 'head_branch', 'path', 'status', 'event', 'head_sha'))
+
+
+def _source_audit_active(client, workflow, expected):
+    # Every waiting state precedes the one permitted running audit. A malformed
+    # view is never retried on this exceptional queue-behind-running path.
+    running = []
+    active = _active_once(client.api, workflow, running=running)
+    if active is not None:
+        return active
+    if _source_blob_metadata(client.api, expected['head']) != {k: expected[k] for k in ('sha', 'size')}:
+        raise ValueError('original18 public source does not match committed local bytes')
+    if not running:
+        return _active_once(client.api, workflow)
+    row = running[0]
+    identity = _original18_run_identity(row)
+    actual = client.api('/actions/runs/'+str(row['id']))
+    if _original18_run_identity(actual) != identity:
+        raise ValueError('running original18 audit changed identity')
+    previous = _source_blob_metadata(client.api, row['head_sha'])
+    if previous['sha'] == expected['sha']:
+        if previous['size'] != expected['size']:
+            raise ValueError('original18 source blob size changed')
+        return row
+    # Source inspection took transport time. A new waiting run, changed running
+    # identity, or completed/absent race conservatively leaves dispatch deferred.
+    latest_running = []
+    latest = _active_once(client.api, workflow, running=latest_running)
+    if latest is not None or not latest_running:
+        return row if latest is None else latest
+    if _original18_run_identity(latest_running[0]) != identity:
+        return latest_running[0]
+    return None
+
+
+def dispatch_existing(workflow, mode=None, *, client=None, before_post=None, expected_source_blob=None):
     """Same approved payloads and server-filtered guard, one 40s transport client."""
     _main_only()
     if workflow not in (AUDIT, PUBLISHER, 'learned_shadow_v1.yml'):
@@ -83,8 +142,17 @@ def dispatch_existing(workflow, mode=None, *, client=None, before_post=None):
     if (workflow == PUBLISHER and mode not in ('publish', 'canary')
             or workflow != PUBLISHER and mode is not None):
         raise ValueError('unapproved existing workflow input')
+    if expected_source_blob is not None:
+        if (workflow != 'learned_shadow_v1.yml' or not isinstance(expected_source_blob, dict)
+                or set(expected_source_blob) != {'head', 'sha', 'size'}
+                or any(not isinstance(expected_source_blob[k], str) or not HEX.fullmatch(expected_source_blob[k])
+                       for k in ('head', 'sha'))
+                or type(expected_source_blob['size']) is not int
+                or not 0 <= expected_source_blob['size'] <= 32000000):
+            raise ValueError('invalid original18 source queue proof')
     client = client or transport.GitHubClient()
-    active = _active(client.api, workflow)
+    active = (_active(client.api, workflow) if expected_source_blob is None
+              else _source_audit_active(client, workflow, expected_source_blob))
     if active is not None:
         return {'workflow': workflow, 'status': 'ALREADY_PENDING', 'active_run_id': active['id']}
     payload = {'ref': 'main'}

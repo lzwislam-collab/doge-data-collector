@@ -193,6 +193,19 @@ def capture_original18(root, producer, *, clock=None, state_reader=None):
     return result
 
 
+def _committed_source(publication):
+    root, source = original.ROOT, original.bundle.SOURCE
+    head = original.bundle.git(root, 'rev-parse', 'HEAD').decode().strip()
+    raw = original.bundle.git(root, 'show', head+':'+source)
+    path = Path(root)/source
+    if path.is_symlink() or path.read_bytes() != raw:
+        raise ValueError('original18 worktree source differs from committed publication')
+    # A verified fetch may name a remote descendant of local HEAD. The frozen
+    # producer still reads local HEAD; compare that source to the pinned remote.
+    return {'head': publication['head'], 'local_head': head,
+            'sha': hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest(), 'size': len(raw)}
+
+
 def request_original18_witness(capture, publication, state, *, dispatch=None, client=None):
     """After exact data readback, request one existing audit per public head.
 
@@ -218,9 +231,16 @@ def request_original18_witness(capture, publication, state, *, dispatch=None, cl
         return {'status': 'UNKNOWN_PREVIOUS_AUDIT_DISPATCH_NOT_RETRIED', 'requested_head': head}
     if dispatch is None:
         from runtime_r2_bridge import dispatch_existing
+        source = (_committed_source(publication)
+                  if capture.get('runtime_status') == 'WAIT_EXACT_SOURCE_WITNESS' else None)
+        def intent():
+            if source is not None and _committed_source(publication) != source:
+                raise ValueError('original18 committed source changed before dispatch')
+            state.update(original18_audit_attempted_head=head)
         def dispatch(name):
-            return dispatch_existing(name, client=client, before_post=lambda:
-                                     state.update(original18_audit_attempted_head=head))
+            return dispatch_existing(name, client=client, before_post=intent,
+                                     expected_source_blob=None if source is None else
+                                     {key: source[key] for key in ('head', 'sha', 'size')})
     outcome = dispatch('learned_shadow_v1.yml')
     if (not isinstance(outcome, dict) or outcome.get('workflow') != 'learned_shadow_v1.yml'
             or outcome.get('status') not in ('ALREADY_PENDING', 'DISPATCH_ACCEPTED_COMPLETION_UNVERIFIED')):
