@@ -246,12 +246,10 @@ class ProfileTests(unittest.TestCase):
             launcher += " for kind in kinds: print(json.dumps({'kind':kind,'mode':'native_batch','status':'ok','validation_status':'ok','native_batch_calls':1}),file=sys.stderr)\n"
             launcher += " if script=='paired_cohort_audit.py': print(json.dumps({'kind':'runtime_canonical_json_transport','implementation':'paired_canonical_utf8_lru_v1','mode':'canonical_bytes_lru','status':'ok','module_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),'calls':2,'hits':1,'misses':1,'fallback_calls':0,'sha256_calls':2,'encoded_calls':1,'evictions':0,'entries':1,'cached_bytes':10}),file=sys.stderr)\n"
             launcher += " if script=='p0_operational_audit.py': print(json.dumps({'kind':'runtime_p0_inventory_transport','implementation':'p0_fresh_inventory_window4_v1','mode':'fresh_bounded_inventory','status':'ok','installed':True,'window':4,'native_calls':1,'fallback_calls':0,'real_gets':2,'days':1,'module_sha256':hashlib.sha256((root/'runtime_p0_inventory_transport.py').read_bytes()).hexdigest()}),file=sys.stderr)\n"
-            launcher += " if script in ('forward_validation_v2.py','p0_operational_audit.py'): print(json.dumps({'kind':'runtime_witness_git_transport','implementation':'witness_git_raw_lru_v1','mode':'immutable_git_raw_lru','status':'ok','installed':True,'module_sha256':hashlib.sha256((root/'runtime_witness_git_transport.py').read_bytes()).hexdigest(),'native_calls':1,'fallback_calls':0,'hits':1,'misses':1,'successful_reads':1,'evictions':0,'entries':0,'cached_bytes':0,'view_invalidations':0,'max_bytes':8*1024*1024,'max_entries':16,'peak_bytes':100,'peak_entries':1}),file=sys.stderr)\n"
             launcher += " runpy.run_path(str(root/script),run_name='__main__')\n"
             (source / 'runtime_audit_cli.py').write_text(launcher)
             (source / 'runtime_audit_worker.py').write_text('# fixture helper\n')
             (source / 'runtime_p0_inventory_transport.py').write_text('# fixture P0 helper identity only\n')
-            (source / 'runtime_witness_git_transport.py').write_text('# fixture witness helper identity only\n')
             subprocess.run(['git', 'init', '-q'], cwd=source, check=True)
             subprocess.run(['git', 'add', '.'], cwd=source, check=True)
             subprocess.run(['git', '-c', 'user.name=test', '-c', 'user.email=test@example.com',
@@ -281,6 +279,11 @@ class ProfileTests(unittest.TestCase):
             self.assertTrue(report['output_bytes_exactly_equal'])
             self.assertTrue(report['source_state_unchanged'])
             self.assertGreater(report['native_whole_source_seconds'], 0)
+            self.assertFalse(report['diagnostic_components']['components_enabled'])
+            self.assertEqual(report['diagnostic_components']['statistics'],'NOT_MEASURED_DISABLED')
+            component=json.loads((top/'output/native-paired-components.json').read_text())
+            self.assertFalse(component['enabled'])
+            self.assertEqual(component['status'],'disabled')
 
 
 class ComponentTimingTests(unittest.TestCase):
@@ -473,6 +476,70 @@ class ComponentTimingTests(unittest.TestCase):
         self.assertIs(module._STANDARD_JSON_DUMPS, original)
         self.assertIs(module.json.dumps, original)
         self.assertEqual(seen, [1])
+
+
+
+
+class ComponentProfileOptInTests(unittest.TestCase):
+    def run_child(self, setting, expected_enabled, error=None):
+        import contextlib
+        module=ComponentTimingTests.launcher(self)
+        before=ComponentTimingTests.targets(self,module)
+        stats=[]
+        original_path=list(sys.path)
+        def original_main(root,script):
+            current=ComponentTimingTests.targets(self,module)
+            self.assertEqual([a is b for a,b in zip(before,current)], [not expected_enabled]*len(before))
+            self.assertEqual(script,'paired_cohort_audit.py')
+            original_digest=lambda value: module.hashlib.sha256(module.json.dumps(
+                value,sort_keys=True,separators=(',',':'),allow_nan=False).encode()).hexdigest()
+            value=module._CanonicalBytes(original_digest).digest({'real_original_digest':[1,2,3]})
+            self.assertEqual(len(value),64)
+            if error is not None:raise error
+            print('unchanged original stdout')
+            return 17
+        env={} if setting is None else {'DOGE_AUDIT_PAIRED_COMPONENT_PROFILE':setting}
+        try:
+            with tempfile.TemporaryDirectory() as name, patch.dict(profile.os.environ,env,clear=True), patch.dict(sys.modules,{'runtime_audit_cli':module,'numpy':types.ModuleType('numpy')}), patch.object(module,'run_cli',side_effect=original_main,create=True), patch.object(profile,'transport',return_value=contextlib.nullcontext()), patch.object(profile,'write_component_metrics',side_effect=lambda path,value:stats.append(value)), patch('sys.stdout',new_callable=io.StringIO) as stdout:
+                result=profile.child(Path(name),'paired_cohort_audit.py','replay',Path(name)/'captured-get/paired.json','2026-11-10T00:00:00+00:00',True)
+                self.assertEqual(result,17)
+                self.assertEqual(stdout.getvalue(),'unchanged original stdout\n')
+        finally:
+            sys.path[:]=original_path
+            after=ComponentTimingTests.targets(self,module)
+            self.assertTrue(all(a is b for a,b in zip(before,after)))
+        return stats[0]
+
+    def test_formal_native_child_default_and_nonexact_flags_install_no_component_wrappers(self):
+        for setting in (None,'0','true','01','1 ',''):
+            with self.subTest(setting=setting):
+                stats=self.run_child(setting,False)
+                self.assertFalse(stats['enabled'])
+                self.assertEqual(stats['status'],'disabled')
+                self.assertTrue(stats['business_completed'])
+                self.assertTrue(all(row['calls']==0 for row in stats['components'].values()))
+
+    def test_exact_optin_keeps_existing_real_component_diagnostics(self):
+        stats=self.run_child('1',True)
+        self.assertTrue(stats['enabled'])
+        self.assertEqual(stats['status'],'ok')
+        self.assertEqual(stats['components']['digest']['calls'],1)
+        self.assertEqual(stats['components']['sha256']['calls'],1)
+        self.assertTrue(stats['business_completed'])
+
+    def test_optin_child_exception_and_cancel_keep_original_error_and_restore(self):
+        for error in (ValueError('original failure'),KeyboardInterrupt(),SystemExit(7)):
+            with self.subTest(error=type(error).__name__),self.assertRaises(type(error)) as got:
+                self.run_child('1',True,error)
+            self.assertIs(got.exception,error)
+
+    def test_component_flag_only_enables_exact_native_paired_cli(self):
+        self.assertTrue(hasattr(profile,'paired_component_profile_enabled'))
+        with patch.dict(profile.os.environ,{'DOGE_AUDIT_PAIRED_COMPONENT_PROFILE':'1'}):
+            self.assertTrue(profile.paired_component_profile_enabled(True,'paired_cohort_audit.py'))
+            self.assertFalse(profile.paired_component_profile_enabled(False,'paired_cohort_audit.py'))
+            for script in ('forward_validation_v2.py','p0_operational_audit.py','unknown'):
+                self.assertFalse(profile.paired_component_profile_enabled(True,script))
 
 
 if __name__ == '__main__':

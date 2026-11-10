@@ -20,7 +20,6 @@ SCRIPT_BLOBS = {
     'paired_cohort_audit.py': 'a6bdf0c54ffcf648384c756d400e742ab57a1d61',
 }
 BACKEND_BLOBS = {
-    'runtime_witness_git_transport': 'fa0138d6e227f10f871df1a404bf7c8f4e7a85e3',
     'runtime_publication_state': 'f0f6b6c7dbe5d7e4c0995b4714a53957217fbac0',
     'runtime_paired_history': 'b27849b2761de895a33613230de9adbf4187df71',
     'runtime_p0_inventory_transport': 'e55c50a610a58439211b076b95020ae83810954b',
@@ -256,33 +255,6 @@ def _p0_hook(root, script, main_globals):
             except Exception:
                 pass
 
-
-@contextmanager
-def _witness_hook(root, script):
-    """Reuse immutable raw text only inside the complete original FWD/P0 calls."""
-    base = sys.modules.get('forward_validation')
-    if (script not in ('forward_validation_v2.py','p0_operational_audit.py')
-            or not callable(getattr(base,'remote_witnesses',None))):
-        yield
-        return
-    module = _backend(root, 'runtime_witness_git_transport')
-    if module is None:
-        yield
-        return
-    succeeded = False
-    with module.installed(base, root) as report:
-        try:
-            yield
-            succeeded = True
-        finally:
-            try:
-                print(json.dumps(dict(report, kind='runtime_witness_git_transport',
-                    mode='immutable_git_raw_lru', status='ok' if succeeded else 'error',
-                    module_sha256=hashlib.sha256(Path(module.__file__).read_bytes()).hexdigest()),
-                    sort_keys=True), file=sys.stderr, flush=True)
-            except Exception:
-                pass
-
 def run_cli(root, script):
     if script not in SCRIPT_BLOBS:
         raise ValueError('only the three original audit CLIs are allowed')
@@ -298,7 +270,7 @@ def run_cli(root, script):
             return None
         # These exact three blobs only enter main via their final __main__ guard.
         namespace = runpy.run_path(str(path),run_name='_doge_owned_audit_cli')
-        with _hooks(root,script), _p0_hook(root,script,namespace['main'].__globals__), _witness_hook(root,script):
+        with _hooks(root,script), _p0_hook(root,script,namespace['main'].__globals__):
             return namespace['main']()
     finally:
         sys.argv = previous_argv

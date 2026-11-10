@@ -53,9 +53,6 @@ on:
       - 'test_runtime_audit_cli.py'
       - 'test_runtime_canonical_walk.py'
       - 'runtime_p0_inventory_transport.py'
-      - 'runtime_witness_git_transport.py'
-      - 'test_runtime_witness_git_transport.py'
-      - 'test_runtime_witness_launcher.py'
       - 'test_runtime_p0_inventory_transport.py'
       - 'test_runtime_p0_launcher.py'
       - 'test_runtime_p0_profile_receipt.py'
@@ -123,9 +120,6 @@ on:
       - 'test_runtime_audit_cli.py'
       - 'test_runtime_canonical_walk.py'
       - 'runtime_p0_inventory_transport.py'
-      - 'runtime_witness_git_transport.py'
-      - 'test_runtime_witness_git_transport.py'
-      - 'test_runtime_witness_launcher.py'
       - 'test_runtime_p0_inventory_transport.py'
       - 'test_runtime_p0_launcher.py'
       - 'test_runtime_p0_profile_receipt.py'
@@ -227,7 +221,7 @@ jobs:
           # This PR also requires the unchanged complete scientific-evidence suite.
           # Avoid repeating that suite before the isolated six-CLI comparison.
           if [ "$NATIVE_TRANSPORT_PR" = 'true' ]; then
-            python -m unittest -q test_runtime_audit_cli test_runtime_history_prefix_transport test_runtime_audit_pipeline_profile test_runtime_canonical_walk test_runtime_p0_inventory_transport test_runtime_p0_launcher test_runtime_p0_profile_receipt test_runtime_witness_git_transport test_runtime_witness_launcher
+            python -m unittest -q test_runtime_audit_cli test_runtime_history_prefix_transport test_runtime_audit_pipeline_profile test_runtime_canonical_walk test_runtime_p0_inventory_transport test_runtime_p0_launcher test_runtime_p0_profile_receipt
           else
             python -m unittest discover -q
           fi
@@ -319,6 +313,7 @@ jobs:
         timeout-minutes: 11
         env:
           DOGE_AUDIT_PAIRED_CPU_PROFILE: '0'
+          DOGE_AUDIT_PAIRED_COMPONENT_PROFILE: '0'
           GITHUB_TOKEN: ${{ github.token }}
           OPENBLAS_NUM_THREADS: '1'
           OMP_NUM_THREADS: '1'
