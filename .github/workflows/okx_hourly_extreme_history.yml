@@ -294,6 +294,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           DOGE_TAIL_CAPTURE_BRIDGE: '1'
+          DOGE_PROSPECTIVE_RUNTIME_BRIDGE: ${{ steps.prospective_deps.outcome == 'success' && '1' || '0' }}
         run: python p0_open_target_guard.py
       - name: Stop writers on unsafe tail bridge or missing guard output
         if: always() && steps.open_target_guard.outputs.tail_fatal != 'false' && steps.clock_request.outputs.run == 'true'
