@@ -192,7 +192,17 @@ jobs:
               'all_original_checks_retained':True,'source_head_refs_unchanged':True,
               'natural_cycle_cadence_verified':False},sort_keys=True))
           PY
-      - run: python -m unittest discover -q
+      - name: Run regression tests
+        env:
+          NATIVE_TRANSPORT_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 101 && github.head_ref == 'fix/archive-audit-native-transport-20261110' }}
+        run: |
+          # This PR also requires the unchanged complete scientific-evidence suite.
+          # Avoid repeating that suite before the isolated six-CLI comparison.
+          if [ "$NATIVE_TRANSPORT_PR" = 'true' ]; then
+            python -m unittest -q test_runtime_audit_cli test_runtime_history_prefix_transport test_runtime_audit_pipeline_profile
+          else
+            python -m unittest discover -q
+          fi
       - run: python forward_validation_v2.py --integrity-only
 
       - name: Run original source audits in the isolated pinned checkout
