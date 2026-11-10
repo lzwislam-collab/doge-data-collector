@@ -442,10 +442,18 @@ class CanonicalTransportTests(unittest.TestCase):
    root=Path(name);cohort,depth=self.fixture(root);original=cohort.digest
    path=root/SCRIPTS[2];path.write_text('import paired_forward_cohort as c\ndef main():\n c.digest({"x":[1]})\n c.digest({"x":[1]})\n print("original stdout")\n return 0\nif __name__=="__main__":raise SystemExit(main())\n',encoding='utf-8')
    oid=self.subject._blob(path);out=io.StringIO();err=io.StringIO()
-   with mock.patch.dict(sys.modules,{'paired_forward_cohort':cohort}),mock.patch.dict(self.subject.SCRIPT_BLOBS,{SCRIPTS[2]:oid}),mock.patch.dict(self.subject.CANONICAL_BLOBS,{SCRIPTS[2]:oid}),contextlib.redirect_stdout(out),contextlib.redirect_stderr(err):
+   canonical_base=types.ModuleType('forward_validation')
+   with mock.patch.dict(sys.modules,{'paired_forward_cohort':cohort,'forward_validation':canonical_base}),mock.patch.dict(self.subject.SCRIPT_BLOBS,{SCRIPTS[2]:oid}),mock.patch.dict(self.subject.CANONICAL_BLOBS,{SCRIPTS[2]:oid}),contextlib.redirect_stdout(out),contextlib.redirect_stderr(err):
     self.assertEqual(self.subject.run_cli(root,SCRIPTS[2]),0)
    self.assertEqual(out.getvalue(),'original stdout\n');self.assertIs(cohort.digest,original)
    rows=[json.loads(line) for line in err.getvalue().splitlines()];self.assertEqual(len(rows),1);self.assertEqual(rows[0]['hits'],1);self.assertEqual(rows[0]['sha256_calls'],2)
+ def test_canonical_fixture_is_independent_of_existing_history_module_order(self):
+  ambient=types.ModuleType('forward_validation');original=mock.Mock(return_value={'ambient':'unchanged'})
+  ambient.history_receipts=original
+  with mock.patch.dict(sys.modules,{'forward_validation':ambient}):
+   self.test_real_runpy_paired_context_installs_only_during_original_main()
+   self.assertIs(sys.modules['forward_validation'],ambient);self.assertIs(ambient.history_receipts,original)
+   original.assert_not_called()
  def test_canonical_worker_metadata_is_bounded_and_never_reveals_payload(self):
   worker=WorkerRouteTests().worker();out=io.StringIO()
   row={'kind':'runtime_canonical_json_transport','implementation':'paired_canonical_utf8_lru_v1','mode':'canonical_bytes_lru','status':'ok','module_sha256':'a'*64,'calls':3,'hits':1,'misses':2,'fallback_calls':0,'sha256_calls':3,'encoded_calls':2,'evictions':0,'entries':2,'cached_bytes':100}
