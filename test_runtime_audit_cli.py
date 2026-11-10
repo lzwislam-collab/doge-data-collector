@@ -322,9 +322,9 @@ class CanonicalTransportTests(unittest.TestCase):
   values=[None,True,False,0,1,-1,2**100,0.0,-0.0,1.5,'汉字\ud800',[],(),{},[1,False,None],{'b':[1,2],'a':{'x':'é'}}]
   expected=[self.original(v) for v in values];cache=self.cache()
   sha=hashlib.sha256;encoder=json.dumps
-  with mock.patch.object(self.subject.hashlib,'sha256',wraps=sha) as hashed,mock.patch.object(self.subject.json,'dumps',wraps=encoder) as encoded:
+  with mock.patch.object(self.subject.hashlib,'sha256',wraps=sha) as hashed:
    for _ in range(3):self.assertEqual([cache.digest(v) for v in values],expected)
-  self.assertEqual(hashed.call_count,len(values)*3);self.assertEqual(encoded.call_count,len(values));self.assertEqual(cache.stats['hits'],len(values)*2)
+  self.assertEqual(hashed.call_count,len(values)*3);self.assertEqual(cache.stats['encoded_calls'],len(values));self.assertEqual(cache.stats['hits'],len(values)*2)
  def test_nested_mutation_current_structure_and_type_changes_are_detected(self):
   cache=self.cache();value={'a':[{'x':1}], 'b':True}
   for replacement in (1,2,2.0,-0.0,False,'2',{'nested':[3]}):
@@ -334,24 +334,25 @@ class CanonicalTransportTests(unittest.TestCase):
  def test_frozen_candidate_local_reference_change_reuses_exact_current_content(self):
   cache=self.cache();prepared={'candidates':{'1':{'fit_examples':{'a':[{'x':1,'y':0.5}]}},'24':{'p_up':0.4}}}
   expected=self.original(prepared);encoder=json.dumps;sha=hashlib.sha256
-  with mock.patch.object(self.subject.json,'dumps',wraps=encoder) as encoded,mock.patch.object(self.subject.hashlib,'sha256',wraps=sha) as hashes:
+  with mock.patch.object(self.subject.hashlib,'sha256',wraps=sha) as hashes:
    self.assertEqual(cache.digest(prepared),expected)
    candidate=prepared['candidates']['1']
    self.assertEqual(cache.digest(prepared),expected)
    del candidate
    self.assertEqual(cache.digest(prepared),expected)
-  self.assertEqual(encoded.call_count,1);self.assertEqual(hashes.call_count,3);self.assertEqual(cache.stats['hits'],2)
+  self.assertEqual(cache.stats['encoded_calls'],1);self.assertEqual(hashes.call_count,3);self.assertEqual(cache.stats['hits'],2)
  def test_equal_alias_graphs_reuse_bytes_but_still_rehash_each_call(self):
   cache=self.cache();shared={'label':[1,2.5]};aliased={'a':shared,'b':shared};expanded={'a':{'label':[1,2.5]},'b':{'label':[1,2.5]}}
   expected=self.original(aliased);self.assertEqual(expected,self.original(expanded));encoder=json.dumps;sha=hashlib.sha256
-  with mock.patch.object(self.subject.json,'dumps',wraps=encoder) as encoded,mock.patch.object(self.subject.hashlib,'sha256',wraps=sha) as hashes:
+  with mock.patch.object(self.subject.hashlib,'sha256',wraps=sha) as hashes:
    self.assertEqual(cache.digest(aliased),expected);self.assertEqual(cache.digest(expanded),expected)
-  self.assertEqual(encoded.call_count,1);self.assertEqual(hashes.call_count,2);self.assertEqual(cache.stats['hits'],1)
+  self.assertEqual(cache.stats['encoded_calls'],1);self.assertEqual(hashes.call_count,2);self.assertEqual(cache.stats['hits'],1)
  def test_string_interning_does_not_change_json_content_key(self):
   cache=self.cache();text=''.join(['canonical key fixture value ',str(20261110),' é']);value={'x':text};expected=self.original(value);encoder=json.dumps
-  with mock.patch.object(self.subject.json,'dumps',wraps=encoder) as encoded:
+  with mock.patch.object(self.subject.hashlib,'sha256',wraps=hashlib.sha256) as hashed:
    self.assertEqual(cache.digest(value),expected);value['x']=sys.intern(text);self.assertEqual(cache.digest(value),expected)
-  self.assertEqual(encoded.call_count,1);self.assertEqual(cache.stats['hits'],1)
+  self.assertEqual(hashed.call_count,2)
+  self.assertEqual(cache.stats['encoded_calls'],1);self.assertEqual(cache.stats['hits'],1)
  def test_dict_order_difference_may_miss_but_nested_mutation_never_uses_old_bytes(self):
   cache=self.cache();a={'z':[1],'a':False};b={'a':False,'z':[1]}
   for value in (a,b,a,b):self.assertEqual(cache.digest(value),self.original(value))
@@ -414,9 +415,9 @@ class CanonicalTransportTests(unittest.TestCase):
   cache=self.cache();error=ValueError('marshal detail must not escape')
   with mock.patch.object(self.subject.marshal,'dumps',side_effect=error):self.assertEqual(cache.digest({'a':1}),self.original({'a':1}))
   self.assertEqual(cache.stats['fallback_calls'],1)
- def test_eligibility_walk_failure_returns_to_complete_original(self):
+ def test_snapshot_decode_failure_returns_to_complete_original(self):
   cache=self.cache()
-  with mock.patch.object(self.subject,'_json_closed',side_effect=RuntimeError('concurrent mutation')):self.assertEqual(cache.digest({'x':1}),self.original({'x':1}))
+  with mock.patch.object(self.subject.marshal,'loads',side_effect=RuntimeError('snapshot decode unavailable')):self.assertEqual(cache.digest({'x':1}),self.original({'x':1}))
   self.assertEqual(cache.stats['fallback_calls'],1);self.assertEqual(cache.stats['entries'],0)
  def test_bounded_lru_eviction_and_clear_release_only_bytes(self):
   cache=self.cache(max_bytes=180,max_entries=2)

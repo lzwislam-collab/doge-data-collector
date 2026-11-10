@@ -13,6 +13,77 @@ import marshal
 from pathlib import Path
 import runpy
 import sys
+import types
+
+_STANDARD_JSON_DUMPS = json.dumps
+
+
+def _namespace_state(namespace, excluded=()):
+    return tuple((key, value) for key, value in namespace.items() if key not in excluded)
+
+
+def _same_namespace(namespace, state, excluded=()):
+    return (len(namespace) - sum(key in namespace for key in excluded) == len(state)
+            and all(key in namespace and namespace[key] is value for key, value in state))
+
+
+def _standard_json_state():
+    """Capture the actual standard encoder chain before installing any hooks."""
+    import _json
+    encoder = json.encoder
+    if not (encoder.c_make_encoder is _json.make_encoder
+            and encoder.encode_basestring_ascii is _json.encode_basestring_ascii
+            and isinstance(encoder.encode_basestring_ascii, types.BuiltinFunctionType)
+            and type(encoder.c_make_encoder) is type
+            and encoder.c_make_encoder.__module__ == '_json'
+            and json.JSONEncoder.__module__ == 'json.encoder'
+            and json.JSONEncoder.__name__ == 'JSONEncoder'):
+        return None
+    for namespace, filename in ((json.__dict__, json.__file__),
+                                (encoder.__dict__, encoder.__file__),
+                                (json.JSONEncoder.__dict__, encoder.__file__)):
+        if any(Path(value.__code__.co_filename).resolve() != Path(filename).resolve()
+               for value in namespace.values() if isinstance(value, types.FunctionType)):
+            return None
+    namespaces = ((json.__dict__, _namespace_state(json.__dict__, ('dumps',)), ('dumps',)),
+                  (encoder.__dict__, _namespace_state(encoder.__dict__), ()),
+                  (json.JSONEncoder.__dict__, _namespace_state(json.JSONEncoder.__dict__), ()),
+                  (json._default_encoder.__dict__, _namespace_state(json._default_encoder.__dict__), ()),
+                  (_json.__dict__, _namespace_state(_json.__dict__), ()))
+    functions = {}
+    for namespace, _, _ in namespaces:
+        for value in namespace.values():
+            if isinstance(value, types.FunctionType):
+                functions[id(value)] = (value, value.__code__, value.__defaults__,
+                    None if value.__kwdefaults__ is None else _namespace_state(value.__kwdefaults__))
+    return namespaces, tuple(functions.values())
+
+
+try:
+    _STANDARD_JSON_STATE = _standard_json_state()
+except Exception:
+    _STANDARD_JSON_STATE = None
+
+
+def _standard_json_unchanged():
+    """Any changed encoder code/default/class/global uses the complete original."""
+    if json.dumps is not _STANDARD_JSON_DUMPS or _STANDARD_JSON_STATE is None:
+        return False
+    try:
+        namespaces, functions = _STANDARD_JSON_STATE
+        if not all(_same_namespace(namespace, state, excluded)
+                   for namespace, state, excluded in namespaces):
+            return False
+        for function, code, defaults, keywords in functions:
+            if function.__code__ is not code or function.__defaults__ is not defaults:
+                return False
+            actual = function.__kwdefaults__
+            if ((keywords is None and actual is not None) or
+                    (keywords is not None and (actual is None or not _same_namespace(actual, keywords)))):
+                return False
+        return True
+    except Exception:
+        return False
 
 SCRIPT_BLOBS = {
     'forward_validation_v2.py': '3adbdcc43c5dbdb57ecd482b1d4138e720146ba1',
@@ -22,6 +93,7 @@ SCRIPT_BLOBS = {
 BACKEND_BLOBS = {
     'runtime_publication_state': 'f0f6b6c7dbe5d7e4c0995b4714a53957217fbac0',
     'runtime_paired_history': 'b27849b2761de895a33613230de9adbf4187df71',
+    'runtime_p0_inventory_transport': '139cde4b032f50ec83fb1a35dac3ff0856147d70',
 }
 CANONICAL_BLOBS = {
     'paired_forward_cohort.py': '02e6b3ba51f063ba17cddcb98ff6445a08235c97',
@@ -67,8 +139,10 @@ class _CanonicalBytes:
 
     def digest(self, value):
         self.stats['calls'] += 1
+        if not _standard_json_unchanged(): return self._fallback(value)
         try: key = marshal.dumps(value,2)
         except Exception: return self._fallback(value)
+        if not _standard_json_unchanged(): return self._fallback(value)
         if len(key) > self.max_bytes: return self._fallback(value)
         canonical = self.entries.get(key)
         if canonical is not None:
@@ -77,17 +151,27 @@ class _CanonicalBytes:
             self.entries.move_to_end(key); self.stats['hits'] += 1
         else:
             self.stats['misses'] += 1
-            try: closed = _json_closed(value)
+            try:
+                # Only decode our own bounded, successfully marshalled bytes.
+                # Unknown buffer exporters decode as bytes and fail JSON, so
+                # np.float64/bytes collisions cannot seed a canonical cache hit.
+                snapshot = marshal.loads(key)
             except Exception: return self._fallback(value)
-            if not closed: return self._fallback(value)
-            self.stats['encoded_calls'] += 1
-            canonical = json.dumps(value,sort_keys=True,separators=(',', ':'),allow_nan=False).encode()
+            if not _standard_json_unchanged(): return self._fallback(value)
+            try:
+                self.stats['encoded_calls'] += 1
+                canonical = json.dumps(snapshot,sort_keys=True,
+                    separators=(',', ':'),allow_nan=False).encode()
+            except Exception: return self._fallback(value)
+            if not _standard_json_unchanged(): return self._fallback(value)
             size = len(key)+len(canonical)
             if size > self.max_bytes: return self._fallback(value)
             # A signal/thread mutation during a miss must never associate bytes
             # from different object states. Recheck only before storing the miss.
-            try: unchanged = marshal.dumps(value,2) == key
+            try: unchanged = (marshal.dumps(value,2) == key and
+                              marshal.dumps(snapshot,2) == key)
             except Exception: unchanged = False
+            if not unchanged or not _standard_json_unchanged(): return self._fallback(value)
             if unchanged:
                 while self.entries and (len(self.entries)>=self.max_entries or
                         self.stats['cached_bytes']+size>self.max_bytes):
@@ -221,6 +305,30 @@ def _hooks(root, script):
         if paired is not None:
             cohort.history_guard = previous_pair
 
+@contextmanager
+def _p0_hook(root, script, main_globals):
+    """Install fresh bounded GET transport only in the original P0 main globals."""
+    if script != 'p0_operational_audit.py':
+        yield
+        return
+    module = _backend(root, 'runtime_p0_inventory_transport')
+    if module is None:
+        yield
+        return
+    succeeded = False
+    with module.installed(main_globals) as report:
+        try:
+            yield
+            succeeded = True
+        finally:
+            try:
+                print(json.dumps(dict(report, kind='runtime_p0_inventory_transport',
+                    mode='fresh_bounded_inventory', status='ok' if succeeded else 'error',
+                    module_sha256=hashlib.sha256(Path(module.__file__).read_bytes()).hexdigest()),
+                    sort_keys=True), file=sys.stderr, flush=True)
+            except Exception:
+                pass
+
 def run_cli(root, script):
     if script not in SCRIPT_BLOBS:
         raise ValueError('only the three original audit CLIs are allowed')
@@ -236,7 +344,7 @@ def run_cli(root, script):
             return None
         # These exact three blobs only enter main via their final __main__ guard.
         namespace = runpy.run_path(str(path),run_name='_doge_owned_audit_cli')
-        with _hooks(root,script):
+        with _hooks(root,script), _p0_hook(root,script,namespace['main'].__globals__):
             return namespace['main']()
     finally:
         sys.argv = previous_argv

@@ -245,9 +245,11 @@ class ProfileTests(unittest.TestCase):
             launcher += " kinds=['runtime_publication_state_validation']+(['runtime_paired_history_validation'] if script=='paired_cohort_audit.py' else [])\n"
             launcher += " for kind in kinds: print(json.dumps({'kind':kind,'mode':'native_batch','status':'ok','validation_status':'ok','native_batch_calls':1}),file=sys.stderr)\n"
             launcher += " if script=='paired_cohort_audit.py': print(json.dumps({'kind':'runtime_canonical_json_transport','implementation':'paired_canonical_utf8_lru_v1','mode':'canonical_bytes_lru','status':'ok','module_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),'calls':2,'hits':1,'misses':1,'fallback_calls':0,'sha256_calls':2,'encoded_calls':1,'evictions':0,'entries':1,'cached_bytes':10}),file=sys.stderr)\n"
+            launcher += " if script=='p0_operational_audit.py': print(json.dumps({'kind':'runtime_p0_inventory_transport','implementation':'p0_fresh_inventory_window4_v1','mode':'fresh_bounded_inventory','status':'ok','installed':True,'window':4,'native_calls':1,'fallback_calls':0,'real_gets':2,'days':1,'module_sha256':hashlib.sha256((root/'runtime_p0_inventory_transport.py').read_bytes()).hexdigest()}),file=sys.stderr)\n"
             launcher += " runpy.run_path(str(root/script),run_name='__main__')\n"
             (source / 'runtime_audit_cli.py').write_text(launcher)
             (source / 'runtime_audit_worker.py').write_text('# fixture helper\n')
+            (source / 'runtime_p0_inventory_transport.py').write_text('# fixture P0 helper identity only\n')
             subprocess.run(['git', 'init', '-q'], cwd=source, check=True)
             subprocess.run(['git', 'add', '.'], cwd=source, check=True)
             subprocess.run(['git', '-c', 'user.name=test', '-c', 'user.email=test@example.com',
@@ -277,6 +279,198 @@ class ProfileTests(unittest.TestCase):
             self.assertTrue(report['output_bytes_exactly_equal'])
             self.assertTrue(report['source_state_unchanged'])
             self.assertGreater(report['native_whole_source_seconds'], 0)
+
+
+class ComponentTimingTests(unittest.TestCase):
+    def launcher(self):
+        path = Path(__file__).parent / 'runtime_audit_cli.py'
+        if not path.exists():
+            path = path.parent / 'reference' / path.name
+        spec = importlib.util.spec_from_file_location('real_timing_launcher', path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def timer(self, module, **kwargs):
+        self.assertTrue(hasattr(profile, 'paired_component_timing'), 'paired component timing missing')
+        return profile.paired_component_timing(module, **kwargs)
+
+    def targets(self, module):
+        return [module._CanonicalBytes.digest, module.marshal.dumps, module.marshal.loads, module._json_closed,
+                module.json.dumps, module.hashlib.sha256, module._hooks]
+
+    def test_real_digest_values_and_all_sha_calls_preserved_with_component_counts(self):
+        module = self.launcher()
+        original = lambda v: module.hashlib.sha256(module.json.dumps(
+            v, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()).hexdigest()
+        value = {'x': [1, 2.5, '汉字']}
+        expected = original(value)
+        before = self.targets(module)
+        cache = module._CanonicalBytes(original)
+        with self.timer(module, enabled=True) as stats:
+            for _ in range(3):
+                self.assertEqual(cache.digest(value), expected)
+            # Unrelated operations outside digest are deliberately not counted.
+            module.json.dumps({'outside': True})
+        self.assertEqual(self.targets(module), before)
+        self.assertEqual(stats['components']['digest']['calls'], 3)
+        self.assertEqual(stats['components']['marshal']['calls'], 5)
+        self.assertEqual(stats['components']['marshal_loads']['calls'], 1)
+        self.assertEqual(stats['components']['eligibility']['calls'], 0)
+        self.assertEqual(stats['components']['json_encode']['calls'], 1)
+        self.assertEqual(stats['components']['sha256']['calls'], 3)
+        self.assertTrue(stats['business_completed'])
+        self.assertTrue(all(v['seconds'] >= 0 for v in stats['components'].values()))
+
+    def test_original_exception_object_and_global_restoration(self):
+        module = self.launcher()
+        before = self.targets(module)
+        error = RuntimeError('PRIVATE_PAYLOAD_MUST_NOT_APPEAR')
+        with self.assertRaises(RuntimeError) as caught:
+            with self.timer(module, enabled=True) as stats:
+                raise error
+        self.assertIs(caught.exception, error)
+        self.assertEqual(self.targets(module), before)
+        self.assertFalse(stats['business_completed'])
+        self.assertNotIn('PRIVATE_PAYLOAD', json.dumps(stats))
+
+    def test_systemexit_and_keyboardinterrupt_preserved_and_restored(self):
+        module = self.launcher()
+        for error in (SystemExit(7), KeyboardInterrupt()):
+            with self.subTest(error=type(error).__name__):
+                before = self.targets(module)
+                with self.assertRaises(type(error)) as caught:
+                    with self.timer(module, enabled=True):
+                        raise error
+                self.assertIs(caught.exception, error)
+                self.assertEqual(self.targets(module), before)
+
+    def test_disabled_has_no_patches_and_no_component_counts(self):
+        module = self.launcher()
+        before = self.targets(module)
+        with self.timer(module, enabled=False) as stats:
+            self.assertEqual(self.targets(module), before)
+        self.assertEqual(stats['status'], 'disabled')
+        self.assertEqual(stats['components']['digest']['calls'], 0)
+
+    def test_unavailable_module_is_noop_not_business_failure(self):
+        module = types.ModuleType('unknown')
+        with self.timer(module, enabled=True) as stats:
+            self.assertFalse(hasattr(module, '_CanonicalBytes'))
+        self.assertEqual(stats['status'], 'unavailable')
+
+    def test_timing_clock_errors_never_change_real_digest_result(self):
+        module = self.launcher()
+        original = lambda v: 'original fallback result'
+        value = {'x': [1]}
+        expected = module._CanonicalBytes(original).digest(value)
+        before = self.targets(module)
+        clock = lambda: (_ for _ in ()).throw(RuntimeError('bad timer'))
+        with self.timer(module, enabled=True, clock=clock) as stats:
+            self.assertEqual(module._CanonicalBytes(original).digest(value), expected)
+        self.assertEqual(self.targets(module), before)
+        self.assertGreater(stats['timer_errors'], 0)
+
+    def test_utc_is_timed_for_whole_paired_context_and_restored(self):
+        from contextlib import contextmanager
+        module = self.launcher()
+        cohort = types.ModuleType('paired_forward_cohort')
+        calls = []
+        def utc(value):
+            calls.append(value)
+            return value
+        cohort.utc = utc
+        @contextmanager
+        def hooks(root, script):
+            yield
+        module._hooks = hooks
+        with patch.dict(sys.modules, {'paired_forward_cohort': cohort}):
+            with self.timer(module, enabled=True) as stats:
+                with module._hooks(Path('.'), 'paired_cohort_audit.py'):
+                    for number in range(4):
+                        self.assertEqual(cohort.utc(number), number)
+                self.assertIs(cohort.utc, utc)
+            self.assertIs(cohort.utc, utc)
+        self.assertEqual(calls, list(range(4)))
+        self.assertEqual(stats['components']['cohort_utc']['calls'], 4)
+
+    def test_metric_write_error_does_not_replace_original_business_result(self):
+        self.assertTrue(hasattr(profile, 'write_component_metrics'), 'component writer missing')
+        with patch.object(Path, 'write_text', side_effect=PermissionError('private error')):
+            self.assertFalse(profile.write_component_metrics(Path('unused'), {'status': 'ok'}))
+
+    def test_standard_encoder_reference_timed_together_and_restored_on_success(self):
+        module = self.launcher()
+        original = module.json.dumps
+        module._STANDARD_JSON_DUMPS = original
+        with self.timer(module, enabled=True) as stats:
+            self.assertIs(module._STANDARD_JSON_DUMPS, module.json.dumps)
+            self.assertIsNot(module.json.dumps, original)
+            self.assertEqual(module.json.dumps({'x': 1}), original({'x': 1}))
+        self.assertIs(module._STANDARD_JSON_DUMPS, original)
+        self.assertIs(module.json.dumps, original)
+        self.assertTrue(stats['instrumented_standard_encoder'])
+
+    def test_marshal_loads_counted_only_inside_digest_and_restored(self):
+        module = self.launcher()
+        closed = module._json_closed
+        def checked(value):
+            module.marshal.loads(module.marshal.dumps(value, 2))
+            return closed(value)
+        module._json_closed = checked
+        before = self.targets(module)
+        expected = module._CanonicalBytes(lambda v: 'fallback').digest({'x': 1})
+        with self.timer(module, enabled=True) as stats:
+            module.marshal.loads(module.marshal.dumps({'outside': True}, 2))
+            actual = module._CanonicalBytes(lambda v: 'fallback').digest({'x': 1})
+        self.assertEqual(actual, expected)
+        self.assertEqual(stats['components']['marshal_loads']['calls'], 1)
+        self.assertEqual(self.targets(module), before)
+
+    def test_standard_encoder_reference_restored_on_exception(self):
+        module = self.launcher()
+        original = module.json.dumps
+        module._STANDARD_JSON_DUMPS = original
+        error = RuntimeError('original error')
+        with self.assertRaises(RuntimeError) as got:
+            with self.timer(module, enabled=True):
+                self.assertIs(module._STANDARD_JSON_DUMPS, module.json.dumps)
+                raise error
+        self.assertIs(got.exception, error)
+        self.assertIs(module._STANDARD_JSON_DUMPS, original)
+        self.assertIs(module.json.dumps, original)
+
+    def test_standard_encoder_reference_restored_on_cancel(self):
+        module = self.launcher()
+        original = module.json.dumps
+        module._STANDARD_JSON_DUMPS = original
+        for error in (SystemExit(9), KeyboardInterrupt()):
+            with self.assertRaises(type(error)) as got:
+                with self.timer(module, enabled=True):
+                    self.assertIs(module._STANDARD_JSON_DUMPS, module.json.dumps)
+                    raise error
+            self.assertIs(got.exception, error)
+            self.assertIs(module._STANDARD_JSON_DUMPS, original)
+            self.assertIs(module.json.dumps, original)
+
+    def test_external_encoder_hook_is_never_blessed_and_is_exactly_restored(self):
+        module = self.launcher()
+        original = module.json.dumps
+        module._STANDARD_JSON_DUMPS = original
+        seen = []
+        def external(*args, **kwargs):
+            seen.append(1)
+            return original(*args, **kwargs)
+        with patch.object(module.json, 'dumps', external):
+            with self.timer(module, enabled=True) as stats:
+                self.assertIs(module._STANDARD_JSON_DUMPS, original)
+                self.assertIsNot(module._STANDARD_JSON_DUMPS, module.json.dumps)
+                self.assertEqual(module.json.dumps({'x': 1}), original({'x': 1}))
+            self.assertIs(module.json.dumps, external)
+            self.assertFalse(stats['instrumented_standard_encoder'])
+        self.assertIs(module._STANDARD_JSON_DUMPS, original)
+        self.assertIs(module.json.dumps, original)
+        self.assertEqual(seen, [1])
 
 
 if __name__ == '__main__':

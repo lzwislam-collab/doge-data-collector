@@ -37,6 +37,7 @@ PREFIXES = ('https://api.github.com/repos/lzwislam-collab/doge-data-collector/',
             'https://raw.githubusercontent.com/lzwislam-collab/doge-data-collector/')
 MAX_BODY = 32 * 1024 * 1024
 MAX_FIXTURE = 256 * 1024 * 1024
+_PROFILE_STANDARD_JSON_DUMPS = json.dumps
 
 
 class ProfileError(ValueError):
@@ -194,6 +195,121 @@ def paired_profile_enabled(optimized, script):
 
 
 @contextmanager
+def paired_component_timing(launcher, enabled=True, clock=None):
+    """Diagnostic counters only; every original call and exception is retained."""
+    names = ('digest', 'marshal', 'marshal_loads', 'eligibility', 'json_encode', 'sha256', 'cohort_utc')
+    stats = {'kind': 'paired_component_timing', 'enabled': bool(enabled),
+             'status': 'disabled' if not enabled else 'unavailable',
+             'instrumented_standard_encoder': False,
+             'business_completed': False, 'timer_errors': 0,
+             'components': {name: {'calls': 0, 'seconds': 0.0} for name in names}}
+    if not enabled:
+        yield stats
+        stats['business_completed'] = True
+        return
+    try:
+        targets = [(launcher._CanonicalBytes, 'digest', 'digest'),
+                   (launcher.marshal, 'dumps', 'marshal'),
+                   (launcher.marshal, 'loads', 'marshal_loads'),
+                   (launcher, '_json_closed', 'eligibility'),
+                   (launcher.json, 'dumps', 'json_encode'),
+                   (launcher.hashlib, 'sha256', 'sha256')]
+        originals = [(owner, name, kind, getattr(owner, name))
+                     for owner, name, kind in targets]
+        hooks = launcher._hooks
+        if not all(callable(row[3]) for row in originals) or not callable(hooks):
+            raise AttributeError('diagnostic target unavailable')
+    except (AttributeError, TypeError):
+        yield stats
+        stats['business_completed'] = True
+        return
+    clock = time.perf_counter if clock is None else clock
+    depth = 0
+
+    def read_clock():
+        try:
+            value = clock()
+            if type(value) not in (float, int) or not math.isfinite(value):
+                raise ValueError('invalid diagnostic timer')
+            return value
+        except Exception:
+            stats['timer_errors'] += 1
+            return None
+
+    def timed(original, kind, *args, **kwargs):
+        stats['components'][kind]['calls'] += 1
+        start = read_clock()
+        try:
+            return original(*args, **kwargs)
+        finally:
+            end = read_clock()
+            if start is not None and end is not None and end >= start:
+                stats['components'][kind]['seconds'] += end - start
+
+    def wrap(original, kind):
+        def measured(*args, **kwargs):
+            nonlocal depth
+            if kind == 'digest':
+                depth += 1
+                try:
+                    return timed(original, kind, *args, **kwargs)
+                finally:
+                    depth -= 1
+            if depth:
+                return timed(original, kind, *args, **kwargs)
+            return original(*args, **kwargs)
+        return measured
+
+    @contextmanager
+    def measured_hooks(root, script):
+        with hooks(root, script):
+            cohort = sys.modules.get('paired_forward_cohort')
+            original_utc = getattr(cohort, 'utc', None)
+            if script != 'paired_cohort_audit.py' or not callable(original_utc):
+                yield
+                return
+            def measured_utc(*args, **kwargs):
+                return timed(original_utc, 'cohort_utc', *args, **kwargs)
+            cohort.utc = measured_utc
+            try:
+                yield
+            finally:
+                cohort.utc = original_utc
+
+    installed = []
+    try:
+        for owner, name, kind, original in originals:
+            measured = wrap(original, kind)
+            # This diagnostic wrapper still calls the same captured standard
+            # encoder exactly once. Never bless an already replaced encoder.
+            if (kind == 'json_encode' and original is _PROFILE_STANDARD_JSON_DUMPS
+                    and getattr(launcher, '_STANDARD_JSON_DUMPS', None) is original):
+                launcher._STANDARD_JSON_DUMPS = measured
+                installed.append((launcher, '_STANDARD_JSON_DUMPS', original))
+                stats['instrumented_standard_encoder'] = True
+            setattr(owner, name, measured)
+            installed.append((owner, name, original))
+        launcher._hooks = measured_hooks
+        stats['status'] = 'ok'
+        yield stats
+        stats['business_completed'] = True
+    finally:
+        launcher._hooks = hooks
+        for owner, name, original in reversed(installed):
+            setattr(owner, name, original)
+
+
+def write_component_metrics(path, stats):
+    """Best effort diagnostic output cannot replace an audit result or error."""
+    try:
+        Path(path).write_text(json.dumps(stats, sort_keys=True, indent=2,
+                                        allow_nan=False) + '\n', encoding='utf-8')
+        return True
+    except Exception:
+        return False
+
+
+@contextmanager
 def paired_cpu_profile(enabled, fixture):
     """Diagnostic only; profile overhead stays included in the measured trial."""
     if not enabled:
@@ -230,8 +346,16 @@ def child(root, script, mode, fixture, clock, optimized):
         sys.argv = [script]
         try:
             if optimized:
-                from runtime_audit_cli import run_cli
-                result = run_cli(root, script)
+                import runtime_audit_cli as launcher
+                stats = None
+                try:
+                    with paired_component_timing(
+                            launcher, enabled=script == 'paired_cohort_audit.py') as stats:
+                        result = launcher.run_cli(root, script)
+                finally:
+                    if script == 'paired_cohort_audit.py' and stats is not None:
+                        write_component_metrics(Path(fixture).resolve().parent.parent /
+                                                'native-paired-components.json', stats)
                 return 0 if result is None else result
             try:
                 runpy.run_path(str(root / script), run_name='__main__')
@@ -259,13 +383,13 @@ def source_control_state(source, helper):
     return state
 
 
-def validate_native_diagnostics(stderr, script, expected_launcher_sha256=None):
+def validate_native_diagnostics(stderr, script, expected_launcher_sha256=None, expected_p0_sha256=None):
     if len(stderr.encode('utf-8')) > 1024 * 1024:
         raise ProfileError('oversize native diagnostics')
     required = {'runtime_publication_state_validation'}
     if script == 'paired_cohort_audit.py':
         required.add('runtime_paired_history_validation')
-    rows, canonical = [], []
+    rows, canonical, inventory = [], [], []
     counts = {'calls', 'hits', 'misses', 'fallback_calls', 'sha256_calls',
               'encoded_calls', 'evictions', 'entries', 'cached_bytes'}
     for line in stderr.splitlines():
@@ -275,6 +399,20 @@ def validate_native_diagnostics(stderr, script, expected_launcher_sha256=None):
         if not isinstance(row, dict): continue
         if row.get('kind') == 'runtime_audit_cli_fallback':
             raise ProfileError('legacy CLI/backend fallback cannot establish native performance')
+        if row.get('kind') == 'runtime_p0_inventory_transport':
+            fields = {'native_calls','fallback_calls','real_gets','days'}
+            if (script != 'p0_operational_audit.py' or set(row) != fields |
+                    {'kind','implementation','mode','status','installed','module_sha256','window'}
+                    or row.get('implementation') != 'p0_fresh_inventory_window4_v1'
+                    or row.get('mode') != 'fresh_bounded_inventory' or row.get('status') != 'ok'
+                    or row.get('installed') is not True or type(row.get('window')) is not int or row['window'] != 4
+                    or row.get('module_sha256') != expected_p0_sha256
+                    or any(type(row[k]) is not int or not 0 <= row[k] <= 10**9 for k in fields)
+                    or row['native_calls'] == 0 or row['fallback_calls'] != 0
+                    or row['days'] == 0 or row['real_gets'] < row['days'] + row['native_calls']):
+                raise ProfileError('invalid actual P0 fresh inventory transport evidence')
+            inventory.append(row)
+            continue
         if row.get('kind') == 'runtime_canonical_json_transport':
             if (script != 'paired_cohort_audit.py'
                     or set(row) != counts | {'kind', 'implementation', 'mode', 'status', 'module_sha256'}
@@ -306,7 +444,9 @@ def validate_native_diagnostics(stderr, script, expected_launcher_sha256=None):
         raise ProfileError('required native validation evidence missing')
     if script == 'paired_cohort_audit.py' and len(canonical) != 1:
         raise ProfileError('exactly one canonical paired transport receipt required')
-    return rows + canonical
+    if script == 'p0_operational_audit.py' and expected_p0_sha256 is not None and len(inventory) != 1:
+        raise ProfileError('exactly one actual P0 inventory receipt required')
+    return rows + canonical + inventory
 
 
 def fingerprint(root):
@@ -453,7 +593,8 @@ def worker(source, head, output, timeout_seconds, max_native_seconds):
                     trial['phases'].append({'script': script, 'seconds': elapsed, 'exit_code': result.returncode})
                     if optimized:
                         trial['phases'][-1]['native_diagnostics'] = validate_native_diagnostics(
-                            result.stderr, script, original_code['runtime_audit_cli.py'])
+                            result.stderr, script, original_code['runtime_audit_cli.py'],
+                            expected_p0_sha256=original_code['runtime_p0_inventory_transport.py'])
                     trial['phases'][-1]['stdout_sha256'] = digest(result.stdout.encode('utf-8'))
                     write_json(output / 'summary.json', report)
                     if result.returncode != 0:
