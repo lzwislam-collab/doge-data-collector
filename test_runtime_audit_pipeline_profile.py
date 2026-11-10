@@ -23,6 +23,20 @@ class Response(io.BytesIO):
 
 
 
+class ProfilerOptInTests(unittest.TestCase):
+    def test_formal_comparison_has_no_profiler_by_default(self):
+        with patch.dict(profile.os.environ, {}, clear=True):
+            self.assertFalse(profile.paired_profile_enabled(True, 'paired_cohort_audit.py'))
+
+    def test_explicit_flag_profiles_only_native_paired_cli(self):
+        with patch.dict(profile.os.environ, {'DOGE_AUDIT_PAIRED_CPU_PROFILE': '1'}):
+            self.assertTrue(profile.paired_profile_enabled(True, 'paired_cohort_audit.py'))
+            self.assertFalse(profile.paired_profile_enabled(False, 'paired_cohort_audit.py'))
+            self.assertFalse(profile.paired_profile_enabled(True, 'forward_validation_v2.py'))
+        with patch.dict(profile.os.environ, {'DOGE_AUDIT_PAIRED_CPU_PROFILE': '0'}):
+            self.assertFalse(profile.paired_profile_enabled(True, 'paired_cohort_audit.py'))
+
+
 class PairedProfilerTests(unittest.TestCase):
     def test_disabled_diagnostic_has_no_output_file(self):
         with tempfile.TemporaryDirectory() as name:
@@ -50,6 +64,48 @@ class PairedProfilerTests(unittest.TestCase):
                 with profile.paired_cpu_profile(True, fixture):
                     raise RuntimeError('original failure')
             self.assertTrue((Path(name) / 'native-paired.cprofile').is_file())
+
+
+class CanonicalEvidenceTests(unittest.TestCase):
+    def rows(self):
+        base = dict(kind='runtime_publication_state_validation', mode='native_batch',
+                    status='ok', validation_status='ok', native_batch_calls=1)
+        pair = dict(base, kind='runtime_paired_history_validation')
+        cache = dict(kind='runtime_canonical_json_transport',
+                     implementation='paired_canonical_utf8_lru_v1', mode='canonical_bytes_lru',
+                     status='ok', module_sha256='a'*64, calls=2, hits=1, misses=1,
+                     fallback_calls=0, sha256_calls=2, encoded_calls=1,
+                     evictions=0, entries=1, cached_bytes=10)
+        return base, pair, cache
+
+    def test_complete_paired_performance_needs_real_cache_evidence(self):
+        base, pair, cache = self.rows()
+        with self.assertRaises(profile.ProfileError):
+            profile.validate_native_diagnostics(
+                '\n'.join(map(json.dumps, (base, pair))), 'paired_cohort_audit.py')
+
+    def test_cache_hits_hash_counts_identity_and_shape_are_checked(self):
+        base, pair, cache = self.rows()
+        for bad in (dict(cache, hits=0), dict(cache, fallback_calls=1), dict(cache, sha256_calls=1),
+                    dict(cache, module_sha256='b'*64), dict(cache, calls=True),
+                    dict(cache, secret='must-not-be-accepted')):
+            with self.subTest(bad=bad), self.assertRaises(profile.ProfileError):
+                profile.validate_native_diagnostics(
+                    '\n'.join(map(json.dumps, (base, pair, bad))),
+                    'paired_cohort_audit.py', expected_launcher_sha256='a'*64)
+
+    def test_valid_evidence_proves_transport_and_every_successful_sha(self):
+        rows = self.rows()
+        result = profile.validate_native_diagnostics(
+            '\n'.join(map(json.dumps, rows)), 'paired_cohort_audit.py',
+            expected_launcher_sha256='a'*64)
+        self.assertEqual(len(result), 3)
+
+    def test_cache_evidence_is_rejected_outside_paired_cli(self):
+        base, pair, cache = self.rows()
+        with self.assertRaises(profile.ProfileError):
+            profile.validate_native_diagnostics(
+                '\n'.join(map(json.dumps, (base, cache))), 'p0_operational_audit.py')
 
 
 class ProfileTests(unittest.TestCase):
@@ -184,10 +240,11 @@ class ProfileTests(unittest.TestCase):
                 code += "for relative in " + repr(targets) + ":\n p=Path(relative);p.parent.mkdir(parents=True,exist_ok=True);p.write_text(json.dumps(report,sort_keys=True))\n"
                 code += "print(json.dumps(report,sort_keys=True))\n"
                 (source / script).write_text(code)
-            launcher = "import runpy,json,sys\n"
+            launcher = "import runpy,json,sys,hashlib\nfrom pathlib import Path\n"
             launcher += "def run_cli(root,script):\n"
             launcher += " kinds=['runtime_publication_state_validation']+(['runtime_paired_history_validation'] if script=='paired_cohort_audit.py' else [])\n"
             launcher += " for kind in kinds: print(json.dumps({'kind':kind,'mode':'native_batch','status':'ok','validation_status':'ok','native_batch_calls':1}),file=sys.stderr)\n"
+            launcher += " if script=='paired_cohort_audit.py': print(json.dumps({'kind':'runtime_canonical_json_transport','implementation':'paired_canonical_utf8_lru_v1','mode':'canonical_bytes_lru','status':'ok','module_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),'calls':2,'hits':1,'misses':1,'fallback_calls':0,'sha256_calls':2,'encoded_calls':1,'evictions':0,'entries':1,'cached_bytes':10}),file=sys.stderr)\n"
             launcher += " runpy.run_path(str(root/script),run_name='__main__')\n"
             (source / 'runtime_audit_cli.py').write_text(launcher)
             (source / 'runtime_audit_worker.py').write_text('# fixture helper\n')

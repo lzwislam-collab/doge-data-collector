@@ -312,4 +312,152 @@ class TransportDiagnosticTests(unittest.TestCase):
   done=subprocess.CompletedProcess(self.args,0,'original stdout\n',json.dumps(self.row()))
   with mock.patch.object(self.worker.subprocess,'run',return_value=done),mock.patch.object(self.worker,'forward_transport_diagnostics',side_effect=RuntimeError('bad parser')):self.assertEqual(self.worker.command(*self.args,cwd=self.root),'original stdout\n')
 
+class CanonicalTransportTests(unittest.TestCase):
+ def setUp(self):
+  self.subject=subject();self.original=lambda v:hashlib.sha256(json.dumps(v,sort_keys=True,separators=(',', ':'),allow_nan=False).encode()).hexdigest()
+ def cache(self,**kwargs):
+  self.assertTrue(hasattr(self.subject,'_CanonicalBytes'),'canonical byte transport is missing')
+  return self.subject._CanonicalBytes(self.original,**kwargs)
+ def test_equal_json_values_recompute_sha_on_every_hit_and_reduce_encoding(self):
+  values=[None,True,False,0,1,-1,2**100,0.0,-0.0,1.5,'汉字\ud800',[],(),{},[1,False,None],{'b':[1,2],'a':{'x':'é'}}]
+  expected=[self.original(v) for v in values];cache=self.cache()
+  sha=hashlib.sha256;encoder=json.dumps
+  with mock.patch.object(self.subject.hashlib,'sha256',wraps=sha) as hashed,mock.patch.object(self.subject.json,'dumps',wraps=encoder) as encoded:
+   for _ in range(3):self.assertEqual([cache.digest(v) for v in values],expected)
+  self.assertEqual(hashed.call_count,len(values)*3);self.assertEqual(encoded.call_count,len(values));self.assertEqual(cache.stats['hits'],len(values)*2)
+ def test_nested_mutation_current_structure_and_type_changes_are_detected(self):
+  cache=self.cache();value={'a':[{'x':1}], 'b':True}
+  for replacement in (1,2,2.0,-0.0,False,'2',{'nested':[3]}):
+   value['a'][0]['x']=replacement;self.assertEqual(cache.digest(value),self.original(value))
+  value['a'].append({'x':'new'});self.assertEqual(cache.digest(value),self.original(value))
+  self.assertGreaterEqual(cache.stats['misses'],8)
+ def test_aliases_and_equal_new_objects_preserve_exact_canonical_results(self):
+  cache=self.cache();shared=['x',1];values=[[shared,shared],[['x',1],['x',1]],{'z':shared,'a':shared},{'a':['x',1],'z':['x',1]}]
+  for value in values:
+   for _ in range(2):self.assertEqual(cache.digest(value),self.original(value))
+ def test_seeded_builtin_values_match_original_with_numeric_keys_and_unicode(self):
+  import random
+  randomizer=random.Random(20261110);cache=self.cache()
+  atoms=[None,True,False,0,1,-4,0.0,-0.0,1e-200,1e200,'汉字','\ud800','é',2**150]
+  def value(depth=0):
+   if depth>3 or randomizer.randrange(3)==0:return randomizer.choice(atoms)
+   if randomizer.randrange(2):return [value(depth+1) for _ in range(randomizer.randrange(4))]
+   return {str(i):value(depth+1) for i in range(randomizer.randrange(4))}
+  values=[value() for _ in range(500)]+[{None:'a',False:'b',2:'c'},{1:'a',2.5:'b'},{'z':1,'a':2}]
+  for item in values:
+   try:expected=self.original(item)
+   except Exception as error:
+    with self.assertRaises(type(error)) as got:cache.digest(item)
+    self.assertEqual(str(got.exception),str(error))
+   else:
+    for _ in range(2):self.assertEqual(cache.digest(item),expected)
+ def test_miss_mutation_during_encoding_does_not_associate_old_key(self):
+  cache=self.cache();value={'x':1};encoder=json.dumps
+  def mutate(item,**kwargs):
+   encoded=encoder(item,**kwargs);item['x']=2;return encoded
+  with mock.patch.object(self.subject.json,'dumps',side_effect=mutate):self.assertEqual(cache.digest(value),self.original({'x':1}))
+  self.assertEqual(cache.stats['entries'],0);self.assertEqual(cache.digest(value),self.original(value))
+ def test_nan_infinity_mixed_keys_and_cycles_keep_original_exceptions(self):
+  cache=self.cache();cycle=[];cycle.append(cycle)
+  for value in (float('nan'),float('inf'),-float('inf'),{'x':float('nan')},{'a':1,2:3},cycle):
+   for _ in range(2):
+    with self.subTest(value=type(value).__name__):
+     try:self.original(value)
+     except Exception as expected:
+      with self.assertRaises(type(expected)) as got:cache.digest(value)
+      self.assertEqual(str(got.exception),str(expected))
+     else:self.fail('fixture must fail original')
+  self.assertEqual(cache.stats['entries'],0)
+ def test_unsupported_and_subclasses_never_hit_builtin_cache(self):
+  import enum
+  class Number(enum.IntEnum):ONE=1
+  class ListChild(list):pass
+  class DictChild(dict):pass
+  class StringChild(str):pass
+  cache=self.cache();[cache.digest(v) for v in (1,[1],{'x':1},'x')]
+  before=cache.stats['hits']
+  values=[Number.ONE,ListChild([1]),DictChild(x=1),StringChild('x'),b'x',{1},frozenset({1}),1+2j,compile('1','x','eval'),object()]
+  for value in values:
+   for _ in range(2):
+    try:expected=self.original(value)
+    except Exception as expected_error:
+     with self.assertRaises(type(expected_error)) as got:cache.digest(value)
+     self.assertEqual(str(got.exception),str(expected_error))
+    else:self.assertEqual(cache.digest(value),expected)
+  self.assertEqual(cache.stats['hits'],before);self.assertEqual(cache.stats['fallback_calls'],len(values)*2)
+ def test_marshal_failure_uses_original_digest_and_original_error(self):
+  cache=self.cache();error=ValueError('marshal detail must not escape')
+  with mock.patch.object(self.subject.marshal,'dumps',side_effect=error):self.assertEqual(cache.digest({'a':1}),self.original({'a':1}))
+  self.assertEqual(cache.stats['fallback_calls'],1)
+ def test_eligibility_walk_failure_returns_to_complete_original(self):
+  cache=self.cache()
+  with mock.patch.object(self.subject,'_json_closed',side_effect=RuntimeError('concurrent mutation')):self.assertEqual(cache.digest({'x':1}),self.original({'x':1}))
+  self.assertEqual(cache.stats['fallback_calls'],1);self.assertEqual(cache.stats['entries'],0)
+ def test_bounded_lru_eviction_and_clear_release_only_bytes(self):
+  cache=self.cache(max_bytes=180,max_entries=2)
+  for value in ({'a':1},{'b':2},{'a':1},{'c':3}):self.assertEqual(cache.digest(value),self.original(value))
+  self.assertEqual(cache.stats['entries'],2);self.assertGreater(cache.stats['evictions'],0);self.assertLessEqual(cache.stats['cached_bytes'],180)
+  self.assertTrue(all(type(k) is bytes and type(v) is bytes for k,v in cache.entries.items()))
+  cache.clear();self.assertFalse(cache.entries);self.assertEqual(cache.stats['cached_bytes'],0);self.assertEqual(cache.stats['entries'],0)
+ def test_oversize_and_deep_values_use_original_without_retention(self):
+  cache=self.cache(max_bytes=32);value={'x':'a'*100};self.assertEqual(cache.digest(value),self.original(value));self.assertEqual(cache.stats['entries'],0)
+  value=1
+  for _ in range(120):value=[value]
+  self.assertEqual(cache.digest(value),self.original(value));self.assertEqual(cache.stats['entries'],0)
+ def fixture(self,root):
+  cohort=types.ModuleType('paired_forward_cohort');depth=types.ModuleType('forward_execution_evidence')
+  for name in ('paired_forward_cohort.py','forward_execution_evidence.py','paired_cohort_audit.py'):
+   source=REFERENCE/name
+   if not source.exists():source=HERE.parent/'pinned'/name
+   shutil.copyfile(source,root/name)
+  depth.__dict__.update(hashlib=hashlib,json=json);functions(depth,root/'forward_execution_evidence.py',{'digest'})
+  cohort.__dict__.update(depth=depth);functions(cohort,root/'paired_forward_cohort.py',{'digest'})
+  return cohort,depth
+ def test_exact_paired_hook_restores_and_clears_on_success_error_and_systemexit(self):
+  with tempfile.TemporaryDirectory() as name:
+   root=Path(name);cohort,depth=self.fixture(root);original=cohort.digest
+   self.assertTrue(hasattr(self.subject,'_canonical_hook'),'paired canonical context is missing')
+   for error in (None,ValueError('original'),SystemExit(7)):
+    output=io.StringIO();held=None
+    try:
+     with contextlib.redirect_stderr(output),self.subject._canonical_hook(root,SCRIPTS[2],cohort) as held:
+      self.assertIsNotNone(held);self.assertIsNot(cohort.digest,original);self.assertEqual(cohort.digest({'x':[1]}),self.original({'x':[1]}));cohort.digest({'x':[1]})
+      if error:raise error
+    except BaseException as got:self.assertIs(got,error)
+    self.assertIs(cohort.digest,original);self.assertFalse(held.entries);row=json.loads(output.getvalue());self.assertEqual(row['kind'],'runtime_canonical_json_transport');self.assertEqual(row['sha256_calls'],2);self.assertEqual(row['hits'],1);self.assertNotIn('original',output.getvalue())
+ def test_identity_or_module_location_mismatch_keeps_complete_original(self):
+  with tempfile.TemporaryDirectory() as name:
+   root=Path(name);cohort,depth=self.fixture(root);original=cohort.digest
+   self.assertTrue(hasattr(self.subject,'_canonical_hook'),'paired canonical context is missing')
+   for script in SCRIPTS[:2]:
+    with self.subject._canonical_hook(root,script,cohort) as cache:self.assertIsNone(cache);self.assertIs(cohort.digest,original)
+   for filename in ('paired_forward_cohort.py','forward_execution_evidence.py','paired_cohort_audit.py'):
+    path=root/filename;raw=path.read_bytes();path.write_bytes(raw+b'\n# unknown\n')
+    with self.subject._canonical_hook(root,SCRIPTS[2],cohort) as cache:self.assertIsNone(cache);self.assertIs(cohort.digest,original)
+    path.write_bytes(raw)
+   depth.__file__=str(root.parent/'foreign.py')
+   with self.subject._canonical_hook(root,SCRIPTS[2],cohort) as cache:self.assertIsNone(cache);self.assertIs(cohort.digest,original)
+ def test_real_runpy_paired_context_installs_only_during_original_main(self):
+  with tempfile.TemporaryDirectory() as name:
+   root=Path(name);cohort,depth=self.fixture(root);original=cohort.digest
+   path=root/SCRIPTS[2];path.write_text('import paired_forward_cohort as c\ndef main():\n c.digest({"x":[1]})\n c.digest({"x":[1]})\n print("original stdout")\n return 0\nif __name__=="__main__":raise SystemExit(main())\n',encoding='utf-8')
+   oid=self.subject._blob(path);out=io.StringIO();err=io.StringIO()
+   with mock.patch.dict(sys.modules,{'paired_forward_cohort':cohort}),mock.patch.dict(self.subject.SCRIPT_BLOBS,{SCRIPTS[2]:oid}),mock.patch.dict(self.subject.CANONICAL_BLOBS,{SCRIPTS[2]:oid}),contextlib.redirect_stdout(out),contextlib.redirect_stderr(err):
+    self.assertEqual(self.subject.run_cli(root,SCRIPTS[2]),0)
+   self.assertEqual(out.getvalue(),'original stdout\n');self.assertIs(cohort.digest,original)
+   rows=[json.loads(line) for line in err.getvalue().splitlines()];self.assertEqual(len(rows),1);self.assertEqual(rows[0]['hits'],1);self.assertEqual(rows[0]['sha256_calls'],2)
+ def test_canonical_worker_metadata_is_bounded_and_never_reveals_payload(self):
+  worker=WorkerRouteTests().worker();out=io.StringIO()
+  row={'kind':'runtime_canonical_json_transport','implementation':'paired_canonical_utf8_lru_v1','mode':'canonical_bytes_lru','status':'ok','module_sha256':'a'*64,'calls':3,'hits':1,'misses':2,'fallback_calls':0,'sha256_calls':3,'encoded_calls':2,'evictions':0,'entries':2,'cached_bytes':100}
+  with contextlib.redirect_stdout(out):worker.forward_transport_diagnostics(json.dumps(row),SCRIPTS[2])
+  self.assertEqual(len(out.getvalue().splitlines()),1);self.assertEqual(json.loads(out.getvalue())['source_kind'],row['kind'])
+  for changed in (dict(row,secret='PRIVATE_TOKEN'),dict(row,hits=True),dict(row,cached_bytes=2**31),dict(row,mode='PRIVATE_TOKEN'),dict(row,module_sha256='PRIVATE_TOKEN')):
+   out=io.StringIO()
+   with contextlib.redirect_stdout(out):worker.forward_transport_diagnostics(json.dumps(changed),SCRIPTS[2])
+   self.assertEqual(out.getvalue(),'')
+  for stage in SCRIPTS[:2]:
+   out=io.StringIO()
+   with contextlib.redirect_stdout(out):worker.forward_transport_diagnostics(json.dumps(row),stage)
+   self.assertEqual(out.getvalue(),'')
+
 if __name__=='__main__':unittest.main()

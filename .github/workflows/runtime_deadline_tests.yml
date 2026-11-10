@@ -280,6 +280,7 @@ jobs:
         if: github.event_name == 'pull_request' && github.head_ref == 'fix/archive-audit-native-transport-20261110'
         timeout-minutes: 11
         env:
+          DOGE_AUDIT_PAIRED_CPU_PROFILE: '0'
           GITHUB_TOKEN: ${{ github.token }}
           OPENBLAS_NUM_THREADS: '1'
           OMP_NUM_THREADS: '1'

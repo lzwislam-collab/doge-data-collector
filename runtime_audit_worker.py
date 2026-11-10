@@ -251,6 +251,19 @@ def forward_transport_diagnostics(stderr, stage):
                 kind = source.get('kind')
                 if kind in TRANSPORT_IMPLEMENTATIONS:
                     fields = _transport_fields(source,TRANSPORT_IMPLEMENTATIONS[kind])
+                elif kind == 'runtime_canonical_json_transport':
+                    counts = ('calls','hits','misses','fallback_calls','sha256_calls',
+                              'encoded_calls','evictions','entries','cached_bytes')
+                    if (stage != 'paired_cohort_audit.py' or set(source) !=
+                            set(counts)|{'kind','implementation','mode','status','module_sha256'}
+                            or source['implementation'] != 'paired_canonical_utf8_lru_v1'
+                            or source['mode'] != 'canonical_bytes_lru'
+                            or source['status'] not in ('ok','error')
+                            or not isinstance(source['module_sha256'],str)
+                            or not re.fullmatch('[0-9a-f]{64}',source['module_sha256'])
+                            or any(type(source[k]) is not int or not 0<=source[k]<=2147483647 for k in counts)):
+                        continue
+                    fields = {k:v for k,v in source.items() if k != 'kind'}
                 elif kind == 'runtime_audit_cli_fallback':
                     if set(source)!={'kind','backend','reason'} or source['backend'] not in ('original_cli','runtime_publication_state','runtime_paired_history'):
                         continue

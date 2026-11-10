@@ -187,6 +187,12 @@ def frozen_clock(at):
         datetime_module.datetime = original
 
 
+def paired_profile_enabled(optimized, script):
+    """Formal timings are uninstrumented unless diagnostics are explicitly requested."""
+    return (optimized and script == 'paired_cohort_audit.py'
+            and os.environ.get('DOGE_AUDIT_PAIRED_CPU_PROFILE') == '1')
+
+
 @contextmanager
 def paired_cpu_profile(enabled, fixture):
     """Diagnostic only; profile overhead stays included in the measured trial."""
@@ -219,7 +225,7 @@ def child(root, script, mode, fixture, clock, optimized):
     import numpy  # noqa: F401; only the C extension required by these real CLIs
     at = datetime_module.datetime.fromisoformat(clock)
     with transport(mode, fixture), frozen_clock(at), paired_cpu_profile(
-            optimized and script == 'paired_cohort_audit.py', fixture):
+            paired_profile_enabled(optimized, script), fixture):
         previous = sys.argv
         sys.argv = [script]
         try:
@@ -253,13 +259,15 @@ def source_control_state(source, helper):
     return state
 
 
-def validate_native_diagnostics(stderr, script):
+def validate_native_diagnostics(stderr, script, expected_launcher_sha256=None):
     if len(stderr.encode('utf-8')) > 1024 * 1024:
         raise ProfileError('oversize native diagnostics')
     required = {'runtime_publication_state_validation'}
     if script == 'paired_cohort_audit.py':
         required.add('runtime_paired_history_validation')
-    rows = []
+    rows, canonical = [], []
+    counts = {'calls', 'hits', 'misses', 'fallback_calls', 'sha256_calls',
+              'encoded_calls', 'evictions', 'entries', 'cached_bytes'}
     for line in stderr.splitlines():
         if not line.lstrip().startswith('{'): continue
         try: row = json.loads(line)
@@ -267,6 +275,27 @@ def validate_native_diagnostics(stderr, script):
         if not isinstance(row, dict): continue
         if row.get('kind') == 'runtime_audit_cli_fallback':
             raise ProfileError('legacy CLI/backend fallback cannot establish native performance')
+        if row.get('kind') == 'runtime_canonical_json_transport':
+            if (script != 'paired_cohort_audit.py'
+                    or set(row) != counts | {'kind', 'implementation', 'mode', 'status', 'module_sha256'}
+                    or row.get('implementation') != 'paired_canonical_utf8_lru_v1'
+                    or row.get('mode') != 'canonical_bytes_lru' or row.get('status') != 'ok'):
+                raise ProfileError('invalid canonical transport evidence')
+            identity = row['module_sha256']
+            if (not isinstance(identity, str) or len(identity) != 64
+                    or any(c not in '0123456789abcdef' for c in identity)
+                    or (expected_launcher_sha256 is not None and identity != expected_launcher_sha256)):
+                raise ProfileError('canonical transport implementation identity differs')
+            if (any(type(row[k]) is not int or not 0 <= row[k] <= 10**9 for k in counts)
+                    or row['calls'] == 0 or row['hits'] == 0
+                    or row['sha256_calls'] != row['calls']
+                    or row['fallback_calls'] != 0
+                    or row['hits'] + row['misses'] != row['calls']
+                    or row['encoded_calls'] > row['misses']
+                    or row['entries'] > 128 or row['cached_bytes'] > 64 * 1024 * 1024):
+                raise ProfileError('canonical transport reuse or fresh SHA evidence missing')
+            canonical.append(row)
+            continue
         if row.get('kind') not in required: continue
         if (row.get('mode') != 'native_batch' or row.get('status') != 'ok'
                 or row.get('validation_status') != 'ok'):
@@ -275,7 +304,9 @@ def validate_native_diagnostics(stderr, script):
     seen = {r['kind'] for r in rows if r.get('native_batch_calls', 0) > 0}
     if seen != required:
         raise ProfileError('required native validation evidence missing')
-    return rows
+    if script == 'paired_cohort_audit.py' and len(canonical) != 1:
+        raise ProfileError('exactly one canonical paired transport receipt required')
+    return rows + canonical
 
 
 def fingerprint(root):
@@ -370,7 +401,9 @@ def worker(source, head, output, timeout_seconds, max_native_seconds):
               'metadata': 'actual original GET replies; candidate replays equal measured latency',
               'production_dispatch': False, 'production_changes': False, 'trials': [],
               'diagnostic_profiling': {'scope': 'native paired CLI only',
-                  'file': 'native-paired.cprofile', 'included_in_native_elapsed': True,
+                  'enabled': paired_profile_enabled(True, 'paired_cohort_audit.py'),
+                  'file': 'native-paired.cprofile' if paired_profile_enabled(True, 'paired_cohort_audit.py') else None,
+                  'included_in_native_elapsed': paired_profile_enabled(True, 'paired_cohort_audit.py'),
                   'production_override': False},
               'comparison': 'JSON object keys canonicalized; numeric lexemes, every field and list order retained; other files exact bytes',
               'diagnostic_environment': {'PYTHONHASHSEED': '0', 'PYTHONUTF8': '1',
@@ -419,7 +452,8 @@ def worker(source, head, output, timeout_seconds, max_native_seconds):
                     (output / (label + '-' + script + '.stderr')).write_text(result.stderr, encoding='utf-8')
                     trial['phases'].append({'script': script, 'seconds': elapsed, 'exit_code': result.returncode})
                     if optimized:
-                        trial['phases'][-1]['native_diagnostics'] = validate_native_diagnostics(result.stderr, script)
+                        trial['phases'][-1]['native_diagnostics'] = validate_native_diagnostics(
+                            result.stderr, script, original_code['runtime_audit_cli.py'])
                     trial['phases'][-1]['stdout_sha256'] = digest(result.stdout.encode('utf-8'))
                     write_json(output / 'summary.json', report)
                     if result.returncode != 0:
