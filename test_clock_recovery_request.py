@@ -271,16 +271,27 @@ class WorkflowAdmissionTests(unittest.TestCase):
      count+=1
     self.assertTrue(past);self.assertGreater(count,5)
 
- def test_prospective_bridge_is_enabled_only_on_foreground_step(self):
+ def test_prospective_bridge_is_enabled_only_on_foreground_and_bounded_handoff(self):
   text=(Path(__file__).parent/'.github/workflows/okx_hourly_extreme_history.yml').read_text(encoding='utf-8')
-  flag="DOGE_PROSPECTIVE_RUNTIME_BRIDGE:"
-  self.assertEqual(text.count(flag),1)
-  flagged=[b for b in self.blocks(text) if any(flag in line for line in b)]
-  self.assertEqual(len(flagged),1);self.assertTrue(any('id: deadline_service' in line for line in flagged[0]))
-  self.assertTrue(any('        env:'==line for line in flagged[0]))
-  switch=next(line for line in flagged[0] if flag in line)
-  self.assertIn("steps.prospective_deps.outcome == 'success'",switch)
-  self.assertIn("'1' || '0'",switch)
+  blocks=self.blocks(text);flag="DOGE_PROSPECTIVE_RUNTIME_BRIDGE:"
+  allowed={'deadline_service','open_target_guard'};admitted={}
+  expected=chr(36)+"{{ steps.prospective_deps.outcome == 'success' && '1' || '0' }}"
+  for index,block in enumerate(blocks):
+   switches=[line for line in block if flag in line]
+   if not switches:continue
+   step=next((line.strip()[4:] for line in block if line.startswith('        id: ')),None)
+   self.assertIn(step,allowed,'prospective work admitted outside ordinary foreground/handoff: '+block[0])
+   self.assertNotIn(step,admitted);self.assertEqual(len(switches),1)
+   self.assertIn('        env:',block)
+   self.assertEqual(switches[0],'          '+flag+' '+expected)
+   admitted[step]=(index,block)
+  self.assertEqual(set(admitted),allowed);self.assertEqual(text.count(flag),len(allowed))
+  front,tail=admitted['deadline_service'],admitted['open_target_guard']
+  self.assertLess(front[0],tail[0]);tail_text='\n'.join(tail[1])
+  self.assertIn("DOGE_TAIL_CAPTURE_BRIDGE: '1'",tail_text)
+  self.assertIn('run: python p0_open_target_guard.py',tail_text)
+  archive=next(i for i,block in enumerate(blocks) if any(line.strip()=='id: archive_bridge_start' for line in block))
+  self.assertLess(tail[0],archive)
 
 
  def test_numpy_install_is_after_fast_publish_and_failure_visible_after_artifacts(self):
