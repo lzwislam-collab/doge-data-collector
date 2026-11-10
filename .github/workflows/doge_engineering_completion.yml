@@ -35,7 +35,12 @@ jobs:
           python-version: '3.11'
       - run: python -m pip install numpy==2.3.5
       - name: Test readiness monitoring and bounded trusted dispatch
-        run: python -m unittest test_forward_readiness -q
+        run: python -m unittest test_forward_readiness test_market_snapshot_recovery -q
+      - name: Recover stale required market snapshot from trusted hourly completion
+        if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_run' && (github.event.workflow_run.path == '.github/workflows/okx_hourly_extreme_history.yml' || startsWith(github.event.workflow_run.path, '.github/workflows/okx_hourly_extreme_history.yml@'))
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python market_snapshot_recovery.py
       - name: Record terminal status and missing evidence without historical reconstruction
         if: github.event_name == 'workflow_run' && github.event.workflow_run.name == 'Backfill DOGE BTC ETH 1H extreme-event research history'
         env:
