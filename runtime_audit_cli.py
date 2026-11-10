@@ -10,9 +10,11 @@ import hashlib
 import importlib
 import json
 import marshal
+import os
 from pathlib import Path
 import runpy
 import sys
+import types
 
 SCRIPT_BLOBS = {
     'forward_validation_v2.py': '3adbdcc43c5dbdb57ecd482b1d4138e720146ba1',
@@ -23,6 +25,7 @@ BACKEND_BLOBS = {
     'runtime_publication_state': 'f0f6b6c7dbe5d7e4c0995b4714a53957217fbac0',
     'runtime_paired_history': 'b27849b2761de895a33613230de9adbf4187df71',
     'runtime_p0_inventory_transport': 'e55c50a610a58439211b076b95020ae83810954b',
+    'runtime_paired_git_stream': 'b4760557613e8753ca9dffcc0770a83833591240',
 }
 CANONICAL_BLOBS = {
     'paired_forward_cohort.py': '02e6b3ba51f063ba17cddcb98ff6445a08235c97',
@@ -255,6 +258,71 @@ def _p0_hook(root, script, main_globals):
             except Exception:
                 pass
 
+
+def _paired_original_context(root,script,namespace):
+    """Reject synthetic/AST contexts silently before importing a new backend."""
+    if script!='paired_cohort_audit.py' or not isinstance(namespace,dict):return False
+    try:
+        path=root/script
+        if path.stat().st_size>1024*1024 or _blob(path)!='a6bdf0c54ffcf648384c756d400e742ab57a1d61':return False
+        cohort=namespace['cohort'];publication=cohort.publication
+        for filename,module,oid in (
+                ('paired_forward_cohort.py',cohort,'02e6b3ba51f063ba17cddcb98ff6445a08235c97'),
+                ('publish_forward_evidence.py',publication,'d982f4f8bd278d7a1505073bc35dd71b80eeb095')):
+            if (type(module) is not types.ModuleType or Path(module.__file__).resolve()!=root/filename
+                    or (root/filename).stat().st_size>1024*1024 or _blob(root/filename)!=oid):return False
+        code=compile(path.read_bytes(),str(path),'exec',dont_inherit=True)
+        children=[child for child in code.co_consts if isinstance(child,types.CodeType)]
+        if len(children)!=6 or {child.co_name for child in children}!={'nonoverlap','metrics','bounded_cache','verify_pair','evaluate','main'}:return False
+        special={'__name__','__doc__','__package__','__loader__','__spec__','__file__','__cached__','__builtins__'}
+        if set(namespace)-set(code.co_names)-special:return False
+        for child in children:
+            function=namespace.get(child.co_name)
+            defaults={'verify_pair':(None,),'evaluate':(cohort.ROOT,None)}.get(child.co_name)
+            actual_defaults=function.__defaults__ if isinstance(function,types.FunctionType) else None
+            same_defaults=(actual_defaults is None if defaults is None else
+                type(actual_defaults) is tuple and len(actual_defaults)==len(defaults)
+                and all(actual is expected for actual,expected in zip(actual_defaults,defaults)))
+            if (not isinstance(function,types.FunctionType) or function.__code__!=child
+                    or function.__globals__ is not namespace or not same_defaults
+                    or function.__kwdefaults__ is not None or function.__closure__ is not None):return False
+        if (type(cohort.ROOT) is not type(root) or Path(cohort.ROOT).resolve()!=root or Path(namespace['__file__']).resolve()!=path
+                or namespace.get('json') is not json or namespace.get('hashlib') is not hashlib
+                or namespace.get('OrderedDict') is not OrderedDict):return False
+        for key in ('selection','quotes','frozen'):
+            if namespace.get(key) is not getattr(cohort,key,None):return False
+        pubcode=compile((root/'publish_forward_evidence.py').read_bytes(),str(root/'publish_forward_evidence.py'),'exec',dont_inherit=True)
+        commands=[child for child in pubcode.co_consts if isinstance(child,types.CodeType) and child.co_name=='command']
+        command=publication.command
+        return (len(commands)==1 and isinstance(command,types.FunctionType) and command.__code__==commands[0]
+                and command.__globals__ is publication.__dict__ and command.__defaults__ is None
+                and command.__kwdefaults__ is None and command.__closure__ is None)
+    except (AttributeError,KeyError,OSError,TypeError,ValueError,SyntaxError):return False
+
+
+@contextmanager
+def _paired_stream_hook(root,script,main_globals):
+    if not _paired_original_context(root,script,main_globals):
+        yield;return
+    module=_backend(root,'runtime_paired_git_stream')
+    if module is None:
+        yield;return
+    report=None;succeeded=False
+    try:
+        with module.installed(root,main_globals,trusted_object_directory=
+                os.environ.get('DOGE_AUDIT_STREAM_TRUSTED_OBJECT_DIRECTORY')) as report:
+            yield
+            succeeded=True
+    finally:
+        if report is not None and report.get('installed') is True:
+            try:
+                fields={key:report[key] for key in ('installed','implementation','requests','verified_reads',
+                    'processes','fallback_calls','reaped','reader_joined','disabled')}
+                print(json.dumps(dict(fields,kind='runtime_paired_git_stream',mode='fresh_sequential_blobs',
+                    status='ok' if succeeded else 'error',module_sha256=hashlib.sha256(
+                        Path(module.__file__).read_bytes()).hexdigest()),sort_keys=True),file=sys.stderr,flush=True)
+            except Exception:pass
+
 def run_cli(root, script):
     if script not in SCRIPT_BLOBS:
         raise ValueError('only the three original audit CLIs are allowed')
@@ -270,7 +338,8 @@ def run_cli(root, script):
             return None
         # These exact three blobs only enter main via their final __main__ guard.
         namespace = runpy.run_path(str(path),run_name='_doge_owned_audit_cli')
-        with _hooks(root,script), _p0_hook(root,script,namespace['main'].__globals__):
+        with _hooks(root,script), _p0_hook(root,script,namespace['main'].__globals__), \
+                _paired_stream_hook(root,script,namespace['main'].__globals__):
             return namespace['main']()
     finally:
         sys.argv = previous_argv

@@ -5,6 +5,7 @@ audit caches are discarded. The live serial writer installs complete matching
 reports, and frozen P2 checks still decide eligibility at capture time.
 """
 import hashlib
+from contextlib import contextmanager
 import json
 import math
 import os
@@ -23,7 +24,7 @@ INPUTS = ('data/direction_v42/forward_registry.csv',
 OUTPUTS = ('data/p0_operations/latest.json', 'data/paired_forward_v1/audit_latest.json')
 SCRIPTS = ('forward_validation_v2.py', 'p0_operational_audit.py', 'paired_cohort_audit.py')
 CLI_HELPERS = ('runtime_audit_cli.py', 'runtime_publication_state.py', 'runtime_paired_history.py',
-               'runtime_p0_inventory_transport.py')
+               'runtime_p0_inventory_transport.py', 'runtime_paired_git_stream.py')
 TRANSPORT_IMPLEMENTATIONS = {
     'runtime_publication_state_validation': 'runtime_publication_state_native_batch_v1',
     'runtime_paired_history_validation': 'runtime_paired_history_native_batch_v1',
@@ -236,7 +237,25 @@ def _transport_fields(row, implementation, nested=False):
     return out
 
 
-def forward_transport_diagnostics(stderr, stage):
+def _paired_stream_fields(source,expected_sha256):
+    counts={'requests','verified_reads','processes','fallback_calls'}
+    flags={'installed','reaped','reader_joined','disabled'}
+    if (set(source)!=counts|flags|{'kind','implementation','mode','status','module_sha256'}
+            or source.get('implementation')!='paired_fresh_git_blob_stream_v1'
+            or source.get('mode')!='fresh_sequential_blobs' or source.get('status')!='ok'
+            or not isinstance(expected_sha256,str) or not re.fullmatch('[0-9a-f]{64}',expected_sha256)
+            or source.get('module_sha256')!=expected_sha256
+            or any(type(source[key]) is not int or not 0<=source[key]<=10**9 for key in counts)
+            or any(type(source[key]) is not bool for key in flags)
+            or source['installed'] is not True or source['reaped'] is not True
+            or source['reader_joined'] is not True or source['disabled'] is not False
+            or source['processes']!=1 or source['requests']==0
+            or source['verified_reads']!=source['requests'] or source['fallback_calls']!=0):
+        raise ValueError('invalid authenticated paired stream receipt')
+    return {key:value for key,value in source.items() if key!='kind'}
+
+
+def forward_transport_diagnostics(stderr, stage, expected_stream_sha256=None):
     """Forward only bounded fixed metadata; never raw subprocess stderr."""
     try:
         if stage not in SCRIPTS or not isinstance(stderr,str) or len(stderr)>65536:
@@ -279,8 +298,11 @@ def forward_transport_diagnostics(stderr, stage):
                             or any(type(source[k]) is not int or not 0<=source[k]<=2147483647 for k in counts)):
                         continue
                     fields = {k:v for k,v in source.items() if k != 'kind'}
+                elif kind == 'runtime_paired_git_stream':
+                    if stage!='paired_cohort_audit.py':continue
+                    fields=_paired_stream_fields(source,expected_stream_sha256)
                 elif kind == 'runtime_audit_cli_fallback':
-                    if set(source)!={'kind','backend','reason'} or source['backend'] not in ('original_cli','runtime_publication_state','runtime_paired_history','runtime_p0_inventory_transport'):
+                    if set(source)!={'kind','backend','reason'} or source['backend'] not in ('original_cli','runtime_publication_state','runtime_paired_history','runtime_p0_inventory_transport','runtime_paired_git_stream'):
                         continue
                     value = source['reason']
                     fields = {'backend':source['backend'],'mode':'legacy_full_fallback',
@@ -306,7 +328,11 @@ def command(*args, cwd):
     try:
         if (len(args)==3 and Path(args[0]).resolve()==Path(sys.executable).resolve()
                 and Path(args[1]).resolve()==(Path(cwd).resolve()/CLI_HELPERS[0]) and args[2] in SCRIPTS):
-            forward_transport_diagnostics(completed.stderr,args[2])
+            expected=None
+            if args[2]=='paired_cohort_audit.py':
+                path=Path(cwd)/'runtime_paired_git_stream.py'
+                if path.is_file() and not path.is_symlink():expected=hashlib.sha256(path.read_bytes()).hexdigest()
+            forward_transport_diagnostics(completed.stderr,args[2],expected_stream_sha256=expected)
     except Exception:
         pass
     return completed.stdout
@@ -422,6 +448,32 @@ def verify_cli_sources(snapshot, head):
     return True
 
 
+@contextmanager
+def paired_stream_source(source,snapshot):
+    """Explicitly bind one worker-created shared clone to its selected source."""
+    key='DOGE_AUDIT_STREAM_TRUSTED_OBJECT_DIRECTORY'
+    previous=os.environ.pop(key,None)
+    try:
+        try:
+            source=Path(source).resolve();snapshot=Path(snapshot).resolve()
+            objects=source/'.git/objects';alternate=snapshot/'.git/objects/info/alternates'
+            if (source!=snapshot and objects.is_dir() and not objects.is_symlink()
+                    and not (source/'.git').is_symlink()
+                    and not alternate.is_symlink() and alternate.is_file()):
+                with alternate.open('rb') as handle:raw=handle.read(16385)
+                if len(raw)<=16384:
+                    lines=raw.decode('utf-8').splitlines()
+                    if len(lines)==1:
+                        target=Path(lines[0])
+                        if not target.is_absolute():target=alternate.parent.parent/target
+                        if target.resolve()==objects.resolve():os.environ[key]=str(objects.resolve())
+        except (OSError,ValueError,TypeError):pass
+        yield
+    finally:
+        os.environ.pop(key,None)
+        if previous is not None:os.environ[key]=previous
+
+
 def audit_snapshot(root, head, temporary_parent=None, *, exclude_source_archive=True):
     with tempfile.TemporaryDirectory(prefix='doge-source-audit-', dir=temporary_parent) as name:
         snapshot = Path(name)/'snapshot'
@@ -429,11 +481,12 @@ def audit_snapshot(root, head, temporary_parent=None, *, exclude_source_archive=
         use_launcher = verify_cli_sources(snapshot, head)
         inputs = fingerprint(snapshot)
         timings = []
-        for script in SCRIPTS:
-            arguments = (str(snapshot/'runtime_audit_cli.py'), script) if use_launcher else (script,)
-            _, seconds = timed_command(script, sys.executable, *arguments,
-                                       cwd=snapshot, input_head=head)
-            timings.append({'stage': script, 'seconds': seconds})
+        with paired_stream_source(root,snapshot):
+            for script in SCRIPTS:
+                arguments = (str(snapshot/'runtime_audit_cli.py'), script) if use_launcher else (script,)
+                _, seconds = timed_command(script, sys.executable, *arguments,
+                                           cwd=snapshot, input_head=head)
+                timings.append({'stage': script, 'seconds': seconds})
         outputs = {p: (snapshot/p).read_text(encoding='utf-8') for p in OUTPUTS}
         return {'status': 'ok', 'input_head': head, 'inputs': inputs,
                 'outputs': outputs, 'timings': timings, 'checkout': checkout}

@@ -27,6 +27,10 @@ on:
       - 'runtime_publication_state.py'
       - 'test_runtime_history_prefix_transport.py'
       - 'runtime_paired_history.py'
+      - 'runtime_paired_git_stream.py'
+      - 'test_runtime_paired_git_stream.py'
+      - 'test_runtime_paired_stream_launcher.py'
+      - 'test_runtime_paired_stream_receipt.py'
       - 'runtime_core_history_profile.py'
       - 'test_runtime_core_history_profile.py'
       - 'test_runtime_publication_state.py'
@@ -94,6 +98,10 @@ on:
       - 'runtime_publication_state.py'
       - 'test_runtime_history_prefix_transport.py'
       - 'runtime_paired_history.py'
+      - 'runtime_paired_git_stream.py'
+      - 'test_runtime_paired_git_stream.py'
+      - 'test_runtime_paired_stream_launcher.py'
+      - 'test_runtime_paired_stream_receipt.py'
       - 'runtime_core_history_profile.py'
       - 'test_runtime_core_history_profile.py'
       - 'test_runtime_publication_state.py'
@@ -221,7 +229,7 @@ jobs:
           # This PR also requires the unchanged complete scientific-evidence suite.
           # Avoid repeating that suite before the isolated six-CLI comparison.
           if [ "$NATIVE_TRANSPORT_PR" = 'true' ]; then
-            python -m unittest -q test_runtime_audit_cli test_runtime_history_prefix_transport test_runtime_audit_pipeline_profile test_runtime_canonical_walk test_runtime_p0_inventory_transport test_runtime_p0_launcher test_runtime_p0_profile_receipt
+            python -m unittest -q test_runtime_audit_cli test_runtime_history_prefix_transport test_runtime_audit_pipeline_profile test_runtime_canonical_walk test_runtime_p0_inventory_transport test_runtime_p0_launcher test_runtime_p0_profile_receipt test_runtime_paired_git_stream test_runtime_paired_stream_launcher test_runtime_paired_stream_receipt
           else
             python -m unittest discover -q
           fi

@@ -8,7 +8,7 @@ Production CLIs, source data, deadlines and qualification logic are unchanged.
 import argparse
 import base64
 from collections import Counter, defaultdict
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 import datetime as datetime_module
 import hashlib
 import io
@@ -389,22 +389,51 @@ def source_control_state(source, helper):
     return state
 
 
-def validate_native_diagnostics(stderr, script, expected_launcher_sha256=None, expected_p0_sha256=None):
+def _diagnostic_members(pairs):
+    result={}
+    for key,value in pairs:
+        if key in result:raise ProfileError('duplicate native diagnostic member')
+        result[key]=value
+    return result
+
+
+def validate_native_diagnostics(stderr, script, expected_launcher_sha256=None, expected_p0_sha256=None,
+                                expected_stream_sha256=None):
     if len(stderr.encode('utf-8')) > 1024 * 1024:
         raise ProfileError('oversize native diagnostics')
     required = {'runtime_publication_state_validation'}
     if script == 'paired_cohort_audit.py':
         required.add('runtime_paired_history_validation')
-    rows, canonical, inventory = [], [], []
+    rows, canonical, inventory, streams = [], [], [], []
     counts = {'calls', 'hits', 'misses', 'fallback_calls', 'sha256_calls',
               'encoded_calls', 'evictions', 'entries', 'cached_bytes'}
     for line in stderr.splitlines():
         if not line.lstrip().startswith('{'): continue
-        try: row = json.loads(line)
+        try: row = json.loads(line,object_pairs_hook=_diagnostic_members)
         except ValueError: continue
         if not isinstance(row, dict): continue
         if row.get('kind') == 'runtime_audit_cli_fallback':
             raise ProfileError('legacy CLI/backend fallback cannot establish native performance')
+        if row.get('kind') == 'runtime_paired_git_stream':
+            fields={'requests','verified_reads','processes','fallback_calls'}
+            flags={'installed','reaped','reader_joined','disabled'}
+            if (script!='paired_cohort_audit.py' or set(row)!=fields|flags|
+                    {'kind','implementation','mode','status','module_sha256'}
+                    or row.get('implementation')!='paired_fresh_git_blob_stream_v1'
+                    or row.get('mode')!='fresh_sequential_blobs' or row.get('status')!='ok'
+                    or not isinstance(expected_stream_sha256,str)
+                    or len(expected_stream_sha256)!=64
+                    or any(c not in '0123456789abcdef' for c in expected_stream_sha256)
+                    or row.get('module_sha256')!=expected_stream_sha256
+                    or any(type(row[key]) is not int or not 0<=row[key]<=10**9 for key in fields)
+                    or any(type(row[key]) is not bool for key in flags)
+                    or row['installed'] is not True or row['reaped'] is not True
+                    or row['reader_joined'] is not True or row['disabled'] is not False
+                    or row['processes']!=1 or row['requests']==0 or row['fallback_calls']!=0
+                    or row['verified_reads']!=row['requests']):
+                raise ProfileError('invalid actual paired fresh Git stream evidence')
+            streams.append(row)
+            continue
         if row.get('kind') == 'runtime_p0_inventory_transport':
             fields = {'native_calls','fallback_calls','real_gets','days'}
             if (script != 'p0_operational_audit.py' or set(row) != fields |
@@ -452,7 +481,9 @@ def validate_native_diagnostics(stderr, script, expected_launcher_sha256=None, e
         raise ProfileError('exactly one canonical paired transport receipt required')
     if script == 'p0_operational_audit.py' and expected_p0_sha256 is not None and len(inventory) != 1:
         raise ProfileError('exactly one actual P0 inventory receipt required')
-    return rows + canonical + inventory
+    if script == 'paired_cohort_audit.py' and expected_stream_sha256 is not None and len(streams)!=1:
+        raise ProfileError('exactly one authenticated actual paired stream receipt required')
+    return rows + canonical + inventory + streams
 
 
 def fingerprint(root):
@@ -578,6 +609,10 @@ def worker(source, head, output, timeout_seconds, max_native_seconds):
                     raise ProfileError('isolated audit did not check out the selected fixed head')
                 current_inputs = fingerprint(snapshot)
                 original_code = code_fingerprint(snapshot)
+                if optimized and 'runtime_paired_git_stream.py' in getattr(audit,'CLI_HELPERS',()):
+                    if ('runtime_paired_git_stream.py' not in original_code or
+                            audit.verify_cli_sources(snapshot,head) is not True):
+                        raise ProfileError('selected native helper closure is not authenticated')
                 if inputs is None: inputs = current_inputs
                 if current_inputs != inputs:
                     raise ProfileError('original/native input fingerprints differ')
@@ -596,10 +631,11 @@ def worker(source, head, output, timeout_seconds, max_native_seconds):
                                '--fixture', str(fixture), '--clock', clock]
                     if optimized: command.append('--optimized')
                     phase_start = time.perf_counter()
-                    result = subprocess.run(command, cwd=snapshot, capture_output=True, text=True,
-                        encoding='utf-8', timeout=min(240, remaining),
-                        env=dict(os.environ, PYTHONHASHSEED='0', PYTHONUTF8='1',
-                                 PYTHONDONTWRITEBYTECODE='1'))
+                    with audit.paired_stream_source(source,snapshot) if hasattr(audit,'paired_stream_source') else nullcontext():
+                        result = subprocess.run(command, cwd=snapshot, capture_output=True, text=True,
+                            encoding='utf-8', timeout=min(240, remaining),
+                            env=dict(os.environ, PYTHONHASHSEED='0', PYTHONUTF8='1',
+                                     PYTHONDONTWRITEBYTECODE='1'))
                     elapsed = time.perf_counter() - phase_start
                     (output / (label + '-' + script + '.stdout')).write_text(result.stdout, encoding='utf-8')
                     (output / (label + '-' + script + '.stderr')).write_text(result.stderr, encoding='utf-8')
@@ -607,7 +643,8 @@ def worker(source, head, output, timeout_seconds, max_native_seconds):
                     if optimized:
                         trial['phases'][-1]['native_diagnostics'] = validate_native_diagnostics(
                             result.stderr, script, original_code['runtime_audit_cli.py'],
-                            expected_p0_sha256=original_code['runtime_p0_inventory_transport.py'])
+                            expected_p0_sha256=original_code['runtime_p0_inventory_transport.py'],
+                            expected_stream_sha256=original_code.get('runtime_paired_git_stream.py'))
                     trial['phases'][-1]['stdout_sha256'] = digest(result.stdout.encode('utf-8'))
                     write_json(output / 'summary.json', report)
                     if result.returncode != 0:
