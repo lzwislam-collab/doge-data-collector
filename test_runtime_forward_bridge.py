@@ -205,6 +205,133 @@ class SequentialOriginal18(unittest.TestCase):
         self.assertNotIn('original18_audit_requested_head', state)
         self.assertEqual(client.posts, 1)
 
+    def source_queue(self):
+        source = self.root/frozen.bundle.SOURCE
+        source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_bytes(b'new committed source\n')
+        def git(*args):
+            return subprocess.check_output(['git', *args], cwd=self.root, stderr=subprocess.DEVNULL)
+        git('init')
+        git('config', 'user.name', 'Fixture')
+        git('config', 'user.email', 'fixture@example.invalid')
+        git('add', '.')
+        git('commit', '-m', 'public source fixture')
+        head = git('rev-parse', 'HEAD').decode().strip()
+        blob = git('rev-parse', 'HEAD:'+frozen.bundle.SOURCE).decode().strip()
+        repo = frozen.shadow.REPO
+        class Client:
+            def __init__(self): self.posts = []; self.gets = []; self.post_error = None
+            def api(self, path):
+                from urllib.parse import urlsplit, parse_qs
+                self.gets.append(path)
+                parts = urlsplit(path); query = parse_qs(parts.query)
+                row = {'id': 42, 'head_sha': 'c'*40, 'head_branch': 'main',
+                       'path': '.github/workflows/learned_shadow_v1.yml', 'status': 'in_progress',
+                       'event': 'workflow_dispatch', 'repository': {'full_name': repo},
+                       'head_repository': {'full_name': repo}}
+                if parts.path.startswith('/actions/workflows/'):
+                    return ({'total_count': 1, 'workflow_runs': [row]} if query['status'] == ['in_progress']
+                            else {'total_count': 0, 'workflow_runs': []})
+                if parts.path == '/actions/runs/42': return row
+                if parts.path == '/contents/'+frozen.bundle.SOURCE:
+                    current = query['ref'] == [head]
+                    return {'type': 'file', 'path': frozen.bundle.SOURCE,
+                            'sha': blob if current else 'd'*40, 'size': 21 if current else 9}
+                raise AssertionError('unexpected source queue read '+path)
+            def request(self, path, payload):
+                self.posts.append((path, payload))
+                if self.post_error: raise self.post_error
+                return 204
+        root_patch = patch.object(frozen, 'ROOT', self.root)
+        root_patch.start(); self.addCleanup(root_patch.stop)
+        return source, {'status': 'verified_remote_readback', 'head': head, 'verified_paths': []}, Client()
+
+    def test_exact_source_wait_queues_correct_source_once_behind_old_source(self):
+        source, publication, client = self.source_queue()
+        capture = {'request_witness': True, 'changed_paths': [], 'runtime_status': 'WAIT_EXACT_SOURCE_WITNESS'}
+        state = {}
+        first = self.m.request_original18_witness(capture, publication, state, client=client)
+        second = self.m.request_original18_witness(capture, publication, state, client=client)
+        self.assertEqual(first['status'], 'DISPATCH_ACCEPTED_COMPLETION_UNVERIFIED')
+        self.assertEqual(second['status'], 'ALREADY_REQUESTED_THIS_PUBLIC_HEAD')
+        self.assertEqual(len(client.posts), 1)
+        self.assertFalse(first['exact_head_witness_verified'])
+
+    def test_exact_source_wait_rejects_uncommitted_source_before_any_post(self):
+        source, publication, client = self.source_queue()
+        source.write_bytes(b'unpublished source')
+        with self.assertRaises(ValueError):
+            self.m.request_original18_witness({'request_witness': True, 'changed_paths': [],
+                'runtime_status': 'WAIT_EXACT_SOURCE_WITNESS'}, publication, {}, client=client)
+        self.assertFalse(client.posts)
+
+    def test_queued_source_unknown_post_is_not_retried(self):
+        source, publication, client = self.source_queue()
+        client.post_error = TimeoutError('unknown accepted POST')
+        capture = {'request_witness': True, 'changed_paths': [], 'runtime_status': 'WAIT_EXACT_SOURCE_WITNESS'}
+        state = {}
+        with self.assertRaises(TimeoutError):
+            self.m.request_original18_witness(capture, publication, state, client=client)
+        result = self.m.request_original18_witness(capture, publication, state, client=client)
+        self.assertEqual(result['status'], 'UNKNOWN_PREVIOUS_AUDIT_DISPATCH_NOT_RETRIED')
+        self.assertEqual(len(client.posts), 1)
+
+    def test_source_modified_during_queue_reads_never_consumes_post_intent(self):
+        source, publication, client = self.source_queue()
+        original_api = client.api
+        def change_after_read(path):
+            value = original_api(path)
+            if path.startswith('/contents/'):
+                source.write_bytes(b'changed during remote source read')
+            return value
+        client.api = change_after_read
+        state = {}
+        with self.assertRaises(ValueError):
+            self.m.request_original18_witness({'request_witness': True, 'changed_paths': [],
+                'runtime_status': 'WAIT_EXACT_SOURCE_WITNESS'}, publication, state, client=client)
+        self.assertFalse(client.posts)
+        self.assertEqual(state, {})
+
+    def test_remote_descendant_head_with_same_source_can_queue_original_local_source(self):
+        source, publication, client = self.source_queue()
+        local_head = publication['head']
+        publication['head'] = 'e'*40
+        original_api = client.api
+        def descendant(path):
+            return original_api(path.replace('ref='+'e'*40, 'ref='+local_head))
+        client.api = descendant
+        result = self.m.request_original18_witness({'request_witness': True, 'changed_paths': [],
+            'runtime_status': 'WAIT_EXACT_SOURCE_WITNESS'}, publication, {}, client=client)
+        self.assertEqual(result['status'], 'DISPATCH_ACCEPTED_COMPLETION_UNVERIFIED')
+        self.assertEqual(len(client.posts), 1)
+
+    def test_remote_descendant_with_different_source_never_queues_for_local_source(self):
+        source, publication, client = self.source_queue()
+        publication['head'] = 'e'*40
+        with self.assertRaises(ValueError):
+            self.m.request_original18_witness({'request_witness': True, 'changed_paths': [],
+                'runtime_status': 'WAIT_EXACT_SOURCE_WITNESS'}, publication, {}, client=client)
+        self.assertFalse(client.posts)
+
+    def test_local_head_changed_during_source_reads_never_consumes_post_intent(self):
+        source, publication, client = self.source_queue()
+        original_api = client.api
+        changed = []
+        def advance_after_read(path):
+            value = original_api(path)
+            if path.startswith('/contents/') and not changed:
+                subprocess.check_output(['git', 'commit', '--allow-empty', '-m', 'new local head'],
+                                        cwd=self.root, stderr=subprocess.DEVNULL)
+                changed.append(True)
+            return value
+        client.api = advance_after_read
+        state = {}
+        with self.assertRaises(ValueError):
+            self.m.request_original18_witness({'request_witness': True, 'changed_paths': [],
+                'runtime_status': 'WAIT_EXACT_SOURCE_WITNESS'}, publication, state, client=client)
+        self.assertFalse(client.posts)
+        self.assertEqual(state, {})
+
 
 class Original18Validation(unittest.TestCase):
     """Cache the full immutable model guard, never the actual Git journal guard."""

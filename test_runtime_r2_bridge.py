@@ -501,5 +501,172 @@ class FrozenNoNewCanaryBranch(unittest.TestCase):
         self.assertIn(self.formal['event_id'], result['errors'])
 
 
+class Original18SourceQueue(unittest.TestCase):
+    """Only an uncovered source may wait behind the existing serial audit."""
+    def setUp(self):
+        self.m = importlib.import_module('runtime_r2_bridge')
+        self.workflow = 'learned_shadow_v1.yml'
+        self.source = 'data/hourly_research/ohlc.csv'
+        self.expected = {'head': 'a'*40, 'sha': 'b'*40, 'size': 12}
+        self.row = {'id': 42, 'head_branch': 'main', 'head_sha': 'c'*40,
+                    'path': '.github/workflows/'+self.workflow, 'status': 'in_progress',
+                    'event': 'workflow_dispatch',
+                    'repository': {'full_name': frozen.f.old.REPO},
+                    'head_repository': {'full_name': frozen.f.old.REPO}}
+        self.reply = {'in_progress': {'total_count': 1, 'workflow_runs': [self.row]}}
+        self.metadata = {'a'*40: {'type': 'file', 'path': self.source, 'sha': 'b'*40, 'size': 12},
+                         'c'*40: {'type': 'file', 'path': self.source, 'sha': 'd'*40, 'size': 9}}
+        self.reads, self.posts = [], []
+        self.env = patch.dict(os.environ, {'GITHUB_REF': 'refs/heads/main',
+                              'GITHUB_REPOSITORY': frozen.f.old.REPO})
+        self.env.start()
+        self.addCleanup(self.env.stop)
+
+    def api(self, path):
+        self.reads.append(path)
+        parsed = urlsplit(path)
+        query = parse_qs(parsed.query)
+        if parsed.path == '/actions/workflows/'+self.workflow+'/runs':
+            return self.reply.get(query['status'][0], {'total_count': 0, 'workflow_runs': []})
+        if parsed.path == '/contents/'+self.source:
+            value = self.metadata[query['ref'][0]]
+            if isinstance(value, Exception): raise value
+            return value
+        if parsed.path == '/actions/runs/42': return self.row
+        raise AssertionError('unexpected source queue read '+path)
+
+    def request(self, path, payload):
+        self.posts.append((path, payload))
+        return 204
+
+    def call(self, **extra):
+        return self.m.dispatch_existing(self.workflow, client=self,
+                                        expected_source_blob=self.expected, **extra)
+
+    def test_old_running_source_can_queue_one_existing_serial_audit(self):
+        result = self.call()
+        self.assertEqual(result['status'], 'DISPATCH_ACCEPTED_COMPLETION_UNVERIFIED')
+        self.assertEqual(self.posts, [('/actions/workflows/learned_shadow_v1.yml/dispatches', {'ref': 'main'})])
+        self.assertIn('/contents/'+self.source+'?ref='+'a'*40, self.reads)
+        self.assertIn('/contents/'+self.source+'?ref='+'c'*40, self.reads)
+
+    def test_empty_queue_still_requires_remote_source_to_match_local_proof(self):
+        self.reply = {}
+        self.metadata['a'*40]['sha'] = 'e'*40
+        with self.assertRaises(ValueError): self.call()
+        self.assertFalse(self.posts)
+
+    def test_empty_queue_with_verified_remote_source_keeps_original_dispatch(self):
+        self.reply = {}
+        self.assertEqual(self.call()['status'], 'DISPATCH_ACCEPTED_COMPLETION_UNVERIFIED')
+        self.assertEqual(len(self.posts), 1)
+        self.assertIn('/contents/'+self.source+'?ref='+'a'*40, self.reads)
+
+    def test_empty_queue_new_active_run_during_metadata_read_prevents_post(self):
+        original_api = self.api
+        for state in ('in_progress', 'pending'):
+            with self.subTest(state=state):
+                self.reply = {}
+                def appear_during_read(path):
+                    value = original_api(path)
+                    if path.startswith('/contents/'):
+                        self.reply[state] = {'total_count': 1, 'workflow_runs': [dict(self.row, status=state)]}
+                    return value
+                self.api = appear_during_read
+                self.assertEqual(self.call()['status'], 'ALREADY_PENDING')
+        self.api = original_api
+        self.assertFalse(self.posts)
+
+    def test_running_same_source_or_nonunique_running_view_never_adds_audit(self):
+        for count, blob in ((1, 'b'*40), (2, 'd'*40)):
+            with self.subTest(count=count):
+                self.reply['in_progress']['total_count'] = count
+                self.metadata['c'*40]['sha'] = blob
+                self.metadata['c'*40]['size'] = 12 if blob == 'b'*40 else 9
+                self.assertEqual(self.call()['status'], 'ALREADY_PENDING')
+        self.assertFalse(self.posts)
+
+    def test_any_waiting_run_or_completed_race_conservatively_defers(self):
+        for state in ('pending', 'queued', 'requested', 'waiting', 'in_progress'):
+            with self.subTest(state=state):
+                self.reply = {state: {'total_count': 1, 'workflow_runs': [dict(self.row, status='completed')]}}
+                self.assertEqual(self.call()['status'], 'ALREADY_PENDING')
+        self.assertFalse(self.posts)
+        self.assertFalse(any(path.startswith('/contents/') for path in self.reads))
+
+    def test_wrong_active_head_or_repository_identity_never_posts(self):
+        for changed in ({'head_sha': 'not-a-sha'}, {'repository': {'full_name': 'other/repo'}},
+                        {'head_repository': {'full_name': 'other/repo'}}, {'event': 'pull_request'}):
+            with self.subTest(changed=changed):
+                self.reply['in_progress']['workflow_runs'] = [dict(self.row, **changed)]
+                with self.assertRaises(ValueError): self.call()
+        self.assertFalse(self.posts)
+
+    def test_unproven_public_source_or_bad_pinned_metadata_never_posts(self):
+        for head in ('a'*40, 'c'*40):
+            saved = dict(self.metadata[head])
+            for changed in ({'type': 'dir'}, {'path': 'other.csv'}, {'sha': 'invalid'},
+                            {'size': True}, {'size': -1}, {'size': 32000001}):
+                with self.subTest(head=head, changed=changed):
+                    self.metadata[head] = dict(saved, **changed)
+                    with self.assertRaises(ValueError): self.call()
+            self.metadata[head] = saved
+        self.metadata['a'*40]['sha'] = 'e'*40
+        with self.assertRaises(ValueError): self.call()
+        self.assertFalse(self.posts)
+
+    def test_special_source_queue_does_not_post_after_count_page_contradiction(self):
+        for malformed in ({'total_count': 1, 'workflow_runs': []},
+                          {'total_count': 0, 'workflow_runs': [self.row]}):
+            with self.subTest(malformed=malformed):
+                self.reply = {'pending': malformed}
+                before = len(self.reads)
+                with self.assertRaises(ValueError): self.call()
+                self.assertEqual(len(self.reads)-before, 1)
+        self.assertFalse(self.posts)
+
+    def test_source_read_network_failure_never_consumes_post_intent(self):
+        self.metadata['c'*40] = TimeoutError('shared transport budget')
+        attempted = []
+        with self.assertRaises(TimeoutError): self.call(before_post=lambda: attempted.append(True))
+        self.assertEqual(attempted, [])
+        self.assertFalse(self.posts)
+
+    def test_queue_changed_during_source_reads_never_adds_another_audit(self):
+        original_api = self.api
+        for changed in ({'total_count': 2, 'workflow_runs': [self.row]},
+                        {'total_count': 0, 'workflow_runs': []},
+                        {'total_count': 1, 'workflow_runs': [dict(self.row, status='completed')]}):
+            with self.subTest(changed=changed):
+                self.reply = {'in_progress': {'total_count': 1, 'workflow_runs': [self.row]}}
+                def change_after_read(path):
+                    value = original_api(path)
+                    if path.startswith('/contents/'):
+                        self.reply['in_progress'] = changed
+                    return value
+                self.api = change_after_read
+                self.assertEqual(self.call()['status'], 'ALREADY_PENDING')
+        self.api = original_api
+        self.assertFalse(self.posts)
+
+    def test_waiting_run_appearing_during_source_reads_blocks_second_post(self):
+        original_api = self.api
+        def queue_after_read(path):
+            value = original_api(path)
+            if path.startswith('/contents/'):
+                self.reply['queued'] = {'total_count': 1, 'workflow_runs': [dict(self.row, id=43, status='queued')]}
+            return value
+        self.api = queue_after_read
+        self.assertEqual(self.call()['status'], 'ALREADY_PENDING')
+        self.assertFalse(self.posts)
+
+    def test_special_option_cannot_change_existing_r2_dispatches(self):
+        for workflow in (self.m.AUDIT, self.m.PUBLISHER):
+            with self.subTest(workflow=workflow), self.assertRaises(ValueError):
+                self.m.dispatch_existing(workflow, 'publish' if workflow == self.m.PUBLISHER else None,
+                                         client=self, expected_source_blob=self.expected)
+        self.assertFalse(self.posts)
+
+
 if __name__ == '__main__':
     unittest.main()
