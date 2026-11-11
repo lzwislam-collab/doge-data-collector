@@ -27,6 +27,10 @@ _retry_not_before = 0.0
 FIELDS = ['txid','block_height','amount_doge','headline','observed_at_utc','verification']
 
 
+class BudgetExhausted(TimeoutError):
+    """Local work deadline only; a provider/network failure is never this class."""
+
+
 def timestamp():
     return datetime.now(timezone.utc).isoformat()
 
@@ -34,29 +38,37 @@ def timestamp():
 def request(path, *, attempts=4, timeout=20, deadline=None):
     global _last_request_time, _retry_not_before
     url = API + path
+    provider_error = None
     for attempt in range(attempts):
         now = time.monotonic()
         wait = max(0, MIN_REQUEST_INTERVAL - (now - _last_request_time),
                    _retry_not_before - now)
         remaining = None if deadline is None else deadline - now - wait
-        if remaining is not None and remaining <= 0:
-            raise TimeoutError('request budget exhausted: ' + path)
+        if remaining is not None and remaining < timeout:
+            if provider_error is not None:
+                raise provider_error
+            raise BudgetExhausted('full request slot unavailable: ' + path)
         if wait:
             time.sleep(wait)
         remaining = None if deadline is None else deadline - time.monotonic()
-        if remaining is not None and remaining <= 0:
-            raise TimeoutError('request budget exhausted after wait: ' + path)
+        if remaining is not None and remaining < timeout:
+            if provider_error is not None:
+                raise provider_error
+            raise BudgetExhausted('full request slot unavailable after wait: ' + path)
         _last_request_time = time.monotonic()
         try:
             req = urllib.request.Request(url, headers={'Accept':'application/json', 'User-Agent':'DOGE-block-scanner/1.0'})
             with urllib.request.urlopen(req, timeout=timeout if remaining is None else min(timeout, remaining)) as response:
                 obj = json.load(response)
-            if deadline is not None and time.monotonic() >= deadline:
-                raise TimeoutError('response exceeded request budget: ' + path)
             if not isinstance(obj,dict) or obj.get('status') != 'success' or not isinstance(obj.get('data'),dict):
                 raise ValueError('invalid API envelope: ' + path)
+            if deadline is not None and time.monotonic() >= deadline:
+                raise BudgetExhausted('complete successful response exceeded local budget: ' + path)
             return obj['data']
+        except BudgetExhausted:
+            raise
         except (urllib.error.URLError, TimeoutError) as exc:
+            provider_error = exc
             if isinstance(exc, urllib.error.HTTPError):
                 if exc.code not in (429, 500, 502, 503, 504):
                     raise
@@ -72,8 +84,9 @@ def request(path, *, attempts=4, timeout=20, deadline=None):
                 delay = 2 * (attempt + 1)
             if attempt == attempts - 1:
                 raise
-            if deadline is not None and time.monotonic() + delay >= deadline:
-                raise TimeoutError('retry exceeds request budget: ' + path) from exc
+            if deadline is not None and time.monotonic() + delay + MIN_REQUEST_INTERVAL + timeout > deadline:
+                # The budget cannot erase a real provider failure or its status.
+                raise
             time.sleep(delay)
 
 
@@ -229,6 +242,8 @@ def main():
     block_count = tx_count = new = 0
     stop_reason = 'batch_complete'
     incomplete_block = None
+    scanning_height = None
+    in_tx_loop = False
     rows = {}
     state_path = OUT/'checkpoint.json'
     tip_start = target_start = current = last = None
@@ -249,9 +264,11 @@ def main():
         current = last + 1
         final = min(target_start, current + MAX_BLOCKS - 1)
         for height in range(current, final + 1):
-            if time.monotonic() >= scan_deadline:
+            if time.monotonic() + 20 + MIN_REQUEST_INTERVAL > scan_deadline:
                 stop_reason = 'time_budget_before_block'
                 break
+            scanning_height = height
+            in_tx_loop = False
             block = parse_block(height, deadline=scan_deadline)
             if block['previous_block_hash'] != last_block['hash']:
                 raise ValueError('block does not extend completed checkpoint')
@@ -261,8 +278,12 @@ def main():
             verified = progress['verified']
             new_rows = {}
             block_complete = True
+            in_tx_loop = True
             for txid in txids:
-                if time.monotonic() >= scan_deadline:
+                saved = verified.get(txid)
+                needs_request = saved is None or 'identity' not in saved
+                if (time.monotonic() >= scan_deadline or
+                        (needs_request and time.monotonic() + 20 + MIN_REQUEST_INTERVAL > scan_deadline)):
                     block_complete = False
                     incomplete_block = height
                     stop_reason = 'time_budget_in_block'
@@ -320,6 +341,11 @@ def main():
             new += len(new_rows)
             block_count += 1
             progress_path.unlink(missing_ok=True)
+            scanning_height = None
+            in_tx_loop = False
+    except BudgetExhausted:
+        stop_reason = 'time_budget_in_block' if in_tx_loop else 'time_budget_before_block'
+        incomplete_block = scanning_height if in_tx_loop else None
     except Exception as exc:
         stop_reason = 'error'
         errors.append(type(exc).__name__ + ': ' + str(exc)[:300])
