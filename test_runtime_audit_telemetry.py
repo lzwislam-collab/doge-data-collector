@@ -31,6 +31,10 @@ COUNTER_KEYS=('child_ru_inblock','child_ru_majflt','child_ru_nvcsw','child_ru_ni
 def sample(values=(1.,2.,3.,4.), load=(1.,2.,3.), openblas='2', omp='1'):
     return dict(zip(CPU_KEYS,values), load=load, openblas_num_threads=openblas, omp_num_threads=omp)
 class TelemetryTests(unittest.TestCase):
+    def setUp(self):
+        enabled=patch.dict(worker.os.environ,{'DOGE_AUDIT_COMMAND_TELEMETRY':'1'})
+        enabled.start();self.addCleanup(enabled.stop)
+
     def isolated_import(self,error):
         original_import=builtins.__import__
         def import_probe(name,*args,**kwargs):
@@ -224,5 +228,77 @@ class TelemetryTests(unittest.TestCase):
         cleaned=RemoveTelemetry().visit(actual)
         expected=ast.parse(ORIGINAL_TIMED).body[0]
         self.assertEqual(ast.dump(cleaned,include_attributes=False),ast.dump(expected,include_attributes=False))
+
+class DefaultLogContractTests(unittest.TestCase):
+    def capture(self, *, original=False, error=None):
+        result=object();stream=io.StringIO()
+        namespace={'time':worker.time,'emit_progress':worker.emit_progress,'elapsed':worker.elapsed,
+                   'command':None}
+        def command(*args,**kwargs):
+            self.assertEqual(args,('private-original-argument',))
+            self.assertEqual(kwargs,{'cwd':'.'})
+            if error is not None:raise error
+            return result
+        namespace['command']=command
+        exec(ORIGINAL_TIMED,namespace)
+        invoke=namespace['timed_command'] if original else worker.timed_command
+        fixed=SimpleNamespace(now=lambda zone:SimpleNamespace(isoformat=lambda:'2026-11-11T00:00:00+00:00'))
+        with patch.dict(worker.os.environ,{},clear=True),patch.object(worker,'command',side_effect=command), \
+                patch.object(worker,'_read_command_telemetry',side_effect=AssertionError('sampling disabled')) as read, \
+                patch.object(worker.time,'monotonic',side_effect=(10.,12.)),patch.object(worker,'datetime',fixed), \
+                contextlib.redirect_stdout(stream):
+            if error is None:
+                output,seconds=invoke('p0_operational_audit.py','private-original-argument',cwd='.',input_head='a'*40)
+                self.assertIs(output,result);self.assertEqual(seconds,2.)
+            else:
+                with self.assertRaises(type(error)) as caught:
+                    invoke('p0_operational_audit.py','private-original-argument',cwd='.',input_head='a'*40)
+                self.assertIs(caught.exception,error)
+            read.assert_not_called()
+        return stream.getvalue()
+
+    def test_default_success_is_byte_exact_original_begin_end_without_sampling(self):
+        self.assertEqual(self.capture(),self.capture(original=True))
+        rows=[json.loads(line) for line in self.capture().splitlines()]
+        self.assertEqual([(row['kind'],row['event']) for row in rows],
+                         [('runtime_source_audit_progress','begin'),('runtime_source_audit_progress','end')])
+
+    def test_default_timeout_retains_last_end_diagnostics_and_exact_log(self):
+        error=subprocess.TimeoutExpired(('private-command',),240,output=b'PRIVATE_PARTIAL\xff',stderr=b'PRIVATE_STDERR')
+        text=self.capture(error=error)
+        self.assertEqual(text,self.capture(original=True,error=error))
+        end=json.loads(text.splitlines()[-1])
+        self.assertEqual(end['event'],'end');self.assertEqual(end['kind'],'runtime_source_audit_progress')
+        self.assertEqual(end['failure_diagnostics']['failure_kind'],'command_timeout')
+        self.assertNotIn('PRIVATE_',text)
+
+    def test_default_nonzero_exit_retains_original_exception_and_exact_log(self):
+        error=subprocess.CalledProcessError(7,('private-command',),output='PRIVATE_STDOUT',stderr='PRIVATE_STDERR')
+        self.assertEqual(self.capture(error=error),self.capture(original=True,error=error))
+
+    def test_only_exact_one_enables_sampling_or_extra_lines(self):
+        for value in (None,'','0','true','01',' 1','1 ','1\n'):
+            with self.subTest(value=value):
+                env={} if value is None else {'DOGE_AUDIT_COMMAND_TELEMETRY':value}
+                stream=io.StringIO()
+                with patch.dict(worker.os.environ,env,clear=True), \
+                        patch.object(worker,'_read_command_telemetry',side_effect=AssertionError('sampling disabled')) as read, \
+                        contextlib.redirect_stdout(stream):
+                    self.assertEqual(worker._safe_command_telemetry(),{})
+                    worker._emit_command_telemetry('clone',sample())
+                    read.assert_not_called()
+                self.assertEqual(stream.getvalue(),'')
+
+    def test_environment_lookup_failure_disables_optional_diagnostic(self):
+        env=SimpleNamespace(get=lambda key:(_ for _ in ()).throw(OSError('private lookup failure')))
+        stream=io.StringIO()
+        with patch.object(worker.os,'environ',env), \
+                patch.object(worker,'_read_command_telemetry',side_effect=AssertionError('sampling disabled')) as read, \
+                contextlib.redirect_stdout(stream):
+            self.assertEqual(worker._safe_command_telemetry(),{})
+            worker._emit_command_telemetry('clone',sample())
+            read.assert_not_called()
+        self.assertEqual(stream.getvalue(),'')
+
 if __name__=='__main__':unittest.main()
 

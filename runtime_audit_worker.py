@@ -431,7 +431,17 @@ def _read_command_telemetry():
     return row
 
 
+def _command_telemetry_enabled():
+    """Keep the established progress-only log unless an owner opts in."""
+    try:
+        return os.environ.get('DOGE_AUDIT_COMMAND_TELEMETRY') == '1'
+    except Exception:
+        return False
+
+
 def _safe_command_telemetry():
+    if not _command_telemetry_enabled():
+        return {}
     try:
         row = _read_command_telemetry()
         return row if type(row) is dict else {}
@@ -442,6 +452,8 @@ def _safe_command_telemetry():
 def _emit_command_telemetry(phase, before, **metadata):
     """Independent bounded diagnostic: never change a command result or error."""
     try:
+        if not _command_telemetry_enabled():
+            return
         if phase not in ('clone',) + SCRIPTS:
             return
         after = _safe_command_telemetry()

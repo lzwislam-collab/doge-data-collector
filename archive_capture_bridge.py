@@ -113,7 +113,7 @@ def worker(root, control):
     if os.environ.get('DOGE_ARCHIVE_QUALIFIED_DRAIN') == '1': args.append('--require-qualified-stop')
     if existing: args.append('--archive-existing-records')
     env = dict(os.environ, DOGE_ARCHIVE_RUNTIME_PROGRESS='1',
-               OPENBLAS_NUM_THREADS='1', OMP_NUM_THREADS='1')
+               OPENBLAS_NUM_THREADS='1', OMP_NUM_THREADS='1', DOGE_AUDIT_COMMAND_TELEMETRY='1')
     env.pop('DOGE_ARCHIVE_OWNED_PARENT_PID', None)
     env.pop('DOGE_ARCHIVE_OWNED_STOP_FILE', None)
     if existing:

@@ -229,6 +229,7 @@ jobs:
         env:
           OPENBLAS_NUM_THREADS: '1'
           OMP_NUM_THREADS: '1'
+          DOGE_AUDIT_COMMAND_TELEMETRY: '1'
           PYTHONUTF8: '1'
           DOGE_PROSPECTIVE_RUNTIME_BRIDGE: ${{ steps.prospective_deps.outcome == 'success' && '1' || '0' }}
           GITHUB_TOKEN: ${{ github.token }}
