@@ -69,25 +69,21 @@ def main():
    old[key]=row
   revisions=load(ROOT/'revisions.csv',REVISIONS)
   # Fetch every series before any history mutation. Fail closed on partial network failure.
-  fetched={}
-  for sid in SERIES:
-   url,data=fetch(sid)
-   # Availability begins only after the response has been received and parsed.
-   fetched[sid]=(url,data,now())
-  for sid,(url,data,checked) in fetched.items():
+  fetched={sid:fetch(sid) for sid in SERIES}
+  for sid,(url,data) in fetched.items():
    name,unit,freq=SERIES[sid]
-   audit['series'][sid]={'label':name,'count_on_source':len(data),'oldest_observation_date':min(data),'latest_observation_date':max(data),'url':url,'checked_at_utc':checked}
+   audit['series'][sid]={'label':name,'count_on_source':len(data),'oldest_observation_date':min(data),'latest_observation_date':max(data),'url':url}
    for d,val in data.items():
     key=sid,d
     if key not in old:
-     old[key]={'series_id':sid,'observation_date':d,'value':val,'unit':unit,'frequency':freq,'source_url':url,'first_seen_utc':checked,'last_checked_utc':checked,'revision_count':'0'}
+     old[key]={'series_id':sid,'observation_date':d,'value':val,'unit':unit,'frequency':freq,'source_url':url,'first_seen_utc':stamp,'last_checked_utc':stamp,'revision_count':'0'}
      audit['new_rows']+=1
     else:
      row=old[key]
      if Decimal(row['value'])!=Decimal(val):
-      revisions.append({'series_id':sid,'observation_date':d,'old_value':row['value'],'new_value':val,'observed_at_utc':checked,'source_url':url})
+      revisions.append({'series_id':sid,'observation_date':d,'old_value':row['value'],'new_value':val,'observed_at_utc':stamp,'source_url':url})
       row['value']=val;row['revision_count']=str(int(row['revision_count'])+1);audit['revisions']+=1
-     row['last_checked_utc']=checked
+     row['last_checked_utc']=stamp
   observations=[old[k] for k in sorted(old)]
   assert len(observations)==len(set(old))
   save_atomic(ROOT/'observations.csv',csv_text(FIELDS,observations))

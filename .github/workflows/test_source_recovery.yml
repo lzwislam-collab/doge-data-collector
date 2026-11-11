@@ -7,6 +7,7 @@ on:
       - 'doge_liquidity.py'
       - 'doge_whale_blocks.py'
       - 'macro_collector.py'
+      - 'macro_collector_runtime_v1.py'
       - 'etf_flows.py'
       - 'feed_freshness_audit.py'
       - 'source_publication.py'
@@ -30,6 +31,7 @@ on:
       - 'doge_liquidity.py'
       - 'doge_whale_blocks.py'
       - 'macro_collector.py'
+      - 'macro_collector_runtime_v1.py'
       - 'etf_flows.py'
       - 'feed_freshness_audit.py'
       - 'source_publication.py'
@@ -54,7 +56,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          sparse-checkout: .github/workflows
+          sparse-checkout: |
+            .github/workflows
+            data/stage5
+            system/versions
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -64,6 +69,6 @@ jobs:
         run: >-
           python -m unittest -v
           test_source_publication test_source_recovery_workflows test_source_recovery_quality
-          test_feed_quality test_enhancement_data test_auxiliary_source_refresh
+          test_feed_quality test_enhancement_data test_auxiliary_source_refresh test_macro_source_compatibility
           test_microstructure_source_collectors test_whale_block_integrity
           test_whale_block_resume test_whale_http_retry

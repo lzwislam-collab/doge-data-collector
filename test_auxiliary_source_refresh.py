@@ -16,7 +16,7 @@ from source_recovery_test_dependencies import ensure_test_dependencies
 
 ensure_test_dependencies()
 
-import macro_collector as macro
+import macro_collector_runtime_v1 as macro
 import etf_flows as etf
 
 
