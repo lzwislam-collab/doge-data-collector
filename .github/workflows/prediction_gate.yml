@@ -144,7 +144,7 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           p=Path('reports/DOGE_SPOT_PLUS_DAILY.md')
-          p.write_text('正式前瞻成绩请查看 [V2日报](DOGE_FORWARD_VALIDATION_V2_DAILY.md)。以下旧协议成绩为独立历史诊断，不作为V2验收依据。\n\n'+p.read_text(),encoding='utf-8')
+          p.write_text('正式前瞻成绩请查看 [当前V2报告](DOGE_FORWARD_VALIDATION_V2.md)；统一导航见 [报告入口](../README.md#current-reports)。以下旧协议成绩为独立历史诊断，不作为V2验收依据。\n\n'+p.read_text(),encoding='utf-8')
           PY
       - name: Audit claim eligibility
         id: audit
@@ -161,6 +161,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Presentation only: keep per-source cutoffs and historical notices after every refresh.
+          python report_routing.py
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           for file in data/quality/latest.json data/prediction_gate/latest.json data/stage5/latest.json data/stage5/error_review/latest.json data/stage5/spot_plus/latest.json data/stage5/spot_plus/evolution_latest.json data/stage5/spot_plus/evolution_log.csv data/stage5/spot_plus/live_quote_latest.json data/stage5/forward_validation/daily_latest.json reports/DOGE_FORWARD_VALIDATION_DAILY.md reports/DOGE_SPOT_PLUS_DAILY.md data/stage5/forward_validation_v2/daily_latest.json reports/DOGE_FORWARD_VALIDATION_V2_DAILY.md data/stage5/p1_model_league/latest.json reports/DOGE_P1_MODEL_LEAGUE.md data/stage5/p2_spot_paper/latest.json reports/DOGE_P2_SPOT_PAPER.md data/stage5/three_risk_gates/latest.json reports/DOGE_THREE_RISK_GATES.md; do
