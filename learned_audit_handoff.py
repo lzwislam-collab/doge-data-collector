@@ -96,21 +96,19 @@ def _current_source(api):
 
 
 def _active_terminal(api):
+    from r2_engineering_dispatch import queue_snapshot
     states = ('pending', 'queued', 'requested', 'waiting', 'in_progress')
+    def validate(row):
+        if (type(row.get('id')) is not int or row['id'] <= 0
+                or row.get('head_branch') != 'main'
+                or row.get('path', '').split('@')[0] != '.github/workflows/'+TERMINAL
+                or row.get('status') not in states+('completed',)):
+            raise ValueError('terminal queue identity changed')
     for state in states:
-        value = api('/actions/workflows/'+TERMINAL+'/runs?branch=main&status='+state+'&per_page=1')
-        rows, count = value.get('workflow_runs'), value.get('total_count')
-        if (not isinstance(rows, list) or type(count) is not int or count < 0 or len(rows) > 1
-                or bool(rows) != bool(count)):
-            raise ValueError('terminal queue response incomplete')
+        path = '/actions/workflows/'+TERMINAL+'/runs?branch=main&status='+state+'&per_page=1'
+        rows, count = queue_snapshot(api,path,validate)
         if rows:
-            row = rows[0]
-            if (not isinstance(row, dict) or type(row.get('id')) is not int or row['id'] <= 0
-                    or row.get('head_branch') != 'main'
-                    or row.get('path', '').split('@')[0] != '.github/workflows/'+TERMINAL
-                    or row.get('status') not in states+('completed',)):
-                raise ValueError('terminal queue identity changed')
-            return row['id']
+            return rows[0]['id']
     return None
 
 

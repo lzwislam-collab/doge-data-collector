@@ -1,4 +1,6 @@
 """Bounded dispatch must bind real Actions heads, never HTTP204 alone."""
+import copy
+import learned_audit_handoff as handoff
 from datetime import datetime, timedelta, timezone
 import importlib.util
 from pathlib import Path
@@ -185,5 +187,87 @@ class BoundDispatch(unittest.TestCase):
         wire=json.dumps({'value':payload}).encode()
         with patch.object(subject.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout=wire)):
             self.assertEqual(subject.Client().api('/git/blobs/'+BLOB),payload)
+
+TERMINAL = 'doge_engineering_completion.yml'
+
+class QueueReadTests(unittest.TestCase):
+    def reader(self, responses):
+        calls=[]
+        def read(path):
+            calls.append(path)
+            value=responses.pop(0) if responses else {'total_count':0,'workflow_runs':[]}
+            if isinstance(value,Exception):raise value
+            return copy.deepcopy(value)
+        return read,calls
+
+    def active(self, module, read):
+        if module is handoff:return handoff._active_terminal(read)
+        return subject._active(type('C',(),{'api':staticmethod(read)})(),subject.AUDIT)
+
+    def row(self,module):
+        return {'id':9,'head_branch':'main','path':'.github/workflows/'+
+                (TERMINAL if module is handoff else subject.AUDIT),'status':'pending'}
+
+    def test_count_without_rows_is_read_once_more_before_empty_is_accepted(self):
+        for module in (handoff,subject):
+            with self.subTest(module=module.__name__):
+                read,calls=self.reader([{'total_count':1,'workflow_runs':[]},
+                                        {'total_count':0,'workflow_runs':[]}])
+                try:result=self.active(module,read)
+                except ValueError as exc:self.fail('legal inconsistent queue was not rechecked: '+str(exc))
+                self.assertIsNone(result)
+                self.assertEqual(len(calls),6)
+                self.assertEqual(calls[0],calls[1])
+
+    def test_consistent_active_second_read_prevents_dispatch(self):
+        for module in (handoff,subject):
+            with self.subTest(module=module.__name__):
+                read,calls=self.reader([{'total_count':1,'workflow_runs':[]},
+                        {'total_count':1,'workflow_runs':[self.row(module)]}])
+                try:result=self.active(module,read)
+                except ValueError as exc:self.fail('legal inconsistent queue was not rechecked: '+str(exc))
+                self.assertEqual(result if module is handoff else result['id'],9)
+                self.assertEqual(len(calls),2)
+                self.assertEqual(calls[0],calls[1])
+
+    def test_persistent_inconsistency_still_fails_after_exactly_two_reads(self):
+        for module in (handoff,subject):
+            with self.subTest(module=module.__name__):
+                read,calls=self.reader([{'total_count':1,'workflow_runs':[]},
+                                        {'total_count':1,'workflow_runs':[]}])
+                with self.assertRaisesRegex(ValueError,'queue.*count=1.*rows=0'):
+                    self.active(module,read)
+                self.assertEqual(len(calls),2)
+
+    def test_invalid_schema_or_row_identity_never_receives_recovery_read(self):
+        for module in (handoff,subject):
+            for value in ({'total_count':True,'workflow_runs':[]},
+                          {'total_count':-1,'workflow_runs':[]},
+                          {'total_count':0,'workflow_runs':[dict(self.row(module),head_branch='wrong')]},
+                          {'total_count':0,'workflow_runs':[dict(self.row(module),id=True)]}):
+                with self.subTest(module=module.__name__,value=value):
+                    read,calls=self.reader([value])
+                    with self.assertRaises(ValueError):self.active(module,read)
+                    self.assertEqual(len(calls),1)
+
+    def test_http_error_and_original_deadline_exhaustion_propagate_without_retry(self):
+        for module in (handoff,subject):
+            for error in (HTTPError('public-queue',403,'Forbidden',{},None),
+                          TimeoutError('original40s exhausted')):
+                with self.subTest(module=module.__name__,error=type(error).__name__):
+                    read,calls=self.reader([error])
+                    with self.assertRaises(type(error)):self.active(module,read)
+                    self.assertEqual(len(calls),1)
+
+    def test_second_read_error_never_becomes_empty(self):
+        for module in (handoff,subject):
+            with self.subTest(module=module.__name__):
+                read,calls=self.reader([{'total_count':1,'workflow_runs':[]},TimeoutError('same budget')])
+                try:self.active(module,read)
+                except TimeoutError:pass
+                except ValueError as exc:self.fail('second read was not reached: '+str(exc))
+                else:self.fail('second read error became empty')
+                self.assertEqual(len(calls),2)
+
 
 if __name__=='__main__':unittest.main()
