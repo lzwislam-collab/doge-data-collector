@@ -1,6 +1,6 @@
 {
-  "status": "WAIT",
-  "audited_at_utc": "2026-11-11T13:44:15.329915+00:00",
+  "status": "BLOCKED",
+  "audited_at_utc": "2026-11-11T14:42:31.212249+00:00",
   "source_report_audited_at_utc": "2026-11-11T13:34:59.115681+00:00",
   "source": "Existing V3.1 portfolios report; no new captures or exchange account verification",
   "eligible_for_independent_paper_review_only": false,
@@ -19,6 +19,7 @@
         "immature: requires 30 observation days and 100 completed due intervals",
         "execution prefix blocked",
         "path_gap_count: unresolved gap",
+        "mark timestamp missing/stale/future",
         "strategy_minus_cash_pct_points: not positive",
         "double_cost_net_return_pct: not positive"
       ],
@@ -116,6 +117,7 @@
         "immature: requires 30 observation days and 100 completed due intervals",
         "execution prefix blocked",
         "path_gap_count: unresolved gap",
+        "mark timestamp missing/stale/future",
         "strategy_minus_hold_pct_points: not positive",
         "strategy_minus_cash_pct_points: not positive",
         "double_cost_minus_hold_pct_points: not positive",
@@ -208,7 +210,9 @@
       "actual_account_fee_verified": false
     }
   },
-  "blockers": [],
+  "blockers": [
+    "report clock missing/stale/future"
+  ],
   "limitations": [
     "Sampled drawdown does not prove continuous maximum drawdown.",
     "Recorded costs are paper ledger amounts; actual account fee tier and fills remain unverified.",
