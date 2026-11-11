@@ -11,6 +11,7 @@ import io
 import json
 import os
 from pathlib import Path
+import py_compile
 import shutil
 import subprocess
 import sys
@@ -83,7 +84,7 @@ class RuntimeRescueTests(unittest.TestCase):
         self.git('config', 'core.longpaths', 'true')
         self.git('config', 'user.name', 'Protected Rescue QA')
         self.git('config', 'user.email', 'qa@example.invalid')
-        (self.root / '.gitignore').write_text('quote_rescue_result.json\n', encoding='utf-8')
+        (self.root / '.gitignore').write_text('quote_rescue_result.json\n__pycache__/\n', encoding='utf-8')
         row = dict(zip(self.frozen.FCOLS, ['p', self.frozen.MODEL, issued.isoformat(),
             issued.isoformat(), issued.isoformat(), '1', '1', self.target.isoformat(),
             '.5', 'UP', 'UP', 'DOWN', 'synthetic']))
@@ -438,6 +439,30 @@ class RuntimeRescueTests(unittest.TestCase):
         self.assertEqual((baseline_remote / 'reject-count').read_text().strip(), '3')
         self.assertIs(self.publisher.validate_state, original)
         self.assertIs(self.evidence.history_receipts, alias)
+
+    def test_baseline_reimport_bytecode_keeps_tracked_checkout_clean(self):
+        # CI normally writes bytecode. Make that mode deterministic even under
+        # a local -B harness, then invalidate only the clone's source mtimes.
+        before = {path.name: path.read_bytes() for path in self.root.glob('*.py')}
+        for path in self.root.glob('*.py'):
+            py_compile.compile(str(path), doraise=True)
+        self.commit('synthetic interpreter cache before baseline clone')
+        baseline = self.area / 'bytecode-baseline'
+        subprocess.run(['git', '-c', 'core.longpaths=true', '-c', 'core.autocrlf=false',
+                        'clone', '-q', str(self.root), str(baseline)], check=True, capture_output=True)
+        for path in baseline.glob('*.py'):
+            stat = path.stat()
+            os.utime(path, (stat.st_atime, stat.st_mtime + 2))
+        previous = sys.dont_write_bytecode
+        try:
+            sys.dont_write_bytecode = False
+            with graph(baseline) as modules:
+                modules['quote_only_rescue'].ensure_clean_checkout(baseline)
+        finally:
+            sys.dont_write_bytecode = previous
+        self.assertEqual({path.name: path.read_bytes() for path in baseline.glob('*.py')}, before)
+        tracked = subprocess.check_output(['git', 'ls-files', '--', '__pycache__/*.pyc'], cwd=baseline)
+        self.assertEqual(tracked, b'')
 
     def test_readonly_probe_cli_completes_original_and_native_without_capture(self):
         self.require_runtime()
