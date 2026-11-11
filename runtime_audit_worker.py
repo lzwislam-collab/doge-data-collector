@@ -18,9 +18,22 @@ from datetime import datetime, timezone
 from pathlib import Path
 import runtime_process
 
+SOURCE_BINDING_BLOB='654b432b5d6c5efc33ef0eaebf95c02e273aae67'
+
+def _source_binding_backend():
+    path=Path(__file__).resolve().with_name('p0_source_binding.py')
+    raw=path.read_bytes().replace(b'\r\n',b'\n')
+    if hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()!=SOURCE_BINDING_BLOB:
+        raise ValueError('unreviewed source binding implementation')
+    import p0_source_binding as module
+    if Path(module.__file__).resolve()!=path:raise ValueError('source binding implementation location changed')
+    return module
+
 INPUTS = ('data/direction_v42/forward_registry.csv',
           'data/direction_v42/forward_scores.csv', 'data/quote_evidence_v2/bindings.csv',
           'data/paired_forward_v1/pairs.jsonl', 'data/hourly_research/ohlc.csv')
+PRODUCER_INPUTS = ('data/stage5/forward_validation/remote_witnesses.csv',
+                   'p0_locked_publication_context_v1')
 OUTPUTS = ('data/p0_operations/latest.json', 'data/paired_forward_v1/audit_latest.json')
 SCRIPTS = ('forward_validation_v2.py', 'p0_operational_audit.py', 'paired_cohort_audit.py')
 CLI_HELPERS = ('runtime_audit_cli.py', 'runtime_publication_state.py', 'runtime_paired_history.py',
@@ -43,13 +56,14 @@ EXCLUDED_PREFIX = 'data/plus_evidence_v1_0/sources/'
 # Reviewed dependency closure at efe0857e. A change falls back to the original
 # full checkout; this is an optimization eligibility check, not a new freeze.
 AUDITED_BLOBS = {
+    'p0_source_binding.py': '654b432b5d6c5efc33ef0eaebf95c02e273aae67',
     'direction_baseline_v42.py': '4bd0417548ab8251ec9d92e168db46d6ec1068bb',
     'direction_forward_v42.py': '368abc641db6d5ea6496ac4db624554161034665',
     'forward_execution_evidence.py': '7c2fd41af2fc5e52afd7fcabe2ea909b9457b7bb',
     'forward_validation.py': 'f0831c7d38581543f84a85639c6d69a7305ff382',
     'forward_validation_v2.py': '3adbdcc43c5dbdb57ecd482b1d4138e720146ba1',
     'okx_hourly_research_history.py': '6a403d175243d8766650e2b53ede52660ea94386',
-    'p0_operational_audit.py': 'c615bdc665d24481569f545922d3d7aa04594d60',
+    'p0_operational_audit.py': '398b0af0242b03e5819e9de54a7dc7cf3754bccf',
     'p1_adaptive_v2.py': '2fb92e67a1915e552eb9a236f202fc424c9b1b50',
     'p1_model_competition.py': '20fb6c70b64e6d46c6ec58525301eec72e08705d',
     'paired_cohort_audit.py': 'a6bdf0c54ffcf648384c756d400e742ab57a1d61',
@@ -171,7 +185,7 @@ def emit_progress(phase, event, **metadata):
         if type(seconds) in (float, int) and math.isfinite(seconds) and seconds >= 0:
             row['seconds'] = seconds
         values = metadata.get('input_fingerprints')
-        if isinstance(values, dict) and set(values) == set(INPUTS) and all(
+        if isinstance(values, dict) and set(values) == set(INPUTS + PRODUCER_INPUTS) and all(
                 isinstance(v, str) and re.fullmatch('[0-9a-f]{64}', v) for v in values.values()):
             row['input_fingerprints'] = values
         error = metadata.get('error')
@@ -427,7 +441,12 @@ def prepare_checkout(source, checkout, head, *, exclude_source_archive=True):
 
 
 def fingerprint(root):
-    return {p: hashlib.sha256((Path(root)/p).read_bytes()).hexdigest() for p in INPUTS}
+    p0_source_binding = _source_binding_backend()
+    result = {p: hashlib.sha256((Path(root)/p).read_bytes()).hexdigest() for p in INPUTS}
+    path = Path(root)/PRODUCER_INPUTS[0]
+    result[PRODUCER_INPUTS[0]] = hashlib.sha256(b'\1'+path.read_bytes() if path.exists() else b'\0').hexdigest()
+    result[PRODUCER_INPUTS[1]] = p0_source_binding.binding_fingerprint(root)
+    return result
 
 
 def result_metadata(directory):
@@ -517,7 +536,9 @@ def accept(root, result):
         path = Path(root)/p
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(result['outputs'][p], encoding='utf-8')
-    return {'status': 'ready', 'input_head': result['input_head'], 'timings': result['timings']}
+    return {'status': 'ready', 'input_head': result['input_head'], 'timings': result['timings'],
+            'basis': {'inputs': dict(result['inputs']), 'reports': {
+                p: hashlib.sha256((Path(root)/p).read_bytes()).hexdigest() for p in OUTPUTS}}}
 
 
 class Auditor:

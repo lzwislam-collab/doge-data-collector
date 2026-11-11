@@ -14,7 +14,7 @@ from pathlib import Path
 import threading
 import types
 
-P0_BLOB = 'c615bdc665d24481569f545922d3d7aa04594d60'
+P0_BLOB = '398b0af0242b03e5819e9de54a7dc7cf3754bccf'
 WORKFLOW = '/actions/workflows/okx_hourly_extreme_history.yml'
 WINDOW = 4
 

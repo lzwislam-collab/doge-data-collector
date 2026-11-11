@@ -18,15 +18,15 @@ import types
 
 SCRIPT_BLOBS = {
     'forward_validation_v2.py': '3adbdcc43c5dbdb57ecd482b1d4138e720146ba1',
-    'p0_operational_audit.py': 'c615bdc665d24481569f545922d3d7aa04594d60',
+    'p0_operational_audit.py': '398b0af0242b03e5819e9de54a7dc7cf3754bccf',
     'paired_cohort_audit.py': 'a6bdf0c54ffcf648384c756d400e742ab57a1d61',
 }
 BACKEND_BLOBS = {
     'runtime_publication_state': 'f0f6b6c7dbe5d7e4c0995b4714a53957217fbac0',
     'runtime_paired_history': 'b27849b2761de895a33613230de9adbf4187df71',
-    'runtime_p0_inventory_transport': 'e55c50a610a58439211b076b95020ae83810954b',
+    'runtime_p0_inventory_transport': '0d2552b131ef277d2d10b617854810b6854105ef',
     'runtime_paired_git_stream': 'b4760557613e8753ca9dffcc0770a83833591240',
-    'runtime_witness_git_stream': '991e11a5fb36875b89d43aa6e11c100c924cc824',
+    'runtime_witness_git_stream': '2ed1bac280055e24a9e392b5efed2ab9a452e654',
 }
 CANONICAL_BLOBS = {
     'paired_forward_cohort.py': '02e6b3ba51f063ba17cddcb98ff6445a08235c97',
@@ -363,7 +363,7 @@ def _witness_stream_hook(root,script,main_globals):
         yield;return
     # Synthetic/AST launcher tests and unknown CLIs must keep the original path.
     expected={'forward_validation_v2.py':'3adbdcc43c5dbdb57ecd482b1d4138e720146ba1',
-              'p0_operational_audit.py':'c615bdc665d24481569f545922d3d7aa04594d60'}
+              'p0_operational_audit.py':'398b0af0242b03e5819e9de54a7dc7cf3754bccf'}
     try: known=(root/script).stat().st_size<=1024*1024 and _blob(root/script)==expected[script]
     except (OSError,ValueError): known=False
     if not known:

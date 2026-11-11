@@ -424,7 +424,8 @@ def cycle(adapter, state, clock):
     # Verify public pair context before recording its eligibility at capture.
     # No later replay may retrofit a previously unverified book into eligibility.
     now = utc(clock())
-    if state.get('source_audited_at') is None or (now - state['source_audited_at']).total_seconds() >= 300:
+    if (state.get('source_audited_at') is None or getattr(adapter, 'source_audit_required', False)
+            or (now - state['source_audited_at']).total_seconds() >= 300):
         if not action('source_audit'):
             publish()
             return out
@@ -593,6 +594,18 @@ def run(root, adapter, duration_seconds=2400, clock=None, sleep=None, stop_file=
     return result
 
 
+SOURCE_BINDING_BLOB='654b432b5d6c5efc33ef0eaebf95c02e273aae67'
+
+def _source_binding_backend():
+    path=Path(__file__).resolve().with_name('p0_source_binding.py')
+    raw=path.read_bytes().replace(b'\r\n',b'\n')
+    if hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()!=SOURCE_BINDING_BLOB:
+        raise ValueError('unreviewed source binding implementation')
+    import p0_source_binding as module
+    if Path(module.__file__).resolve()!=path:raise ValueError('source binding implementation location changed')
+    return module
+
+
 class LiveAdapter:
     """Only frozen producer entry points; all writers execute sequentially."""
     # Existing publisher callers without foreground admission stay disabled.
@@ -614,6 +627,9 @@ class LiveAdapter:
         self.custody_prepared = None
         self.last_verified_publication = None
         self.prospective_client = None
+        self.accepted_source_basis = None
+        self.pending_source_binding = None
+        self.source_audit_required = False
 
     def begin_prospective_cycle(self):
         # One total transport budget for all optional namespaces, not three
@@ -733,11 +749,36 @@ class LiveAdapter:
             self.python('minimal_market_forward.py', 'bind')
             self.python('feature_ablation.py', 'bind')
         elif name == 'source_audit':
-            return self.auditor.poll()
+            result = self.auditor.poll()
+            if result.get('status') == 'ready':
+                self.accepted_source_basis = result.get('basis')
+                self.pending_source_binding = None
+                self.source_audit_required = False
+            return result
         elif name == 'book':
             # Preserve raw depth during initial/mismatched audit waits without
             # calling it an eligible formal event or retrofitting it later.
             mode = 'capture' if self.source_ready() else 'smoke'
+            if mode == 'capture':
+                source_binding = _source_binding_backend()
+                try:
+                    plan = getattr(self, 'pending_source_binding', None)
+                    if plan is None:
+                        operations = json.loads((self.root/'data/p0_operations/latest.json').read_bytes())
+                        plan = source_binding.prepare_first_book_bindings(self.root, operations,
+                            datetime.now(timezone.utc), basis=getattr(self, 'accepted_source_basis', None))
+                    if plan.get('requires_publication'):
+                        self.pending_source_binding = plan
+                        source_binding.verify_prepared_transition(self.root, plan)
+                        publication = self.action('publish')
+                        self.accepted_source_basis = source_binding.verify_first_book_bindings(
+                            self.root, plan, publication)
+                        self.pending_source_binding = None
+                        if not self.source_ready():
+                            raise ValueError('source report changed after binding remote ACK')
+                except ValueError:
+                    self.source_audit_required = True
+                    raise
             self.last_smoke_output = None
             captured_output = self.python('p2_paired_execution_v3_1.py', mode)
             if mode == 'smoke': self.last_smoke_output = captured_output
@@ -777,6 +818,13 @@ class LiveAdapter:
                 paths = ['data/hourly_research', 'data/derived_4h_v1', 'data/feature_ablation_v1',
                          'data/minimal_market_forward_v1', 'data/p0_operations',
                          'data/p2_paired_execution_v3_1', 'data/paired_forward_v1', BASE]
+                source_binding = _source_binding_backend()
+                witness_path = source_binding.base.WITNESSES
+                paths.append(witness_path)
+                binding_changed = bool(self.command('git', 'diff', 'HEAD', '--name-only', '--', witness_path).strip())
+                binding_guard = binding_changed or bool(getattr(self, 'pending_source_binding', None))
+                if binding_guard:
+                    source_binding.validate_binding_history(self.root)
                 if self.prospective_enabled:
                     paths.append('data/learned_shadow_v1')
                 existing = [p for p in paths if (self.root/p).exists()]
@@ -785,14 +833,21 @@ class LiveAdapter:
                 for p in existing: self.command('git', 'add', '-f', '--', p)
                 staged = self.command('git', 'diff', '--cached', '--name-only').splitlines()
                 allowed = tuple(p + '/' for p in paths) + tuple(p + '/' for p in ('data/direction_v42', 'data/quote_evidence_v2'))
-                if any(not p.startswith(allowed) for p in staged):
+                if any(p != witness_path and not p.startswith(allowed) for p in staged):
                     raise ValueError('unexpected staged path outside runtime evidence allowlist')
                 expected = {p: (self.root/p).read_bytes() for p in staged}
+                if getattr(self, 'pending_source_binding', None):
+                    source_binding.verify_prepared_transition(self.root, self.pending_source_binding)
+                    # A binding already committed before runner loss still needs
+                    # explicit remote ACK even when it is absent from Git's diff.
+                    expected[witness_path] = self.pending_source_binding['expected_csv']
                 legacy_staged = any(p.startswith('data/learned_shadow_v1/') for p in staged)
                 if self.prospective_enabled and legacy_staged:
                     profile.call('preflight_original18_guard', self.validate_original18_owned, self.root)
                 publication_scope = 'data'
                 def validate(current_root):
+                    if binding_guard:
+                        source_binding.validate_binding_history(current_root)
                     profile.call(publication_scope+'_post_rebase_validate_state', validate_publication_state, current_root)
                     profile.call(publication_scope+'_post_rebase_pair_guard', pair.guard, current_root)
                     profile.call(publication_scope+'_post_rebase_pair_history_guard', validate_paired_history, current_root)
