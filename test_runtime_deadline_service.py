@@ -654,6 +654,72 @@ class DeferredSmokeTests(unittest.TestCase):
                 self.assertTrue(any(e['stage'] == failed for e in result['errors']))
 
 
+class StderrTailDiagnosticTests(unittest.TestCase):
+    def details(self, stderr):
+        return runtime.exception_details(subprocess.CalledProcessError(
+            17, ['offline-fixture'], output='original stdout', stderr=stderr))
+
+    def test_root_exception_tail_is_preserved_without_changing_original_fields(self):
+        value = 'earlier traceback\n'*180+'ValueError: source item changed\n'
+        result = self.details(value)
+        self.assertIn('ValueError: source item changed', result.get('stderr_tail', ''))
+        self.assertEqual(result['stderr_tail'], runtime.diagnostic_text(value, 16384)[-1000:])
+        self.assertLessEqual(len(result['stderr_tail']), 1000)
+        self.assertEqual(result['stderr'], runtime.diagnostic_text(value))
+        self.assertEqual(result['stdout'], 'original stdout')
+        self.assertEqual(result['returncode'], 17)
+        self.assertTrue(result['error'].startswith('CalledProcessError: '))
+
+    def test_full_redaction_precedes_tail_cut_across_secret_url_and_private_key_boundaries(self):
+        token = 'fake-env-start-'+('s'*1800)+'-secret-tail'
+        url = 'https://fake-user:fake-pass@example.invalid/'+('p'*1800)+'/fake-url-tail?sig=private'
+        private = '-----BEGIN PRIVATE KEY-----\n'+('fake-key-material'*120)+'\n-----END PRIVATE KEY-----'
+        for sensitive, forbidden in ((token, ('fake-env-start', 'secret-tail', 's'*30)),
+                (url, ('fake-user', 'fake-pass', 'fake-url-tail', 'p'*30)),
+                (private, ('fake-key-material', 'PRIVATE KEY'))):
+            for as_bytes in (False, True):
+                with self.subTest(form=sensitive[:20], as_bytes=as_bytes), \
+                        patch.dict(os.environ, {'DIAGNOSTIC_TEST_TOKEN': token}):
+                    value = 'prefix\n'*200+sensitive+'\nValueError: original root cause\n'
+                    if as_bytes: value = value.encode()
+                    result = self.details(value)
+                    tail = result.get('stderr_tail', '')
+                    self.assertIn('[REDACTED]', tail)
+                    self.assertIn('ValueError: original root cause', tail)
+                    for part in forbidden: self.assertNotIn(part, tail)
+                    self.assertLessEqual(len(tail), 1000)
+
+    def test_original_sixteen_kib_input_gate_still_omits_oversized_tail(self):
+        for value in (b'x'*16385, '密'*6000):
+            with self.subTest(kind=type(value).__name__):
+                result = self.details(value)
+                self.assertEqual(result.get('stderr_tail'), '[omitted: diagnostic input exceeds limit]')
+                self.assertEqual(result['stderr'], '[omitted: diagnostic input exceeds limit]')
+                self.assertEqual(result['returncode'], 17)
+
+    def test_tail_diagnostic_failure_preserves_all_original_exception_details(self):
+        exc = subprocess.CalledProcessError(17, ['offline-fixture'], output='original stdout',
+                                            stderr='ValueError: original root cause')
+        original = runtime.diagnostic_text
+        expected = runtime.exception_details(exc)
+        expected.pop('stderr_tail', None)
+        def fail_only_tail(value, limit=1000):
+            if limit == 16384: raise RuntimeError('diagnostic failed')
+            return original(value, limit)
+        with patch.object(runtime, 'diagnostic_text', side_effect=fail_only_tail) as diagnostic:
+            result = runtime.exception_details(exc)
+        diagnostic.assert_any_call(exc.stderr, 16384)
+        self.assertEqual(result, expected)
+        self.assertEqual(exc.returncode, 17)
+        self.assertEqual(exc.stderr, 'ValueError: original root cause')
+
+    def test_only_allowed_present_stderr_gets_a_tail(self):
+        for value in (None, object()):
+            self.assertNotIn('stderr_tail', self.details(value))
+        for value in ('', b''):
+            self.assertEqual(self.details(value).get('stderr_tail'), '')
+
+
 class DiagnosticTests(unittest.TestCase):
     def setUp(self):
         self.clock = Clock()

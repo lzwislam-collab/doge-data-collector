@@ -42,6 +42,14 @@ IDENTITY_CACHE_MAX_BYTES = 64 * 1024 * 1024
 IDENTITY_CACHE_MAX_ENTRIES = 256
 _identity_cache = OrderedDict()
 _identity_cache_bytes = 0
+# Published PR117 transport. Witness compatibility only; local execution must
+# still verify this checkout's complete current manifest and registered bytes.
+PUBLISHED_PREDECESSOR_MANIFESTS = frozenset({
+    '2223b89e468f4c3ec8945f8e0adb9114ea2da21c64c0c63136c7db8113c114dc',
+    'deecd431679db728b59790ad5043d5361620e49a4c4b5befe621e2138680262a',
+    '908b2bc9e10175f824c4264728b5810472364a8a3ecea9d6ed7454f4c36cdc3d',
+    'f88fd09295827919c693c77f2719534bff414d35d66c5cf7a8521c8d2be106a2',
+})
 
 
 def _lf(raw):
@@ -150,10 +158,15 @@ def _cached_identity_at(head, path):
 def _candidate_transport(head, trusted):
     manifest, digest = trusted
     raw = _cached_identity_at(head, MANIFEST)
-    if _sha(raw) != digest or _manifest(raw) != manifest:
-        raise ValueError('candidate does not carry this exact engineering version')
-    _verify_files(manifest, lambda path: _cached_identity_at(head, path))
-    return digest
+    actual_digest = _sha(raw)
+    candidate = _manifest(raw)
+    if actual_digest == digest:
+        if candidate != manifest:
+            raise ValueError('candidate current engineering manifest differs')
+    elif actual_digest not in PUBLISHED_PREDECESSOR_MANIFESTS:
+        raise ValueError('candidate is not current or a published engineering predecessor')
+    _verify_files(candidate, lambda path: _cached_identity_at(head, path))
+    return actual_digest
 
 
 def _original_candidate(files, row, read_at, before, after, workflow):

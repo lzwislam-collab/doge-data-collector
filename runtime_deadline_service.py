@@ -232,6 +232,11 @@ def exception_details(exc):
                 value = getattr(exc, name, None)
                 if isinstance(value, (str, bytes)):
                     result[name] = diagnostic_text(value)
+                    if name == 'stderr':
+                        try:
+                            result['stderr_tail'] = diagnostic_text(value, 16384)[-1000:]
+                        except Exception:
+                            pass
         cleanup = getattr(exc, 'process_cleanup', None)
         if type(cleanup) is dict:
             safe = {key: cleanup[key] for key in ('termination_requested', 'kill_requested',
