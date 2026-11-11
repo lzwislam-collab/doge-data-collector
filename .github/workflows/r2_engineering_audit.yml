@@ -1,0 +1,139 @@
+name: Audit DOGE R2 engineering transport v1
+run-name: R2E1 audit ${{ inputs.request_id || github.event_name }}
+on:
+  workflow_dispatch:
+    inputs:
+      request_id:
+        description: Bounded engineering dispatch identity
+        type: string
+        required: false
+      expected_head:
+        description: Exact intended main head
+        type: string
+        required: false
+      not_after_utc:
+        description: Original obligation deadline
+        type: string
+        required: false
+  push:
+    branches: [main]
+    paths: ['r2_engineering*.py', 'r2_witness_presence.py', 'test_r2_engineering*.py', 'test_r2_witness_presence.py', 'learned_audit_handoff.py', 'test_learned_audit_handoff.py', 'config/r2_engineering_transport_v1.json', '.github/workflows/r2_engineering_*.yml']
+  pull_request:
+    paths: ['r2_engineering*.py', 'r2_witness_presence.py', 'test_r2_engineering*.py', 'test_r2_witness_presence.py', 'learned_audit_handoff.py', 'test_learned_audit_handoff.py', 'config/r2_engineering_transport_v1.json', '.github/workflows/r2_engineering_*.yml']
+  workflow_run:
+    workflows: ['Backfill DOGE BTC ETH 1H extreme-event research history', 'Publish DOGE R2 engineering transport v1', 'Publish DOGE V2 R2 frozen forward evidence']
+    types: [completed]
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: r2-engineering-audit-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  audit:
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.status == 'completed' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.event != 'pull_request')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONUTF8: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+      DOGE_R2_ADAPTER_TEST_FIXTURE_ROOT: /tmp/r2-engineering-retained-fixtures-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install numpy==2.3.5 scipy==1.16.3 scikit-learn==1.7.2 joblib==1.5.2 threadpoolctl==3.6.0 botocore==1.43.112 beautifulsoup4==4.12.3 PyYAML==6.0.2
+      - name: Exact requested head and original deadline
+        env:
+          EXPECTED_HEAD: ${{ inputs.expected_head }}
+          NOT_AFTER_UTC: ${{ inputs.not_after_utc }}
+        run: |
+          python - <<'PY'
+          from datetime import datetime, timezone
+          import json, os, subprocess
+          expected, deadline = os.environ['EXPECTED_HEAD'], os.environ['NOT_AFTER_UTC']
+          actual = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          if actual != os.environ['GITHUB_SHA']:
+              raise ValueError('engineering checkout differs from actual Actions head')
+          print(json.dumps({'expected_head': expected, 'actual_actions_head': actual}))
+          if deadline and datetime.now(timezone.utc) >= datetime.fromisoformat(deadline.replace('Z', '+00:00')):
+              raise ValueError('original obligation window closed')
+          import r2_engineering_runtime as engine
+          engine.verify_transport()
+          PY
+      - name: All tests and original frozen history
+        run: |
+          python -m unittest discover -q
+          python forward_validation_v2.py --integrity-only
+      - name: Original frozen registration and real publication replay through engineering v1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python r2_engineering_runtime.py audit
+      - name: Preserve full engineering audit and failures
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r2-engineering-audit-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            phase2-forward-output/
+            forward-readiness-output/
+            config/r2_engineering_transport_v1.json
+            config/phase2_forward_v2.json
+            config/phase2_forward_registration_v2.json
+            research/phase2_forward_v2/model.json
+            ${{ env.DOGE_R2_ADAPTER_TEST_FIXTURE_ROOT }}/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
+  handoff:
+    needs: audit
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install numpy==2.3.5
+      - name: Prepare one current-context handoff without sending a request
+        id: handoff_prepare
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python -B learned_audit_handoff.py prepare
+      - name: Preserve immutable intent before any handoff request
+        id: handoff_intent
+        if: steps.handoff_prepare.outputs.prepared == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: learned-audit-handoff-request-${{ github.run_id }}
+          path: forward-readiness-output/learned-audit-handoff-prepare.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: Request existing readiness only after remote intent confirmation
+        if: steps.handoff_prepare.outputs.prepared == 'true' && steps.handoff_intent.outputs.artifact-id != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          HANDOFF_INTENT_ARTIFACT_ID: ${{ steps.handoff_intent.outputs.artifact-id }}
+        run: python -B learned_audit_handoff.py post
+      - name: Preserve handoff result even when its outcome is unknown
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: learned-audit-handoff-result-${{ github.run_id }}-${{ github.run_attempt }}
+          path: forward-readiness-output/learned-audit-handoff-*.json
+          if-no-files-found: error
+          retention-days: 90

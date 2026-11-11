@@ -251,5 +251,5 @@ def request_original18_witness(capture, publication, state, *, dispatch=None, cl
 
 
 def route_r2(root, publication, state, **options):
-    from runtime_r2_bridge import route_r2 as route
+    from r2_engineering_routing import route_r2 as route
     return route(root, publication, state, **options)
