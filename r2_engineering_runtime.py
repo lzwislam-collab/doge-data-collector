@@ -45,6 +45,7 @@ _identity_cache_bytes = 0
 # Published PR117 transport. Witness compatibility only; local execution must
 # still verify this checkout's complete current manifest and registered bytes.
 PUBLISHED_PREDECESSOR_MANIFESTS = frozenset({
+    '031e09b4b0d17fa6f226488f4bda1fc6e1762a999721ed74ffe360b223b3fb4e',
     '2223b89e468f4c3ec8945f8e0adb9114ea2da21c64c0c63136c7db8113c114dc',
     'deecd431679db728b59790ad5043d5361620e49a4c4b5befe621e2138680262a',
     '908b2bc9e10175f824c4264728b5810472364a8a3ecea9d6ed7454f4c36cdc3d',
@@ -297,7 +298,7 @@ def versioned_result(result, trusted=None, *, mode=None):
     out = {**result, 'engineering_version': VERSION,
            'engineering_manifest_sha256': trusted[1],
            'compatible_audit_workflow': ENGINEERING_AUDIT}
-    if mode == 'publish':
+    if mode in ('publish', 'canary'):
         pending = pending_witness(result, r.records('events'), r.records('scores'),
                                   datetime.now(timezone.utc), f.policy())
         out['engineering_pending_witness'] = pending

@@ -124,7 +124,49 @@ class EngineeringRouting(unittest.TestCase):
         self.remote.reads[('c'*40,path)]=self.remote.files[path]
         out=self.call();self.assertEqual(out['purpose'],'target')
         self.assertEqual(self.remote.posts[0][1]['inputs']['not_after_utc'],'2026-11-09T15:30:00+00:00')
-        self.assertEqual(self.remote.posts[0][1]['inputs']['mode'],'publish')
+        self.assertEqual(self.remote.posts[0][1]['inputs']['mode'],'canary')
+    def test_due_target_keeps_original_canary_mode_at_odd_and_crossed_even_slots(self):
+        for at in (self.now.replace(hour=15,minute=50),self.now.replace(hour=16,minute=0)):
+            with self.subTest(at=at):
+                self.state.clear();self.remote.posts.clear();self.remote.dispatched.clear()
+                self.remote.clock=at
+                path,event=self.remote.add_event('formal',self.now.replace(minute=37))
+                self.remote.audit(3,'c'*40,self.now.replace(minute=38),self.now.replace(minute=40))
+                self.remote.reads[('c'*40,frozen.f.POLICY)]=b'fixed original bytes'
+                self.remote.reads[('c'*40,path)]=self.remote.files[path]
+                result=self.call()
+                self.assertEqual(result['purpose'],'target')
+                self.assertEqual(self.remote.posts[-1][1]['inputs']['mode'],'canary')
+    def test_pre_target_binding_and_missing_prediction_keep_no_issue_mode(self):
+        path,event=self.remote.add_event('formal',self.now.replace(minute=5))
+        result=self.call()
+        self.assertEqual(result['purpose'],'prediction_witness')
+        self.assertEqual(self.remote.posts[-1][1]['inputs']['mode'],'canary')
+        self.state.clear();self.remote.posts.clear();self.remote.dispatched.clear()
+        self.remote.audit(3,'c'*40,self.now.replace(minute=6),self.now.replace(minute=8))
+        self.remote.reads[('c'*40,frozen.f.POLICY)]=b'fixed original bytes'
+        self.remote.reads[('c'*40,path)]=self.remote.files[path]
+        result=self.call()
+        self.assertEqual(result['purpose'],'binding')
+        self.assertEqual(self.remote.posts[-1][1]['inputs']['mode'],'canary')
+    def test_registered_purpose_workflow_mode_combinations_are_exact_and_unknown_fail_closed(self):
+        select=getattr(subject,'_dispatch_mode',None)
+        self.assertTrue(callable(select),'registered purpose/workflow/mode mapping missing')
+        allowed=(('target',original.PUBLISHER,'canary','canary'),
+            ('binding',original.PUBLISHER,'canary','canary'),
+            ('issue',original.PUBLISHER,'publish','publish'),
+            ('source_witness',original.AUDIT,None,'publish'),
+            ('prediction_witness',original.AUDIT,None,'canary'))
+        for purpose,workflow,mode,expected in allowed:
+            self.assertEqual(select({'purpose':purpose,'workflow':workflow,'mode':mode}),expected)
+        for invalid in ({}, {'purpose':'unknown','workflow':original.AUDIT,'mode':None},
+                {'purpose':'target','workflow':original.PUBLISHER,'mode':'publish'},
+                {'purpose':'binding','workflow':original.AUDIT,'mode':'canary'},
+                {'purpose':'issue','workflow':original.PUBLISHER,'mode':''},
+                {'purpose':'source_witness','workflow':original.AUDIT,'mode':''},
+                {'purpose':'prediction_witness','workflow':original.AUDIT,'mode':'publish'},
+                {'purpose':'target','workflow':'unknown.yml','mode':'canary'}):
+            with self.subTest(choice=invalid),self.assertRaises(ValueError):select(invalid)
     def test_old_or_new_active_publisher_prevents_replacement(self):
         for workflow in (original.PUBLISHER,dispatch.LIVE):
             with self.subTest(workflow=workflow):
@@ -317,6 +359,69 @@ class EngineeringRouting(unittest.TestCase):
                 self.assertFalse(old_readiness.trusted_completion(row,[job]))
                 self.assertFalse(old_readiness.trusted_completion(dict(row,pull_requests=[{}]),[job]))
         except AttributeError:self.fail('new audit parent admission is missing')
+
+
+class FrozenCanaryProducerTests(unittest.TestCase):
+    def test_real_frozen_run_scores_formal_with_existing_canary_and_never_enters_issue(self):
+        import test_phase2_forward_v2 as frames
+        import test_learned_shadow_v1 as quotes
+        p=frozen.f.policy()
+        model=frozen.f.make_model(json.loads((frozen.ROOT/frozen.f.PARENT).read_bytes()))
+        old=json.loads((frozen.ROOT/frozen.f.old.PACKAGE).read_bytes())
+        def event(cohort,at):
+            frame=frames.Forward().frame(at)
+            bm=old['models']['1']['full']
+            features=frozen.f.old.causal_features(frozen.f.benchmark_frame(frame),at)
+            probability=frozen.prior.predict(bm,[[features[j] for j in bm['columns']]])[0]
+            result=frozen.f.issue(p,model,frame,quotes.Shadow().packet(at),at,probability,cohort)
+            result.update(input_source_commit='1'*40,input_source_sha256='a'*64,
+                          registration_run_id=1,source_run_id=2)
+            return result
+        canary=event('canary',datetime(2026,10,20,0,1,tzinfo=timezone.utc))
+        formal=event('formal',datetime(2026,11,9,14,37,34,tzinfo=timezone.utc))
+        events=[canary,formal]
+        self.assertIs(canary['included_in_formal_statistics'],False)
+        self.assertIs(formal['included_in_formal_statistics'],True)
+        for at in (datetime(2026,11,9,15,50,tzinfo=timezone.utc),
+                   datetime(2026,11,9,16,0,tzinfo=timezone.utc)):
+            packet=quotes.Shadow().packet(at,101)
+            expected=frozen.f.score(formal,packet,p)
+            class Clock(datetime):
+                @classmethod
+                def now(cls,tz=None):return at if tz is not None else at.replace(tzinfo=None)
+            for mode in ('canary','publish'):
+                with self.subTest(at=at,mode=mode):
+                    appended=[]
+                    # Use the unchanged producer/control flow, event replay and score.
+                    # Synthetic guard/provider I/O does not prove real server qualification.
+                    with patch.dict(os.environ,{'GITHUB_REF':'refs/heads/main'}), \
+                         patch.object(frozen,'datetime',Clock), \
+                         patch.object(frozen,'guard',return_value=(p,model,old,{'registered':b'fixture'})), \
+                         patch.object(frozen,'records',side_effect=lambda folder:copy.deepcopy(events) if folder=='events' else []), \
+                         patch.object(frozen,'runs_server',return_value=[]), \
+                         patch.object(frozen,'publication',return_value=([],{})), \
+                         patch.object(frozen,'provenance'), \
+                         patch.object(frozen.f,'witness',return_value={'run_id':1,'head_sha':'1'*40}), \
+                         patch.object(frozen,'capture_target',return_value=packet) as target_capture, \
+                         patch.object(frozen.frozen,'capture',side_effect=AssertionError('ISSUE capture entered')) as issue_capture, \
+                         patch.object(frozen,'read_at',side_effect=ValueError('missing latest73 source bars')) as source_read, \
+                         patch.object(frozen.subprocess,'check_output',return_value='1'*40), \
+                         patch.object(frozen,'append',side_effect=lambda root,folder,key,value:appended.append((folder,key,copy.deepcopy(value)))):
+                        result=frozen.run(mode)
+                    self.assertEqual(result['new_scores'],[formal['event_id']])
+                    self.assertEqual(result['new_events'],[])
+                    target_capture.assert_called_once()
+                    issue_capture.assert_not_called()
+                    score=next(value for folder,key,value in appended if folder=='scores')
+                    self.assertEqual(frozen.f.encode(score),frozen.f.encode(expected))
+                    self.assertEqual(result['plan']['formal_issued'],1)
+                    self.assertEqual(result['plan']['canary_issued'],1)
+                    if mode=='canary':
+                        source_read.assert_not_called()
+                        self.assertNotIn('issuance',result['errors'])
+                    else:
+                        source_read.assert_called_once()
+                        self.assertIn('missing latest73 source bars',result['errors']['issuance'])
 
 
 if __name__=='__main__':unittest.main()
