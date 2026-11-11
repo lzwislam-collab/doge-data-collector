@@ -318,8 +318,9 @@ class RequestBudgetTests(unittest.TestCase):
     def test_retry_cannot_sleep_past_deadline(self):
         error = urllib.error.HTTPError('url', 429, 'limited', {'Retry-After': '45'}, None)
         with patch.object(scanner.urllib.request, 'urlopen', side_effect=error) as open_url:
-            with self.assertRaises(TimeoutError):
-                scanner.request('/network', attempts=2, deadline=self.clock.now + 10)
+            with self.assertRaises(Exception) as raised:
+                scanner.request('/network', attempts=2, deadline=self.clock.now + 25)
+        self.assertIs(raised.exception, error)
         self.assertEqual(open_url.call_count, 1)
         self.assertFalse(self.clock.sleeps)
 
@@ -338,12 +339,30 @@ class RequestBudgetTests(unittest.TestCase):
         class SlowResponse(io.BytesIO):
             def read(self, *args, **kwargs):
                 raw = super().read(*args, **kwargs)
-                clock.now += 2
+                clock.now += 22
                 return raw
         with patch.object(scanner.urllib.request, 'urlopen',
                           return_value=SlowResponse(b'{"status":"success","data":{"ok":true}}')):
             with self.assertRaises(TimeoutError):
-                scanner.request('/network', attempts=1, deadline=clock.now + 1)
+                scanner.request('/network', attempts=1, deadline=clock.now + 21)
+
+    def test_late_provider_failure_envelopes_remain_data_errors(self):
+        clock = self.clock
+        class LateFailure(io.BytesIO):
+            def read(self, *args, **kwargs):
+                raw = super().read(*args, **kwargs)
+                clock.now += 22
+                return raw
+        for payload in ({'status':'error','data':{'message':'provider declared failure'}},
+                        {'status':'success','data':[]}):
+            with self.subTest(payload=payload):
+                with patch.object(scanner.urllib.request, 'urlopen',
+                                  return_value=LateFailure(json.dumps(payload).encode())):
+                    with self.assertRaises(Exception) as raised:
+                        scanner.request('/network', attempts=1, deadline=clock.now + 21)
+                self.assertIsInstance(raised.exception, ValueError)
+                self.assertIn('invalid API envelope', str(raised.exception))
+
 
     def test_all_requests_keep_original_global_start_interval(self):
         starts = []
@@ -390,6 +409,140 @@ class CapturedProviderReplayTests(unittest.TestCase):
         self.assertEqual(end_tip - scanner.CONFIRMATIONS, 6453125)
         self.assertEqual(calls[-1][0], scanner.API + '/network')
         self.assertLessEqual(calls[-1][1]['timeout'], 10)
+
+
+class NormalBudgetTailTests(unittest.TestCase):
+    def setUp(self):
+        self.context = fixture_directory()
+        self.root = self.context.__enter__()
+        self.addCleanup(self.context.__exit__, None, None, None)
+        self.clock = Clock()
+        self.start = self.clock.now
+        self.checkpoint = {'last_completed_height': 10}
+        self.pending = {'schema_version': 1, 'height': 11, 'txids': ['a' * 64],
+                        'verified': {'a' * 64: {'amount_doge': '2000000', 'headline': 'legacy',
+                                               'observed_at_utc': '2026-10-15T10:31:36+00:00'}}}
+        (self.root/'checkpoint.json').write_text(json.dumps(self.checkpoint))
+        self.pending_raw = json.dumps(self.pending).encode()
+        (self.root/'pending_block.json').write_bytes(self.pending_raw)
+        self.addCleanup(patch.stopall)
+        patch.object(scanner, 'OUT', self.root).start()
+        patch.object(scanner, 'RUN_SECONDS', 780).start()
+        patch.object(scanner, 'MAX_BLOCKS', 1).start()
+        patch.object(scanner.time, 'monotonic', self.clock.monotonic).start()
+        patch.object(scanner.time, 'sleep', self.clock.sleep).start()
+        patch.object(scanner, '_last_request_time', 0).start()
+        patch.object(scanner, '_retry_not_before', 0).start()
+        patch.object(scanner, 'get_tip', return_value=17).start()
+
+    def source_block(self, height, **kwargs):
+        value = block(height)
+        value['txids'] = value['txs']
+        return value
+
+    def assert_original_state(self):
+        self.assertEqual(json.loads((self.root/'checkpoint.json').read_text()), self.checkpoint)
+        self.assertEqual((self.root/'pending_block.json').read_bytes(), self.pending_raw)
+
+    def summary(self):
+        return json.loads((self.root/'latest.json').read_bytes())
+
+    def test_last_point_three_seconds_stops_normally_without_any_http(self):
+        def near_deadline(height, **kwargs):
+            value = self.source_block(height)
+            if height == 11:
+                self.clock.now = self.start + 660 - .3
+                scanner._last_request_time = self.clock.now
+            return value
+        with patch.object(scanner, 'parse_block', side_effect=near_deadline), \
+             patch.object(scanner.urllib.request, 'urlopen') as network:
+            self.assertEqual(scanner.main(), 0)
+        network.assert_not_called()
+        self.assert_original_state()
+        latest = self.summary()
+        self.assertEqual(latest['errors'], [])
+        self.assertEqual(latest['scan_stop_reason'], 'time_budget_in_block')
+        self.assertEqual(latest['incomplete_block_not_committed'], 11)
+        self.assertEqual(latest['backlog_blocks_at_run_end'], 1)
+
+    def test_new_block_needs_a_full_request_slot_before_it_starts(self):
+        seen = []
+        def near_deadline(height, **kwargs):
+            seen.append(height)
+            value = self.source_block(height)
+            if height == 10:
+                self.clock.now = self.start + 660 - .3
+            return value
+        with patch.object(scanner, 'parse_block', side_effect=near_deadline):
+            self.assertEqual(scanner.main(), 0)
+        self.assertEqual(seen, [10])
+        self.assert_original_state()
+        self.assertEqual(self.summary()['scan_stop_reason'], 'time_budget_before_block')
+
+    def test_real_provider_errors_stay_errors_when_retry_budget_runs_out(self):
+        cases = [urllib.error.HTTPError('url', 429, 'provider rate limited', {'Retry-After':'45'}, None),
+                 urllib.error.HTTPError('url', 500, 'provider server failed', {}, None),
+                 TimeoutError('real provider timeout'),
+                 urllib.error.URLError('real provider connection failed')]
+        for error in cases:
+            with self.subTest(provider_error=str(error)):
+                self.clock.now = self.start
+                scanner._retry_not_before = 0
+                scanner._last_request_time = 0
+                def near_deadline(height, **kwargs):
+                    value = self.source_block(height)
+                    if height == 11:
+                        self.clock.now = self.start + 660 - 25
+                    return value
+                def provider_failure(*args, **kwargs):
+                    self.clock.now += 24.9
+                    raise error
+                with patch.object(scanner, 'parse_block', side_effect=near_deadline), \
+                     patch.object(scanner.urllib.request, 'urlopen', side_effect=provider_failure):
+                    self.assertEqual(scanner.main(), 1)
+                self.assert_original_state()
+                self.assertEqual(self.summary()['scan_stop_reason'], 'error')
+                self.assertTrue(any(str(error) in value for value in self.summary()['errors']),
+                                self.summary()['errors'])
+
+    def test_valid_complete_response_after_local_deadline_is_normal_incomplete_progress(self):
+        def near_deadline(height, **kwargs):
+            value = self.source_block(height)
+            if height == 11:
+                self.clock.now = self.start + 660 - 21
+            return value
+        clock = self.clock
+        class SlowResponse(io.BytesIO):
+            def read(self, *args, **kwargs):
+                raw = super().read(*args, **kwargs)
+                clock.now += 22
+                return raw
+        body = json.dumps({'status':'success', 'data':transaction('a' * 64)}).encode()
+        with patch.object(scanner, 'parse_block', side_effect=near_deadline), \
+             patch.object(scanner.urllib.request, 'urlopen', return_value=SlowResponse(body)):
+            self.assertEqual(scanner.main(), 0)
+        self.assert_original_state()
+        self.assertEqual(self.summary()['errors'], [])
+        self.assertEqual(self.summary()['scan_stop_reason'], 'time_budget_in_block')
+        self.assertEqual(self.summary()['backlog_blocks_at_run_end'], 1)
+
+    def test_end_tip_local_budget_failure_stays_error_and_cannot_reuse_zero(self):
+        failure_type = getattr(scanner, 'BudgetExhausted', TimeoutError)
+        def tip(**kwargs):
+            if kwargs.get('attempts') == 1:
+                raise failure_type('end tip has no budget')
+            return 17
+        with patch.object(scanner, 'get_tip', side_effect=tip), \
+             patch.object(scanner, 'parse_block', side_effect=self.source_block), \
+             patch.object(scanner, 'explain', return_value=(Decimal('2000000'), 'legacy')):
+            self.assertEqual(scanner.main(), 1)
+        latest = self.summary()
+        self.assertEqual(latest['last_completed_height'], 11)
+        self.assertIsNone(latest['backlog_blocks_at_run_end'])
+        self.assertIsNone(latest['confirmed_tip_at_run'])
+        self.assertFalse(latest['run_end_tip_verified'])
+        self.assertTrue(latest['errors'])
+
 
 
 if __name__ == '__main__':
