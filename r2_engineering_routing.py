@@ -148,6 +148,20 @@ def _deadline(choice, view):
                for key in choice['event_ids'])
 
 
+def _dispatch_mode(choice):
+    allowed = {
+        ('target', original.PUBLISHER, 'canary'): 'canary',
+        ('binding', original.PUBLISHER, 'canary'): 'canary',
+        ('issue', original.PUBLISHER, 'publish'): 'publish',
+        ('source_witness', original.AUDIT, None): 'publish',
+        ('prediction_witness', original.AUDIT, None): 'canary',
+    }
+    try:
+        return allowed[(choice.get('purpose'), choice.get('workflow'), choice.get('mode'))]
+    except (AttributeError, KeyError, TypeError):
+        raise ValueError('unregistered original routing purpose/workflow/mode') from None
+
+
 class _Routed(Exception):
     def __init__(self, result):
         self.result = result
@@ -227,6 +241,7 @@ def route_r2(root, publication, state, *, clock=None, client=None):
                 raise ValueError('unexpected original router mutation')
             capture['request_kind'] = 'workflow_dispatch'
             choice, view = capture['choice'], capture['view']
+            mode = _dispatch_mode(choice)
             raw = _read_bytes(root, bounded, working, view['head'], original.frozen.SOURCE)
             expected = {original.frozen.SOURCE:_blob(raw)}
             expected[dispatch.ENGINEERING_MANIFEST] = dispatch.committed_manifest_blob(root)
@@ -234,7 +249,7 @@ def route_r2(root, publication, state, *, clock=None, client=None):
                 if key in view['hashes']:
                     expected[original.frozen.f.BASE+'/events/'+key+'.json'] = view['hashes'][key]
             result = dispatch.dispatch_bound(dispatch.LIVE, expected, _deadline(choice, view),
-                client=bounded, clock=clock, mode='publish', state=working['engineering_bound_dispatches'])
+                client=bounded, clock=clock, mode=mode, state=working['engineering_bound_dispatches'])
             raise _Routed({**result, 'workflow':dispatch.LIVE, 'purpose':choice['purpose'],
                 'event_ids':choice.get('event_ids', []), 'existing_canary_count':view['existing_canary_count'],
                 'witness_or_forecast_verified':False})

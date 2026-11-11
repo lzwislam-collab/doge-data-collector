@@ -9,6 +9,7 @@ from pathlib import Path
 import sys
 import types
 import unittest
+from uuid import uuid4
 from unittest import mock
 from urllib.error import HTTPError
 
@@ -35,6 +36,65 @@ TRANSPORT = {
 
 def digest(raw):
     return hashlib.sha256(raw.replace(b'\r\n', b'\n')).hexdigest()
+
+
+class CanaryPendingAuditTests(unittest.TestCase):
+    def test_canary_without_new_rows_still_prepares_original_prediction_audit_intent(self):
+        import r2_engineering_runtime as engine
+        import r2_engineering_dispatch as dispatch
+        now=f.utc('2026-11-09T17:59:59Z')
+        key='1794240000_formal'
+        event={'event_id':key,'cohort':'formal','issued_at_utc':'2026-11-09T17:00:00Z',
+               'target_utc':'2026-11-09T18:00:00Z'}
+        original={'status':'FORWARD_PAPER_ONLY','request_witness':False,'new_events':[],
+                  'new_scores':[],'rejected':{key:'MISSING_PREDICTION_PUBLIC_WITNESS'}}
+        unchanged=json.dumps(original,sort_keys=True)
+        with mock.patch.object(r,'records',side_effect=lambda kind:[event] if kind=='events' else []), \
+             mock.patch.object(engine,'datetime') as clock:
+            clock.now.return_value=now
+            report=engine.versioned_result(original,({},'a'*64),mode='canary')
+        self.assertEqual(report.get('engineering_pending_witness'),[{'event_id':key,'kind':'prediction'}])
+        self.assertTrue(report['request_witness'])
+        self.assertEqual(json.dumps(original,sort_keys=True),unchanged)
+        root=HERE/'mode-test-receipts'/uuid4().hex
+        event_path=f.BASE+'/events/'+key+'.json'
+        raw=f.encode(event)
+        (root/event_path).parent.mkdir(parents=True,exist_ok=True);(root/event_path).write_bytes(raw)
+        output=root/'phase2-forward-output/runtime.json';output.parent.mkdir();output.write_text(json.dumps(report))
+        head='1'*40
+        def git(_, *args):
+            if args==('rev-parse','HEAD'):return head.encode()
+            if args==('show',head+':'+event_path):return raw
+            if args==('show',head+':'+r.SOURCE):return b'exact committed source'
+            raise AssertionError(args)
+        with mock.patch.object(dispatch,'_git',side_effect=git), \
+             mock.patch.object(dispatch,'committed_manifest_blob',return_value='b'*40):
+            intent=dispatch.current_intent(root,now)
+        self.assertIsNotNone(intent)
+        self.assertEqual(intent[1],f.utc(event['target_utc']))
+        self.assertEqual(set(intent[0]),{event_path,r.SOURCE,dispatch.ENGINEERING_MANIFEST})
+        self.assertEqual(report['new_events'],[]);self.assertEqual(report['new_scores'],[])
+
+    def test_canary_pending_metadata_keeps_original_strict_deadlines_and_rejections(self):
+        import r2_engineering_runtime as engine
+        key='1794240000_formal'
+        event={'event_id':key,'cohort':'formal','issued_at_utc':'2026-11-09T17:00:00Z',
+               'target_utc':'2026-11-09T18:00:00Z'}
+        for reason,at,scored,expected in (
+            ('MISSING_PREDICTION_PUBLIC_WITNESS','2026-11-09T18:00:00Z',False,[]),
+            ('MISSING_TARGET_PUBLIC_WITNESS','2026-11-09T18:24:59Z',True,[{'event_id':key,'kind':'target'}]),
+            ('MISSING_TARGET_PUBLIC_WITNESS','2026-11-09T18:25:00Z',True,[]),
+            ('MISSING_REAL_TARGET','2026-11-09T18:10:00Z',False,[])):
+            original={'request_witness':False,'rejected':{key:reason},'new_events':[],'new_scores':[]}
+            before=json.dumps(original,sort_keys=True)
+            with self.subTest(reason=reason,at=at), \
+                 mock.patch.object(r,'records',side_effect=lambda kind:[event] if kind=='events' else ([{'event_id':key}] if scored else [])), \
+                 mock.patch.object(engine,'datetime') as clock:
+                clock.now.return_value=f.utc(at)
+                result=engine.versioned_result(original,({},'a'*64),mode='canary')
+            self.assertEqual(result.get('engineering_pending_witness'),expected)
+            self.assertEqual(result['request_witness'],bool(expected))
+            self.assertEqual(json.dumps(original,sort_keys=True),before)
 
 
 class EngineeringRuntime(unittest.TestCase):
