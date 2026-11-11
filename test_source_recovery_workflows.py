@@ -1,5 +1,7 @@
 """The six existing schedules recover data only, with a callback audit."""
 from pathlib import Path
+import ast
+import re
 import unittest
 from source_recovery_test_dependencies import ensure_test_dependencies
 
@@ -18,6 +20,28 @@ SOURCES={
 }
 
 def load(name):return yaml.load((ROOT/'.github/workflows'/name).read_text(encoding='utf-8'), Loader=yaml.BaseLoader)
+
+
+def guard_allows(job, event_name, **upstream):
+ # Evaluate only the small literal/comparison boolean language used by these
+ # GitHub job guards. Unexpected identifiers or operators fail the contract.
+ context={'github.event_name':event_name,'github.repository':'owner/repo',
+  'github.event.workflow_run.conclusion':upstream.get('conclusion'),
+  'github.event.workflow_run.event':upstream.get('event'),
+  'github.event.workflow_run.head_branch':upstream.get('head_branch'),
+  'github.event.workflow_run.head_repository.full_name':upstream.get('repository')}
+ expression=job.get('if','True')
+ def literal(match):
+  name=match.group()
+  if name not in context:raise AssertionError('unexpected guard context: '+name)
+  return repr(context[name])
+ expression=re.sub(r'github(?:\.[A-Za-z_][A-Za-z_0-9]*)+',literal,expression)
+ expression=expression.replace('&&',' and ').replace('||',' or ')
+ tree=ast.parse(expression,mode='eval')
+ allowed=(ast.Expression,ast.BoolOp,ast.Compare,ast.Constant,ast.And,ast.Or,ast.Eq,ast.NotEq)
+ if any(not isinstance(node,allowed) for node in ast.walk(tree)):
+  raise AssertionError('unexpected guard syntax')
+ return bool(eval(compile(tree,'<workflow guard>','eval'),{'__builtins__':{}},{}))
 
 
 class SourceWorkflowTests(unittest.TestCase):
@@ -41,9 +65,32 @@ class SourceWorkflowTests(unittest.TestCase):
     self.assertIn('sparse-checkout',checkout['with'])
  def test_liquidation_clock_cannot_awaken_frozen_quote_job(self):
   doc=load('liquidations.yml')
-  self.assertEqual(doc['jobs']['quote']['if'],"github.event_name != 'schedule'")
+  for event in ('workflow_dispatch','push','schedule','workflow_run','pull_request','repository_dispatch'):
+   with self.subTest(event=event):
+    self.assertEqual(guard_allows(doc['jobs']['quote'],event),event in ('workflow_dispatch','push'))
   self.assertNotIn('.github/workflows/liquidations.yml',doc['on']['push']['paths'])
   self.assertEqual(set(doc['on']['push']['paths']),{'quote_evidence_v2.py','data/stage5/forward_validation_protocol_v2.json'})
+ def test_release_data_window_listens_only_to_existing_source_contract_ci(self):
+  doc=load('liquidations.yml')
+  self.assertEqual(doc['on'].get('workflow_run'),{
+   'workflows':[load('test_source_recovery.yml')['name']],'types':['completed']})
+  self.assertEqual(doc['on']['schedule'],[{'cron':'4,19,34,49 * * * *'}])
+ def test_release_data_window_requires_successful_main_repository_push(self):
+  job=load('liquidations.yml')['jobs']['sample']
+  valid={'conclusion':'success','event':'push','head_branch':'main','repository':'owner/repo'}
+  self.assertTrue(guard_allows(job,'workflow_run',**valid))
+  invalid=[
+   ('conclusion','failure'),('conclusion','cancelled'),('conclusion','skipped'),('conclusion',None),
+   ('event','pull_request'),('event','schedule'),('event','workflow_dispatch'),('event',None),
+   ('head_branch','feature/elsewhere'),('head_branch',None),
+   ('repository','fork/repo'),('repository',None)]
+  for field,value in invalid:
+   context={**valid,field:value}
+   with self.subTest(field=field,value=value):
+    self.assertFalse(guard_allows(job,'workflow_run',**context))
+  for event in ('workflow_dispatch','push','schedule'):
+   with self.subTest(existing_event=event):
+    self.assertTrue(guard_allows(job,event))
  def test_quality_refreshes_after_exact_source_workflows_without_new_clock(self):
   doc=load('feed_freshness_audit.yml')
   callback=doc['on']['workflow_run']
