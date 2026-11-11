@@ -6,13 +6,29 @@ on:
         type: choice
         options: [audit, bridge]
         default: audit
+      source_audit_run_id:
+        type: string
+        default: ''
+      source_audit_attempt:
+        type: string
+        default: ''
+      source_audit_head:
+        type: string
+        default: ''
+      source_audit_blob:
+        type: string
+        default: ''
+      source_audit_kind:
+        type: choice
+        options: [legacy, r2]
+        default: legacy
   push:
     branches: [main, 'audit/forward-readiness-*']
     paths: ['forward_readiness.py', 'test_forward_readiness.py', '.github/workflows/doge_engineering_completion.yml']
   pull_request:
     paths: ['forward_readiness.py', 'test_forward_readiness.py', '.github/workflows/doge_engineering_completion.yml']
   workflow_run:
-    workflows: ['Backfill DOGE BTC ETH 1H extreme-event research history', 'Collect OKX public market data', 'Sample free Bybit DOGE liquidation events', 'Sample free Binance DOGE liquidation snapshots', 'Audit DOGE V2 R2 frozen forward registration', 'Audit future learned DOGE shadow candidate registration']
+    workflows: ['Backfill DOGE BTC ETH 1H extreme-event research history', 'Collect OKX public market data', 'Sample free Bybit DOGE liquidation events', 'Sample free Binance DOGE liquidation snapshots', 'Audit DOGE V2 R2 frozen forward registration', 'Audit future learned DOGE shadow candidate registration', 'Audit DOGE R2 engineering transport v1']
     types: [completed]
 permissions:
   contents: read
@@ -29,13 +45,25 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: main
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - run: python -m pip install numpy==2.3.5
       - name: Test readiness monitoring and bounded trusted dispatch
-        run: python -m unittest test_forward_readiness test_market_snapshot_recovery -q
+        run: python -m unittest test_forward_readiness test_market_snapshot_recovery test_learned_audit_handoff -q
+      - name: Verify explicitly handed off audit completion and unchanged current source
+        id: source_audit
+        if: github.event_name == 'workflow_dispatch' && inputs.source_audit_run_id != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SOURCE_AUDIT_RUN_ID: ${{ inputs.source_audit_run_id }}
+          SOURCE_AUDIT_ATTEMPT: ${{ inputs.source_audit_attempt }}
+          SOURCE_AUDIT_HEAD: ${{ inputs.source_audit_head }}
+          SOURCE_AUDIT_BLOB: ${{ inputs.source_audit_blob }}
+          SOURCE_AUDIT_KIND: ${{ inputs.source_audit_kind }}
+        run: python -B learned_audit_handoff.py verify
       - name: Recover stale required market snapshot from trusted hourly completion
         if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_run' && (github.event.workflow_run.path == '.github/workflows/okx_hourly_extreme_history.yml' || startsWith(github.event.workflow_run.path, '.github/workflows/okx_hourly_extreme_history.yml@'))
         env:
@@ -51,8 +79,8 @@ jobs:
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          READINESS_MODE: ${{ github.event_name == 'workflow_run' && 'bridge' || inputs.mode || 'audit' }}
-        run: python forward_readiness.py "$READINESS_MODE"
+          READINESS_MODE: ${{ steps.source_audit.outputs.readiness_mode || (github.event_name == 'workflow_run' && 'bridge' || inputs.mode || 'audit') }}
+        run: python r2_engineering_readiness.py "$READINESS_MODE"
       - name: Preserve independent completion receipt
         if: always()
         uses: actions/upload-artifact@v4

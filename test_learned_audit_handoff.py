@@ -1,0 +1,241 @@
+"""No-network handoff tests; all parent/source clocks are synthetic."""
+import copy
+import importlib
+import unittest
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+import json
+try:
+    handoff = importlib.import_module('learned_audit_handoff')
+except ModuleNotFoundError:
+    handoff = None
+REPO = 'lzwislam-collab/doge-data-collector'
+HEAD = 'a' * 40
+BLOB = 'b' * 40
+NOW = datetime(2026, 11, 11, 10, 34, tzinfo=timezone.utc)
+def parent(**changes):
+    row = {'id': 7, 'run_attempt': 1, 'head_sha': HEAD, 'head_branch': 'main',
+           'path': '.github/workflows/learned_shadow_v1.yml',
+           'repository': {'full_name': REPO}, 'head_repository': {'full_name': REPO},
+           'event': 'workflow_dispatch', 'status': 'completed', 'conclusion': 'success',
+           'created_at': '2026-11-11T10:24:48Z', 'updated_at': '2026-11-11T10:33:49Z',
+           'pull_requests': []}
+    return dict(row, **changes)
+class Provider:
+    def __init__(self, rows=None):
+        self.rows = list(rows or [parent()]); self.calls = []; self.posts = []
+        self.main = HEAD; self.blobs = {HEAD: BLOB}; self.artifacts = [];self.queue=None
+        self.marker={'id':77,'name':'learned-audit-handoff-request-7','expired':False,
+          'workflow_run':{'id':7,'head_sha':HEAD,'head_branch':'main'}}
+        self.audit_steps = [{'name':name,'conclusion':'success'} for name in (
+          'Full regression and frozen production history',
+          'Audit exact future bundle and probe raw public quote without predictions',
+          'Preserve full audit and failures')]
+    def api(self, path):
+        self.calls.append(path)
+        if path == '/actions/runs/7':
+            return copy.deepcopy(self.rows.pop(0) if len(self.rows) > 1 else self.rows[0])
+        if path == '/git/ref/heads/main': return {'object': {'type': 'commit', 'sha': self.main}}
+        prefix = '/contents/data/hourly_research?ref='
+        if path.startswith(prefix):
+            return [{'name': 'ohlc.csv', 'path': 'data/hourly_research/ohlc.csv',
+                     'type': 'file', 'sha': self.blobs[path[len(prefix):]], 'size': 11126790}]
+        if path == '/actions/runs/7/artifacts?per_page=100':
+            return {'total_count': len(self.artifacts), 'artifacts': self.artifacts}
+        if path == '/actions/artifacts/77':return copy.deepcopy(self.marker)
+        if path.startswith('/actions/workflows/doge_engineering_completion.yml/runs?'):
+            return copy.deepcopy(self.queue or {'total_count':0,'workflow_runs':[]})
+        if path == '/actions/runs/7/attempts/1/jobs?per_page=100':
+            return {'total_count':1,'jobs':[{'id':9,'run_id':7,'name':'audit',
+              'status':'completed','conclusion':'success','steps':self.audit_steps}]}
+        raise AssertionError('unexpected provider read: ' + path)
+    def request(self, path, payload):
+        self.posts.append((path, payload)); return 204
+class HandoffTests(unittest.TestCase):
+    def setUp(self):
+        self.assertIsNotNone(handoff, 'explicit learned audit handoff is missing')
+        self.provider = Provider(); self.clock_value = NOW; self.sleeps = []
+    def clock(self): return self.clock_value
+    def sleep(self, seconds):
+        self.sleeps.append(seconds); self.clock_value += timedelta(seconds=seconds)
+    def verify(self, **kw):
+        kw.setdefault('local_source_blob',BLOB)
+        return handoff.verify_parent(7,1,HEAD,BLOB,client=self.provider,clock=self.clock,
+              sleep=self.sleep,obligation=lambda at:['issue:1794391200_1'],**kw)
+    def request(self, **kw):
+        kw.setdefault('persist_intent',lambda row:None)
+        prepared=handoff.prepare_handoff(7,1,HEAD,BLOB,client=self.provider,
+          clock=self.clock,obligation=lambda at:['issue:1794391200_1'],kind=kw.get('kind','legacy'))
+        if not prepared['prepared']:return prepared
+        self.assertEqual(self.provider.posts,[])
+        self.provider.artifacts.append(copy.deepcopy(self.provider.marker))
+        return handoff.request_terminal(7,1,HEAD,BLOB,client=self.provider,clock=self.clock,
+              obligation=lambda at:['issue:1794391200_1'],intent_artifact_id=77,
+              expected_keys=prepared['obligation_keys'],**kw)
+    def test_prepare_has_no_post_and_remote_marker_blocks_restart_before_post(self):
+        try:
+            result=handoff.prepare_handoff(7,1,HEAD,BLOB,client=self.provider,
+              clock=self.clock,obligation=lambda at:['issue:1794391200_1'])
+        except AttributeError:self.fail('prepare-before-upload phase is missing')
+        self.assertTrue(result['prepared']);self.assertEqual(self.provider.posts,[])
+        self.provider.artifacts.append(copy.deepcopy(self.provider.marker))
+        again=handoff.prepare_handoff(7,1,HEAD,BLOB,client=self.provider,
+          clock=self.clock,obligation=lambda at:['issue:1794391200_1'])
+        self.assertFalse(again['prepared']);self.assertEqual(again['status'],'SKIP_PREVIOUS_HANDOFF_ATTEMPT')
+    def test_wrong_or_expired_intent_artifact_cannot_authorize_post(self):
+        for change in ({'expired':True},{'name':'wrong'}, {'workflow_run':{'id':8}}):
+            self.provider.marker.update(change)
+            with self.subTest(change=change),self.assertRaises(ValueError):
+                handoff.request_terminal(7,1,HEAD,BLOB,client=self.provider,clock=self.clock,
+                  obligation=lambda at:['issue:1794391200_1'],intent_artifact_id=77,
+                  expected_keys=['issue:1794391200_1'],persist_intent=lambda row:None)
+        self.assertEqual(self.provider.posts,[])
+    def test_busy_terminal_is_not_replaced_by_another_pending_dispatch(self):
+        self.provider.queue={'total_count':1,'workflow_runs':[{'id':9,'head_branch':'main',
+          'path':'.github/workflows/doge_engineering_completion.yml','status':'pending'}]}
+        self.assertEqual(self.request()['status'],'SKIP_EXISTING_TERMINAL_ACTIVE')
+        self.assertEqual(self.provider.posts,[])
+    def test_ambiguous_terminal_queue_fails_before_post(self):
+        self.provider.queue={'total_count':1,'workflow_runs':[]}
+        with self.assertRaises(ValueError):self.request()
+        self.assertEqual(self.provider.posts,[])
+    def test_requests_existing_terminal_with_exact_parent_and_source(self):
+        self.provider.rows=[parent(status='in_progress',conclusion=None)]
+        result=self.request()
+        self.assertEqual(result['status'],'DISPATCH_ACCEPTED_COMPLETION_UNVERIFIED')
+        self.assertEqual(self.provider.posts,[('/actions/workflows/doge_engineering_completion.yml/dispatches',
+          {'ref':'main','inputs':{'mode':'bridge','source_audit_run_id':'7','source_audit_attempt':'1',
+           'source_audit_head':HEAD,'source_audit_blob':BLOB,'source_audit_kind':'legacy'}})])
+        self.assertFalse(result['witness_or_forecast_verified'])
+    def test_recorded_attempt_prevents_repeat_post_after_unknown_result(self):
+        self.provider.artifacts=[{'name':'learned-audit-handoff-request-7','expired':False}]
+        self.assertEqual(self.request()['status'],'SKIP_PREVIOUS_HANDOFF_ATTEMPT')
+        self.assertEqual(self.provider.posts,[])
+    def test_terminal_waits_for_exact_success_then_admits_readiness(self):
+        self.provider.rows=[parent(status='in_progress',conclusion=None),parent()]
+        result=self.verify()
+        self.assertEqual(result['status'],'SOURCE_AUDIT_HANDOFF_ADMITTED')
+        self.assertTrue(result['admitted']);self.assertEqual(self.sleeps,[1])
+        self.assertEqual(result.get('readiness_mode'),'bridge')
+        self.assertEqual(self.provider.posts,[])
+    def test_failed_parent_never_admits(self):
+        self.provider.rows=[parent(conclusion='failure')]
+        with self.assertRaisesRegex(ValueError,'parent audit did not succeed'):self.verify()
+    def test_failed_or_skipped_original_audit_step_is_not_admitted(self):
+        for conclusion in ('failure','skipped'):
+            self.provider.audit_steps[0]['conclusion']=conclusion
+            with self.subTest(conclusion=conclusion),self.assertRaises(ValueError):self.verify()
+    def test_wrong_parent_identity_never_admits(self):
+        for change in ({'id':8},{'run_attempt':2},{'head_sha':'c'*40},{'head_branch':'feature'},
+          {'event':'pull_request'},{'path':'.github/workflows/phase2_forward_audit_v2.yml'},
+          {'repository':{'full_name':'elsewhere/repo'}},{'head_repository':{'full_name':'elsewhere/repo'}},
+          {'pull_requests':[{'number':1}]}):
+            with self.subTest(change=change):
+                self.provider.rows=[parent(**change)]
+                with self.assertRaises(ValueError):self.verify()
+    def test_changed_main_source_skips(self):
+        self.provider.main='c'*40;self.provider.blobs['c'*40]='d'*40
+        result=self.verify()
+        self.assertEqual(result['status'],'SKIP_SOURCE_CHANGED')
+        self.assertEqual(result.get('readiness_mode'),'audit')
+        self.assertEqual(self.provider.posts,[])
+    def test_wrong_source_or_future_parent_clock_fails_closed(self):
+        self.provider.blobs[HEAD]='d'*40
+        with self.assertRaises(ValueError):self.verify()
+        self.provider.blobs[HEAD]=BLOB;self.provider.rows=[parent(updated_at='2026-11-11T10:35:00Z')]
+        with self.assertRaises(ValueError):self.verify()
+    def test_parent_wait_is_bounded(self):
+        self.provider.rows=[parent(status='in_progress',conclusion=None)]
+        self.assertEqual(self.verify(wait_seconds=3)['status'],'SKIP_PARENT_NOT_COMPLETE')
+        self.assertEqual(sum(self.sleeps),3);self.assertEqual(self.provider.posts,[])
+    def test_closed_obligations_skip_request_and_verification(self):
+        empty=lambda at:[]
+        self.assertEqual(handoff.prepare_handoff(7,1,HEAD,BLOB,client=self.provider,clock=self.clock,
+          obligation=empty)['status'],'SKIP_NO_CURRENT_OBLIGATION')
+        self.assertEqual(handoff.verify_parent(7,1,HEAD,BLOB,client=self.provider,clock=self.clock,
+          sleep=self.sleep,obligation=empty)['status'],'SKIP_NO_CURRENT_OBLIGATION')
+        self.assertEqual(self.provider.posts,[])
+    def test_ambiguous_provider_error_never_turns_into_success(self):
+        def broken(path):raise TimeoutError('provider unavailable')
+        self.provider.api=broken
+        with self.assertRaises(TimeoutError):self.verify()
+        self.assertEqual(self.provider.posts,[])
+    def test_unknown_post_result_is_recorded_as_consumed_without_retry(self):
+        def unknown(path,payload):
+            self.provider.posts.append((path,payload));raise TimeoutError('unknown acceptance')
+        self.provider.request=unknown;receipt={}
+        with self.assertRaises(TimeoutError):self.request(receipt=receipt)
+        self.assertTrue(receipt['request_attempted']);self.assertEqual(len(self.provider.posts),1)
+    def test_durable_intent_is_saved_before_the_only_post(self):
+        writes=[]
+        def post(path,payload):
+            self.assertEqual(len(writes),1)
+            self.assertTrue(writes[0]['request_attempted'])
+            self.assertEqual(writes[0]['parent_run_id'],7)
+            self.provider.posts.append((path,payload));return 204
+        self.provider.request=post
+        try:self.request(persist_intent=lambda row:writes.append(copy.deepcopy(row)))
+        except TypeError:self.fail('durable intent callback is not implemented')
+        self.assertEqual(len(self.provider.posts),1)
+    def test_local_intent_persistence_crossing_deadline_prevents_post(self):
+        def persist(row):self.clock_value=NOW.replace(minute=45)
+        prepared=handoff.prepare_handoff(7,1,HEAD,BLOB,client=self.provider,clock=self.clock,
+          obligation=lambda at:['issue:1794391200_1'])
+        self.provider.artifacts.append(copy.deepcopy(self.provider.marker))
+        result=handoff.request_terminal(7,1,HEAD,BLOB,client=self.provider,clock=self.clock,
+          intent_artifact_id=77,expected_keys=prepared['obligation_keys'],persist_intent=persist,
+          obligation=lambda at:[] if at.minute>=45 else ['issue:1794391200_1'])
+        self.assertEqual(result['status'],'SKIP_OBLIGATION_CHANGED')
+        self.assertEqual(self.provider.posts,[])
+    def test_obligation_closing_during_source_reads_never_admits(self):
+        api=self.provider.api
+        def advancing(path):
+            value=api(path)
+            if path.startswith('/contents/'):
+                self.clock_value=NOW.replace(minute=45)
+            return value
+        self.provider.api=advancing
+        status=handoff.verify_parent(7,1,HEAD,BLOB,client=self.provider,clock=self.clock,
+          sleep=self.sleep,obligation=lambda at:[] if at.minute>=45 else ['issue:1794391200_1'])
+        self.assertEqual(status['status'],'SKIP_NO_CURRENT_OBLIGATION')
+    def test_original_plan_keeps_deadline_and_existing_event_exclusion(self):
+        import learned_shadow_runtime as original
+        policy=json.loads((original.ROOT/original.shadow.POLICY).read_bytes())
+        self.assertEqual(handoff.obligation_keys(policy,[],{},NOW),['issue:1794391200_1'])
+        self.assertEqual(handoff.obligation_keys(policy,[],{},NOW.replace(minute=45)),[])
+        event={'event_id':'1794391200_1','horizon_hours':1,'slot_utc':'2026-11-11T10:00:00Z',
+               'target_utc':'2026-11-11T11:34:00Z'}
+        self.assertEqual(handoff.obligation_keys(policy,[event],{},NOW),[])
+    def test_new_r2_parent_uses_its_own_successful_audit_steps(self):
+        self.provider.rows=[parent(path='.github/workflows/r2_engineering_audit.yml',event='workflow_run')]
+        self.provider.audit_steps=[{'name':name,'conclusion':'success'} for name in (
+          'All tests and original frozen history',
+          'Original frozen registration and real publication replay through engineering v1',
+          'Preserve full engineering audit and failures')]
+        try:result=self.verify(kind='r2')
+        except TypeError:self.fail('new engineering audit kind is missing')
+        self.assertTrue(result['admitted']);self.assertEqual(result['source_audit_kind'],'r2')
+        result=self.request(kind='r2')
+        self.assertEqual(result['status'],'DISPATCH_ACCEPTED_COMPLETION_UNVERIFIED')
+        self.assertEqual(self.provider.posts[0][1]['inputs']['source_audit_kind'],'r2')
+    def test_claimed_kind_must_match_actual_parent_path(self):
+        with self.assertRaises(ValueError):self.verify(kind='r2')
+        with self.assertRaises(ValueError):self.verify(kind='unregistered')
+    def test_old_terminal_checkout_source_cannot_enable_bridge(self):
+        result=self.verify(local_source_blob='c'*40)
+        self.assertEqual(result['status'],'SKIP_LOCAL_SOURCE_CHANGED')
+        self.assertFalse(result['admitted']);self.assertEqual(result['readiness_mode'],'audit')
+    def test_r2_obligations_keep_original_issuance_and_target_cutoffs(self):
+        import phase2_forward_runtime_v2 as original
+        policy=original.f.policy()
+        try:keys=handoff.r2_obligation_keys(policy,[],{},NOW)
+        except AttributeError:self.fail('R2 frozen obligation adapter is missing')
+        self.assertEqual(keys,['issue:1794391200_formal'])
+        self.assertEqual(handoff.r2_obligation_keys(policy,[],{},NOW.replace(minute=45)),[])
+        event={'event_id':'1794384000_formal','cohort':'formal','slot_utc':'2026-11-11T08:00:00Z',
+          'target_utc':'2026-11-11T10:10:00Z'}
+        self.assertEqual(handoff.r2_obligation_keys(policy,[event],{},NOW),
+          ['issue:1794391200_formal','target:1794384000_formal'])
+        self.assertEqual(handoff.r2_obligation_keys(policy,[event],{},NOW.replace(minute=35)),
+          ['issue:1794391200_formal'])
+if __name__=='__main__':unittest.main()
