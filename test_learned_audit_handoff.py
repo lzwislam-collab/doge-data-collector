@@ -310,6 +310,117 @@ class CompletionTests(unittest.TestCase):
         self.assertEqual(result['parent_run_id'],7);self.assertEqual(result['source_audit_kind'],'legacy')
         self.assertIn('readiness_mode=bridge',output.read_text());self.assertEqual(self.provider.posts,[])
 
+class CrossFamilyCompletionTests(unittest.TestCase):
+    def setUp(self):
+        import learned_shadow_runtime as legacy
+        import phase2_forward_runtime_v2 as r2
+        self.policies = {'legacy': json.loads((legacy.ROOT/legacy.shadow.POLICY).read_bytes()),
+                         'r2': r2.f.policy()}
+        self.events = {'legacy': [{'event_id': '1794391200_1', 'horizon_hours': 1,
+            'slot_utc': '2026-11-11T10:00:00Z', 'target_utc': '2026-11-11T11:34:00Z'}],
+            'r2': [{'event_id': '1794391200_formal', 'cohort': 'formal',
+                'slot_utc': '2026-11-11T10:00:00Z', 'target_utc': '2026-11-11T11:34:00Z'},
+                {'event_id': '1794387600_formal', 'cohort': 'formal',
+                'slot_utc': '2026-11-11T09:00:00Z', 'target_utc': '2026-11-11T10:10:00Z'}]}
+        self.calls = []
+        self.provider = Provider()
+
+    def planned(self, at, kind='legacy'):
+        self.calls.append((kind, at))
+        planner = handoff.obligation_keys if kind == 'legacy' else handoff.r2_obligation_keys
+        return planner(self.policies[kind], self.events[kind], {}, at)
+
+    def use_parent(self, kind):
+        row = parent(path=handoff.AUDITS[kind], event='workflow_run' if kind == 'r2' else 'push')
+        self.provider.rows = [row]
+        self.provider.audit_steps = [{'name': name, 'conclusion': 'success'}
+                                     for name in handoff.AUDIT_STEPS[kind]]
+        return row
+
+    def verify(self, kind, at):
+        with patch.object(handoff, 'current_obligation', side_effect=self.planned):
+            return handoff.verify_completion(self.use_parent(kind), client=self.provider,
+                clock=lambda: at, local_source_blob=BLOB)
+
+    def test_legacy_completion_can_wake_only_original_r2_target(self):
+        self.assertEqual(self.planned(NOW, 'legacy'), [])
+        self.assertEqual(self.planned(NOW, 'r2'), ['target:1794387600_formal'])
+        self.calls.clear()
+        result = self.verify('legacy', NOW)
+        self.assertTrue(result['admitted'])
+        self.assertEqual(result['readiness_mode'], 'bridge')
+        self.assertEqual(result['obligation_keys'], ['r2:target:1794387600_formal'])
+        self.assertEqual(result['source_audit_kind'], 'legacy')
+        self.assertIs(result['witness_or_forecast_verified'], False)
+        self.assertEqual(self.calls, [('legacy', NOW), ('r2', NOW)]*2)
+        self.assertEqual(self.provider.posts, [])
+
+    def test_r2_completion_can_wake_only_original_legacy_target(self):
+        at = NOW.replace(hour=11, minute=46)
+        self.events['r2'] = []
+        self.assertEqual(self.planned(at, 'r2'), [])
+        self.assertEqual(self.planned(at, 'legacy'), ['target:1794391200_1'])
+        self.calls.clear()
+        result = self.verify('r2', at)
+        self.assertTrue(result['admitted'])
+        self.assertEqual(result['obligation_keys'], ['legacy:target:1794391200_1'])
+        self.assertEqual(result['source_audit_kind'], 'r2')
+        self.assertEqual(self.calls, [('legacy', at), ('r2', at)]*2)
+        self.assertEqual(self.provider.posts, [])
+
+    def test_both_empty_original_plans_remain_audit_only(self):
+        at = NOW.replace(hour=11, minute=59)
+        self.events['r2'] = []
+        self.assertEqual(self.planned(at, 'legacy'), [])
+        self.assertEqual(self.planned(at, 'r2'), [])
+        result = self.verify('legacy', at)
+        self.assertEqual(result['status'], 'SKIP_NO_CURRENT_OBLIGATION')
+        self.assertFalse(result['admitted'])
+        self.assertEqual(result['readiness_mode'], 'audit')
+
+    def test_both_families_use_same_actual_utc_and_recheck_original_deadline(self):
+        clocks = iter([NOW, NOW, NOW.replace(minute=35)])
+        with patch.object(handoff, 'current_obligation', side_effect=self.planned):
+            result = handoff.verify_completion(self.use_parent('legacy'), client=self.provider,
+                clock=lambda: next(clocks), local_source_blob=BLOB)
+        self.assertEqual(result['status'], 'SKIP_OBLIGATION_CHANGED')
+        self.assertFalse(result['admitted'])
+        self.assertEqual(result['readiness_mode'], 'audit')
+        self.assertEqual(self.calls, [('legacy', NOW), ('r2', NOW),
+            ('legacy', NOW.replace(minute=35)), ('r2', NOW.replace(minute=35))])
+
+    def test_unknown_other_family_plan_cannot_admit_known_family_work(self):
+        def unknown(at, kind='legacy'):
+            if kind == 'r2': raise ValueError('unknown frozen planner state')
+            return ['target:1794391200_1']
+        with patch.object(handoff, 'current_obligation', side_effect=unknown):
+            with self.assertRaisesRegex(ValueError, 'unknown frozen planner state'):
+                handoff.verify_completion(self.use_parent('legacy'), client=self.provider,
+                    clock=lambda: NOW, local_source_blob=BLOB)
+        self.assertEqual(self.provider.posts, [])
+
+    def test_explicit_prepare_post_and_verify_keep_original_parent_family(self):
+        for kind, at in (('legacy', NOW), ('r2', NOW.replace(hour=11, minute=46))):
+            with self.subTest(kind=kind):
+                if kind == 'r2': self.events['r2'] = []
+                self.use_parent(kind)
+                self.calls.clear()
+                with patch.object(handoff, 'current_obligation', side_effect=self.planned):
+                    prepared = handoff.prepare_handoff(7, 1, HEAD, BLOB,
+                        client=self.provider, clock=lambda: at, kind=kind)
+                    posted = handoff.request_terminal(7, 1, HEAD, BLOB,
+                        client=self.provider, clock=lambda: at, kind=kind,
+                        intent_artifact_id=77, expected_keys=['unchanged-explicit-family-key'])
+                    verified = handoff.verify_parent(7, 1, HEAD, BLOB, client=self.provider,
+                        clock=lambda: at, kind=kind, local_source_blob=BLOB)
+                for result in (prepared, posted, verified):
+                    self.assertEqual(result['status'], 'SKIP_NO_CURRENT_OBLIGATION')
+                    self.assertFalse(result['admitted'])
+                self.assertTrue(self.calls)
+                self.assertTrue(all(actual_kind == kind for actual_kind, _ in self.calls))
+        self.assertEqual(self.provider.posts, [])
+
+
 class CompletionWorkflowTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
