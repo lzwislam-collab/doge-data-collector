@@ -26,7 +26,7 @@ BACKEND_BLOBS = {
     'runtime_paired_history': 'b27849b2761de895a33613230de9adbf4187df71',
     'runtime_p0_inventory_transport': 'e55c50a610a58439211b076b95020ae83810954b',
     'runtime_paired_git_stream': 'b4760557613e8753ca9dffcc0770a83833591240',
-    'runtime_witness_git_stream': '6a849c10f243e14828874ce02117bdb482c9ba50',
+    'runtime_witness_git_stream': '991e11a5fb36875b89d43aa6e11c100c924cc824',
 }
 CANONICAL_BLOBS = {
     'paired_forward_cohort.py': '02e6b3ba51f063ba17cddcb98ff6445a08235c97',
