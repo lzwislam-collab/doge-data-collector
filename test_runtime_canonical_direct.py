@@ -70,21 +70,23 @@ class DirectDigestTests(unittest.TestCase):
         self.assertEqual(cache.stats['sha256_calls'],1)
 
 class LargeMissDigestTests(unittest.TestCase):
-    def test_large_misses_use_complete_original_digest_without_cache_graph_walk(self):
+    def test_large_nested_change_uses_current_content_without_losing_repeated_hits(self):
         original=Mock(side_effect=digest);cache=cli._CanonicalBytes(original)
         value={'receipt':'A'*(600*1024),'nested':[{'x':1}]}
-        expected=[digest(value)]
+        expected=digest(value)
         with patch.object(cli,'_json_closed',wraps=cli._json_closed) as walked:
-            self.assertEqual(cache.digest(value),expected[0])
+            self.assertEqual(cache.digest(value),expected)
             value['nested'][0]['x']=-0.0
             self.assertEqual(cache.digest(value),digest(value))
-            self.assertEqual(walked.call_count,0,'large miss still paid the redundant cache graph walk')
-        self.assertEqual(original.call_count,2)
-        self.assertEqual(cache.stats['sha256_calls'],2)
-        self.assertEqual(cache.stats['direct_calls'],2)
-        self.assertEqual(cache.stats['hits']+cache.stats['misses'],0)
+            self.assertNotEqual(cache.digest(value),expected)
+            self.assertEqual(walked.call_count,2)
+        self.assertEqual(original.call_count,0)
+        self.assertEqual(cache.stats['sha256_calls'],3)
+        self.assertEqual(cache.stats['direct_calls'],0)
+        self.assertEqual(cache.stats['hits'],1)
+        self.assertEqual(cache.stats['misses'],2)
         self.assertEqual(cache.stats['fallback_calls'],0)
-        self.assertFalse(cache.entries)
+        self.assertTrue(cache.entries)
         self.assertEqual(cache.max_bytes,64*1024*1024)
         self.assertEqual(cache.max_entries,128)
 
@@ -99,26 +101,36 @@ class LargeMissDigestTests(unittest.TestCase):
                 self.assertEqual(str(actual.exception),str(expected.exception))
                 self.assertFalse(cache.entries)
 
-    def test_large_repeated_value_performs_original_encoding_and_fresh_sha_each_time(self):
-        value={'receipt':'A'*(600*1024)}
+    def test_large_prepared_reuses_one_canonical_encoding_with_two_fresh_hashes(self):
+        value={'schema_version':1,'candidates':{'1':{'fit_examples':examples(),
+            'receipt':'A'*(600*1024)},'24':{'fit_examples':examples(24)}}}
+        self.assertGreater(len(cli.marshal.dumps(value,2)),512*1024)
         expected=digest(value);sha=hashlib.sha256;encode=json.dumps
         cache=cli._CanonicalBytes(digest)
         with patch.object(cli.hashlib,'sha256',wraps=sha) as hashes,patch.object(cli.json,'dumps',wraps=encode) as encoded:
             self.assertEqual(cache.digest(value),expected)
             self.assertEqual(cache.digest(value),expected)
         self.assertEqual(hashes.call_count,2)
-        self.assertEqual(encoded.call_count,2)
-        self.assertFalse(cache.entries)
-
-    def test_large_miss_does_not_change_small_cache_hits_and_fresh_hashes(self):
-        cache=cli._CanonicalBytes(digest)
-        large={'receipt':'A'*(600*1024)};small={'receipt':[1,False,None]}
-        for value in (small,large,small):self.assertEqual(cache.digest(value),digest(value))
+        self.assertEqual(encoded.call_count,1)
         self.assertEqual(cache.stats['hits'],1)
         self.assertEqual(cache.stats['misses'],1)
-        self.assertEqual(cache.stats['direct_calls'],1)
-        self.assertEqual(cache.stats['sha256_calls'],3)
-        self.assertEqual(cache.stats['hits']+cache.stats['misses']+cache.stats['direct_calls'],cache.stats['calls'])
-        self.assertLessEqual(cache.stats['cached_bytes'],cache.max_bytes)
+        self.assertEqual(cache.stats['sha256_calls'],2)
+        self.assertEqual(cache.stats['direct_calls'],0)
+        self.assertEqual(len(cache.entries),1)
+        self.assertTrue(all(type(k) is bytes and type(v) is bytes for k,v in cache.entries.items()))
+
+    def test_large_value_keeps_small_hits_fresh_hashes_and_original_byte_bounds(self):
+        for limits in ({},{'max_bytes':4096,'max_entries':2}):
+            with self.subTest(limits=limits):
+                cache=cli._CanonicalBytes(digest,**limits)
+                large={'receipt':'A'*(600*1024)};small={'receipt':[1,False,None]}
+                for value in (small,large,small):self.assertEqual(cache.digest(value),digest(value))
+                self.assertEqual(cache.stats['hits'],1)
+                self.assertEqual(cache.stats['misses'],1 if limits else 2)
+                self.assertEqual(cache.stats['direct_calls'],0)
+                self.assertEqual(cache.stats['sha256_calls'],3)
+                self.assertEqual(cache.stats['fallback_calls'],1 if limits else 0)
+                self.assertLessEqual(cache.stats['cached_bytes'],cache.max_bytes)
+                self.assertLessEqual(cache.stats['entries'],cache.max_entries)
 
 if __name__=='__main__':unittest.main()

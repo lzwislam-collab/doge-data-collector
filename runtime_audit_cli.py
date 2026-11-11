@@ -123,16 +123,6 @@ class _CanonicalBytes:
             # its exact canonical bytes are reused without retaining object IDs.
             self.entries.move_to_end(key); self.stats['hits'] += 1
         else:
-            # A large uncached typed key consumes more than a fair share of
-            # the original bounded LRU. Use the complete original encoder and
-            # fresh SHA instead of paying a graph walk and a second key dump
-            # before promptly evicting these measured large miss-only values.
-            # Small receipts retain their original cache and all byte bounds.
-            if len(key) > max(512*1024,self.max_bytes//max(1,self.max_entries)):
-                self.stats['direct_calls'] += 1
-                result = self.original(value)
-                self.stats['sha256_calls'] += 1
-                return result
             self.stats['misses'] += 1
             try: closed = _json_closed(value)
             except Exception: return self._fallback(value)
