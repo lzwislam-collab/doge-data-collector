@@ -329,6 +329,10 @@ def verify_completion(event, *, client, clock=None, obligation=None, local_sourc
             or _parent_kind(actual) != claimed_kind):
         raise ValueError('source audit completion identity or kind changed')
     blob = _source(client.api, head)
+    if obligation is None:
+        def obligation(at):
+            return sorted({family+':'+key for family in ('legacy', 'r2')
+                           for key in current_obligation(at, family)})
     return verify_parent(run_id, attempt, head, blob, client=client, clock=clock,
         obligation=obligation, wait_seconds=0, kind=claimed_kind,
         local_source_blob=local_source_blob)
