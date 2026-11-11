@@ -7,6 +7,7 @@ on:
     branches: [main]
     paths:
       - 'macro_collector.py'
+      - 'macro_collector_runtime_v1.py'
       - 'source_publication.py'
       - '.github/workflows/macro.yml'
 permissions:
@@ -31,7 +32,7 @@ jobs:
       - name: Download official FRED series and audit
         id: collector
         continue-on-error: true
-        run: python macro_collector.py
+        run: python macro_collector_runtime_v1.py
       - name: Publish source files and verify remote bytes
         if: always()
         env:
