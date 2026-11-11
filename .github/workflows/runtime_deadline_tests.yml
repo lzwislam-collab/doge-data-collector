@@ -246,7 +246,7 @@ jobs:
           PY
       - name: Run regression tests
         env:
-          NATIVE_TRANSPORT_PR: ${{ github.event_name == 'pull_request' && (github.head_ref == 'fix/p0-archive-audit-20261111' || github.head_ref == 'fix/p0-current-archive-20261111' || github.head_ref == 'fix/p0-source-binding-20261111') }}
+          NATIVE_TRANSPORT_PR: ${{ github.event_name == 'pull_request' && (github.head_ref == 'fix/p0-archive-audit-20261111' || github.head_ref == 'fix/p0-current-archive-20261111' || github.head_ref == 'fix/p0-source-binding-20261111' || github.head_ref == 'fix/p0-native-first-profile-20261111') }}
         run: |
           # This PR also requires the unchanged complete scientific-evidence suite.
           # Avoid repeating that suite before the isolated six-CLI comparison.
@@ -339,11 +339,12 @@ jobs:
 
 
       - name: Compare whole original audit CLIs with native history transport
-        if: github.event_name == 'pull_request' && (github.head_ref == 'fix/p0-archive-audit-20261111' || github.head_ref == 'fix/p0-current-archive-20261111' || github.head_ref == 'fix/p0-source-binding-20261111')
+        if: github.event_name == 'pull_request' && (github.head_ref == 'fix/p0-archive-audit-20261111' || github.head_ref == 'fix/p0-current-archive-20261111' || github.head_ref == 'fix/p0-source-binding-20261111' || github.head_ref == 'fix/p0-native-first-profile-20261111')
         timeout-minutes: 11
         env:
           DOGE_AUDIT_PAIRED_CPU_PROFILE: '0'
           DOGE_AUDIT_PAIRED_COMPONENT_PROFILE: '0'
+          NATIVE_FIRST_PROFILE: ${{ github.event_name == 'pull_request' && github.head_ref == 'fix/p0-native-first-profile-20261111' }}
           GITHUB_TOKEN: ${{ github.token }}
           OPENBLAS_NUM_THREADS: '1'
           OMP_NUM_THREADS: '1'
@@ -381,9 +382,11 @@ jobs:
           then
             printf '%s\n' '{"diagnostic":"github_core_rate_limit","status":"probe_process_failed"}'
           fi
-          python -B runtime_audit_pipeline_profile.py --source-root "$GITHUB_WORKSPACE" --ref "$GITHUB_SHA" --output "$RUNNER_TEMP/source-audit-native-profile"
+          profile_order_args=()
+          if [ "$NATIVE_FIRST_PROFILE" = 'true' ]; then profile_order_args+=(--native-first); fi
+          python -B runtime_audit_pipeline_profile.py --source-root "$GITHUB_WORKSPACE" --ref "$GITHUB_SHA" --output "$RUNNER_TEMP/source-audit-native-profile" "${profile_order_args[@]}"
       - name: Preserve whole audit CLI comparison
-        if: always() && github.event_name == 'pull_request' && (github.head_ref == 'fix/p0-archive-audit-20261111' || github.head_ref == 'fix/p0-current-archive-20261111' || github.head_ref == 'fix/p0-source-binding-20261111')
+        if: always() && github.event_name == 'pull_request' && (github.head_ref == 'fix/p0-archive-audit-20261111' || github.head_ref == 'fix/p0-current-archive-20261111' || github.head_ref == 'fix/p0-source-binding-20261111' || github.head_ref == 'fix/p0-native-first-profile-20261111')
         uses: actions/upload-artifact@v4
         with:
           name: source-audit-native-profile-${{ github.run_id }}-${{ github.run_attempt }}
