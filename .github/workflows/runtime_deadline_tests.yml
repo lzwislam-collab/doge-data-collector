@@ -350,6 +350,37 @@ jobs:
           PYTHONUTF8: '1'
           PYTHONDONTWRITEBYTECODE: '1'
         run: |
+          if ! python -B - <<'PY_QUOTA'
+          import json, os, urllib.request
+          from datetime import datetime, timezone
+          diagnostic = {'diagnostic': 'github_core_rate_limit', 'server_date': None}
+          try:
+              request = urllib.request.Request('https://api.github.com/rate_limit', headers={
+                  'Authorization': 'Bearer '+os.environ['GITHUB_TOKEN'],
+                  'Accept': 'application/vnd.github+json',
+                  'User-Agent': 'DOGE-audit-quota-diagnostic/1'})
+              with urllib.request.urlopen(request, timeout=6) as response:
+                  diagnostic['server_date'] = response.headers.get('Date')
+                  raw = response.read(16385)
+              if len(raw) > 16384:
+                  raise ValueError('quota diagnostic body too large')
+              core = json.loads(raw)['resources']['core']
+              numbers = {key: core[key] for key in ('limit', 'remaining', 'reset', 'used')}
+              if any(type(value) is not int or value < 0 for value in numbers.values()):
+                  raise ValueError('quota diagnostic numbers malformed')
+              diagnostic.update(status='ok', core=numbers)
+          except Exception as error:
+              headers = getattr(error, 'headers', None)
+              if headers is not None:
+                  diagnostic['server_date'] = headers.get('Date')
+              diagnostic.update(status='error', error_type=type(error).__name__,
+                                http_status=getattr(error, 'code', None))
+          diagnostic['actual_utc'] = datetime.now(timezone.utc).isoformat()
+          print(json.dumps(diagnostic, sort_keys=True))
+          PY_QUOTA
+          then
+            printf '%s\n' '{"diagnostic":"github_core_rate_limit","status":"probe_process_failed"}'
+          fi
           python -B runtime_audit_pipeline_profile.py --source-root "$GITHUB_WORKSPACE" --ref "$GITHUB_SHA" --output "$RUNNER_TEMP/source-audit-native-profile"
       - name: Preserve whole audit CLI comparison
         if: always() && github.event_name == 'pull_request' && (github.head_ref == 'fix/p0-archive-audit-20261111' || github.head_ref == 'fix/p0-current-archive-20261111' || github.head_ref == 'fix/p0-source-binding-20261111')

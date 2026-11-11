@@ -145,7 +145,9 @@ def transport(mode, path):
                 entry.update(status=getattr(response, 'status', getattr(response, 'code', 200)),
                     response_url=response.geturl(),
                     headers={k: v for k, v in response.headers.items()
-                             if k.lower() in ('content-type', 'content-length', 'date', 'etag')},
+                             if k.lower() in ('content-type', 'content-length', 'date', 'etag',
+                                 'x-ratelimit-limit', 'x-ratelimit-remaining', 'x-ratelimit-reset',
+                                 'x-ratelimit-resource', 'x-ratelimit-used', 'retry-after')},
                     body_base64=base64.b64encode(body).decode('ascii'), sha256=digest(body))
         except urllib.error.URLError as error:
             entry.update(url_error=True, reason=str(error.reason))
