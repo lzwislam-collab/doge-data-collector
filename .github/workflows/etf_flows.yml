@@ -1,7 +1,14 @@
 name: Collect BTC ETH spot ETF flows
 on:
   workflow_dispatch:
-  # Lean-v1.0: historical data retained; auto collection paused until prospective incremental value is proven.
+  schedule:
+    - cron: '43 5,13,21 * * 1-6'
+  push:
+    branches: [main]
+    paths:
+      - 'etf_flows.py'
+      - 'source_publication.py'
+      - '.github/workflows/etf_flows.yml'
 permissions:
   contents: write
 concurrency:
@@ -13,6 +20,11 @@ jobs:
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: true
+          sparse-checkout: |
+            data/etf
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -22,22 +34,22 @@ jobs:
         id: collector
         continue-on-error: true
         run: python etf_flows.py
-      - name: Save history, revisions and errors
+      - name: Publish source files and verify remote bytes
         if: always()
+        env:
+          SOURCE_COLLECTION_OUTCOME: ${{ steps.collector.outcome }}
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          for f in data/etf/latest.json data/etf/daily_flows.csv data/etf/revisions.csv; do
-            if [ -f "$f" ]; then git add -f "$f"; fi
-          done
-          if ! git diff --cached --quiet; then
-            git commit -m 'data: update BTC ETH ETF flows and revisions'
-            for i in 1 2 3 4 5; do
-              if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
-              if [ "$i" -eq 5 ]; then exit 1; fi
-              sleep 4
-            done
-          fi
+          python source_publication.py --source etf
       - name: Fail if ETF collection failed
         if: steps.collector.outcome != 'success'
         run: exit 1
+      - name: Preserve source failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-5-etf-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 90
+          if-no-files-found: warn
+          path: data/etf/

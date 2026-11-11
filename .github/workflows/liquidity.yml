@@ -2,7 +2,14 @@ name: Collect DOGE swap liquidity
 
 on:
   workflow_dispatch:
-  # Lean-v1.0: optional snapshot/audit research auto-schedule paused; manual/review triggers remain.
+  schedule:
+    - cron: '13 * * * *'
+  push:
+    branches: [main]
+    paths:
+      - 'doge_liquidity.py'
+      - 'source_publication.py'
+      - '.github/workflows/liquidity.yml'
 
 permissions:
   contents: write
@@ -16,10 +23,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
+          ref: main
           persist-credentials: true
+          sparse-checkout: |
+            data/liquidity
       - name: Python
         uses: actions/setup-python@v5
         with:
@@ -28,22 +37,22 @@ jobs:
         id: scanner
         continue-on-error: true
         run: python doge_liquidity.py
-      - name: Persist results, including failure diagnostics
+      - name: Publish source files and verify remote bytes
         if: always()
+        env:
+          SOURCE_COLLECTION_OUTCOME: ${{ steps.scanner.outcome }}
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          for f in data/liquidity/latest.json data/liquidity/hourly_snapshots.csv; do
-            if [ -f "$f" ]; then git add -f "$f"; fi
-          done
-          if ! git diff --cached --quiet; then
-            git commit -m 'data: collect DOGE swap liquidity'
-            for attempt in 1 2 3 4 5; do
-              if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
-              if [ "$attempt" -eq 5 ]; then exit 1; fi
-              sleep 4
-            done
-          fi
+          python source_publication.py --source liquidity
       - name: Report collection failure
         if: steps.scanner.outcome != 'success'
         run: exit 1
+      - name: Preserve source failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-5-liquidity-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 90
+          if-no-files-found: warn
+          path: data/liquidity/

@@ -1,6 +1,15 @@
 name: Audit DOGE feed freshness
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows:
+      - 'Collect DOGE on-chain data'
+      - 'Collect observed DOGE liquidation events'
+      - 'Collect DOGE swap liquidity'
+      - 'Collect BTC ETH spot ETF flows'
+      - 'Collect US macro indicators'
+      - 'DOGE confirmed block whale scanner'
+    types: [completed]
   push:
     branches: [main]
     paths:
@@ -8,7 +17,6 @@ on:
       - 'test_feed_quality.py'
       - 'test_enhancement_data.py'
       - '.github/workflows/feed_freshness_audit.yml'
-  # Lean-v1.0: optional snapshot/audit research auto-schedule paused; manual/review triggers remain.
 permissions:
   contents: write
 concurrency:
@@ -16,10 +24,34 @@ concurrency:
   cancel-in-progress: false
 jobs:
   audit:
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 4
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/*/
+            /data/latest.json
+            /data/onchain/latest.json
+            /data/onchain/metrics_latest.json
+            /data/liquidations/
+            /data/liquidity/
+            /data/etf/
+            /data/macro/
+            /data/whales/latest.json
+            /data/whales_blocks/latest.json
+            /data/okx_address_balances/latest.json
+            /data/bybit_liquidations/
+            /data/binance_liquidations/
+            /data/hourly_research/latest.json
+            /data/policy_events/
+            /data/regulatory_events/
+            /data/sec_events/
+            /data/quality/
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -29,23 +61,14 @@ jobs:
         id: check
         continue-on-error: true
         run: python feed_freshness_audit.py
-      - name: Commit timestamped quality diagnostics
+      - name: Publish current source audit and verify remote bytes
         if: always()
+        env:
+          SOURCE_COLLECTION_OUTCOME: ${{ steps.check.outcome }}
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          if [ -f data/quality/latest.json ]; then
-            git add -f data/quality/latest.json
-            if ! git diff --cached --quiet; then
-              git commit -m 'data: record source-specific freshness and coverage status'
-              for n in 1 2 3 4 5; do
-                if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
-                git rebase --abort || true
-                [ "$n" -lt 5 ] || exit 1
-                sleep 4
-              done
-            fi
-          fi
+          python source_publication.py --source quality
       - name: Fail if any critical feed failed
         if: steps.check.outcome != 'success'
         run: exit 1

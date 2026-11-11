@@ -10,6 +10,8 @@ from bs4 import BeautifulSoup
 
 ROOT = Path(__file__).resolve().parent/'data'/'etf'
 SOURCES={'BTC':'https://farside.co.uk/btc/','ETH':'https://farside.co.uk/eth/'}
+ALL_DATA_SOURCES={'BTC':'https://farside.co.uk/bitcoin-etf-flow-all-data/',
+                  'ETH':'https://farside.co.uk/ethereum-etf-flow-all-data/'}
 FIELDS=['asset','trade_date_us','total_usd_m','reported_funds','funds_with_values','source_url','first_seen_utc','last_checked_utc','revision_count']
 REVISIONS=['asset','trade_date_us','old_total_usd_m','new_total_usd_m','observed_at_utc','source_url']
 DATE=re.compile(r'^\d{1,2}\s+[A-Za-z]{3}\s+20\d{2}$')
@@ -72,12 +74,43 @@ def scrape(asset,url):
     if not result:raise ValueError('No complete dated ETF flow rows')
     return result
 
+def fetch_for_refresh(asset,url,stored_dates):
+    rows=scrape(asset,url)
+    checked=utc()
+    checked_by_date={d:checked for d in rows}
+    checks=[{'url':url,'checked_at_utc':checked,'published_rows':len(rows)}]
+    rolling_start=min(rows)
+    if stored_dates and rolling_start>max(stored_dates):
+        # No overlap means the rolling window cannot establish continuity.
+        # Only the original provider's full table may recover that interval.
+        history_url=ALL_DATA_SOURCES[asset]
+        history=scrape(asset,history_url)
+        history_checked=utc()
+        if max(stored_dates) not in history:
+            raise ValueError(f'Full ETF table lacks saved continuity anchor: {asset}')
+        for d,row in rows.items():
+            full=history.get(d)
+            if (full is None or Decimal(full['total_usd_m'])!=Decimal(row['total_usd_m'])
+                    or int(full['reported_funds'])!=int(row['reported_funds'])
+                    or int(full['funds_with_values'])!=int(row['funds_with_values'])):
+                raise ValueError(f'Rolling/full ETF table mismatch: {asset} {d}')
+        # Retain the existing observed span; do not silently expand to 2024.
+        floor=min(stored_dates)
+        for d,row in history.items():
+            if floor<=d<rolling_start:
+                rows[d]=row
+                checked_by_date[d]=history_checked
+        checks.append({'url':history_url,'checked_at_utc':history_checked,
+                       'published_rows':len(history)})
+    return rows,checked_by_date,checks
+
+
 def main():
     ROOT.mkdir(parents=True,exist_ok=True)
     started=utc();existing_path=ROOT/'daily_flows.csv';revision_path=ROOT/'revisions.csv'
     result={'schema_version':1,'started_at_utc':started,'ended_at_utc':None,'status':'error',
             'unit':'USD millions','source':'Farside public BTC and ETH ETF tables',
-            'errors':{},'latest_trade_date':{},'published_rows':{},'new_rows':0,'revised_rows':0,
+            'errors':{},'latest_trade_date':{},'published_rows':{},'source_checks':{},'new_rows':0,'revised_rows':0,
             'caveats':['Farside is third-party compiled US-listed spot ETF flow data',
                        'Publication may lag and source values can be revised',
                        'Weekends/holidays and unpublished values are missing, not zero',
@@ -92,23 +125,26 @@ def main():
             old[key]=row
         revisions=load_csv(revision_path,REVISIONS)
         # Fetch both before mutating anything: never commit one asset as full-success.
-        fetched={asset:scrape(asset,url) for asset,url in SOURCES.items()}
-        for asset,rows in fetched.items():
+        fetched={asset:fetch_for_refresh(asset,url,[d for a,d in old if a==asset])
+                 for asset,url in SOURCES.items()}
+        for asset,(rows,checked_by_date,checks) in fetched.items():
+            result['source_checks'][asset]=checks
             result['latest_trade_date'][asset]=max(rows)
             result['published_rows'][asset]=len(rows)
             for d,new in rows.items():
                 key=(asset,d)
+                checked=checked_by_date[d]
                 if key not in old:
-                    old[key]={**new,'first_seen_utc':started,'last_checked_utc':started,'revision_count':'0'}
+                    old[key]={**new,'first_seen_utc':checked,'last_checked_utc':checked,'revision_count':'0'}
                     result['new_rows']+=1
                 else:
                     record=old[key]
                     if Decimal(record['total_usd_m'])!=Decimal(new['total_usd_m']):
                         revisions.append({'asset':asset,'trade_date_us':d,'old_total_usd_m':record['total_usd_m'],
-                                          'new_total_usd_m':new['total_usd_m'],'observed_at_utc':started,'source_url':new['source_url']})
+                                          'new_total_usd_m':new['total_usd_m'],'observed_at_utc':checked,'source_url':new['source_url']})
                         record['revision_count']=str(int(record['revision_count'])+1)
                         result['revised_rows']+=1
-                    record.update(new);record['last_checked_utc']=started
+                    record.update(new);record['last_checked_utc']=checked
         sorted_rows=[old[k] for k in sorted(old,key=lambda x:(x[1],x[0]))]
         atomic(existing_path,csv_dump(FIELDS,sorted_rows))
         atomic(revision_path,csv_dump(REVISIONS,revisions))
