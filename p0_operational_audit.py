@@ -6,6 +6,18 @@ import forward_validation_v2 as v2
 import direction_forward_v42 as frozen
 import quote_evidence_v2 as evidence
 
+SOURCE_BINDING_BLOB='f9b5136cc207558268cafeeb709436cff5e7a733'
+
+def _source_binding_backend():
+    from pathlib import Path
+    path=Path(__file__).resolve().with_name('p0_source_binding.py')
+    raw=path.read_bytes().replace(b'\r\n',b'\n')
+    if hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()!=SOURCE_BINDING_BLOB:
+        raise ValueError('unreviewed source binding implementation')
+    import p0_source_binding as module
+    if Path(module.__file__).resolve()!=path:raise ValueError('source binding implementation location changed')
+    return module
+
 # Original public identities already recorded in P2 books and this fixed P0 proof.
 # These locators are not replacement publication times or edits to witness history.
 _CAPTURED_SOURCE_PROOF_COMMIT='2ff6e82aa5872d47e7e63e7e87017af85ebfef92'
@@ -142,6 +154,8 @@ def reconcile(rows, scores, eligible, effective, now, runs, horizon=1, window_da
             'original_effective_from_utc':effective.isoformat()}
 
 def evaluate(root=frozen.ROOT, now=None, runs=None):
+    source_binding=_source_binding_backend()
+    locked_sources=source_binding.locked_contexts(root)
     now=now or datetime.now(timezone.utc)
     protocol=json.loads((root/v2.PROTOCOL).read_text());v2.check_protocol(protocol);v2.check_code(root,protocol)
     base.locked_file(root,v2.PROTOCOL)
@@ -155,12 +169,17 @@ def evaluate(root=frozen.ROOT, now=None, runs=None):
     bindings=frozen.read_rows(root/evidence.BINDINGS,evidence.BCOLS)
     base.history_receipts(root,evidence.BINDINGS,evidence.BCOLS,bindings)
     effective=frozen.utc(protocol['effective_from_utc']);eligible=set();valid_scores={};proofs={};rejected={}
+    recovery=source_binding.recovery_batch(root)
     for fid,row in registry.items():
         if frozen.utc(row['issued_at_utc'])<effective: continue
         try:
             evidence.verify_bound(root,row,None,bindings)
             witness=legacy['verified_remote_head_witnesses'].get(fid)
             issued=frozen.utc(row['issued_at_utc'])
+            locked=locked_sources.get(fid)
+            if locked and (not witness or witness.get('head_sha')!=locked['source_witness_head_sha']
+                    or witness.get('observed_public_utc')!=locked['observed_public_utc']):
+                witness=source_binding.recover_locked_publication(root,row,bindings,locked,batch=recovery)
             if fid in _CAPTURED_SOURCE_WITNESSES and (not witness
                 or not issued-timedelta(seconds=1)<=frozen.utc(witness['observed_public_utc'])<=issued+timedelta(minutes=45)
                 or frozen.utc(witness['observed_public_utc'])>=frozen.utc(row['target_utc'])):

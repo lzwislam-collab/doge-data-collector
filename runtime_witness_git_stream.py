@@ -18,7 +18,7 @@ import runtime_process
 IMPLEMENTATION = 'witness_fresh_git_blob_stream_v1'
 _BLOBS = {'forward_validation.py': 'f0831c7d38581543f84a85639c6d69a7305ff382',
           'forward_validation_v2.py': '3adbdcc43c5dbdb57ecd482b1d4138e720146ba1',
-          'p0_operational_audit.py': 'c615bdc665d24481569f545922d3d7aa04594d60',
+          'p0_operational_audit.py': 'db494c83ddfbb47662a864b1764ad42283f6a0f1',
           'quote_evidence_v2.py': '7d1e62e60f3aa78949ef1d5d81d74086d1907c91'}
 _SPEC = re.compile(r'[0-9a-f]{40}:(?:data/direction_v42/forward_registry\.csv|'
                    r'data/stage5/forward_validation_protocol\.json|'

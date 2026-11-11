@@ -58,6 +58,11 @@ on:
       - 'test_archive_timeout_ownership.py'
       - 'test_archive_capture_bridge.py'
       - 'p0_open_target_guard.py'
+      - 'p0_source_binding.py'
+      - 'p0_operational_audit.py'
+      - 'test_p0_source_binding.py'
+      - 'test_p0_source_binding_gate.py'
+      - 'test_p0_operations.py'
       - 'runtime_audit_worker.py'
       - 'runtime_audit_cli.py'
       - 'test_runtime_audit_cli.py'
@@ -135,6 +140,11 @@ on:
       - 'test_archive_timeout_ownership.py'
       - 'test_archive_capture_bridge.py'
       - 'p0_open_target_guard.py'
+      - 'p0_source_binding.py'
+      - 'p0_operational_audit.py'
+      - 'test_p0_source_binding.py'
+      - 'test_p0_source_binding_gate.py'
+      - 'test_p0_operations.py'
       - 'runtime_audit_worker.py'
       - 'runtime_audit_cli.py'
       - 'test_runtime_audit_cli.py'
@@ -236,12 +246,12 @@ jobs:
           PY
       - name: Run regression tests
         env:
-          NATIVE_TRANSPORT_PR: ${{ github.event_name == 'pull_request' && (github.head_ref == 'fix/p0-archive-audit-20261111' || github.head_ref == 'fix/p0-current-archive-20261111') }}
+          NATIVE_TRANSPORT_PR: ${{ github.event_name == 'pull_request' && (github.head_ref == 'fix/p0-archive-audit-20261111' || github.head_ref == 'fix/p0-current-archive-20261111' || github.head_ref == 'fix/p0-source-binding-20261111') }}
         run: |
           # This PR also requires the unchanged complete scientific-evidence suite.
           # Avoid repeating that suite before the isolated six-CLI comparison.
           if [ "$NATIVE_TRANSPORT_PR" = 'true' ]; then
-            python -m unittest -q test_runtime_audit_cli test_runtime_history_prefix_transport test_runtime_audit_pipeline_profile test_runtime_canonical_walk test_runtime_p0_inventory_transport test_runtime_p0_launcher test_runtime_p0_profile_receipt test_runtime_paired_git_stream test_runtime_paired_stream_launcher test_runtime_paired_stream_receipt test_runtime_canonical_direct test_runtime_canonical_receipt_v2 test_runtime_witness_git_stream test_runtime_witness_stream_receipt test_runtime_witness_quote_stream
+            python -m unittest -q test_runtime_audit_cli test_runtime_history_prefix_transport test_runtime_audit_pipeline_profile test_runtime_canonical_walk test_runtime_p0_inventory_transport test_runtime_p0_launcher test_runtime_p0_profile_receipt test_runtime_paired_git_stream test_runtime_paired_stream_launcher test_runtime_paired_stream_receipt test_runtime_canonical_direct test_runtime_canonical_receipt_v2 test_runtime_witness_git_stream test_runtime_witness_stream_receipt test_runtime_witness_quote_stream test_p0_source_binding test_p0_source_binding_gate
           else
             python -m unittest discover -q
           fi
@@ -329,7 +339,7 @@ jobs:
 
 
       - name: Compare whole original audit CLIs with native history transport
-        if: github.event_name == 'pull_request' && (github.head_ref == 'fix/p0-archive-audit-20261111' || github.head_ref == 'fix/p0-current-archive-20261111')
+        if: github.event_name == 'pull_request' && (github.head_ref == 'fix/p0-archive-audit-20261111' || github.head_ref == 'fix/p0-current-archive-20261111' || github.head_ref == 'fix/p0-source-binding-20261111')
         timeout-minutes: 11
         env:
           DOGE_AUDIT_PAIRED_CPU_PROFILE: '0'
@@ -340,12 +350,174 @@ jobs:
           PYTHONUTF8: '1'
           PYTHONDONTWRITEBYTECODE: '1'
         run: |
+          if ! python -B - <<'PY_QUOTA'
+          import json, os, urllib.request
+          from datetime import datetime, timezone
+          diagnostic = {'diagnostic': 'github_core_rate_limit', 'server_date': None}
+          try:
+              request = urllib.request.Request('https://api.github.com/rate_limit', headers={
+                  'Authorization': 'Bearer '+os.environ['GITHUB_TOKEN'],
+                  'Accept': 'application/vnd.github+json',
+                  'User-Agent': 'DOGE-audit-quota-diagnostic/1'})
+              with urllib.request.urlopen(request, timeout=6) as response:
+                  diagnostic['server_date'] = response.headers.get('Date')
+                  raw = response.read(16385)
+              if len(raw) > 16384:
+                  raise ValueError('quota diagnostic body too large')
+              core = json.loads(raw)['resources']['core']
+              numbers = {key: core[key] for key in ('limit', 'remaining', 'reset', 'used')}
+              if any(type(value) is not int or value < 0 for value in numbers.values()):
+                  raise ValueError('quota diagnostic numbers malformed')
+              diagnostic.update(status='ok', core=numbers)
+          except Exception as error:
+              headers = getattr(error, 'headers', None)
+              if headers is not None:
+                  diagnostic['server_date'] = headers.get('Date')
+              diagnostic.update(status='error', error_type=type(error).__name__,
+                                http_status=getattr(error, 'code', None))
+          diagnostic['actual_utc'] = datetime.now(timezone.utc).isoformat()
+          print(json.dumps(diagnostic, sort_keys=True))
+          PY_QUOTA
+          then
+            printf '%s\n' '{"diagnostic":"github_core_rate_limit","status":"probe_process_failed"}'
+          fi
           python -B runtime_audit_pipeline_profile.py --source-root "$GITHUB_WORKSPACE" --ref "$GITHUB_SHA" --output "$RUNNER_TEMP/source-audit-native-profile"
       - name: Preserve whole audit CLI comparison
-        if: always() && github.event_name == 'pull_request' && (github.head_ref == 'fix/p0-archive-audit-20261111' || github.head_ref == 'fix/p0-current-archive-20261111')
+        if: always() && github.event_name == 'pull_request' && (github.head_ref == 'fix/p0-archive-audit-20261111' || github.head_ref == 'fix/p0-current-archive-20261111' || github.head_ref == 'fix/p0-source-binding-20261111')
         uses: actions/upload-artifact@v4
         with:
           name: source-audit-native-profile-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/source-audit-native-profile/
           if-no-files-found: error
+          retention-days: 7
+
+  p0_component_diagnostic:
+    # Attribution only: the independent regression job retains the complete 140s gate.
+    if: github.event_name == 'pull_request' && github.event.pull_request.number == 123 && github.head_ref == 'fix/p0-source-binding-20261111' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Check out diagnostic drivers
+        uses: actions/checkout@v4
+        with:
+          path: current
+          persist-credentials: false
+      - name: Check out the exact failed source with its full history
+        uses: actions/checkout@v4
+        with:
+          ref: 5808659c59e3b981db0b9bd217886210932a5421
+          path: readonly-source
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install numpy==2.3.5 oss2==2.19.1 aliyun-python-sdk-core==2.16.1 PyYAML==6.0.2 beautifulsoup4==4.12.3
+      - name: Read the original failed comparison artifact
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: '13870237561'
+          run-id: '43051436679'
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/ci123-original-profile
+      - name: Attribute p0 components using original inputs and measured replay latency
+        timeout-minutes: 11
+        env:
+          GITHUB_TOKEN: ''
+          GIT_NO_LAZY_FETCH: '1'
+          GIT_OPTIONAL_LOCKS: '0'
+          GIT_TERMINAL_PROMPT: '0'
+          DOGE_AUDIT_STREAM_TRUSTED_OBJECT_DIRECTORY: ${{ github.workspace }}/readonly-source/.git/objects
+          OPENBLAS_NUM_THREADS: '1'
+          OMP_NUM_THREADS: '1'
+          PYTHONHASHSEED: '0'
+          PYTHONUTF8: '1'
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python -I -B "$GITHUB_WORKSPACE/current/runtime_paired_component_profile.py" \
+            --source "$GITHUB_WORKSPACE/readonly-source" \
+            --artifact-dir "$RUNNER_TEMP/ci123-original-profile" \
+            --clone "$RUNNER_TEMP/p0-replay" \
+            --output "$RUNNER_TEMP/p0-component-diagnostic" \
+            --script p0_operational_audit.py --prepare-only
+          python -I -B "$GITHUB_WORKSPACE/current/runtime_p0_component_profile.py" \
+            --snapshot "$RUNNER_TEMP/p0-replay" \
+            --fixture "$RUNNER_TEMP/p0-component-diagnostic/captured-get/p0_operational_audit.py.json" \
+            --expected "$RUNNER_TEMP/p0-component-diagnostic/expected-p0.json" \
+            --output "$RUNNER_TEMP/p0-component-diagnostic/p0-components.json" \
+            --clock 2026-11-11T15:50:05.791502+00:00
+      - name: Preserve p0 diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-component-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/p0-component-diagnostic/
+          if-no-files-found: warn
+          retention-days: 7
+
+  paired_component_diagnostic:
+    # Attribution only: the independent regression job retains the complete 140s gate.
+    if: github.event_name == 'pull_request' && github.event.pull_request.number == 123 && github.head_ref == 'fix/p0-source-binding-20261111' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Check out diagnostic drivers
+        uses: actions/checkout@v4
+        with:
+          path: current
+          persist-credentials: false
+      - name: Check out the exact failed source with its full history
+        uses: actions/checkout@v4
+        with:
+          ref: 5808659c59e3b981db0b9bd217886210932a5421
+          path: readonly-source
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install numpy==2.3.5 oss2==2.19.1 aliyun-python-sdk-core==2.16.1 PyYAML==6.0.2 beautifulsoup4==4.12.3
+      - name: Read the original failed comparison artifact
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: '13870237561'
+          run-id: '43051436679'
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/ci123-original-profile
+      - name: Attribute paired components using original inputs and measured replay latency
+        timeout-minutes: 11
+        env:
+          GITHUB_TOKEN: ''
+          GIT_NO_LAZY_FETCH: '1'
+          GIT_OPTIONAL_LOCKS: '0'
+          GIT_TERMINAL_PROMPT: '0'
+          DOGE_AUDIT_STREAM_TRUSTED_OBJECT_DIRECTORY: ${{ github.workspace }}/readonly-source/.git/objects
+          OPENBLAS_NUM_THREADS: '1'
+          OMP_NUM_THREADS: '1'
+          PYTHONHASHSEED: '0'
+          PYTHONUTF8: '1'
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python -I -B "$GITHUB_WORKSPACE/current/runtime_paired_component_profile.py" \
+            --source "$GITHUB_WORKSPACE/readonly-source" \
+            --artifact-dir "$RUNNER_TEMP/ci123-original-profile" \
+            --clone "$RUNNER_TEMP/paired-replay" \
+            --output "$RUNNER_TEMP/paired-component-diagnostic"
+      - name: Preserve paired diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: paired-component-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/paired-component-diagnostic/
+          if-no-files-found: warn
           retention-days: 7

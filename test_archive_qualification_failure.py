@@ -5,7 +5,8 @@ import tempfile
 import unittest
 from datetime import timedelta
 from pathlib import Path
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 import runtime_deadline_service as runtime
 from test_runtime_deadline_service import Adapter, Clock, START
@@ -79,13 +80,35 @@ class CaptureContextTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as name, patch.dict(os.environ, {
                 'GITHUB_REF': 'refs/heads/main', 'GITHUB_REPOSITORY': runtime.REPO}):
             adapter = runtime.LiveAdapter(Path(name))
+            report = Path(name)/'data/p0_operations/latest.json'
+            report.parent.mkdir(parents=True)
+            report.write_text(json.dumps({'status': 'ok', 'forecast_proofs': {}}), encoding='utf-8')
+            # These tests classify the frozen capture result. Publication binding
+            # and remote ACK are tested separately in test_p0_source_binding_gate.
+            binding = SimpleNamespace(prepare_first_book_bindings=Mock(
+                return_value={'requires_publication': False}))
             # The exchange command and frozen-ledger readers are I/O boundaries;
             # runtime.action itself and its diagnostic/qualification logic run.
             with patch.object(adapter, 'python'), patch.object(adapter, 'source_ready', return_value=ready), \
+                 patch.object(runtime, '_source_binding_backend', return_value=binding), \
                  patch.object(engine, 'read_events', return_value=[row] if row else []), \
                  patch.object(engine, 'event_books', return_value=iter([{'requested_at_utc': START.isoformat()}])):
                 result = adapter.action('book')
+            if ready:
+                binding.prepare_first_book_bindings.assert_called_once()
+            else:
+                binding.prepare_first_book_bindings.assert_not_called()
             return result
+
+    def test_missing_live_report_still_fails_closed_before_capture(self):
+        with tempfile.TemporaryDirectory() as name, patch.dict(os.environ, {
+                'GITHUB_REF': 'refs/heads/main', 'GITHUB_REPOSITORY': runtime.REPO}):
+            adapter = runtime.LiveAdapter(Path(name))
+            with patch.object(adapter, 'python') as capture, \
+                    patch.object(adapter, 'source_ready', return_value=True):
+                with self.assertRaises(FileNotFoundError):
+                    adapter.action('book')
+            capture.assert_not_called()
 
     def test_empty_frozen_reservation_context_is_distinct_from_source_rejection(self):
         result = self.capture({'source_items': []})

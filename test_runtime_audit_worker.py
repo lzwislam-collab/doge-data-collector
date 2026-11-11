@@ -180,7 +180,11 @@ class SparseCheckoutAndProgressTests(unittest.TestCase):
             self.assertEqual(report['order'], ['forward_validation_v2.py','p0_operational_audit.py','paired_cohort_audit.py'])
             self.assertEqual(bytes.fromhex(report['excluded_blob']), b'archive-current\x00\xff')
             self.assertEqual(report['history_count'], 2)
-            self.assertEqual(result['inputs'], {p:hashlib.sha256(retained[p]).hexdigest() for p in worker.INPUTS})
+            self.assertEqual({p:result['inputs'][p] for p in worker.INPUTS},
+                             {p:hashlib.sha256(retained[p]).hexdigest() for p in worker.INPUTS})
+            self.assertEqual(set(result['inputs']),set(worker.INPUTS+worker.PRODUCER_INPUTS))
+            self.assertEqual(result['inputs'][worker.PRODUCER_INPUTS[0]],hashlib.sha256(b'\0').hexdigest())
+            self.assertEqual(result['inputs'][worker.PRODUCER_INPUTS[1]],hashlib.sha256(b'{}').hexdigest())
             self.assertTrue(all((root/p).read_bytes() == b for p,b in retained.items()))
             self.assertEqual((root/'.git/config').read_bytes(), before_config)
             self.assertFalse((root/'fixture-order.json').exists())

@@ -22,6 +22,87 @@ class Response(io.BytesIO):
     def geturl(self): return URL
 
 
+class QuotaDiagnosticTests(unittest.TestCase):
+    def test_quota_headers_survive_success_and_http_failure_without_sensitive_headers(self):
+        wanted = {'Content-Type': 'application/json', 'Content-Length': '2',
+            'Date': 'Wed, 11 Nov 2026 17:00:00 GMT', 'ETag': 'original-etag',
+            'X-RateLimit-Limit': '1000', 'x-ratelimit-remaining': '0',
+            'X-RATELIMIT-RESET': '1794417000', 'X-RateLimit-Resource': 'core',
+            'X-RateLimit-Used': '1000', 'Retry-After': '17'}
+        private = {name: 'private-marker' for name in ('Authorization', 'Proxy-Authorization',
+            'Cookie', 'Set-Cookie', 'X-Api-Key', 'X-GitHub-Token', 'X-Unknown-Header')}
+        for status in (200, 403):
+            with self.subTest(status=status), tempfile.TemporaryDirectory() as name:
+                response = Response(b'{}')
+                response.headers = dict(wanted, **private)
+                replacement = {'return_value': response} if status == 200 else {'side_effect':
+                    urllib.error.HTTPError(URL, status, 'Forbidden', response.headers, io.BytesIO(b'{}'))}
+                path = Path(name)/'quota-reply.json'
+                with patch.object(profile.urllib.request, 'urlopen', **replacement):
+                    with profile.transport('record', path):
+                        if status == 200:
+                            profile.urllib.request.urlopen(URL).close()
+                        else:
+                            with self.assertRaises(urllib.error.HTTPError):
+                                profile.urllib.request.urlopen(URL)
+                fixture = json.loads(path.read_text())
+                self.assertEqual(fixture['entries'][0]['headers'], wanted)
+                self.assertNotIn('private-marker', path.read_text())
+
+    def quota_program(self):
+        import textwrap
+        workflow = Path(__file__).resolve().parent/'.github/workflows/runtime_deadline_tests.yml'
+        text = workflow.read_text(encoding='utf-8')
+        opening = "python -B - <<'PY_QUOTA'\n"
+        self.assertIn(opening, text, 'whole CLI step must include one diagnostic probe')
+        program, separator, tail = text.split(opening, 1)[1].partition('          PY_QUOTA\n')
+        self.assertTrue(separator)
+        original = 'python -B runtime_audit_pipeline_profile.py --source-root "$GITHUB_WORKSPACE" --ref "$GITHUB_SHA" --output "$RUNNER_TEMP/source-audit-native-profile"'
+        self.assertIn(original, tail)
+        self.assertNotIn('sleep', program)
+        return textwrap.dedent(program)
+
+    def run_probe(self, reply=None, error=None):
+        program = self.quota_program()
+        replacement = {'side_effect': error} if error is not None else {'return_value': reply}
+        with patch.dict(profile.os.environ, {'GITHUB_TOKEN': 'private-token-marker'}, clear=True), \
+                patch.object(profile.urllib.request, 'urlopen', **replacement) as request, \
+                patch('sys.stdout', new_callable=io.StringIO) as output:
+            exec(compile(program, '<actual-workflow-quota-probe>', 'exec'), {})
+        request.assert_called_once()
+        call = request.call_args
+        self.assertEqual(call.args[0].full_url, 'https://api.github.com/rate_limit')
+        self.assertEqual(call.args[0].get_method(), 'GET')
+        self.assertEqual(call.args[0].get_header('Authorization'), 'Bearer private-token-marker')
+        self.assertEqual(call.kwargs, {'timeout': 6})
+        self.assertNotIn('private-token-marker', output.getvalue())
+        return json.loads(output.getvalue())
+
+    def test_actual_workflow_probe_reads_same_token_core_quota_once(self):
+        response = Response(json.dumps({'resources': {'core': {
+            'limit': 1000, 'remaining': 7, 'used': 993, 'reset': 1794417000}}}).encode())
+        response.headers = {'Date': 'Wed, 11 Nov 2026 17:00:00 GMT'}
+        result = self.run_probe(reply=response)
+        self.assertEqual(result['status'], 'ok')
+        self.assertEqual(result['core'], {'limit': 1000, 'remaining': 7, 'used': 993, 'reset': 1794417000})
+        self.assertEqual(result['server_date'], response.headers['Date'])
+        from datetime import datetime, timezone
+        self.assertLess(abs((datetime.now(timezone.utc)-datetime.fromisoformat(result['actual_utc'])).total_seconds()), 10)
+
+    def test_probe_errors_are_diagnostics_without_retry_or_interrupting_cli(self):
+        for error in (TimeoutError('private-token-marker'),
+                urllib.error.HTTPError('https://api.github.com/rate_limit', 403,
+                    'private-token-marker', {'Date': 'Wed, 11 Nov 2026 17:00:00 GMT'}, None)):
+            with self.subTest(error=type(error).__name__):
+                result = self.run_probe(error=error)
+                self.assertEqual(result['status'], 'error')
+                self.assertEqual(result['error_type'], type(error).__name__)
+        for body in (b'x'*16385, b'{"resources":{"core":{"limit":true}}}'):
+            with self.subTest(size=len(body)):
+                response = Response(body)
+                self.assertEqual(self.run_probe(reply=response)['status'], 'error')
+
+
 
 class ProfilerOptInTests(unittest.TestCase):
     def test_formal_comparison_has_no_profiler_by_default(self):
