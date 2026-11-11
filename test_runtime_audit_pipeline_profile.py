@@ -623,5 +623,272 @@ class ComponentProfileOptInTests(unittest.TestCase):
                 self.assertFalse(profile.paired_component_profile_enabled(True,script))
 
 
+class NativeFirstTrialOrderTests(unittest.TestCase):
+    """Safe orchestration only: no Git, temporary directories or real child CLIs."""
+    def run_worker(self, native_first=False, native_seconds=3., original_seconds=3., fail_label=None):
+        import copy
+        import inspect
+        from contextlib import nullcontext
+        from unittest.mock import Mock
+        if native_first:
+            self.assertIn('native_first', inspect.signature(profile.worker).parameters,
+                          'worker lacks explicit native-first opt-in')
+        root=Path(__file__).resolve().parent
+        source=root/'mock-source-not-created'
+        output=root/'mock-output-not-created'
+        workspace=root/'mock-workspace-not-created'
+        head='a'*40
+        clock=types.SimpleNamespace(value=0.)
+        calls=[];reports=[]
+        class Workspace:
+            def __enter__(self):return str(workspace)
+            def __exit__(self,*args):return False
+        audit=types.SimpleNamespace(
+            CLI_HELPERS=('runtime_paired_git_stream.py',),
+            prepare_checkout=Mock(return_value={'mode':'sparse_source_archive_excluded'}),
+            verify_cli_sources=Mock(return_value=True),
+            paired_stream_source=lambda *args:nullcontext())
+        checkout=types.SimpleNamespace(require_full_history=Mock())
+        code={name:'b'*64 for name in ('runtime_audit_cli.py','runtime_p0_inventory_transport.py',
+                                      'runtime_paired_git_stream.py','runtime_witness_git_stream.py')}
+        inputs={name:'c'*64 for name in profile.INPUTS}
+        outputs={f'output-{i}.json':{'sha256':'d'*64,'comparison_sha256':'d'*64,'bytes':2}
+                 for i in range(9)}
+        def command(arguments,**kwargs):
+            script=arguments[arguments.index('--script')+1]
+            label='native' if '--optimized' in arguments else 'original'
+            mode=(arguments[arguments.index('--metadata-mode')+1]
+                  if '--metadata-mode' in arguments else ('replay' if label=='native' else 'record'))
+            calls.append({'label':label,'script':script,'mode':mode,'kwargs':kwargs,
+                          'explicit_metadata_mode':'--metadata-mode' in arguments,
+                          'clock':arguments[arguments.index('--clock')+1]})
+            clock.value+=(native_seconds if label=='native' else original_seconds)/3
+            failed=label==fail_label
+            return subprocess.CompletedProcess(arguments,7 if failed else 0,
+                                               stdout='complete '+script+'\n',stderr='diagnostics')
+        def git(root,*args,**kwargs):
+            self.assertEqual(args,('rev-parse','HEAD'))
+            return head.encode()
+        def report(path,value):reports.append(copy.deepcopy(value))
+        error=None
+        with patch.dict(sys.modules,{'runtime_audit_worker':audit,'runtime_audit_checkout_profile':checkout}),\
+             patch.object(profile,'source_control_state',return_value={'head':head,'refs':'fixed'}),\
+             patch.object(profile,'fingerprint',return_value=inputs),\
+             patch.object(profile,'code_fingerprint',return_value=code),\
+             patch.object(profile,'output_manifest',return_value=outputs),\
+             patch.object(profile,'git',side_effect=git),\
+             patch.object(profile,'write_json',side_effect=report),\
+             patch.object(profile,'validate_native_diagnostics',return_value=[{'mode':'native_batch'}]) as validation,\
+             patch.object(profile.tempfile,'TemporaryDirectory',return_value=Workspace()),\
+             patch.object(profile.subprocess,'run',side_effect=command),\
+             patch.object(profile.Path,'write_text',return_value=0),\
+             patch.object(profile.shutil,'rmtree') as cleanup,\
+             patch.object(profile.time,'perf_counter',side_effect=lambda:clock.value):
+            try:
+                if native_first:profile.worker(source,head,output,600,140,native_first=True)
+                else:profile.worker(source,head,output,600,140)
+            except profile.ProfileError as caught:error=caught
+        self.assertTrue(reports)
+        self.assertLessEqual(validation.call_count,3)
+        self.assertLessEqual(cleanup.call_count,2)
+        return calls,reports[-1],error
+
+    def test_default_keeps_original_record_then_native_replay(self):
+        calls,report,error=self.run_worker()
+        self.assertIsNone(error)
+        self.assertEqual([(r['label'],r['mode']) for r in calls],
+                         [('original','record')]*3+[('native','replay')]*3)
+        self.assertEqual([t['kind'] for t in report['trials']],['original','native'])
+        self.assertEqual(report['native_whole_source_seconds'],3.)
+        self.assertEqual(len({r['clock'] for r in calls}),1)
+        self.assertEqual(report['max_native_whole_source_seconds'],140)
+        self.assertFalse(any(r['explicit_metadata_mode'] for r in calls))
+        self.assertNotIn('execution_order',report)
+        self.assertNotIn('metadata_recorded_by',report)
+        self.assertEqual(report['metadata'],'actual original GET replies; candidate replays equal measured latency')
+
+    def test_native_first_records_first_and_keeps_report_label_indices(self):
+        calls,report,error=self.run_worker(native_first=True)
+        self.assertIsNone(error)
+        self.assertEqual([(r['label'],r['mode']) for r in calls],
+                         [('native','record')]*3+[('original','replay')]*3)
+        self.assertEqual([t['kind'] for t in report['trials']],['original','native'])
+        self.assertEqual(report['execution_order'],['native','original'])
+        self.assertEqual(report['metadata_recorded_by'],'native')
+        self.assertEqual(report['trials'][1]['metadata_mode'],'record')
+        self.assertEqual(report['trials'][0]['metadata_mode'],'replay')
+        self.assertEqual(report['status'],'PASS_WHOLE_CLI_EQUIVALENCE')
+        self.assertTrue(report['five_inputs_unchanged'])
+        self.assertTrue(report['source_state_unchanged'])
+        self.assertTrue(report['output_semantics_exactly_equal'])
+        self.assertEqual(len(report['trials'][1]['outputs']),9)
+        self.assertEqual(len({r['clock'] for r in calls}),1)
+        self.assertTrue(all(r['kwargs']['timeout']<=240 for r in calls))
+        self.assertTrue(all(r['explicit_metadata_mode'] for r in calls))
+
+    def test_native_budget_is_checked_by_label_after_execution_order_reversal(self):
+        _,report,error=self.run_worker(native_first=True,native_seconds=141.,original_seconds=3.)
+        self.assertIsInstance(error,profile.ProfileError)
+        self.assertEqual(report['status'],'FAIL')
+        self.assertEqual(report['native_whole_source_seconds'],141.)
+        self.assertEqual(report['original_whole_source_seconds'],3.)
+
+    def test_slow_original_is_not_mistaken_for_native_budget(self):
+        _,report,error=self.run_worker(native_first=True,native_seconds=138.,original_seconds=201.)
+        self.assertIsNone(error)
+        self.assertEqual(report['native_whole_source_seconds'],138.)
+        self.assertEqual(report['original_whole_source_seconds'],201.)
+
+    def test_failed_original_replay_cannot_turn_native_local_success_into_pass(self):
+        calls,report,error=self.run_worker(native_first=True,fail_label='original')
+        self.assertIsInstance(error,profile.ProfileError)
+        self.assertEqual(report['status'],'FAIL')
+        self.assertEqual([t['kind'] for t in report['trials']],['original','native'])
+        self.assertEqual(len(report['trials'][1]['phases']),3)
+        self.assertNotIn('output_semantics_exactly_equal',report)
+
+    def test_partial_native_failure_keeps_original_not_started_slot(self):
+        calls,report,error=self.run_worker(native_first=True,fail_label='native')
+        self.assertIsInstance(error,profile.ProfileError)
+        self.assertEqual(len(calls),1)
+        self.assertEqual(report['status'],'FAIL')
+        self.assertEqual(report['trials'][0],{'kind':'original','status':'not_started'})
+        self.assertEqual(report['trials'][1]['kind'],'native')
+        self.assertNotIn('measured_speedup',report)
+
+    def test_default_child_metadata_path_is_unchanged(self):
+        base=['--child','--script',profile.SCRIPTS[0],'--fixture','not-created.json',
+              '--clock','2026-11-11T20:00:00+00:00']
+        with patch.object(profile,'child',return_value=0) as child:
+            profile.main(base)
+            self.assertEqual(child.call_args.args[2],'record')
+            self.assertIs(child.call_args.args[-1],False)
+            profile.main(base+['--optimized'])
+            self.assertEqual(child.call_args.args[2],'replay')
+            self.assertIs(child.call_args.args[-1],True)
+
+    def test_explicit_child_metadata_mode_is_independent_of_optimized(self):
+        base=['--child','--script',profile.SCRIPTS[0],'--fixture','not-created.json',
+              '--clock','2026-11-11T20:00:00+00:00']
+        with patch.object(profile,'child',return_value=0) as child,patch('sys.stderr',new_callable=io.StringIO):
+            try:profile.main(base+['--optimized','--metadata-mode','record'])
+            except SystemExit:self.fail('native child cannot explicitly record first')
+            self.assertEqual(child.call_args.args[2],'record')
+            self.assertIs(child.call_args.args[-1],True)
+
+    def test_public_optin_is_forwarded_to_owned_worker_without_running_a_process(self):
+        from contextlib import nullcontext
+        from unittest.mock import Mock
+        class LocalPath:
+            def __init__(self,value):self.value=str(value)
+            def resolve(self):return self
+            def is_relative_to(self,other):return False
+            def __truediv__(self,name):return type(self)(self.value+'/'+name)
+            def read_text(self,**kwargs):return '{}'
+            def __str__(self):return self.value
+            @property
+            def parent(self):return type(self)('profile-root')
+        command=Mock(return_value='')
+        runtime=types.SimpleNamespace(command=command,cancellation_signals=lambda:nullcontext())
+        base=['--source-root','source','--ref','a'*40,'--output','output']
+        with patch.dict(sys.modules,{'runtime_process':runtime}),patch.object(profile,'Path',LocalPath),\
+             patch.object(profile.os,'name','posix'),patch.object(profile.sys,'path',list(sys.path)),\
+             patch('sys.stdout',new_callable=io.StringIO):
+            profile.main(base)
+            self.assertNotIn('--native-first',command.call_args.args[0])
+            profile.main(base+['--native-first'])
+            arguments=command.call_args.args[0]
+            self.assertIn('--native-first',arguments)
+            self.assertEqual(float(arguments[arguments.index('--max-native-seconds')+1]),140.)
+            self.assertEqual(command.call_args.kwargs['timeout'],600.)
+
+    def test_worker_entry_receives_optin_and_legacy_call_remains_unchanged(self):
+        class LocalPath:
+            def __init__(self,value):self.value=str(value)
+            def resolve(self):return self
+            def is_relative_to(self,other):return False
+            def __str__(self):return self.value
+            @property
+            def parent(self):return type(self)('profile-root')
+        base=['--worker','--source-root','source','--ref','a'*40,'--output','output']
+        with patch.object(profile,'Path',LocalPath),patch.object(profile.os,'name','posix'),\
+             patch.object(profile,'worker',return_value=0) as worker:
+            profile.main(base)
+            self.assertEqual(worker.call_args.kwargs,{})
+            profile.main(base+['--native-first'])
+            self.assertEqual(worker.call_args.kwargs,{'native_first':True})
+
+
+class NativeFirstTransportSafetyTests(unittest.TestCase):
+    """Real transport context on in-memory fixtures; no files or live HTTP."""
+    def fixture(self):
+        body=b'{}'
+        return {'entries':[{'url':URL,'response_url':URL,'status':200,'headers':{},
+            'body_base64':'e30=','sha256':profile.digest(body),'elapsed_seconds':0.}],
+            'request_credentials_recorded':False}
+
+    def test_record_first_does_not_require_a_preexisting_fixture(self):
+        path=Path('native-first-fixture-not-created.json')
+        with patch.object(profile.Path,'stat',side_effect=AssertionError('record read fixture')),\
+             patch.object(profile.Path,'read_text',side_effect=AssertionError('record read fixture')),\
+             patch.object(profile,'write_json') as write,\
+             patch.object(profile.urllib.request,'urlopen',return_value=Response(b'{}')):
+            with profile.transport('record',path):
+                self.assertEqual(profile.urllib.request.urlopen(URL).read(),b'{}')
+        self.assertEqual(len(write.call_args.args[1]['entries']),1)
+        self.assertFalse(write.call_args.args[1]['request_credentials_recorded'])
+
+    def test_missing_replay_fixture_fails_without_live_network(self):
+        with patch.object(profile.Path,'stat',side_effect=FileNotFoundError('missing fixture')),\
+             patch.object(profile.urllib.request,'urlopen') as network:
+            with self.assertRaises(FileNotFoundError):
+                with profile.transport('replay',Path('not-created.json')):pass
+        network.assert_not_called()
+
+    def test_extra_replay_get_fails_without_live_fallback(self):
+        with patch.object(profile.Path,'stat',return_value=types.SimpleNamespace(st_size=500)),\
+             patch.object(profile.Path,'read_text',return_value=json.dumps(self.fixture())),\
+             patch.object(profile.time,'sleep') as sleep,\
+             patch.object(profile.urllib.request,'urlopen') as network:
+            with self.assertRaisesRegex(profile.ProfileError,'unrecorded'):
+                with profile.transport('replay',Path('not-created.json')):
+                    self.assertEqual(profile.urllib.request.urlopen(URL).read(),b'{}')
+                    profile.urllib.request.urlopen(URL)
+        network.assert_not_called()
+        sleep.assert_called_once_with(0.)
+
+    def test_unconsumed_replay_reply_fails(self):
+        with patch.object(profile.Path,'stat',return_value=types.SimpleNamespace(st_size=500)),\
+             patch.object(profile.Path,'read_text',return_value=json.dumps(self.fixture())),\
+             patch.object(profile.urllib.request,'urlopen') as network:
+            with self.assertRaisesRegex(profile.ProfileError,'unconsumed'):
+                with profile.transport('replay',Path('not-created.json')):pass
+        network.assert_not_called()
+
+
+class NativeFirstWorkflowContractTests(unittest.TestCase):
+    BRANCH='fix/p0-native-first-profile-20261111'
+    def test_exact_new_branch_uses_existing_three_profile_selectors_and_explicit_flag(self):
+        text=(Path(__file__).resolve().parent/'.github/workflows/runtime_deadline_tests.yml').read_text()
+        selectors=[line for line in text.splitlines()
+                   if line.lstrip().startswith(('if:','NATIVE_TRANSPORT_PR:')) and self.BRANCH in line]
+        self.assertEqual(len(selectors),3,'experimental branch lacks main profile/artifact/test closure')
+        self.assertTrue(all('pull_request' in line and "== '"+self.BRANCH+"'" in line for line in selectors))
+        self.assertIn('NATIVE_FIRST_PROFILE:',text)
+        self.assertIn('--native-first',text)
+        self.assertIn('timeout-minutes: 11',text)
+        self.assertIn('timeout-minutes: 15',text)
+
+    def test_science_adds_only_existing_pr_path_closure(self):
+        text=(Path(__file__).resolve().parent/'.github/workflows/test_forward_validation.yml').read_text()
+        for name in ('runtime_audit_pipeline_profile.py','test_runtime_audit_pipeline_profile.py',
+                     '.github/workflows/runtime_deadline_tests.yml'):
+            self.assertIn("'"+name+"'",text)
+        self.assertNotIn('\n  push:',text)
+        self.assertNotIn('\n  schedule:',text)
+        self.assertIn('\n  workflow_dispatch:',text)
+
+
+
 if __name__ == '__main__':
     unittest.main()

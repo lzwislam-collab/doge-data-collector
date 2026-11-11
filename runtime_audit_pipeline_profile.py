@@ -1,7 +1,8 @@
 """Diagnostic only: whole original/native source-audit CLI equivalence.
 
-The original pass records actual public GitHub GET replies and their latency.
-The candidate replays exactly those replies, including the captured latency.
+By default the original pass records actual public GitHub GET replies and their
+latency, then the candidate replays them. The explicit native-first experiment
+reverses both the implementation order and which pass records those replies.
 Only these diagnostic processes use a clock captured from real UTC at startup.
 Production CLIs, source data, deadlines and qualification logic are unchanged.
 """
@@ -574,7 +575,7 @@ def output_manifest(root, destination):
     return manifest
 
 
-def worker(source, head, output, timeout_seconds, max_native_seconds):
+def worker(source, head, output, timeout_seconds, max_native_seconds, native_first=False):
     source, output = Path(source).resolve(), Path(output).resolve()
     sys.path.insert(0, str(source))
     import runtime_audit_worker as audit
@@ -605,6 +606,12 @@ def worker(source, head, output, timeout_seconds, max_native_seconds):
                   'OPENBLAS_NUM_THREADS': os.environ.get('OPENBLAS_NUM_THREADS'),
                   'OMP_NUM_THREADS': os.environ.get('OMP_NUM_THREADS')}}
     report['source_control_before'] = before
+    if native_first:
+        report.update(execution_order=['native', 'original'], metadata_recorded_by='native',
+            metadata='actual native GET replies; original replays equal measured latency',
+            cache_state='OS_CACHE_UNCONTROLLED',
+            trials=[{'kind': 'original', 'status': 'not_started'},
+                    {'kind': 'native', 'status': 'not_started'}])
     write_json(output / 'summary.json', report)
     try:
         with tempfile.TemporaryDirectory(prefix='audit-pipeline-profile-') as name:
@@ -612,7 +619,9 @@ def worker(source, head, output, timeout_seconds, max_native_seconds):
             if workspace.is_relative_to(source) or source.is_relative_to(workspace):
                 raise ProfileError('temporary checkouts overlap source')
             inputs = None
-            for optimized, label in ((False, 'original'), (True, 'native')):
+            order = (((True, 'native'), (False, 'original')) if native_first else
+                     ((False, 'original'), (True, 'native')))
+            for optimized, label in order:
                 whole_start = time.perf_counter()
                 snapshot = workspace / label
                 checkout = audit.prepare_checkout(source, snapshot, head)
@@ -631,7 +640,11 @@ def worker(source, head, output, timeout_seconds, max_native_seconds):
                     'snapshot_head': head, 'implementation_file_count': len(original_code),
                     'implementation_fingerprints_sha256': digest(
                         json.dumps(original_code, sort_keys=True).encode('utf-8'))}
-                report['trials'].append(trial)
+                if native_first:
+                    trial['metadata_mode'] = 'record' if label == 'native' else 'replay'
+                    report['trials'][{'original': 0, 'native': 1}[label]] = trial
+                else:
+                    report['trials'].append(trial)
                 trial_start = time.perf_counter()
                 for script in SCRIPTS:
                     remaining = deadline - time.perf_counter()
@@ -641,6 +654,8 @@ def worker(source, head, output, timeout_seconds, max_native_seconds):
                                '--source-root', str(snapshot), '--script', script,
                                '--fixture', str(fixture), '--clock', clock]
                     if optimized: command.append('--optimized')
+                    if native_first:
+                        command.extend(('--metadata-mode', trial['metadata_mode']))
                     phase_start = time.perf_counter()
                     with audit.paired_stream_source(source,snapshot) if hasattr(audit,'paired_stream_source') else nullcontext():
                         result = subprocess.run(command, cwd=snapshot, capture_output=True, text=True,
@@ -676,10 +691,12 @@ def worker(source, head, output, timeout_seconds, max_native_seconds):
                 shutil.rmtree(snapshot)
                 trial['snapshot_cleanup_seconds'] = time.perf_counter() - cleanup_start
                 trial['whole_source_seconds'] = time.perf_counter() - whole_start
-            if not equivalent_manifests(report['trials'][0]['outputs'], report['trials'][1]['outputs']):
+            original_trial = next(trial for trial in report['trials'] if trial['kind'] == 'original')
+            native_trial = next(trial for trial in report['trials'] if trial['kind'] == 'native')
+            if not equivalent_manifests(original_trial['outputs'], native_trial['outputs']):
                 raise ProfileError('whole original/native output manifests differ')
-            if ([p['stdout_sha256'] for p in report['trials'][0]['phases']] !=
-                    [p['stdout_sha256'] for p in report['trials'][1]['phases']]):
+            if ([p['stdout_sha256'] for p in original_trial['phases']] !=
+                    [p['stdout_sha256'] for p in native_trial['phases']]):
                 raise ProfileError('original CLI stdout changed')
             after = source_control_state(source, checkout_profile)
             report['source_control_after'] = after
@@ -687,12 +704,12 @@ def worker(source, head, output, timeout_seconds, max_native_seconds):
                 raise ProfileError('source HEAD/tree/tracked state changed')
             report.update(status='PASS_WHOLE_CLI_EQUIVALENCE', five_inputs_unchanged=True,
                 source_state_unchanged=True, output_semantics_exactly_equal=True,
-                output_bytes_exactly_equal=report['trials'][0]['outputs'] == report['trials'][1]['outputs'],
-                original_pipeline_seconds=report['trials'][0]['pipeline_seconds'],
-                native_pipeline_seconds=report['trials'][1]['pipeline_seconds'],
-                original_whole_source_seconds=report['trials'][0]['whole_source_seconds'],
-                native_whole_source_seconds=report['trials'][1]['whole_source_seconds'],
-                measured_speedup=report['trials'][0]['pipeline_seconds'] / report['trials'][1]['pipeline_seconds'],
+                output_bytes_exactly_equal=original_trial['outputs'] == native_trial['outputs'],
+                original_pipeline_seconds=original_trial['pipeline_seconds'],
+                native_pipeline_seconds=native_trial['pipeline_seconds'],
+                original_whole_source_seconds=original_trial['whole_source_seconds'],
+                native_whole_source_seconds=native_trial['whole_source_seconds'],
+                measured_speedup=original_trial['pipeline_seconds'] / native_trial['pipeline_seconds'],
                 real_natural_qualified_stop='NOT_VERIFIED_BY_DIAGNOSTIC')
             native = report['native_whole_source_seconds']
             reference = {'remaining_seconds_in_failed_archive_after_worker_restart': 257.442452,
@@ -729,9 +746,13 @@ def main(argv=None):
     parser.add_argument('--fixture', type=Path, help=argparse.SUPPRESS)
     parser.add_argument('--clock', help=argparse.SUPPRESS)
     parser.add_argument('--optimized', action='store_true', help=argparse.SUPPRESS)
+    parser.add_argument('--native-first', action='store_true',
+                        help='diagnostic experiment: native records first, original replays')
+    parser.add_argument('--metadata-mode', choices=('record', 'replay'), help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     if args.child:
-        return child(args.source_root, args.script, 'replay' if args.optimized else 'record',
+        return child(args.source_root, args.script,
+                     args.metadata_mode or ('replay' if args.optimized else 'record'),
                      args.fixture, args.clock, args.optimized)
     if args.output is None:
         parser.error('--output is required')
@@ -746,6 +767,9 @@ def main(argv=None):
     if len(head) != 40 or any(c not in '0123456789abcdef' for c in head):
         raise ProfileError('complete fixed input commit SHA required')
     if args.worker:
+        if args.native_first:
+            return worker(source, head, output, args.timeout_seconds, args.max_native_seconds,
+                          native_first=True)
         return worker(source, head, output, args.timeout_seconds, args.max_native_seconds)
     sys.path.insert(0, str(source))
     import runtime_process
@@ -753,6 +777,8 @@ def main(argv=None):
                '--source-root', str(source), '--ref', head, '--output', str(output),
                '--timeout-seconds', str(args.timeout_seconds),
                '--max-native-seconds', str(args.max_native_seconds)]
+    if args.native_first:
+        command.append('--native-first')
     with runtime_process.cancellation_signals():
         result = runtime_process.command(command, cwd=source, timeout=args.timeout_seconds)
     print(result, end='')
