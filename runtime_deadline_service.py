@@ -292,6 +292,7 @@ def cycle(adapter, state, clock):
     prepared_this_cycle = False
     audit_pending = False
     prospective_enabled = state.get('_prospective_enabled') is True
+    archive_existing_records = state.get('_archive_existing_records') is True
     prospective_publication_required = False
     prospective_prepared = False
     prepared_dispatches_attempted = False
@@ -347,15 +348,16 @@ def cycle(adapter, state, clock):
         out['this_cycle_deferred_smoke_pending_at_end'] = False
         # Dispatch is only a request, never claimed to be an exact-head witness.
         action('witness')
-        if prospective_enabled and prospective_prepared:
+        if (prospective_enabled or archive_existing_records) and prospective_prepared:
             # This also covers evidence-preserving early returns after a source
             # audit error. A public at-most-once intent must not be abandoned.
             if prospective_prepared and not prepared_dispatches_attempted:
                 prepared_dispatches_attempted = True
                 # Immutable custody intents get the remaining shared transport first.
-                action('custody_dispatch')
+                if prospective_enabled:
+                    action('custody_dispatch')
                 action('original18_witness')
-                action('r2_dispatch')
+                action('r2_dispatch' if prospective_enabled else 'r2_existing_dispatch')
         return True
 
     registry, scores = adapter.state()
@@ -426,6 +428,32 @@ def cycle(adapter, state, clock):
         prospective_publication_required |= bool(prepared.get('requires_publication'))
         prospective_prepared = True
 
+    elif archive_existing_records:
+        if hasattr(adapter, 'begin_prospective_cycle'):
+            adapter.begin_prospective_cycle()
+        if not action('original18_existing_capture'):
+            out['fatal'] = True
+            return out
+        captured = out['actions'][-1]['result']
+        if (not isinstance(captured, dict) or not isinstance(captured.get('errors'), dict)
+                or captured.get('new_events')):
+            out['errors'].append({'stage': 'original18_existing_capture', 'error': 'invalid existing-records capture contract'})
+            out['fatal'] = True
+            return out
+        for key, error in captured['errors'].items():
+            out['errors'].append({'stage': 'original18_existing_capture', 'item': str(key),
+                                  'error': diagnostic_text(error)})
+        prospective_publication_required = bool(captured.get('requires_publication')
+                                               or captured.get('request_witness'))
+        prospective_prepared = True
+        if prospective_publication_required:
+            if not publish(): return out
+        else:
+            # R2 proves its already public records itself. No original18 bytes
+            # need publication, so an unrelated primary audit must not delay it.
+            prepared_dispatches_attempted = True
+            action('r2_existing_dispatch')
+
     # Verify public pair context before recording its eligibility at capture.
     # No later replay may retrofit a previously unverified book into eligibility.
     now = utc(clock())
@@ -463,6 +491,9 @@ def cycle(adapter, state, clock):
             # journal or custody intent exists on this safe-defer branch.
             prepared_dispatches_attempted = True
             action('r2_dispatch')
+        elif archive_existing_records and prospective_prepared and not prepared_dispatches_attempted:
+            prepared_dispatches_attempted = True
+            action('r2_existing_dispatch')
     elif not publish():
         return out
 
@@ -546,19 +577,42 @@ def qualified_capture(row, book):
     except (KeyError, ValueError, TypeError): return False
 
 
+def _archive_existing_records_allowed(enabled, stop_file, require_qualified_stop, duration_seconds):
+    if type(enabled) is not bool:
+        raise ValueError('explicit archive work scope required')
+    if not enabled:
+        return False
+    parent = os.environ.get('DOGE_ARCHIVE_OWNED_PARENT_PID', '')
+    if (not stop_file or require_qualified_stop is not True or duration_seconds != 600
+            or os.environ.get('GITHUB_ACTIONS') != 'true'
+            or os.environ.get('GITHUB_REF') != 'refs/heads/main'
+            or os.environ.get('GITHUB_REPOSITORY') != REPO
+            or os.environ.get('DOGE_ARCHIVE_EXISTING_RECORDS') != '1'
+            or not parent.isdigit() or int(parent) != os.getppid()
+            or os.environ.get('DOGE_ARCHIVE_OWNED_STOP_FILE') != str(Path(stop_file).resolve())):
+        raise ValueError('existing-records scope requires the owned qualified archive runtime')
+    return True
+
+
 def run(root, adapter, duration_seconds=2400, clock=None, sleep=None, stop_file=None,
-        require_qualified_stop=False):
+        require_qualified_stop=False, archive_existing_records=False):
     if type(duration_seconds) not in (int, float) or not 0 < duration_seconds <= 3000:
         raise ValueError('bounded runtime duration required')
     clock = clock or (lambda: datetime.now(timezone.utc))
     sleep = sleep or time.sleep
+    existing_enabled = _archive_existing_records_allowed(archive_existing_records, stop_file,
+                                                         require_qualified_stop, duration_seconds)
     start = utc(clock())
     end = start + timedelta(seconds=duration_seconds)
     bridge_enabled = (os.environ.get('DOGE_PROSPECTIVE_RUNTIME_BRIDGE') == '1'
                       and not stop_file and not require_qualified_stop)
     state = {'_prospective_enabled': bridge_enabled}
+    if existing_enabled:
+        state['_archive_existing_records'] = True
     if hasattr(adapter, 'prospective_enabled'):
         adapter.prospective_enabled = bridge_enabled
+    if hasattr(adapter, 'archive_existing_records_enabled'):
+        adapter.archive_existing_records_enabled = existing_enabled
     count = errors = 0
     maximum = 0
     fatal = False
@@ -586,6 +640,8 @@ def run(root, adapter, duration_seconds=2400, clock=None, sleep=None, stop_file=
               'economic_acceptance_passed': False, 'historical_gaps_repaired': False,
               'real_orders_authorized': False, 'new_economic_cohort_activated': False}
     result['prospective_bridge_enabled'] = bridge_enabled
+    if existing_enabled:
+        result['archive_existing_records_enabled'] = True
     if require_qualified_stop:
         result['qualified_stop_required'] = True
         result['qualified_stop_satisfied'] = bool(stop_requested() and adapter.can_stop() and not fatal)
@@ -615,6 +671,7 @@ class LiveAdapter:
     """Only frozen producer entry points; all writers execute sequentially."""
     # Existing publisher callers without foreground admission stay disabled.
     prospective_enabled = False
+    archive_existing_records_enabled = False
     def __init__(self, root):
         if os.environ.get('GITHUB_REF') != 'refs/heads/main' or os.environ.get('GITHUB_REPOSITORY') != REPO:
             raise ValueError('live service requires the repository main workflow')
@@ -627,6 +684,7 @@ class LiveAdapter:
         # Only run() may admit foreground prospective work. Archive stop also
         # constructs this adapter directly for publication, bypassing run().
         self.prospective_enabled = False
+        self.archive_existing_records_enabled = False
         self.prospective_state = {}
         self.original18_capture = {}
         self.custody_prepared = None
@@ -697,23 +755,31 @@ class LiveAdapter:
         return reg, scores
 
     def action(self, name):
-        if name in ('original18_capture', 'original18_witness', 'custody_prepare',
+        if name in ('original18_capture', 'custody_prepare',
                     'custody_dispatch', 'r2_dispatch') and not self.prospective_enabled:
             return {'status': 'DISABLED_OUTSIDE_FOREGROUND'}
-        if name == 'original18_capture':
+        if name in ('original18_existing_capture', 'r2_existing_dispatch') and not self.archive_existing_records_enabled:
+            return {'status': 'DISABLED_OUTSIDE_OWNED_ARCHIVE'}
+        if name == 'original18_witness' and not (self.prospective_enabled or self.archive_existing_records_enabled):
+            return {'status': 'DISABLED_OUTSIDE_FOREGROUND'}
+        if name in ('original18_capture', 'original18_existing_capture'):
             import runtime_forward_bridge as bridge
+            existing = name == 'original18_existing_capture'
             def produce(timeout_seconds):
                 # Isolate the child output contract; it cannot write parent job outputs.
                 with tempfile.TemporaryDirectory(prefix='doge-original18-') as folder:
                     env = self._prospective_env(GITHUB_OUTPUT=str(Path(folder)/'outputs'))
-                    output = runtime_process.command(
-                        (sys.executable, 'learned_shadow_runtime.py', 'publish'),
+                    command = ((sys.executable, '-c', 'import json;from runtime_forward_bridge import run_original18_existing;'
+                        'print(json.dumps(run_original18_existing(),sort_keys=True))') if existing else
+                        (sys.executable, 'learned_shadow_runtime.py', 'publish'))
+                    output = runtime_process.command(command,
                         cwd=self.root, env=env, timeout=timeout_seconds)
                 lines = output.strip().splitlines()
                 if not lines: raise ValueError('original18 current producer output missing')
                 return lines[-1]
             self.original18_capture = bridge.capture_original18(
-                self.root, produce, state_reader=lambda root: self.original18_state_owned())
+                self.root, produce, state_reader=lambda root: self.original18_state_owned(),
+                **({'existing_only': True} if existing else {}))
             return self.original18_capture
         elif name == 'original18_witness':
             import runtime_forward_bridge as bridge
@@ -741,6 +807,10 @@ class LiveAdapter:
             import runtime_forward_bridge as bridge
             return bridge.route_r2(self.root, None, self.prospective_state,
                                    client=self.prospective_client)
+        elif name == 'r2_existing_dispatch':
+            import runtime_forward_bridge as bridge
+            return bridge.route_r2(self.root, None, self.prospective_state,
+                                   client=self.prospective_client, existing_only=True)
         elif name == 'watch':
             self.python('quote_capture_retry.py', 'watch')
         elif name == 'prepare':
@@ -811,6 +881,7 @@ class LiveAdapter:
         elif name == 'publish':
             import publish_forward_evidence as publisher
             import paired_forward_cohort as pair
+            original18_enabled = self.prospective_enabled or self.archive_existing_records_enabled
             with PublicationProfile() as profile:
                 profile.call('preflight_validate_p2', validate_p2, self.root)
                 profile.call('preflight_validate_state', validate_publication_state, self.root)
@@ -830,7 +901,7 @@ class LiveAdapter:
                 binding_guard = binding_changed or bool(getattr(self, 'pending_source_binding', None))
                 if binding_guard:
                     source_binding.validate_binding_history(self.root)
-                if self.prospective_enabled:
+                if original18_enabled:
                     paths.append('data/learned_shadow_v1')
                 existing = [p for p in paths if (self.root/p).exists()]
                 # Source histories can only be appended by their existing producers.
@@ -847,7 +918,7 @@ class LiveAdapter:
                     # explicit remote ACK even when it is absent from Git's diff.
                     expected[witness_path] = self.pending_source_binding['expected_csv']
                 legacy_staged = any(p.startswith('data/learned_shadow_v1/') for p in staged)
-                if self.prospective_enabled and legacy_staged:
+                if original18_enabled and legacy_staged:
                     profile.call('preflight_original18_guard', self.validate_original18_owned, self.root)
                 publication_scope = 'data'
                 def validate(current_root):
@@ -857,7 +928,7 @@ class LiveAdapter:
                     profile.call(publication_scope+'_post_rebase_pair_guard', pair.guard, current_root)
                     profile.call(publication_scope+'_post_rebase_pair_history_guard', validate_paired_history, current_root)
                     profile.call(publication_scope+'_post_rebase_validate_p2', validate_p2, current_root)
-                    if self.prospective_enabled and legacy_staged:
+                    if original18_enabled and legacy_staged:
                         profile.call(publication_scope+'_post_rebase_original18_guard',
                                      self.validate_original18_owned, current_root)
                 publication = profile.call('data_publisher_total', publisher.publish, self.root, validate=validate)
@@ -1031,6 +1102,7 @@ def main():
     parser.add_argument('--duration-seconds', type=int, default=2400)
     parser.add_argument('--stop-file', type=Path)
     parser.add_argument('--require-qualified-stop', action='store_true')
+    parser.add_argument('--archive-existing-records', action='store_true')
     parser.add_argument('--archive-reserve-seconds', type=int)
     parser.add_argument('--workflow-started-at')
     parser.add_argument('--workflow-timeout-seconds', type=int)
@@ -1080,6 +1152,12 @@ def main():
 
 def _run_main(root, adapter, args):
     """Existing setup and budget selection, under the main cancellation boundary."""
+    existing = getattr(args, 'archive_existing_records', False)
+    if existing:
+        _archive_existing_records_allowed(existing, args.stop_file,
+                                         args.require_qualified_stop, args.duration_seconds)
+        if args.archive_reserve_seconds is not None:
+            raise ValueError('existing-records scope cannot change foreground reserve planning')
     if ((args.workflow_started_at is not None or args.workflow_timeout_seconds is not None)
             and args.archive_reserve_seconds is None):
         raise ValueError('workflow budget applies only to foreground archive reserve')
@@ -1106,7 +1184,8 @@ def _run_main(root, adapter, args):
         result = finish_due_on_budget_exhaustion(root, adapter, budget_exhausted)
     else:
         result = run(root, adapter, duration, stop_file=args.stop_file,
-                     require_qualified_stop=args.require_qualified_stop)
+                     require_qualified_stop=args.require_qualified_stop,
+                     **({'archive_existing_records': True} if existing else {}))
         if budget is not None: result['archive_window_budget'] = budget
     return result
 
