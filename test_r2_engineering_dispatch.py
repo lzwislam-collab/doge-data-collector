@@ -153,5 +153,37 @@ class BoundDispatch(unittest.TestCase):
         c=SharedQueue();out=subject.dispatch_bound(subject.LIVE,{PATH:BLOB},NOW+timedelta(minutes=10),
             client=c,clock=lambda:NOW,mode='canary')
         self.assertEqual(out['status'],'DEFERRED_ACTIVE_WORKFLOW');self.assertEqual(c.posts,[])
+    def test_same_data_on_pre_release_head_cannot_bind_wrong_engineering_version(self):
+        manifest='config/r2_engineering_transport_v1.json';version='f'*40
+        class Versioned(Client):
+            def api(self,path):
+                if path.startswith('/contents/'+manifest+'?'):
+                    if ('ref='+OLD) in path:raise HTTPError(path,404,'Not Found',{},None)
+                    return {'type':'file','path':manifest,'sha':version,'size':700}
+                if path.startswith('/contents/'):
+                    return {'type':'file','path':PATH,'sha':BLOB,'size':20}
+                return super().api(path)
+        c=Versioned([OLD,HEAD]);out=subject.dispatch_bound(WORKFLOW,{PATH:BLOB,manifest:version},NOW+timedelta(minutes=10),
+            client=c,clock=lambda:NOW,sleep=lambda _:None,token_factory=iter(['first','retry']).__next__,
+            absence_proof=lambda h,p:h==OLD and p==manifest)
+        self.assertEqual(out['status'],'DISPATCH_BOUND_COMPLETION_UNVERIFIED')
+        self.assertEqual(c.cancelled,[100]);self.assertEqual(out['head_sha'],HEAD)
+    def test_committed_manifest_is_pinned_to_local_execution_head(self):
+        self.assertTrue(callable(getattr(subject,'committed_manifest_blob',None)),'committed version binding is absent')
+        raw=(HERE/'config/r2_engineering_transport_v1.json').read_bytes().replace(b'\r\n',b'\n')
+        def git(root,*args):
+            if args==('rev-parse','HEAD'):return (HEAD+'\n').encode()
+            self.assertEqual(args,('show',HEAD+':config/r2_engineering_transport_v1.json'));return raw
+        with patch.object(subject,'_git',side_effect=git):
+            self.assertEqual(subject.committed_manifest_blob(HERE),subject.hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest())
+        with patch.object(subject,'_git',side_effect=[(HEAD+'\n').encode(),b'{}']):
+            with self.assertRaises(ValueError):subject.committed_manifest_blob(HERE)
+    def test_current_history_blob_above_four_megabytes_uses_original_wire_bound(self):
+        # GitHub base64-encodes the historical CSV. This is still below the
+        # existing24MiB transport cap, not an increase in the scientific bound.
+        payload={'content':'A'*(6*1024*1024),'encoding':'base64'}
+        wire=json.dumps({'value':payload}).encode()
+        with patch.object(subject.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout=wire)):
+            self.assertEqual(subject.Client().api('/git/blobs/'+BLOB),payload)
 
 if __name__=='__main__':unittest.main()

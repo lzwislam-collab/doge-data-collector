@@ -190,6 +190,7 @@ def route_r2(root, publication, state, *, clock=None, client=None):
             choice, view = capture['choice'], capture['view']
             raw = _read_bytes(root, bounded, state, view['head'], original.frozen.SOURCE)
             expected = {original.frozen.SOURCE:_blob(raw)}
+            expected[dispatch.ENGINEERING_MANIFEST] = dispatch.committed_manifest_blob(root)
             for key in choice.get('event_ids', []):
                 if key in view['hashes']:
                     expected[original.frozen.f.BASE+'/events/'+key+'.json'] = view['hashes'][key]

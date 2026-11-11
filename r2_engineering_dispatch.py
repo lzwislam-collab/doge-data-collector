@@ -23,7 +23,9 @@ AUDIT='r2_engineering_audit.yml'
 LIVE='r2_engineering_live.yml'
 HEX=re.compile(r'[0-9a-f]{40}')
 BASE='data/phase2_forward_v2'
+ENGINEERING_MANIFEST='config/r2_engineering_transport_v1.json'
 STATES=('pending','queued','requested','waiting','in_progress')
+MAX_RESPONSE_BYTES=24*1024*1024  # same bound as the existing runtime GitHub client
 
 def utc(value):
     if not isinstance(value,datetime) or value.tzinfo is None or value.utcoffset()!=timedelta(0):
@@ -42,7 +44,7 @@ class Client:
         code='''import json,os,sys,time
 from urllib.request import Request,urlopen
 from urllib.error import HTTPError
-path,payload,wanted,limit=sys.argv[1:];payload=json.loads(payload);wanted=int(wanted);end=time.monotonic()+float(limit)
+path,payload,wanted,limit,maximum=sys.argv[1:];payload=json.loads(payload);wanted=int(wanted);maximum=int(maximum);end=time.monotonic()+float(limit)
 req=Request('https://api.github.com/repos/lzwislam-collab/doge-data-collector'+path,data=None if payload is None else json.dumps(payload).encode(),method='GET' if payload is None else 'POST',headers={'Authorization':'Bearer '+os.environ['GITHUB_TOKEN'],'Accept':'application/vnd.github+json','User-Agent':'DOGE-R2-Engineering-Transport/1'})
 try:response=urlopen(req,timeout=min(6,float(limit)))
 except HTTPError as exc:
@@ -57,17 +59,17 @@ with response:
    if time.monotonic()>=end:raise TimeoutError('engineering body deadline')
    if not block:break
    raw.extend(block)
-   if len(raw)>4*1024*1024:raise ValueError('engineering response exceeds bound')
+   if len(raw)>maximum:raise ValueError('engineering response exceeds bound')
 print(json.dumps({'value':json.loads(raw) if wanted==200 else wanted},separators=(',',':')))
 '''
         try:
-            result=subprocess.run([sys.executable,'-I','-B','-c',code,path,json.dumps(payload),str(accepted),str(remaining)],
+            result=subprocess.run([sys.executable,'-I','-B','-c',code,path,json.dumps(payload),str(accepted),str(remaining),str(MAX_RESPONSE_BYTES)],
                 capture_output=True,timeout=remaining,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         except subprocess.TimeoutExpired as exc:
             raise TimeoutError('engineering HTTP child killed and reaped at total deadline') from exc
         if time.monotonic()>=self.end:raise TimeoutError('engineering response arrived beyond budget')
         if result.returncode!=0:raise RuntimeError('engineering HTTP read/write failed; outcome unverified')
-        if len(result.stdout)>4*1024*1024+64:raise ValueError('engineering response exceeds bound')
+        if len(result.stdout)>MAX_RESPONSE_BYTES+64:raise ValueError('engineering response exceeds bound')
         value=json.loads(result.stdout)
         if 'http_error' in value:raise HTTPError(value['url'],value['http_error'],'GitHub HTTP error',{},None)
         return value['value']
@@ -78,7 +80,7 @@ print(json.dumps({'value':json.loads(raw) if wanted==200 else wanted},separators
 def _expected(blobs):
     if not isinstance(blobs,dict) or not 1<=len(blobs)<=16:raise ValueError('bounded intended files required')
     for path,sha in blobs.items():
-        if (not isinstance(path,str) or not (path=='data/hourly_research/ohlc.csv' or
+        if (not isinstance(path,str) or not (path in ('data/hourly_research/ohlc.csv',ENGINEERING_MANIFEST) or
             re.fullmatch(re.escape(BASE)+r'/(events|scores)/[0-9]+_formal\.json',path)) or
             not isinstance(sha,str) or not HEX.fullmatch(sha)):
             raise ValueError('invalid intended immutable identity')
@@ -89,7 +91,7 @@ def _main(client):
     return obj['sha']
 
 def _local_absence(head,path,end=None):
-    if not isinstance(head,str) or not HEX.fullmatch(head) or not re.fullmatch(re.escape(BASE)+r'/(events|scores)/[0-9]+_(formal|canary)\.json',str(path)):
+    if not isinstance(head,str) or not HEX.fullmatch(head) or not (path==ENGINEERING_MANIFEST or re.fullmatch(re.escape(BASE)+r'/(events|scores)/[0-9]+_(formal|canary)\.json',str(path))):
         return False
     end=time.monotonic()+10 if end is None else end
     env=dict(os.environ,GIT_NO_LAZY_FETCH='1')
@@ -195,6 +197,15 @@ def dispatch_bound(workflow,expected_blobs,not_after,*,client=None,clock=None,sl
 def _git(root,*args):
     return subprocess.check_output(['git','--no-replace-objects','-c','safe.directory=*',*args],cwd=root,timeout=15)
 
+def committed_manifest_blob(root):
+    """Pin this executing version, never a potentially stale remote viewhead."""
+    root=Path(root);head=_git(root,'rev-parse','HEAD').decode().strip()
+    if not HEX.fullmatch(head):raise ValueError('invalid execution commit')
+    raw=_git(root,'show',head+':'+ENGINEERING_MANIFEST)
+    local=(root/ENGINEERING_MANIFEST).read_bytes().replace(b'\r\n',b'\n')
+    if raw!=local:raise ValueError('engineering manifest is not this committed execution version')
+    return hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()
+
 def current_intent(root,now):
     """Only currently open original source/prediction/target obligations."""
     import phase2_forward_runtime_v2 as r
@@ -227,6 +238,7 @@ def current_intent(root,now):
     if not deadlines:return None
     raw=_git(root,'show',head+':'+r.SOURCE)
     paths[r.SOURCE]=hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()
+    paths[ENGINEERING_MANIFEST]=committed_manifest_blob(root)
     return paths,min(deadlines)
 
 def verify_remote_intent(intent,artifact_id,*,client,clock=None):

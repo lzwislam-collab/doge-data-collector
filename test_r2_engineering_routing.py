@@ -23,6 +23,7 @@ except ModuleNotFoundError:
     subject = None
 
 OLD_SERVER = original._server_runs
+MANIFEST = 'config/r2_engineering_transport_v1.json'
 
 
 class Provider(OriginalRemote):
@@ -60,12 +61,16 @@ class EngineeringRouting(unittest.TestCase):
         self.assertIsNotNone(subject,'compatible engineering router is missing')
         self.now=datetime(2026,11,9,14,10,tzinfo=timezone.utc)
         self.remote=Provider(self.now);self.state={}
+        self.manifest_raw=b'committed executing engineering identity'
+        self.manifest_blob=subject._blob(self.manifest_raw)
+        self.remote.files[MANIFEST]=self.manifest_raw
         original.transport._TREE_CACHE.clear();original.transport._POLICY_CACHE.clear()
         for target in (
             patch.dict(os.environ,{'GITHUB_REF':'refs/heads/main','GITHUB_REPOSITORY':frozen.f.old.REPO}),
             patch.object(engine,'context',return_value=nullcontext()),
             patch.object(engine,'runs_server',side_effect=lambda extra=():OLD_SERVER(self.remote.api,extra)),
             patch.object(original,'_remote_fixed_files',return_value={frozen.f.POLICY:b'fixed original bytes'}),
+            patch.object(dispatch,'committed_manifest_blob',return_value=self.manifest_blob,create=True),
             patch.object(subject,'_local_git',return_value=None)):
             target.start();self.addCleanup(target.stop)
     def call(self):
@@ -84,6 +89,16 @@ class EngineeringRouting(unittest.TestCase):
     def test_existing_source_proof_still_routes_compatible_publisher(self):
         self.source_witness();out=self.call()
         self.assertEqual(out['purpose'],'issue');self.assertEqual(len(self.remote.posts),1)
+    def test_dispatch_pins_committed_local_manifest_alongside_data(self):
+        with patch.object(dispatch,'dispatch_bound',wraps=dispatch.dispatch_bound) as bound:
+            result=self.call()
+        self.assertEqual(result['status'],'DISPATCH_BOUND_COMPLETION_UNVERIFIED')
+        self.assertEqual(bound.call_args.args[1].get(MANIFEST),self.manifest_blob)
+    def test_same_data_with_different_remote_engineering_version_never_posts(self):
+        self.remote.files[MANIFEST]=b'older engineering release with identical source data'
+        result=self.call()
+        self.assertEqual(result['status'],'DEFERRED_PUBLIC_BYTES_CHANGED')
+        self.assertEqual(self.remote.posts,[])
     def test_closed_original_issue_window_has_no_post(self):
         self.remote.clock=self.now.replace(minute=45)
         self.assertEqual(self.call()['status'],'SKIP_NO_CURRENT_R2_OBLIGATION')
