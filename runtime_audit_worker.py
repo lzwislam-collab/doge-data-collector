@@ -5,6 +5,7 @@ audit caches are discarded. The live serial writer installs complete matching
 reports, and frozen P2 checks still decide eligibility at capture time.
 """
 import hashlib
+from contextlib import contextmanager
 import json
 import math
 import os
@@ -22,6 +23,21 @@ INPUTS = ('data/direction_v42/forward_registry.csv',
           'data/paired_forward_v1/pairs.jsonl', 'data/hourly_research/ohlc.csv')
 OUTPUTS = ('data/p0_operations/latest.json', 'data/paired_forward_v1/audit_latest.json')
 SCRIPTS = ('forward_validation_v2.py', 'p0_operational_audit.py', 'paired_cohort_audit.py')
+CLI_HELPERS = ('runtime_audit_cli.py', 'runtime_publication_state.py', 'runtime_paired_history.py',
+               'runtime_p0_inventory_transport.py', 'runtime_paired_git_stream.py')
+TRANSPORT_IMPLEMENTATIONS = {
+    'runtime_publication_state_validation': 'runtime_publication_state_native_batch_v1',
+    'runtime_paired_history_validation': 'runtime_paired_history_native_batch_v1',
+}
+TRANSPORT_REASONS = frozenset(('dependency_identity_changed', 'dependency_identity_unavailable',
+    'git_read_error', 'history_fallback', 'log_framing', 'log_oid_sequence', 'log_encoding',
+    'object_resolution_count', 'object_resolution_identity', 'object_resolution_framing',
+    'blob_identity_or_order', 'blob_length_or_delimiter', 'blob_content_hash', 'unexpected_blob_tail',
+    'unsupported_path_framing', 'commit_time_format', 'framing', 'oid_sequence',
+    'nonempty_omission', 'patch_encoding', 'script_identity_changed', 'backend_identity_changed',
+    'backend_location_changed', 'backend_import_unavailable'))
+TRANSPORT_RELATIVES = frozenset(INPUTS + ('data/stage5/forward_validation/remote_witnesses.csv',
+                                        'data/stage5/forward_validation/verified_run_metadata.csv'))
 EXCLUDED_PREFIX = 'data/plus_evidence_v1_0/sources/'
 # Reviewed dependency closure at efe0857e. A change falls back to the original
 # full checkout; this is an optimization eligibility check, not a new freeze.
@@ -175,9 +191,151 @@ def elapsed(start):
     except Exception: return None
 
 
+def _diagnostic_object(pairs):
+    row = {}
+    for key, value in pairs:
+        if key in row: raise ValueError('duplicate diagnostic member')
+        row[key] = value
+    return row
+
+
+def _transport_fields(row, implementation, nested=False):
+    if not isinstance(row, dict): raise ValueError('diagnostic object required')
+    enums = {'implementation': (implementation,), 'mode': ('native_batch', 'legacy_full_fallback', 'not_started'),
+             'status': ('ok', 'error', 'running'), 'validation_status': ('ok', 'error')}
+    counts = ('attempted_commit_count', 'native_batch_calls', 'empty_fallback_show_calls')
+    hashes = ('module_sha256', 'ordered_oids_sha256')
+    allowed = set(enums) | set(counts) | set(hashes) | {'relative', 'fallback_reason'}
+    if not nested: allowed |= {'kind', 'histories'}
+    if set(row)-allowed: raise ValueError('unknown diagnostic member')
+    if not nested and not {'implementation','mode','status','validation_status','module_sha256'} <= set(row):
+        raise ValueError('incomplete native diagnostic')
+    out = {}
+    for key, choices in enums.items():
+        if key in row:
+            if row[key] not in choices: raise ValueError('unknown diagnostic enum')
+            out[key] = row[key]
+    for key in counts:
+        if key in row:
+            if type(row[key]) is not int or not 0 <= row[key] <= 2147483647:
+                raise ValueError('invalid diagnostic count')
+            out[key] = row[key]
+    for key in hashes:
+        if key in row:
+            if not isinstance(row[key], str) or not re.fullmatch('[0-9a-f]{64}', row[key]):
+                raise ValueError('invalid diagnostic hash')
+            out[key] = row[key]
+    if 'relative' in row:
+        if row['relative'] not in TRANSPORT_RELATIVES: raise ValueError('unknown diagnostic path')
+        out['relative'] = row['relative']
+    if 'fallback_reason' in row:
+        value = row['fallback_reason']
+        out['fallback_reason'] = value if isinstance(value,str) and value in TRANSPORT_REASONS else 'UNRECOGNIZED_OMITTED'
+    if 'histories' in row:
+        if not isinstance(row['histories'],list) or len(row['histories'])>3: raise ValueError('diagnostic history limit')
+        out['histories'] = [_transport_fields(child,implementation,nested=True) for child in row['histories']]
+    return out
+
+
+def _paired_stream_fields(source,expected_sha256):
+    counts={'requests','verified_reads','processes','fallback_calls'}
+    flags={'installed','reaped','reader_joined','disabled'}
+    if (set(source)!=counts|flags|{'kind','implementation','mode','status','module_sha256'}
+            or source.get('implementation')!='paired_fresh_git_blob_stream_v1'
+            or source.get('mode')!='fresh_sequential_blobs' or source.get('status')!='ok'
+            or not isinstance(expected_sha256,str) or not re.fullmatch('[0-9a-f]{64}',expected_sha256)
+            or source.get('module_sha256')!=expected_sha256
+            or any(type(source[key]) is not int or not 0<=source[key]<=10**9 for key in counts)
+            or any(type(source[key]) is not bool for key in flags)
+            or source['installed'] is not True or source['reaped'] is not True
+            or source['reader_joined'] is not True or source['disabled'] is not False
+            or source['processes']!=1 or source['requests']==0
+            or source['verified_reads']!=source['requests'] or source['fallback_calls']!=0):
+        raise ValueError('invalid authenticated paired stream receipt')
+    return {key:value for key,value in source.items() if key!='kind'}
+
+
+def forward_transport_diagnostics(stderr, stage, expected_stream_sha256=None):
+    """Forward only bounded fixed metadata; never raw subprocess stderr."""
+    try:
+        if stage not in SCRIPTS or not isinstance(stderr,str) or len(stderr)>65536:
+            return
+        if len(stderr.encode('utf-8'))>65536: return
+        emitted = 0; output_bytes = 0
+        for line in stderr.splitlines()[:128]:
+            if emitted >= 32: break
+            if len(line)>4096 or len(line.encode('utf-8'))>4096: continue
+            try:
+                source = json.loads(line,object_pairs_hook=_diagnostic_object)
+                if not isinstance(source,dict): continue
+                kind = source.get('kind')
+                if kind in TRANSPORT_IMPLEMENTATIONS:
+                    fields = _transport_fields(source,TRANSPORT_IMPLEMENTATIONS[kind])
+                elif kind == 'runtime_canonical_json_transport':
+                    counts = ('calls','hits','misses','fallback_calls','sha256_calls',
+                              'encoded_calls','evictions','entries','cached_bytes')
+                    if (stage != 'paired_cohort_audit.py' or set(source) !=
+                            set(counts)|{'kind','implementation','mode','status','module_sha256'}
+                            or source['implementation'] != 'paired_canonical_utf8_lru_v1'
+                            or source['mode'] != 'canonical_bytes_lru'
+                            or source['status'] not in ('ok','error')
+                            or not isinstance(source['module_sha256'],str)
+                            or not re.fullmatch('[0-9a-f]{64}',source['module_sha256'])
+                            or any(type(source[k]) is not int or not 0<=source[k]<=2147483647 for k in counts)):
+                        continue
+                    fields = {k:v for k,v in source.items() if k != 'kind'}
+                elif kind == 'runtime_p0_inventory_transport':
+                    counts = ('native_calls','fallback_calls','real_gets','days')
+                    if (stage != 'p0_operational_audit.py' or set(source) !=
+                            set(counts)|{'kind','implementation','mode','status','installed','module_sha256','window'}
+                            or source['implementation'] != 'p0_fresh_inventory_window4_v1'
+                            or source['mode'] != 'fresh_bounded_inventory'
+                            or source['status'] not in ('ok','error')
+                            or type(source['installed']) is not bool
+                            or type(source['window']) is not int or source['window'] != 4
+                            or not isinstance(source['module_sha256'],str)
+                            or not re.fullmatch('[0-9a-f]{64}',source['module_sha256'])
+                            or any(type(source[k]) is not int or not 0<=source[k]<=2147483647 for k in counts)):
+                        continue
+                    fields = {k:v for k,v in source.items() if k != 'kind'}
+                elif kind == 'runtime_paired_git_stream':
+                    if stage!='paired_cohort_audit.py':continue
+                    fields=_paired_stream_fields(source,expected_stream_sha256)
+                elif kind == 'runtime_audit_cli_fallback':
+                    if set(source)!={'kind','backend','reason'} or source['backend'] not in ('original_cli','runtime_publication_state','runtime_paired_history','runtime_p0_inventory_transport','runtime_paired_git_stream'):
+                        continue
+                    value = source['reason']
+                    fields = {'backend':source['backend'],'mode':'legacy_full_fallback',
+                        'fallback_reason':value if isinstance(value,str) and value in TRANSPORT_REASONS else 'UNRECOGNIZED_OMITTED'}
+                else: continue
+                row = dict(fields,kind='runtime_source_audit_transport',schema_version=1,
+                    source_kind=kind,stage=stage,worker_pid=os.getpid(),
+                    at_utc=datetime.now(timezone.utc).isoformat())
+                output = json.dumps(row,sort_keys=True,allow_nan=False)
+                if len(output.encode('utf-8'))>4096: continue
+            except Exception:
+                continue
+            size = len(output.encode('utf-8'))+1
+            if output_bytes+size>65536: break
+            print(output,flush=True); emitted += 1; output_bytes += size
+    except Exception:
+        pass
+
+
 def command(*args, cwd):
-    return subprocess.run(args, cwd=cwd, check=True, capture_output=True,
-                          text=True, encoding='utf-8', timeout=240).stdout
+    completed = subprocess.run(args, cwd=cwd, check=True, capture_output=True,
+                               text=True, encoding='utf-8', timeout=240)
+    try:
+        if (len(args)==3 and Path(args[0]).resolve()==Path(sys.executable).resolve()
+                and Path(args[1]).resolve()==(Path(cwd).resolve()/CLI_HELPERS[0]) and args[2] in SCRIPTS):
+            expected=None
+            if args[2]=='paired_cohort_audit.py':
+                path=Path(cwd)/'runtime_paired_git_stream.py'
+                if path.is_file() and not path.is_symlink():expected=hashlib.sha256(path.read_bytes()).hexdigest()
+            forward_transport_diagnostics(completed.stderr,args[2],expected_stream_sha256=expected)
+    except Exception:
+        pass
+    return completed.stdout
 
 
 def timed_command(phase, *args, cwd, **metadata):
@@ -274,15 +432,61 @@ def result_metadata(directory):
     return metadata
 
 
+def verify_cli_sources(snapshot, head):
+    """Use only exact helper bytes from this isolated audit's selected Git head."""
+    launcher = command('git', 'ls-tree', '--full-tree', '--name-only', head,
+                       '--', CLI_HELPERS[0], cwd=snapshot).splitlines()
+    if not launcher:
+        return False
+    if launcher != [CLI_HELPERS[0]]:
+        raise ValueError('unexpected isolated audit launcher entry')
+    for relative in CLI_HELPERS:
+        expected = command('git', 'rev-parse', head+':'+relative, cwd=snapshot).strip()
+        actual = command('git', 'hash-object', '--no-filters', '--', relative, cwd=snapshot).strip()
+        if actual != expected:
+            raise ValueError('isolated audit helper differs from pinned source')
+    return True
+
+
+@contextmanager
+def paired_stream_source(source,snapshot):
+    """Explicitly bind one worker-created shared clone to its selected source."""
+    key='DOGE_AUDIT_STREAM_TRUSTED_OBJECT_DIRECTORY'
+    previous=os.environ.pop(key,None)
+    try:
+        try:
+            source=Path(source).resolve();snapshot=Path(snapshot).resolve()
+            objects=source/'.git/objects';alternate=snapshot/'.git/objects/info/alternates'
+            if (source!=snapshot and objects.is_dir() and not objects.is_symlink()
+                    and not (source/'.git').is_symlink()
+                    and not alternate.is_symlink() and alternate.is_file()):
+                with alternate.open('rb') as handle:raw=handle.read(16385)
+                if len(raw)<=16384:
+                    lines=raw.decode('utf-8').splitlines()
+                    if len(lines)==1:
+                        target=Path(lines[0])
+                        if not target.is_absolute():target=alternate.parent.parent/target
+                        if target.resolve()==objects.resolve():os.environ[key]=str(objects.resolve())
+        except (OSError,ValueError,TypeError):pass
+        yield
+    finally:
+        os.environ.pop(key,None)
+        if previous is not None:os.environ[key]=previous
+
+
 def audit_snapshot(root, head, temporary_parent=None, *, exclude_source_archive=True):
     with tempfile.TemporaryDirectory(prefix='doge-source-audit-', dir=temporary_parent) as name:
         snapshot = Path(name)/'snapshot'
         checkout = prepare_checkout(root, snapshot, head, exclude_source_archive=exclude_source_archive)
+        use_launcher = verify_cli_sources(snapshot, head)
         inputs = fingerprint(snapshot)
         timings = []
-        for script in SCRIPTS:
-            _, seconds = timed_command(script, sys.executable, script, cwd=snapshot, input_head=head)
-            timings.append({'stage': script, 'seconds': seconds})
+        with paired_stream_source(root,snapshot):
+            for script in SCRIPTS:
+                arguments = (str(snapshot/'runtime_audit_cli.py'), script) if use_launcher else (script,)
+                _, seconds = timed_command(script, sys.executable, *arguments,
+                                           cwd=snapshot, input_head=head)
+                timings.append({'stage': script, 'seconds': seconds})
         outputs = {p: (snapshot/p).read_text(encoding='utf-8') for p in OUTPUTS}
         return {'status': 'ok', 'input_head': head, 'inputs': inputs,
                 'outputs': outputs, 'timings': timings, 'checkout': checkout}
