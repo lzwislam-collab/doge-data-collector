@@ -6,6 +6,10 @@ import importlib
 import os
 from pathlib import Path
 from urllib.parse import urlsplit, parse_qs
+import copy
+import io
+import json
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -133,6 +137,135 @@ class EngineeringRouting(unittest.TestCase):
         with self.assertRaises(TimeoutError):self.call()
         self.assertEqual(self.call()['status'],'ALREADY_ATTEMPTED_THIS_R2_CONTEXT')
         self.assertEqual(len(self.remote.posts),1)
+    def test_readonly_manifest_failure_does_not_consume_new_context(self):
+        with patch.object(dispatch,'committed_manifest_blob',side_effect=TimeoutError('read-only identity timeout')):
+            with self.assertRaises(TimeoutError):self.call()
+        self.assertEqual(self.remote.posts,[])
+        self.assertEqual(self.state.get('r2_dispatch_attempts',{}),{})
+        self.assertEqual(self.state.get('engineering_bound_dispatches',{}),{})
+        self.assertEqual(self.state.get('engineering_routing_attempts',{}),{})
+        self.assertEqual(self.call()['status'],'DISPATCH_BOUND_COMPLETION_UNVERIFIED')
+        self.assertEqual(len(self.remote.posts),1)
+    def test_bound_nonce_before_client_check_is_not_a_sent_post(self):
+        ticks=[0.0]
+        def token():
+            ticks[0]=41.0
+            return SimpleNamespace(hex='known-preflight-no-wire')
+        with patch.object(subject.time,'monotonic',side_effect=lambda:ticks[0]), \
+             patch.object(dispatch,'uuid4',side_effect=token):
+            with self.assertRaisesRegex(TimeoutError,'engineering routing total budget exhausted'):self.call()
+        self.assertEqual(self.remote.posts,[])
+        self.assertEqual(self.state.get('engineering_bound_dispatches',{}),{})
+        self.assertEqual(self.state.get('engineering_routing_attempts',{}),{})
+        self.assertEqual(self.call()['status'],'DISPATCH_BOUND_COMPLETION_UNVERIFIED')
+        self.assertEqual(len(self.remote.posts),1)
+    def test_local_promotion_prepare_crossing_budget_never_commits_or_posts(self):
+        ticks=[0.0]
+        old={'old-intent':{'request_id':'protected-old','attempt':1}}
+        class SlowComparison(dict):
+            def __ne__(self,other):
+                ticks[0]=41.0
+                return super().__ne__(other)
+        old['old-intent']=SlowComparison(old['old-intent'])
+        self.state['engineering_bound_dispatches']=old
+        before=copy.deepcopy(old)
+        with patch.object(subject.time,'monotonic',side_effect=lambda:ticks[0]):
+            with self.assertRaisesRegex(TimeoutError,'engineering routing total budget exhausted'):self.call()
+        self.assertEqual(self.remote.posts,[])
+        self.assertEqual(self.state.get('engineering_routing_attempts',{}),{})
+        self.assertIs(self.state['engineering_bound_dispatches'],old)
+        self.assertEqual(old,before)
+    def test_existing_bound_conflict_is_validated_before_any_new_marker(self):
+        class Conflict(dict):
+            def __ne__(self,other):return True
+        old={'old-intent':Conflict(request_id='protected-old',attempt=1)}
+        self.state['engineering_bound_dispatches']=old
+        before=copy.deepcopy(old)
+        with self.assertRaisesRegex(ValueError,'existing engineering intent changed'):self.call()
+        self.assertEqual(self.remote.posts,[])
+        self.assertEqual(self.state.get('engineering_routing_attempts',{}),{})
+        self.assertIs(self.state['engineering_bound_dispatches'],old)
+        self.assertEqual(old,before)
+    def test_readonly_manifest_deferral_can_be_rechecked_after_bytes_match(self):
+        self.remote.files[MANIFEST]=b'old identity'
+        self.assertEqual(self.call()['status'],'DEFERRED_PUBLIC_BYTES_CHANGED')
+        self.assertEqual(self.remote.posts,[])
+        self.remote.files[MANIFEST]=self.manifest_raw
+        self.assertEqual(self.call()['status'],'DISPATCH_BOUND_COMPLETION_UNVERIFIED')
+        self.assertEqual(len(self.remote.posts),1)
+    def test_acknowledged_post_followed_by_budget_error_is_never_repeated(self):
+        ticks=[0.0]
+        real=self.remote.request
+        def accepted(path,payload=None):
+            result=real(path,payload)
+            if payload is not None:ticks[0]=41.0
+            return result
+        with patch.object(subject.time,'monotonic',side_effect=lambda:ticks[0]), \
+             patch.object(self.remote,'request',side_effect=accepted):
+            with self.assertRaises(TimeoutError):self.call()
+        self.assertEqual(len(self.remote.posts),1)
+        self.assertEqual(self.call()['status'],'ALREADY_ATTEMPTED_THIS_R2_CONTEXT')
+        self.assertEqual(len(self.remote.posts),1)
+        self.assertTrue(self.state.get('engineering_routing_attempts'))
+        self.assertTrue(self.state['engineering_bound_dispatches'])
+    def test_old_attempt_and_bound_objects_are_preserved_and_other_state_propagates(self):
+        attempts={'previous-unknown-context':{'head':'1'*40,'at_utc':'unknown'}}
+        bound={'previous-unknown-intent':{'request_id':'old-marker','attempt':1}}
+        saved=copy.deepcopy((attempts,bound))
+        self.state.update(r2_dispatch_attempts=attempts,engineering_bound_dispatches=bound)
+        with patch.object(dispatch,'committed_manifest_blob',side_effect=TimeoutError('read-only timeout')):
+            with self.assertRaises(TimeoutError):self.call()
+        self.assertIs(self.state['r2_dispatch_attempts'],attempts)
+        self.assertIs(self.state['engineering_bound_dispatches'],bound)
+        self.assertEqual((attempts,bound),saved)
+        self.assertIn('r2_source_frame_context',self.state)
+        self.assertTrue(self.state['engineering_routing_bytes'])
+        self.assertEqual(self.call()['status'],'DISPATCH_BOUND_COMPLETION_UNVERIFIED')
+        self.assertEqual(attempts,saved[0])
+        self.assertEqual(bound['previous-unknown-intent'],saved[1]['previous-unknown-intent'])
+    def test_preflight_failure_does_not_reopen_original_window(self):
+        with patch.object(dispatch,'committed_manifest_blob',side_effect=TimeoutError('read-only timeout')):
+            with self.assertRaises(TimeoutError):self.call()
+        self.remote.clock=self.now.replace(minute=45)
+        self.assertEqual(self.call()['status'],'SKIP_NO_CURRENT_R2_OBLIGATION')
+        self.assertEqual(self.remote.posts,[])
+    def test_existing_engineering_sent_attempt_is_not_overwritten_or_retried(self):
+        self.remote.unknown=True
+        with self.assertRaises(TimeoutError):self.call()
+        self.assertTrue(self.state.get('engineering_routing_attempts'))
+        sent=copy.deepcopy(self.state['engineering_routing_attempts'])
+        self.assertEqual(self.call()['status'],'ALREADY_ATTEMPTED_THIS_R2_CONTEXT')
+        self.assertEqual(self.state['engineering_routing_attempts'],sent)
+        self.assertEqual(len(self.remote.posts),1)
+    def test_phase_diagnostic_has_only_request_kind_and_started_flag(self):
+        with patch.object(dispatch,'committed_manifest_blob',side_effect=TimeoutError('private-error-token')), \
+             patch('sys.stderr',new_callable=io.StringIO) as stderr:
+            with self.assertRaises(TimeoutError):self.call()
+        rows=[json.loads(line) for line in stderr.getvalue().splitlines() if line.strip()]
+        self.assertEqual(rows,[{'kind':'r2_engineering_route_phase','request_kind':'workflow_dispatch',
+                                'provider_post_started':False}])
+        self.assertNotIn('private-error-token',stderr.getvalue())
+    def test_positively_stale_own_dispatch_keeps_original_single_retry(self):
+        real=self.remote.request
+        cancelled=[]
+        def stale_first(path,payload=None):
+            result=real(path,payload)
+            if payload is not None and len(self.remote.posts)==1:
+                self.remote.dispatched[0]['head_sha']='2'*40
+            return result
+        with patch.object(self.remote,'request',side_effect=stale_first), \
+             patch.object(self.remote,'cancel',side_effect=lambda run_id:cancelled.append(run_id) or 202,create=True):
+            result=self.call()
+        self.assertEqual(result['status'],'DISPATCH_BOUND_COMPLETION_UNVERIFIED')
+        self.assertEqual(len(self.remote.posts),2)
+        self.assertEqual(len(cancelled),1)
+        self.assertEqual(result['stale_run_ids'],cancelled)
+        self.assertEqual(len(self.state['engineering_routing_attempts']),1)
+        intent=next(iter(self.state['engineering_bound_dispatches'].values()))
+        self.assertEqual(intent['attempt'],2)
+        self.assertEqual(intent['request_id'],self.remote.posts[-1][1]['inputs']['request_id'])
+        self.assertEqual(self.call()['status'],'ALREADY_ATTEMPTED_THIS_R2_CONTEXT')
+        self.assertEqual(len(self.remote.posts),2)
     def test_scoped_bindings_restore_even_when_remote_read_fails(self):
         before=(original._choice,original._server_runs,original._server_bytes,frozen.frozen.api,engine.read_identity_at)
         with patch.object(self.remote,'api',side_effect=TimeoutError('provider unavailable')):

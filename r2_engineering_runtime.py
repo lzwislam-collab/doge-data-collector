@@ -45,6 +45,7 @@ _identity_cache_bytes = 0
 # Published PR117 transport. Witness compatibility only; local execution must
 # still verify this checkout's complete current manifest and registered bytes.
 PUBLISHED_PREDECESSOR_MANIFESTS = frozenset({
+    '2223b89e468f4c3ec8945f8e0adb9114ea2da21c64c0c63136c7db8113c114dc',
     'deecd431679db728b59790ad5043d5361620e49a4c4b5befe621e2138680262a',
     '908b2bc9e10175f824c4264728b5810472364a8a3ecea9d6ed7454f4c36cdc3d',
     'f88fd09295827919c693c77f2719534bff414d35d66c5cf7a8521c8d2be106a2',

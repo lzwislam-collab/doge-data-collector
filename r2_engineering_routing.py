@@ -8,10 +8,12 @@ import base64
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 import hashlib
+import json
 import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import time
 from urllib.error import HTTPError
 from urllib.parse import urlencode
@@ -26,6 +28,8 @@ class _Client:
     """Reuse the caller's provider budget; never start another transport client."""
     def __init__(self, base):
         self.base = base
+        self.before_post = None
+        self.post_started = False
         remaining = max(0, 40-float(getattr(base, 'spent', 0)))
         self.end = min(getattr(base, 'end', float('inf')), time.monotonic()+remaining)
     def _check(self):
@@ -36,11 +40,17 @@ class _Client:
     def post(self, path, payload):
         self._check()
         if isinstance(self.base, dispatch.Client):
-            value = self.base.post(path, payload)
+            send = self.base.post
         elif hasattr(self.base, 'request'):
-            value = self.base.request(path, payload)
+            send = self.base.request
         else:
-            value = self.base.post(path, payload)
+            send = self.base.post
+        commit = self.before_post() if self.before_post is not None else None
+        self._check()
+        if commit is not None:
+            commit()
+        self.post_started = True
+        value = send(path, payload)
         self._check();return value
     def cancel(self, run_id):
         self._check()
@@ -178,7 +188,35 @@ def route_r2(root, publication, state, *, clock=None, client=None):
     original._main_only()
     clock = clock or (lambda:datetime.now(timezone.utc))
     bounded = _Client(client or dispatch.Client())
-    capture = {}
+    old_attempts = state.get('r2_dispatch_attempts', {})
+    sent_attempts = state.setdefault('engineering_routing_attempts', {})
+    bound_intents = state.setdefault('engineering_bound_dispatches', {})
+    if not all(isinstance(value, dict) for value in (old_attempts, sent_attempts, bound_intents)):
+        raise ValueError('unknown engineering routing attempt state')
+    working = dict(state)
+    working['r2_dispatch_attempts'] = {**old_attempts, **sent_attempts}
+    working['engineering_bound_dispatches'] = dict(bound_intents)
+    promoted_bound = set()
+    capture = {'request_kind': 'none'}
+    def before_post():
+        key = capture['choice']['key']
+        pending = working['r2_dispatch_attempts'][key]
+        promotions = []
+        for intent, value in working['engineering_bound_dispatches'].items():
+            if intent not in bound_intents or intent in promoted_bound:
+                promotions.append((intent, value))
+            elif bound_intents[intent] != value:
+                raise ValueError('existing engineering intent changed during routing')
+        if len(promotions) != 1:
+            raise ValueError('one bounded engineering intent required before provider POST')
+        intent, value = promotions[0]
+        record = {**pending, 'post_started': True}
+        def commit():
+            dict.setdefault(sent_attempts, key, record)
+            dict.__setitem__(bound_intents, intent, value)
+            promoted_bound.add(intent)
+        return commit
+    bounded.before_post = before_post
     class RouteClient:
         api = bounded.api
         def request(self, path, payload=None):
@@ -187,20 +225,32 @@ def route_r2(root, publication, state, *, clock=None, client=None):
             if path not in ('/actions/workflows/'+original.AUDIT+'/dispatches',
                             '/actions/workflows/'+original.PUBLISHER+'/dispatches'):
                 raise ValueError('unexpected original router mutation')
+            capture['request_kind'] = 'workflow_dispatch'
             choice, view = capture['choice'], capture['view']
-            raw = _read_bytes(root, bounded, state, view['head'], original.frozen.SOURCE)
+            raw = _read_bytes(root, bounded, working, view['head'], original.frozen.SOURCE)
             expected = {original.frozen.SOURCE:_blob(raw)}
             expected[dispatch.ENGINEERING_MANIFEST] = dispatch.committed_manifest_blob(root)
             for key in choice.get('event_ids', []):
                 if key in view['hashes']:
                     expected[original.frozen.f.BASE+'/events/'+key+'.json'] = view['hashes'][key]
             result = dispatch.dispatch_bound(dispatch.LIVE, expected, _deadline(choice, view),
-                client=bounded, clock=clock, mode='publish', state=state.setdefault('engineering_bound_dispatches', {}))
+                client=bounded, clock=clock, mode='publish', state=working['engineering_bound_dispatches'])
             raise _Routed({**result, 'workflow':dispatch.LIVE, 'purpose':choice['purpose'],
                 'event_ids':choice.get('event_ids', []), 'existing_canary_count':view['existing_canary_count'],
                 'witness_or_forecast_verified':False})
-    with _scope(Path(root), bounded, state, capture):
+    try:
+        with _scope(Path(root), bounded, working, capture):
+            try:
+                return original.route_r2(root, publication, working, clock=clock, client=RouteClient())
+            except _Routed as outcome:
+                return outcome.result
+    finally:
+        for key, value in working.items():
+            if key not in ('r2_dispatch_attempts', 'engineering_bound_dispatches'):
+                state[key] = value
         try:
-            return original.route_r2(root, publication, state, clock=clock, client=RouteClient())
-        except _Routed as outcome:
-            return outcome.result
+            print(json.dumps({'kind': 'r2_engineering_route_phase',
+                'request_kind': capture['request_kind'],
+                'provider_post_started': bounded.post_started}, sort_keys=True), file=sys.stderr)
+        except Exception:
+            pass
