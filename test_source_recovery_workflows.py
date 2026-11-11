@@ -55,6 +55,11 @@ class SourceWorkflowTests(unittest.TestCase):
   self.assertEqual(job['timeout-minutes'],'15')
   self.assertEqual(job['env']['DOGE_BLOCK_RUN_SECONDS'],'780')
   self.assertEqual(job['env']['DOGE_BLOCK_MAX'],'100')
+ def test_repository_discovery_installs_source_test_parsers(self):
+  job=load('test_forward_validation.yml')['jobs']['test']
+  scripts='\n'.join(step.get('run','') for step in job['steps'])
+  for package in ('beautifulsoup4==4.12.3','PyYAML==6.0.2'):
+   self.assertIn(package,scripts)
 
 
 if __name__=='__main__':unittest.main()
