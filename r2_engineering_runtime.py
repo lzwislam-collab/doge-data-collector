@@ -46,6 +46,7 @@ _identity_cache_bytes = 0
 # still verify this checkout's complete current manifest and registered bytes.
 PUBLISHED_PREDECESSOR_MANIFESTS = frozenset({
     'deecd431679db728b59790ad5043d5361620e49a4c4b5befe621e2138680262a',
+    '908b2bc9e10175f824c4264728b5810472364a8a3ecea9d6ed7454f4c36cdc3d',
 })
 
 

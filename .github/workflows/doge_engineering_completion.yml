@@ -41,6 +41,8 @@ jobs:
     if: github.event_name != 'workflow_run' || (github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.event != 'pull_request')
     runs-on: ubuntu-24.04
     timeout-minutes: 8
+    env:
+      SOURCE_AUDIT_REQUIRED: ${{ (github.event_name == 'workflow_dispatch' && inputs.source_audit_run_id != '') || (github.event_name == 'workflow_run' && (github.event.workflow_run.path == '.github/workflows/learned_shadow_v1.yml' || startsWith(github.event.workflow_run.path, '.github/workflows/learned_shadow_v1.yml@') || github.event.workflow_run.path == '.github/workflows/r2_engineering_audit.yml' || startsWith(github.event.workflow_run.path, '.github/workflows/r2_engineering_audit.yml@'))) }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -55,7 +57,7 @@ jobs:
         run: python -m unittest test_forward_readiness test_market_snapshot_recovery test_learned_audit_handoff -q
       - name: Verify explicitly handed off audit completion and unchanged current source
         id: source_audit
-        if: github.event_name == 'workflow_dispatch' && inputs.source_audit_run_id != ''
+        if: env.SOURCE_AUDIT_REQUIRED == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
           SOURCE_AUDIT_RUN_ID: ${{ inputs.source_audit_run_id }}
@@ -76,10 +78,10 @@ jobs:
         run: python engineering_run_receipt.py
       - name: Actual-clock readiness and explicit original publisher bridge
         id: readiness
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && (env.SOURCE_AUDIT_REQUIRED != 'true' || steps.source_audit.outcome == 'success')
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          READINESS_MODE: ${{ steps.source_audit.outputs.readiness_mode || (github.event_name == 'workflow_run' && 'bridge' || inputs.mode || 'audit') }}
+          READINESS_MODE: ${{ env.SOURCE_AUDIT_REQUIRED == 'true' && (steps.source_audit.outputs.readiness_mode || 'audit') || (github.event_name == 'workflow_run' && 'bridge' || inputs.mode || 'audit') }}
         run: python r2_engineering_readiness.py "$READINESS_MODE"
       - name: Preserve independent completion receipt
         if: always()

@@ -311,6 +311,29 @@ def verify_parent(run_id, attempt, head, blob, *, client, clock=None, sleep=None
                 parent_wait_cap_seconds=wait_seconds, transport_cap_seconds=40)
 
 
+def verify_completion(event, *, client, clock=None, obligation=None, local_source_blob=None):
+    """Verify an actual source-audit completion; never send a handoff request."""
+    if (not isinstance(event, dict) or event.get('status') != 'completed'
+            or event.get('conclusion') != 'success'):
+        raise ValueError('source audit completion did not succeed')
+    run_id, attempt, head = (event.get(key) for key in ('id', 'run_attempt', 'head_sha'))
+    if (type(run_id) is not int or run_id <= 0 or type(attempt) is not int or attempt <= 0
+            or not isinstance(head, str) or not HEX.fullmatch(head)):
+        raise ValueError('invalid source audit completion locator')
+    claimed_kind = _parent_kind(event)
+    actual = client.api('/actions/runs/'+str(run_id))
+    if (not isinstance(actual, dict) or type(actual.get('id')) is not int
+            or type(actual.get('run_attempt')) is not int
+            or any(event.get(key) != actual.get(key)
+            for key in ('id', 'run_attempt', 'head_sha', 'path'))
+            or _parent_kind(actual) != claimed_kind):
+        raise ValueError('source audit completion identity or kind changed')
+    blob = _source(client.api, head)
+    return verify_parent(run_id, attempt, head, blob, client=client, clock=clock,
+        obligation=obligation, wait_seconds=0, kind=claimed_kind,
+        local_source_blob=local_source_blob)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument('mode', choices=('prepare', 'post', 'verify'))
@@ -356,9 +379,13 @@ def main(argv=None):
                     expected_keys=prepared['obligation_keys'], client=client, receipt=out,
                     persist_intent=save, kind=kind)
         else:
-            out = verify_parent(int(os.environ['SOURCE_AUDIT_RUN_ID']),
-                int(os.environ['SOURCE_AUDIT_ATTEMPT']), os.environ['SOURCE_AUDIT_HEAD'],
-                os.environ['SOURCE_AUDIT_BLOB'], client=client, kind=os.environ['SOURCE_AUDIT_KIND'])
+            if os.environ.get('GITHUB_EVENT_NAME') == 'workflow_run':
+                event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_bytes())
+                out = verify_completion(event.get('workflow_run'), client=client)
+            else:
+                out = verify_parent(int(os.environ['SOURCE_AUDIT_RUN_ID']),
+                    int(os.environ['SOURCE_AUDIT_ATTEMPT']), os.environ['SOURCE_AUDIT_HEAD'],
+                    os.environ['SOURCE_AUDIT_BLOB'], client=client, kind=os.environ['SOURCE_AUDIT_KIND'])
     except Exception as exc:
         out.update(status='SOURCE_AUDIT_HANDOFF_BLOCKED', admitted=False,
                    error=type(exc).__name__+': '+str(exc)[:300])
