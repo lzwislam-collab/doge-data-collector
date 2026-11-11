@@ -168,12 +168,16 @@ class _Routed(Exception):
 
 
 @contextmanager
-def _scope(root, client, state, capture):
+def _scope(root, client, state, capture, *, existing_only=False):
     saved = (original._choice, original._server_runs, original._server_bytes,
              original._active, original.frozen.frozen.api, original.frozen.read_at,
              engine.read_identity_at)
     def choose(*args, **kwargs):
         result = saved[0](*args, **kwargs)
+        if existing_only and 'workflow' in result and result.get('purpose') not in ('target', 'binding', 'prediction_witness'):
+            if result.get('purpose') not in ('source_witness', 'issue'):
+                raise ValueError('unknown original R2 mutation in existing-records scope')
+            result = {'status': 'SKIP_NO_CURRENT_R2_EXISTING_RECORD_OBLIGATION'}
         capture.update(choice=result, view=args[3])
         return result
     def active(api, workflow):
@@ -198,8 +202,10 @@ def _scope(root, client, state, capture):
              engine.read_identity_at) = saved
 
 
-def route_r2(root, publication, state, *, clock=None, client=None):
+def route_r2(root, publication, state, *, clock=None, client=None, existing_only=False):
     original._main_only()
+    if type(existing_only) is not bool:
+        raise ValueError('unknown R2 engineering work scope')
     clock = clock or (lambda:datetime.now(timezone.utc))
     bounded = _Client(client or dispatch.Client())
     old_attempts = state.get('r2_dispatch_attempts', {})
@@ -254,7 +260,7 @@ def route_r2(root, publication, state, *, clock=None, client=None):
                 'event_ids':choice.get('event_ids', []), 'existing_canary_count':view['existing_canary_count'],
                 'witness_or_forecast_verified':False})
     try:
-        with _scope(Path(root), bounded, working, capture):
+        with _scope(Path(root), bounded, working, capture, existing_only=existing_only):
             try:
                 return original.route_r2(root, publication, working, clock=clock, client=RouteClient())
             except _Routed as outcome:

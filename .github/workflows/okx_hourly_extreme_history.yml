@@ -485,6 +485,7 @@ jobs:
         if: ${{ !cancelled() && steps.deadline_service.outputs.fatal == 'false' && steps.open_target_guard.outputs.tail_fatal == 'false' && steps.persist.outcome == 'success' && steps.clock_request.outputs.run == 'true' }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          DOGE_ARCHIVE_EXISTING_RECORDS: '1'
         run: python archive_capture_bridge.py start --snapshot archive-snapshot --control "$RUNNER_TEMP/doge-archive-bridge-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
       - name: Preserve per-run forecast and score evidence snapshot
         id: artifact

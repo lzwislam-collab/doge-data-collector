@@ -9,6 +9,7 @@ import copy
 import json
 import os
 import re
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -143,7 +144,29 @@ def validate_original18(root):
             'events': len(events), 'scores': len(scores), 'public_witness_verified': False}
 
 
-def capture_original18(root, producer, *, clock=None, state_reader=None):
+@contextmanager
+def original18_existing_scope():
+    saved = original.plan
+    def selected(*args, **kwargs):
+        planned = saved(*args, **kwargs)
+        return {**planned, 'issue': []}
+    original.plan = selected
+    try:
+        yield
+    finally:
+        original.plan = saved
+
+
+def run_original18_existing():
+    _main_only()
+    with original18_existing_scope():
+        result = original.run(publish=True)
+    if result.get('new_events'):
+        raise ValueError('existing-records producer returned new issuance')
+    return result
+
+
+def capture_original18(root, producer, *, clock=None, state_reader=None, existing_only=False):
     """Call one bounded frozen producer, without local parallel writers or POST.
 
     producer(timeout_seconds) must use the runner's existing owned-process
@@ -152,6 +175,8 @@ def capture_original18(root, producer, *, clock=None, state_reader=None):
     requesting any event/score witness. No returned field is a qualification.
     """
     _main_only()
+    if type(existing_only) is not bool:
+        raise ValueError('unknown original18 work scope')
     at = _utc((clock or (lambda: datetime.now(timezone.utc)))())
     state = (state_reader or original18_state)(Path(root))
     todo = original.plan(state['policy'], state['events'], state['scores'], at)
@@ -164,7 +189,7 @@ def capture_original18(root, producer, *, clock=None, state_reader=None):
     result = {'status': 'SKIP_NO_CURRENT_OBLIGATION', 'at_utc': at.isoformat(),
               'plan': todo, 'changed_paths': [], 'requires_publication': False,
               'request_witness': False, 'errors': {}, 'historical_backfill': False}
-    if not todo['issue'] and not todo['score'] and not pending:
+    if not (todo['issue'] and not existing_only) and not todo['score'] and not pending:
         return result
     before = _journal(root)
     # The caller supplies the existing timeout/owned-process cancellation path.
@@ -178,6 +203,8 @@ def capture_original18(root, producer, *, clock=None, state_reader=None):
         if (not isinstance(value.get(kind), list)
                 or any(not isinstance(key, str) or not re.fullmatch(_KEY, key) for key in value[kind])):
             raise ValueError('invalid frozen original18 record identity')
+    if existing_only and value['new_events']:
+        raise ValueError('existing-records producer returned new issuance')
     after = _journal(root)
     if any(after.get(path) != digest for path, digest in before.items()):
         raise ValueError('existing original18 journal changed or deleted')
