@@ -48,11 +48,7 @@ def binding_fingerprint(root):
     return _digest(locked_contexts(root, validate_history=False))
 
 
-def _first_proof(root, item):
-    events = engine.read_events(root)
-    event = next((event for event in events if item in event['source_items']), None)
-    if event is None:
-        raise ValueError('locked source event absent')
+def _first_book_proof_bytes(root, event):
     commits = base.git(root, 'log', '--reverse', '--format=%H', '-S',
                        event['record_sha256'], '--', engine.EVENTS).splitlines()
     if not commits:
@@ -63,15 +59,98 @@ def _first_proof(root, item):
         root, 'show', commit+':'+engine.EVENTS).splitlines()]
     if event not in historical:
         raise ValueError('first published source event mismatch')
-    proof = json.loads(base.git(root, 'show', commit+':data/p0_operations/latest.json'))
+    return base.git(root, 'show', commit+':data/p0_operations/latest.json')
+
+
+def _first_proof(root, item):
+    events = engine.read_events(root)
+    event = next((event for event in events if item in event['source_items']), None)
+    if event is None:
+        raise ValueError('locked source event absent')
+    proof = json.loads(_first_book_proof_bytes(root, event))
     return proof.get('forecast_proofs', {}).get(item['forecast_id'], {})
 
 
-def recover_locked_publication(root, row, bindings, item):
+class _BatchUnavailable(Exception):
+    pass
+
+
+def _recovery_basis(root):
+    """Fresh bytes for every current input of the shared original guards."""
+    source = engine.source
+    paths = set(source.CODE_FILES + (source.POLICY, source.SYSTEM,
+        'system/current_paired_shadow.json', source.REG, engine.EVENTS))
+    records = root/source.BASE/'records'
+    paths.update(path.relative_to(root).as_posix() for path in records.glob('*.json'))
+    files = {}
+    for relative in sorted(paths):
+        path = root/relative
+        if path.is_symlink(): raise _BatchUnavailable('unknown recovery input location')
+        files[relative] = hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
+    return (base.git(root, 'rev-parse', 'HEAD'),
+            base.git(root, 'for-each-ref', '--format=%(refname) %(objectname)'), files)
+
+
+class _RecoveryBatch:
+    """One evaluate call's work group; no global or cross-pass result storage."""
+    def __init__(self, root):
+        self.root = Path(root).resolve()
+        self.basis = _recovery_basis(self.root)
+        self.events = None
+        self.proof_bytes = {}
+        self.pairs = None
+        self.disabled = False
+
+    def check(self):
+        if self.disabled: raise _BatchUnavailable('recovery work group unavailable')
+        try:
+            if _recovery_basis(self.root) != self.basis:
+                raise _BatchUnavailable('recovery source changed during evaluate')
+        except Exception:
+            self.disabled = True
+            raise
+
+    def first_proof(self, item):
+        self.check()
+        if self.events is None:
+            self.events = engine.read_events(self.root)
+        event = next((event for event in self.events if item in event['source_items']), None)
+        if event is None: raise ValueError('locked source event absent')
+        key = event['record_sha256']
+        if key not in self.proof_bytes:
+            raw = _first_book_proof_bytes(self.root, event)
+            self.check()
+            self.proof_bytes[key] = raw
+        # Only immutable original bytes are shared. Each source gets a fresh map.
+        return json.loads(self.proof_bytes[key]).get('forecast_proofs', {}).get(item['forecast_id'], {})
+
+    def paired_records(self):
+        self.check()
+        if self.pairs is None:
+            engine.source.guard(self.root)
+            import runtime_paired_history
+            records = runtime_paired_history.history_guard(self.root)
+            self.check()
+            self.pairs = records
+        return self.pairs
+
+
+def recovery_batch(root):
+    try: return _RecoveryBatch(root)
+    except Exception: return None  # Unknown state retains the original per-source path.
+
+
+def recover_locked_publication(root, row, bindings, item, *, batch=None):
     from datetime import timedelta
     root = Path(root)
     fid = row['forecast_id']
-    proof = _first_proof(root, item)
+    shared = type(batch) is _RecoveryBatch and batch.root == root.resolve()
+    try:
+        proof = batch.first_proof(item) if shared else _first_proof(root, item)
+    except Exception:
+        if not shared: raise
+        batch.disabled = True
+        return recover_locked_publication(root, row, bindings, item)
     witness = proof.get('publication', {})
     if (set(witness) != set(base.WCOLS) or witness.get('forecast_id') != fid
             or witness.get('head_sha') != item.get('source_witness_head_sha')
@@ -86,9 +165,15 @@ def recover_locked_publication(root, row, bindings, item):
             or item.get('source_error') is not None or item.get('source_verified') is not True
             or item.get('paired_audit_verified') is not True):
         raise ValueError('locked source forecast context mismatch')
-    engine.source.guard(root)
-    import runtime_paired_history
-    pairs = runtime_paired_history.history_guard(root)
+    if shared:
+        try: pairs = batch.paired_records()
+        except Exception:
+            batch.disabled = True
+            return recover_locked_publication(root, row, bindings, item)
+    else:
+        engine.source.guard(root)
+        import runtime_paired_history
+        pairs = runtime_paired_history.history_guard(root)
     pair = next((pair for pair in pairs if pair['production']['forecast_id'] == fid), None)
     if (pair is None or pair['production'] != row or pair['record_sha256'] != item['pair_sha256']
             or pair['decision']['paper_action'] != item['paper_action']):
@@ -115,6 +200,9 @@ def recover_locked_publication(root, row, bindings, item):
         base.git(root, 'show', checked['head_sha']+':'+quotes.BINDINGS)))}
     if public_bindings.get(fid+'|ISSUE') != bindings.get(fid+'|ISSUE'):
         raise ValueError('locked source ISSUE binding absent at public head')
+    if shared:
+        try: batch.check()
+        except Exception: return recover_locked_publication(root, row, bindings, item)
     return checked
 
 

@@ -6,7 +6,7 @@ import forward_validation_v2 as v2
 import direction_forward_v42 as frozen
 import quote_evidence_v2 as evidence
 
-SOURCE_BINDING_BLOB='654b432b5d6c5efc33ef0eaebf95c02e273aae67'
+SOURCE_BINDING_BLOB='f9b5136cc207558268cafeeb709436cff5e7a733'
 
 def _source_binding_backend():
     from pathlib import Path
@@ -169,6 +169,7 @@ def evaluate(root=frozen.ROOT, now=None, runs=None):
     bindings=frozen.read_rows(root/evidence.BINDINGS,evidence.BCOLS)
     base.history_receipts(root,evidence.BINDINGS,evidence.BCOLS,bindings)
     effective=frozen.utc(protocol['effective_from_utc']);eligible=set();valid_scores={};proofs={};rejected={}
+    recovery=source_binding.recovery_batch(root)
     for fid,row in registry.items():
         if frozen.utc(row['issued_at_utc'])<effective: continue
         try:
@@ -178,7 +179,7 @@ def evaluate(root=frozen.ROOT, now=None, runs=None):
             locked=locked_sources.get(fid)
             if locked and (not witness or witness.get('head_sha')!=locked['source_witness_head_sha']
                     or witness.get('observed_public_utc')!=locked['observed_public_utc']):
-                witness=source_binding.recover_locked_publication(root,row,bindings,locked)
+                witness=source_binding.recover_locked_publication(root,row,bindings,locked,batch=recovery)
             if fid in _CAPTURED_SOURCE_WITNESSES and (not witness
                 or not issued-timedelta(seconds=1)<=frozen.utc(witness['observed_public_utc'])<=issued+timedelta(minutes=45)
                 or frozen.utc(witness['observed_public_utc'])>=frozen.utc(row['target_utc'])):

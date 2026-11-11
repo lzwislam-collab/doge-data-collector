@@ -44,6 +44,15 @@ class LockedPublicationTests(unittest.TestCase):
         self.write(engine.source.REG, engine.source.causal.canon(pair)+'\n')
         self.write(engine.source.record_path(self.root/engine.source.REG, fid).relative_to(self.root),
                    engine.source.causal.canon(pair)+'\n')
+        self.pairs = {fid: pair}
+        if getattr(self, 'two_source_book', False):
+            second = {'production': self.rows[self.IDS[1]], 'decision': {'paper_action': 'NO_TRADE'},
+                      'previous_sha256': pair['record_sha256']}
+            second['record_sha256'] = engine.source.digest(second)
+            self.pairs[self.IDS[1]] = second
+            self.write(engine.source.REG, ''.join(engine.source.causal.canon(p)+'\n' for p in self.pairs.values()))
+            self.write(engine.source.record_path(self.root/engine.source.REG, self.IDS[1]).relative_to(self.root),
+                       engine.source.causal.canon(second)+'\n')
         self.public_head = self.commit()
         if getattr(self, 'nonancestor_public_head', False):
             branch = self.git('symbolic-ref', '--short', 'HEAD')
@@ -73,9 +82,20 @@ class LockedPublicationTests(unittest.TestCase):
             'quote_utc': '2026-10-26T05:02:00+00:00',
             'captured_at_utc': '2026-10-26T05:02:01+00:00',
             'source_items': [self.item], 'previous_sha256': None, 'real_orders_authorized': False}
+        self.items = {fid: self.item}
+        if getattr(self, 'two_source_book', False):
+            other = self.IDS[1]
+            second = dict(self.item, forecast_id=other, issued_at_utc=self.rows[other]['issued_at_utc'],
+                target_utc=self.rows[other]['target_utc'], pair_sha256=self.pairs[other]['record_sha256'],
+                observed_public_utc=self.originals[other]['observed_public_utc'])
+            self.items[other] = second
+            self.event.update(source_items=list(self.items.values()), quote_utc='2026-10-26T11:04:00+00:00',
+                              captured_at_utc='2026-10-26T11:04:01+00:00')
         self.event['record_sha256'] = engine.digest(self.event)
         self.write(engine.EVENTS, engine.source.causal.canon(self.event)+'\n')
         if getattr(self, 'without_original_proof', False): self.proofs.pop(fid)
+        if getattr(self, 'invalid_first_source_proof', False):
+            self.proofs[fid]['quote_id'] = 'f'*64
         self.save_proof()  # exact first-book commit and original P0 proof
         self.first_book_commit = self.proof_commit
         self.later = dict(self.originals[fid], run_id='777777',
@@ -176,6 +196,135 @@ class LockedPublicationTests(unittest.TestCase):
         self.setUp()
         with self.assertRaisesRegex(ValueError, 'original publication window'):
             self.recover()
+
+
+class SinglePassRecoveryTests(unittest.TestCase):
+    def fixture(self, **flags):
+        fixture = LockedPublicationTests('test_valid_later_witness_cannot_replace_already_locked_context')
+        fixture.two_source_book = True
+        for key, value in flags.items(): setattr(fixture, key, value)
+        fixture.setUp()
+        return fixture
+
+    def recover(self, fixture, fid, batch):
+        with patch.object(audit.base, 'github_json', side_effect=lambda path:
+                copy.deepcopy(fixture.server_runs[path.rsplit('/', 1)[-1]])):
+            return binding.recover_locked_publication(fixture.root, fixture.rows[fid],
+                                                      fixture.bindings, fixture.items[fid], batch=batch)
+
+    def test_two_sources_share_full_guard_and_first_book_bytes_but_not_server_checks(self):
+        import runtime_paired_history
+        fixture = self.fixture()
+        before = {p: (fixture.root/p).read_bytes() for p in (engine.EVENTS, engine.source.REG, audit.base.WITNESSES)}
+        original_git = binding.base.git
+        with patch.object(runtime_paired_history, 'history_guard', wraps=runtime_paired_history.history_guard) as history, \
+                patch.object(engine.source, 'guard', wraps=engine.source.guard) as guard, \
+                patch.object(binding.base, 'git', wraps=original_git) as git, \
+                patch.object(audit.base, 'github_json', side_effect=lambda path:
+                    copy.deepcopy(fixture.server_runs[path.rsplit('/', 1)[-1]])) as server:
+            batch = binding.recovery_batch(fixture.root)
+            for fid in fixture.IDS:
+                actual = binding.recover_locked_publication(fixture.root, fixture.rows[fid],
+                    fixture.bindings, fixture.items[fid], batch=batch)
+                self.assertEqual(actual, fixture.originals[fid])
+            self.assertEqual(history.call_count, 1)
+            self.assertEqual(guard.call_count, 1)
+            self.assertEqual(server.call_count, 2)
+            self.assertEqual(sum('-S' in call.args for call in git.call_args_list), 1)
+            self.assertEqual(sum(any(isinstance(x, str) and x.endswith(':data/p0_operations/latest.json')
+                for x in call.args) for call in git.call_args_list), 1)
+        self.assertEqual(before, {p: (fixture.root/p).read_bytes() for p in before})
+
+    def test_no_recovery_result_survives_another_pass(self):
+        import runtime_paired_history
+        fixture = self.fixture()
+        with patch.object(runtime_paired_history, 'history_guard', wraps=runtime_paired_history.history_guard) as history:
+            for _ in range(2):
+                batch = binding.recovery_batch(fixture.root)
+                self.assertEqual(self.recover(fixture, fixture.IDS[0], batch), fixture.originals[fixture.IDS[0]])
+            self.assertEqual(history.call_count, 2)
+
+    def test_complete_evaluate_matches_original_per_source_recovery(self):
+        fixture = self.fixture()
+        with patch.object(binding, 'recovery_batch', return_value=None):
+            expected = fixture.evaluate()
+        actual = fixture.evaluate()
+        self.assertEqual(actual, expected)
+        for fid in fixture.IDS:
+            self.assertEqual(actual['forecast_proofs'][fid]['publication'], fixture.originals[fid])
+
+    def test_complete_evaluate_keeps_each_original_rejection(self):
+        fixture = self.fixture()
+        fixture.server_runs[fixture.originals[fixture.IDS[0]]['run_id']]['id'] = 1
+        with patch.object(binding, 'recovery_batch', return_value=None):
+            expected = fixture.evaluate()
+        actual = fixture.evaluate()
+        self.assertEqual(actual, expected)
+        self.assertIn(fixture.IDS[0], actual['rejected_evidence'])
+        self.assertEqual(actual['forecast_proofs'][fixture.IDS[1]]['publication'], fixture.originals[fixture.IDS[1]])
+
+    def test_one_bad_server_source_does_not_reject_the_other(self):
+        fixture = self.fixture()
+        batch = binding.recovery_batch(fixture.root)
+        fixture.server_runs[fixture.originals[fixture.IDS[0]]['run_id']]['id'] = 1
+        with self.assertRaisesRegex(ValueError, 'server identity'):
+            self.recover(fixture, fixture.IDS[0], batch)
+        self.assertEqual(self.recover(fixture, fixture.IDS[1], batch), fixture.originals[fixture.IDS[1]])
+
+    def test_unknown_server_result_is_not_retried_by_the_work_group(self):
+        fixture = self.fixture()
+        batch = binding.recovery_batch(fixture.root)
+        with patch.object(audit.base, 'github_json', side_effect=TimeoutError('unknown provider reply')) as server:
+            with self.assertRaisesRegex(TimeoutError, 'unknown provider reply'):
+                binding.recover_locked_publication(fixture.root, fixture.rows[fixture.IDS[0]],
+                    fixture.bindings, fixture.items[fixture.IDS[0]], batch=batch)
+            self.assertEqual(server.call_count, 1)
+
+    def test_one_bad_proof_does_not_reject_the_other_in_the_same_book(self):
+        fixture = self.fixture(invalid_first_source_proof=True)
+        batch = binding.recovery_batch(fixture.root)
+        with self.assertRaisesRegex(ValueError, 'original P0 proof mismatch'):
+            self.recover(fixture, fixture.IDS[0], batch)
+        self.assertEqual(self.recover(fixture, fixture.IDS[1], batch), fixture.originals[fixture.IDS[1]])
+
+    def test_changed_individual_record_forces_the_complete_original_guard(self):
+        import runtime_paired_history
+        fixture = self.fixture()
+        batch = binding.recovery_batch(fixture.root)
+        self.recover(fixture, fixture.IDS[0], batch)
+        record = engine.source.record_path(fixture.root/engine.source.REG, fixture.IDS[1])
+        record.write_text('{}', encoding='utf-8')
+        with patch.object(runtime_paired_history, 'history_guard', wraps=runtime_paired_history.history_guard) as history:
+            with self.assertRaisesRegex(ValueError, 'individual paired record'):
+                self.recover(fixture, fixture.IDS[1], batch)
+            self.assertEqual(history.call_count, 1)
+
+    def test_new_head_uses_original_per_source_path(self):
+        import runtime_paired_history
+        fixture = self.fixture()
+        batch = binding.recovery_batch(fixture.root)
+        self.recover(fixture, fixture.IDS[0], batch)
+        fixture.write('new-head.txt', 'independent committed source\n')
+        fixture.commit()
+        with patch.object(runtime_paired_history, 'history_guard', wraps=runtime_paired_history.history_guard) as history:
+            self.assertEqual(self.recover(fixture, fixture.IDS[1], batch), fixture.originals[fixture.IDS[1]])
+            self.assertEqual(history.call_count, 1)
+
+    def test_policy_byte_change_cannot_reuse_an_old_guard(self):
+        fixture = self.fixture()
+        batch = binding.recovery_batch(fixture.root)
+        self.recover(fixture, fixture.IDS[0], batch)
+        path = fixture.root/engine.source.POLICY
+        path.write_bytes(path.read_bytes()+b' ')
+        with self.assertRaisesRegex(ValueError, 'registration/code integrity'):
+            self.recover(fixture, fixture.IDS[1], batch)
+
+    def test_other_root_and_unknown_batch_never_supply_a_checked_result(self):
+        fixture = self.fixture()
+        other = self.fixture()
+        batch = binding.recovery_batch(other.root)
+        for context in (batch, object()):
+            self.assertEqual(self.recover(fixture, fixture.IDS[0], context), fixture.originals[fixture.IDS[0]])
 
 
 class SnapshotDependencyTests(unittest.TestCase):

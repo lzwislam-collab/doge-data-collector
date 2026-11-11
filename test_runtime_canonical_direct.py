@@ -69,4 +69,56 @@ class DirectDigestTests(unittest.TestCase):
         self.assertEqual(cache.stats['fallback_calls'],1)
         self.assertEqual(cache.stats['sha256_calls'],1)
 
+class LargeMissDigestTests(unittest.TestCase):
+    def test_large_misses_use_complete_original_digest_without_cache_graph_walk(self):
+        original=Mock(side_effect=digest);cache=cli._CanonicalBytes(original)
+        value={'receipt':'A'*(600*1024),'nested':[{'x':1}]}
+        expected=[digest(value)]
+        with patch.object(cli,'_json_closed',wraps=cli._json_closed) as walked:
+            self.assertEqual(cache.digest(value),expected[0])
+            value['nested'][0]['x']=-0.0
+            self.assertEqual(cache.digest(value),digest(value))
+            self.assertEqual(walked.call_count,0,'large miss still paid the redundant cache graph walk')
+        self.assertEqual(original.call_count,2)
+        self.assertEqual(cache.stats['sha256_calls'],2)
+        self.assertEqual(cache.stats['direct_calls'],2)
+        self.assertEqual(cache.stats['hits']+cache.stats['misses'],0)
+        self.assertEqual(cache.stats['fallback_calls'],0)
+        self.assertFalse(cache.entries)
+        self.assertEqual(cache.max_bytes,64*1024*1024)
+        self.assertEqual(cache.max_entries,128)
+
+    def test_large_miss_original_errors_are_preserved(self):
+        cycle=[];cycle.append(cycle)
+        for bad in (float('nan'),float('inf'),cycle,{'mixed':'keys',2:3}):
+            value={'receipt':'A'*(600*1024),'bad':bad}
+            with self.subTest(bad=type(bad).__name__):
+                with self.assertRaises(Exception) as expected:digest(value)
+                cache=cli._CanonicalBytes(digest)
+                with self.assertRaises(type(expected.exception)) as actual:cache.digest(value)
+                self.assertEqual(str(actual.exception),str(expected.exception))
+                self.assertFalse(cache.entries)
+
+    def test_large_repeated_value_performs_original_encoding_and_fresh_sha_each_time(self):
+        value={'receipt':'A'*(600*1024)}
+        expected=digest(value);sha=hashlib.sha256;encode=json.dumps
+        cache=cli._CanonicalBytes(digest)
+        with patch.object(cli.hashlib,'sha256',wraps=sha) as hashes,patch.object(cli.json,'dumps',wraps=encode) as encoded:
+            self.assertEqual(cache.digest(value),expected)
+            self.assertEqual(cache.digest(value),expected)
+        self.assertEqual(hashes.call_count,2)
+        self.assertEqual(encoded.call_count,2)
+        self.assertFalse(cache.entries)
+
+    def test_large_miss_does_not_change_small_cache_hits_and_fresh_hashes(self):
+        cache=cli._CanonicalBytes(digest)
+        large={'receipt':'A'*(600*1024)};small={'receipt':[1,False,None]}
+        for value in (small,large,small):self.assertEqual(cache.digest(value),digest(value))
+        self.assertEqual(cache.stats['hits'],1)
+        self.assertEqual(cache.stats['misses'],1)
+        self.assertEqual(cache.stats['direct_calls'],1)
+        self.assertEqual(cache.stats['sha256_calls'],3)
+        self.assertEqual(cache.stats['hits']+cache.stats['misses']+cache.stats['direct_calls'],cache.stats['calls'])
+        self.assertLessEqual(cache.stats['cached_bytes'],cache.max_bytes)
+
 if __name__=='__main__':unittest.main()

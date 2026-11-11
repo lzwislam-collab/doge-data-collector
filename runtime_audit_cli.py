@@ -18,15 +18,15 @@ import types
 
 SCRIPT_BLOBS = {
     'forward_validation_v2.py': '3adbdcc43c5dbdb57ecd482b1d4138e720146ba1',
-    'p0_operational_audit.py': '398b0af0242b03e5819e9de54a7dc7cf3754bccf',
+    'p0_operational_audit.py': 'db494c83ddfbb47662a864b1764ad42283f6a0f1',
     'paired_cohort_audit.py': 'a6bdf0c54ffcf648384c756d400e742ab57a1d61',
 }
 BACKEND_BLOBS = {
     'runtime_publication_state': 'f0f6b6c7dbe5d7e4c0995b4714a53957217fbac0',
     'runtime_paired_history': 'b27849b2761de895a33613230de9adbf4187df71',
-    'runtime_p0_inventory_transport': '0d2552b131ef277d2d10b617854810b6854105ef',
+    'runtime_p0_inventory_transport': '1b612100f3366f456018e3ef834dd0e425810349',
     'runtime_paired_git_stream': 'b4760557613e8753ca9dffcc0770a83833591240',
-    'runtime_witness_git_stream': '2ed1bac280055e24a9e392b5efed2ab9a452e654',
+    'runtime_witness_git_stream': 'cfe31f0fc512bc6632d8c084e5aa1dd576ab73be',
 }
 CANONICAL_BLOBS = {
     'paired_forward_cohort.py': '02e6b3ba51f063ba17cddcb98ff6445a08235c97',
@@ -123,6 +123,16 @@ class _CanonicalBytes:
             # its exact canonical bytes are reused without retaining object IDs.
             self.entries.move_to_end(key); self.stats['hits'] += 1
         else:
+            # A large uncached typed key consumes more than a fair share of
+            # the original bounded LRU. Use the complete original encoder and
+            # fresh SHA instead of paying a graph walk and a second key dump
+            # before promptly evicting these measured large miss-only values.
+            # Small receipts retain their original cache and all byte bounds.
+            if len(key) > max(512*1024,self.max_bytes//max(1,self.max_entries)):
+                self.stats['direct_calls'] += 1
+                result = self.original(value)
+                self.stats['sha256_calls'] += 1
+                return result
             self.stats['misses'] += 1
             try: closed = _json_closed(value)
             except Exception: return self._fallback(value)
@@ -363,7 +373,7 @@ def _witness_stream_hook(root,script,main_globals):
         yield;return
     # Synthetic/AST launcher tests and unknown CLIs must keep the original path.
     expected={'forward_validation_v2.py':'3adbdcc43c5dbdb57ecd482b1d4138e720146ba1',
-              'p0_operational_audit.py':'398b0af0242b03e5819e9de54a7dc7cf3754bccf'}
+              'p0_operational_audit.py':'db494c83ddfbb47662a864b1764ad42283f6a0f1'}
     try: known=(root/script).stat().st_size<=1024*1024 and _blob(root/script)==expected[script]
     except (OSError,ValueError): known=False
     if not known:

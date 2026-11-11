@@ -594,7 +594,7 @@ def run(root, adapter, duration_seconds=2400, clock=None, sleep=None, stop_file=
     return result
 
 
-SOURCE_BINDING_BLOB='654b432b5d6c5efc33ef0eaebf95c02e273aae67'
+SOURCE_BINDING_BLOB='f9b5136cc207558268cafeeb709436cff5e7a733'
 
 def _source_binding_backend():
     path=Path(__file__).resolve().with_name('p0_source_binding.py')
