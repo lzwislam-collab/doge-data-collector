@@ -1,3 +1,17 @@
+<!-- DOGE-P1-6-LEGACY-NOTICE:BEGIN -->
+# 历史 / 独立日报快照，非当前入口
+
+当前导航：[仓库唯一当前报告入口](../README.md#current-reports)。正式当前成绩见 [V2 正式前瞻报告](DOGE_FORWARD_VALIDATION_V2.md)，各自截止以对应 JSON 为准。
+
+以下完整正文按原字节保留；其中“即时”“current”“PASS”均仅指原报告时点。本标识不会刷新来源、合并统计或改变原结论。
+
+- 范围：V2 独立日报快照；不能作为当前状态或滚动 168 小时 P0-2 验收。
+- 正文截止 UTC：2026-10-30T11:37:10.396632+00:00。
+- 配套 JSON：`../data/stage5/forward_validation_v2/daily_latest.json`；来源状态：ok；版本：DOGE_FORWARD_RAW_QUOTE_BOUND_V2_20261012_0200。
+- JSON audited_at_utc：2026-10-30T11:37:10.396632+00:00。
+- 时间与来源对应核对：可对应；不代表当前仍有效。
+<!-- DOGE-P1-6-LEGACY-NOTICE:END -->
+
 # DOGE 正式前瞻验证 V2
 
 截止 UTC：2026-10-30T11:37:10.396632+00:00
