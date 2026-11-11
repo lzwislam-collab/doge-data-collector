@@ -5,6 +5,11 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import json
+import os
+import re
+import hashlib
+import uuid
+from unittest.mock import patch
 try:
     handoff = importlib.import_module('learned_audit_handoff')
 except ModuleNotFoundError:
@@ -238,4 +243,131 @@ class HandoffTests(unittest.TestCase):
           ['issue:1794391200_formal','target:1794384000_formal'])
         self.assertEqual(handoff.r2_obligation_keys(policy,[event],{},NOW.replace(minute=35)),
           ['issue:1794391200_formal'])
+class CompletionTests(unittest.TestCase):
+    def setUp(self): self.provider=Provider()
+    def verify(self,event=None,**kwargs):
+        self.assertTrue(callable(getattr(handoff,'verify_completion',None)),
+                        'natural typed completion verifier is missing')
+        return handoff.verify_completion(event or parent(),client=self.provider,
+            clock=lambda:NOW,obligation=kwargs.pop('obligation',lambda at:['issue:1794391200_1']),
+            local_source_blob=kwargs.pop('local_source_blob',BLOB),**kwargs)
+    def test_natural_completion_uses_real_parent_and_has_no_post(self):
+        result=self.verify()
+        self.assertTrue(result['admitted']);self.assertEqual(result['readiness_mode'],'bridge')
+        self.assertEqual((result['parent_run_id'],result['parent_attempt'],result['source_head']),
+                         (7,1,HEAD))
+        self.assertEqual(result['source_audit_kind'],'legacy')
+        self.assertEqual(result['parent_wait_seconds'],0)
+        self.assertEqual(self.provider.posts,[])
+    def test_event_identity_kind_and_failed_whole_never_fall_back_to_bridge(self):
+        for change in ({'id':8},{'run_attempt':2},{'head_sha':'c'*40},
+          {'path':handoff.AUDITS['r2']},{'status':'in_progress'},{'conclusion':'failure'}):
+            with self.subTest(change=change),self.assertRaises((ValueError,AssertionError)):
+                self.verify(parent(**change))
+        self.provider.rows=[parent(conclusion='failure')]
+        with self.assertRaises(ValueError):self.verify()
+        self.assertEqual(self.provider.posts,[])
+    def test_source_current_local_and_expired_obligations_are_audit_only(self):
+        self.provider.main='c'*40;self.provider.blobs['c'*40]='d'*40
+        result=self.verify();self.assertFalse(result['admitted']);self.assertEqual(result['readiness_mode'],'audit')
+        self.provider.main=HEAD
+        result=self.verify(local_source_blob='d'*40)
+        self.assertFalse(result['admitted']);self.assertEqual(result['readiness_mode'],'audit')
+        result=self.verify(obligation=lambda at:[])
+        self.assertFalse(result['admitted']);self.assertEqual(result['readiness_mode'],'audit')
+        self.assertEqual(self.provider.posts,[])
+    def test_r2_completion_requires_actual_r2_steps_and_kind(self):
+        row=parent(path=handoff.AUDITS['r2'],event='workflow_run');self.provider.rows=[row]
+        with self.assertRaises(ValueError):self.verify(row)
+        self.provider.audit_steps=[{'name':name,'conclusion':'success'} for name in handoff.AUDIT_STEPS['r2']]
+        result=self.verify(row);self.assertEqual(result['source_audit_kind'],'r2');self.assertTrue(result['admitted'])
+        self.assertEqual(self.provider.posts,[])
+    def test_completed_event_cannot_wait_for_a_replaced_attempt(self):
+        self.provider.rows=[parent(status='in_progress',conclusion=None)]
+        result=self.verify();self.assertFalse(result['admitted']);self.assertEqual(result['readiness_mode'],'audit')
+        self.assertEqual(result['status'],'SKIP_PARENT_NOT_COMPLETE')
+    def test_provider_boolean_attempt_is_not_a_real_attempt_identity(self):
+        self.provider.rows=[parent(run_attempt=True)]
+        with self.assertRaises(ValueError):self.verify()
+    def test_cli_natural_event_ignores_dispatch_locators(self):
+        import runtime_custody_bridge as transport
+        root=Path(__file__).resolve().parent/'completion-test-receipts'/uuid.uuid4().hex
+        (root/handoff.SOURCE).parent.mkdir(parents=True)
+        raw=b'actual synthetic source bytes\n';(root/handoff.SOURCE).write_bytes(raw)
+        blob=hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()
+        self.provider.blobs[HEAD]=blob
+        event=root/'event.json';event.write_text(json.dumps({'workflow_run':parent()}),encoding='utf-8')
+        output=root/'outputs'
+        env={'GITHUB_REF':'refs/heads/main','GITHUB_REPOSITORY':REPO,'GITHUB_EVENT_NAME':'workflow_run',
+          'GITHUB_EVENT_PATH':str(event),'GITHUB_OUTPUT':str(output),
+          'SOURCE_AUDIT_RUN_ID':'999','SOURCE_AUDIT_ATTEMPT':'999','SOURCE_AUDIT_HEAD':'f'*40,
+          'SOURCE_AUDIT_BLOB':'e'*40,'SOURCE_AUDIT_KIND':'r2'}
+        with patch.dict(os.environ,env),patch.object(handoff,'ROOT',root), \
+             patch.object(transport,'GitHubClient',return_value=self.provider), \
+             patch.object(handoff,'current_obligation',return_value=['issue:1794391200_1']):
+            handoff.main(['verify'])
+        result=json.loads((root/'forward-readiness-output/learned-audit-handoff-verify.json').read_bytes())
+        self.assertEqual(result['parent_run_id'],7);self.assertEqual(result['source_audit_kind'],'legacy')
+        self.assertIn('readiness_mode=bridge',output.read_text());self.assertEqual(self.provider.posts,[])
+
+class CompletionWorkflowTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from source_recovery_test_dependencies import ensure_test_dependencies
+        ensure_test_dependencies()
+        import yaml
+        cls.root=Path(__file__).resolve().parent
+        cls.load=staticmethod(lambda name:yaml.load((cls.root/'.github/workflows'/name).read_text(encoding='utf-8'),Loader=yaml.BaseLoader))
+    def expression(self,source,values):
+        source=source.strip()
+        if source.startswith('${{'):source=source[3:-2].strip()
+        source=re.sub(r'\b(?:github|inputs|env|steps)\.[A-Za-z0-9_.]+',
+                      lambda m:repr(values.get(m[0],'')),source)
+        return eval(source.replace('&&',' and ').replace('||',' or '),
+                    {'__builtins__':{},'startsWith':lambda a,b:a.startswith(b)},{})
+    def terminal(self):return self.load('doge_engineering_completion.yml')['jobs']['terminal-receipt']
+    def test_source_audits_contain_only_the_original_audit_job(self):
+        for name in ('learned_shadow_v1.yml','r2_engineering_audit.yml'):
+            with self.subTest(name=name):
+                workflow=self.load(name);self.assertEqual(set(workflow['jobs']),{'audit'})
+                steps=workflow['jobs']['audit']['steps']
+                kind='r2' if name.startswith('r2_') else 'legacy'
+                for required in handoff.AUDIT_STEPS[kind]:self.assertTrue(any(s.get('name')==required for s in steps))
+                self.assertFalse(any('learned_audit_handoff.py' in s.get('run','') for s in steps))
+        self.assertIn('Publish DOGE V2 R2 frozen forward evidence',
+                      self.load('r2_engineering_audit.yml')['on']['workflow_run']['workflows'])
+    def test_actual_yaml_routes_source_completions_and_preserves_other_completions(self):
+        job=self.terminal();required=job.get('env',{}).get('SOURCE_AUDIT_REQUIRED')
+        self.assertIsNotNone(required,'typed completion selector is missing')
+        verify=next(s for s in job['steps'] if s.get('id')=='source_audit')
+        readiness=next(s for s in job['steps'] if s.get('id')=='readiness')
+        self.assertLess(job['steps'].index(verify),job['steps'].index(readiness))
+        for kind,path in handoff.AUDITS.items():
+            for actual in (path,path+'@refs/heads/main'):
+                values={'github.event_name':'workflow_run','github.event.workflow_run.path':actual}
+                self.assertTrue(self.expression(required,values))
+        values={'github.event_name':'workflow_run','github.event.workflow_run.path':'.github/workflows/collect.yml',
+                'github.ref':'refs/heads/main','env.SOURCE_AUDIT_REQUIRED':'false'}
+        self.assertFalse(self.expression(required,values))
+        self.assertTrue(self.expression(readiness['if'],values))
+        self.assertEqual(self.expression(readiness['env']['READINESS_MODE'],values),'bridge')
+    def test_typed_failure_skip_or_missing_output_cannot_fall_back_to_bridge(self):
+        job=self.terminal();readiness=next(s for s in job['steps'] if s.get('id')=='readiness')
+        base={'github.event_name':'workflow_run','github.ref':'refs/heads/main','env.SOURCE_AUDIT_REQUIRED':'true'}
+        for outcome in ('failure','skipped','cancelled'):
+            with self.subTest(outcome=outcome):
+                self.assertFalse(self.expression(readiness['if'],dict(base,**{'steps.source_audit.outcome':outcome})))
+        mode=readiness['env']['READINESS_MODE']
+        self.assertEqual(self.expression(mode,dict(base,**{'steps.source_audit.outcome':'success'})),'audit')
+        self.assertEqual(self.expression(mode,dict(base,**{'steps.source_audit.outputs.readiness_mode':'audit'})),'audit')
+    def test_existing_dispatch_locator_and_completion_listeners_remain(self):
+        workflow=self.load('doge_engineering_completion.yml');job=self.terminal()
+        for name in ('source_audit_run_id','source_audit_attempt','source_audit_head','source_audit_blob','source_audit_kind'):
+            self.assertIn(name,workflow['on']['workflow_dispatch']['inputs'])
+        for name in ('learned_shadow_v1.yml','r2_engineering_audit.yml'):
+            self.assertIn(self.load(name)['name'],workflow['on']['workflow_run']['workflows'])
+        required=job.get('env',{}).get('SOURCE_AUDIT_REQUIRED')
+        self.assertIsNotNone(required)
+        self.assertTrue(self.expression(required,{'github.event_name':'workflow_dispatch','inputs.source_audit_run_id':'7'}))
+
 if __name__=='__main__':unittest.main()
