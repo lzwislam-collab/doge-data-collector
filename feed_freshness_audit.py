@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Independent source freshness/coverage audit. Do not conflate staleness and predictive validity."""
-import json,sys,os,csv,math
+import json,sys,os,csv,math,hashlib
 from decimal import Decimal
 from datetime import datetime,timezone,timedelta,date
-from pathlib import Path
+from pathlib import Path,PurePosixPath
 BASE=Path(__file__).resolve().parent
 OUT=BASE/'data/quality/latest.json'
 
@@ -135,7 +135,9 @@ def check_etf_csv(base=BASE,now=None):
    if not Decimal(row['total_usd_m']).is_finite():raise ValueError('nonfinite ETF amount')
    reported=int(row['reported_funds']);filled=int(row['funds_with_values'])
    if not(0<filled<=reported):raise ValueError('ETF constituent fund count invalid')
-   if row['source_url']!=('https://farside.co.uk/'+asset.lower()+'/'):raise ValueError('unknown ETF table source')
+   official_urls={'BTC':('https://farside.co.uk/btc/','https://farside.co.uk/bitcoin-etf-flow-all-data/'),
+                  'ETH':('https://farside.co.uk/eth/','https://farside.co.uk/ethereum-etf-flow-all-data/')}
+   if row['source_url'] not in official_urls[asset]:raise ValueError('unknown ETF table source')
    first=datetime.fromisoformat(row['first_seen_utc'].replace('Z','+00:00'))
    last=datetime.fromisoformat(row['last_checked_utc'].replace('Z','+00:00'))
    if first.tzinfo is None or last.tzinfo is None or first>last or last>now+timedelta(minutes=15) or first.date()<day:
@@ -275,6 +277,31 @@ def check_stage4_csvs(base=BASE,now=None):
  check('sec_policy_candidates',lambda:regulator('sec_events'))
  return checks,failures
 
+def verify_current_raw(base,source,meta):
+ """Independently read the producer's exact immutable packet references."""
+ prefix='data/'+source+'/raw/'
+ manifest=meta.get('raw_evidence')
+ if not isinstance(manifest,list) or not manifest:raise ValueError('raw packet evidence missing')
+ items=list(manifest)
+ if source=='liquidity':
+  snapshot=meta.get('snapshot_evidence')
+  if not isinstance(snapshot,dict):raise ValueError('liquidity snapshot evidence missing')
+  items.append(snapshot)
+ seen=set();root=Path(base).resolve()
+ for item in items:
+  if not isinstance(item,dict):raise ValueError('invalid raw packet reference')
+  path=item.get('path','')
+  if (not isinstance(path,str) or not path.startswith(prefix) or '..' in PurePosixPath(path).parts
+      or str(PurePosixPath(path))!=path or '\\' in path or ':' in path or path in seen):
+   raise ValueError('unsafe or duplicate raw packet path')
+  seen.add(path);file=root/path
+  if not file.is_file() or file.is_symlink() or not file.resolve().is_relative_to(root):
+   raise ValueError('raw packet absent or outside repository')
+  if hashlib.sha256(file.read_bytes()).hexdigest()!=item.get('sha256'):
+   raise ValueError('raw packet digest mismatch')
+ return len(items)
+
+
 def evaluate(base=BASE,now=None):
  if now is None:now=datetime.now(timezone.utc)
  if now.tzinfo is None:raise ValueError('timezone required')
@@ -299,9 +326,41 @@ def evaluate(base=BASE,now=None):
      raise ValueError('ETF trade dates missing')
    if name=='liquidations_okx' and 'NOT market-wide totals' not in x.get('coverage',''):
     raise ValueError('liquidation coverage disclaimer missing')
+   if name=='liquidations_okx' and x.get('schema_version',0)>=4:
+    clocks=[float(x.get(k,0)) for k in ('requested_listen_seconds','subscribed_seconds','heartbeat_verified_seconds')]
+    heartbeat=x.get('data_quality',{})
+    if (x.get('window_complete') is not True or x.get('required_listen_seconds')!=480
+        or any(not math.isfinite(v) or v<480 for v in clocks)
+        or abs(clocks[1]-clocks[2])>.01
+        or x.get('not_market_wide') is not True or x.get('coverage_is_per_listening_window_only') is not True
+        or heartbeat.get('errors') or heartbeat.get('heartbeat_pongs',0)<1
+        or heartbeat.get('heartbeat_pending_at_end') is not False
+        or heartbeat.get('heartbeat_pings')!=heartbeat.get('heartbeat_pongs')):
+     raise ValueError('incomplete verified 480-second liquidation observation window')
+    began=datetime.fromisoformat(x['started_at_utc'].replace('Z','+00:00'))
+    window_start=datetime.fromisoformat(x['window_started_at_utc'].replace('Z','+00:00'))
+    window_end=datetime.fromisoformat(x['window_ended_at_utc'].replace('Z','+00:00'))
+    if (any(v.utcoffset()!=timedelta(0) for v in (began,window_start,window_end))
+        or not began<=window_start<=window_end<=stamp
+        or abs((window_end-window_start).total_seconds()-clocks[1])>1):
+     raise ValueError('liquidation window UTC and measured duration disagree')
+    row['raw_evidence_files_verified']=verify_current_raw(base,'liquidations',x)
+    row['observation_window_complete']=True
+   if name=='liquidity' and x.get('schema_version',0)>=3:
+    row['raw_evidence_files_verified']=verify_current_raw(base,'liquidity',x)
    if name=='whale_confirmed_blocks':
     if x.get('backlog_blocks_at_run_end')!=0 or x.get('errors'):
      raise ValueError('whale block scanner unfinished or error')
+    if x.get('schema_version',0)>=4:
+     if (x.get('run_end_tip_verified') is not True or x.get('confirmation_depth')!=6
+         or x.get('tip_height')-6!=x.get('confirmed_tip_at_run')
+         or x.get('confirmed_tip_at_run')-x.get('last_completed_height')!=0):
+      raise ValueError('whale zero backlog lacks verified run-end confirmed tip')
+     observed=datetime.fromisoformat(x['run_end_tip_observed_at_utc'].replace('Z','+00:00'))
+     began=datetime.fromisoformat(x['started_at_utc'].replace('Z','+00:00'))
+     if observed.tzinfo is None or not began<=observed<=stamp:
+      raise ValueError('whale run-end tip observation clock invalid')
+     row['run_end_tip_verified']=True
    row['state']='ok_coverage_limited' if state=='partial' or 'optional' in name or 'whale' in name or 'liquidations' in name else 'ok'
   except (OSError,ValueError,TypeError,KeyError,json.JSONDecodeError) as e:
    row['state']='stale_or_failed';row['error']=str(e)[:190]

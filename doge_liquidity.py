@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """DOGE Stage 2 independent OKX liquidity collector. No fabricated liquidation figures."""
 import csv
+import hashlib
+import uuid
 import json
 import math
 import os
@@ -22,10 +24,22 @@ FIELDS = ['collected_at_ms','instrument','book_ts_ms','trade_latest_ts_ms','oi_t
           'open_interest_usd','funding_rate','liquidation_usd','liquidation_source_status']
 
 
-def get(path, **params):
+def get(path, raw_dir=None, **params):
     url = API+path+'?'+urllib.parse.urlencode(params)
-    req=urllib.request.Request(url,headers={'Accept':'application/json','User-Agent':'DOGE-liquidity-research/1.0'})
-    with urllib.request.urlopen(req,timeout=25) as res: obj=json.load(res)
+    requested=datetime.now(timezone.utc).isoformat()
+    req=urllib.request.Request(url,headers={'Accept':'application/json','User-Agent':'DOGE-liquidity-research/1.1'})
+    with urllib.request.urlopen(req,timeout=25) as res:
+        raw=res.read()
+        received=datetime.now(timezone.utc).isoformat()
+        proof={'source_url':url,'requested_at_utc':requested,'received_at_utc':received,
+               'first_seen_utc':received,'http_status':getattr(res,'status',200),
+               'headers':dict(res.headers),'body_utf8':raw.decode('utf-8'),
+               'raw_sha256':hashlib.sha256(raw).hexdigest()}
+    if raw_dir is not None:
+        directory=Path(raw_dir);directory.mkdir(parents=True,exist_ok=True)
+        with (directory/(path.rsplit('/',1)[-1]+'-'+uuid.uuid4().hex+'.json')).open('x',encoding='utf-8') as stream:
+            json.dump(proof,stream,ensure_ascii=False,indent=2)
+    obj=json.loads(proof['body_utf8'])
     if obj.get('code')!='0' or not isinstance(obj.get('data'),list) or not obj['data']:
         raise ValueError('OKX response invalid for '+path+': '+str(obj.get('msg',''))[:120])
     return obj['data']
@@ -37,8 +51,8 @@ def number(x, allow_zero=False):
     return n
 
 
-def book():
-    d=get('/api/v5/market/books',instId=INSTRUMENT,sz='400')[0]
+def book(raw_dir=None):
+    d=get('/api/v5/market/books',raw_dir=raw_dir,instId=INSTRUMENT,sz='400')[0]
     now=int(time.time()*1000); ts=int(d['ts'])
     if not 0<=now-ts<=600000: raise ValueError('stale orderbook timestamp')
     bids=[(number(a[0]),number(a[1],True)) for a in d['bids']]
@@ -49,8 +63,8 @@ def book():
     return ts,bids,asks
 
 
-def instrument_spec():
-    rows=get('/api/v5/public/instruments',instType='SWAP',instId=INSTRUMENT)
+def instrument_spec(raw_dir=None):
+    rows=get('/api/v5/public/instruments',raw_dir=raw_dir,instType='SWAP',instId=INSTRUMENT)
     d=next((x for x in rows if x.get('instId')==INSTRUMENT),None)
     if not d:raise ValueError('instrument metadata absent')
     multiplier=number(d['ctVal'])
@@ -80,8 +94,8 @@ def walk(levels, usdt, contract_doge, mid, side):
     return round(avg,10),round(slippage,5)
 
 
-def trade_metrics(contract_doge):
-    rows=get('/api/v5/market/trades',instId=INSTRUMENT,limit='500')
+def trade_metrics(contract_doge,raw_dir=None):
+    rows=get('/api/v5/market/trades',raw_dir=raw_dir,instId=INSTRUMENT,limit='500')
     now=int(time.time()*1000)
     ids=set(); counts={'buy':0,'sell':0}; sizes={'buy':0.,'sell':0.}; times=[]
     for x in rows:
@@ -98,9 +112,11 @@ def trade_metrics(contract_doge):
             'coverage_note':'Last up to 500 trades, NOT a fixed time window. Missing trades between polls cannot be reconstructed.'}
 
 
-def derivatives():
-    oi=get('/api/v5/public/open-interest',instType='SWAP',instId=INSTRUMENT)[0]
-    fr=get('/api/v5/public/funding-rate',instId=INSTRUMENT)[0]
+def derivatives(raw_dir=None):
+    oi=get('/api/v5/public/open-interest',raw_dir=raw_dir,instType='SWAP',instId=INSTRUMENT)[0]
+    fr=get('/api/v5/public/funding-rate',raw_dir=raw_dir,instId=INSTRUMENT)[0]
+    if oi.get('instId')!=INSTRUMENT or fr.get('instId')!=INSTRUMENT:
+        raise ValueError('wrong instrument in derivatives response')
     now=int(time.time()*1000); ts=int(oi['ts'])
     if not 0<=now-ts<=1800000:raise ValueError('stale open interest')
     rate=float(fr['fundingRate'])
@@ -125,26 +141,56 @@ def historical(row):
                 old[k]=r
     key=row['collected_at_ms']
     if key in old:raise ValueError('duplicate current timestamp')
+    previous=max((int(k) for k in old),default=None)
     old[key]=row
     import io
     s=io.StringIO();w=csv.DictWriter(s,fieldnames=FIELDS);w.writeheader();w.writerows(old[k] for k in sorted(old,key=int))
     atomic(p,s.getvalue())
     stamps=sorted(int(k) for k in old)
     return {'rows':len(stamps),'duplicate_timestamps':0,'first_ms':stamps[0],
-            'last_ms':stamps[-1],'gaps_over_90_minutes':sum(b-a>90*60000 for a,b in zip(stamps,stamps[1:]))}
+            'last_ms':stamps[-1],'gaps_over_90_minutes':sum(b-a>90*60000 for a,b in zip(stamps,stamps[1:])),
+            'historical_backfill':False,'previous_snapshot_ms':previous,
+            'gap_since_previous_seconds':(int(key)-previous)/1000 if previous is not None else None}
+
+
+def stamp_collection(result, started_ms):
+    """New rows become available after all successful source responses, never at request start."""
+    collected_ms=int(time.time()*1000)
+    if collected_ms<started_ms:
+        raise ValueError('collection clock moved backwards')
+    result['started_at_utc']=datetime.fromtimestamp(started_ms/1000,timezone.utc).isoformat()
+    result['collected_at_utc']=datetime.fromtimestamp(collected_ms/1000,timezone.utc).isoformat()
+    result['collection_elapsed_ms']=collected_ms-started_ms
+    return collected_ms
+
+
+def archive_snapshot(result, raw_dir, repo_root):
+    """Reference the immutable snapshot from latest without a circular self-hash."""
+    snapshot=Path(raw_dir)/'snapshot.json'
+    payload={k:v for k,v in result.items() if k!='snapshot_evidence'}
+    raw=(json.dumps(payload,ensure_ascii=False,allow_nan=False,indent=2)+'\n').encode('utf-8')
+    with snapshot.open('xb') as stream:
+        stream.write(raw)
+    result['snapshot_evidence']={'path':snapshot.relative_to(Path(repo_root)).as_posix(),
+                                 'sha256':hashlib.sha256(raw).hexdigest()}
+    return result
 
 
 def main():
     ROOT.mkdir(parents=True,exist_ok=True)
     started=int(time.time()*1000)
-    result={'schema_version':2,'collected_at_utc':datetime.fromtimestamp(started/1000,timezone.utc).isoformat(),
+    raw_dir=ROOT/'raw'/(datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')+'-'+uuid.uuid4().hex)
+    raw_dir.mkdir(parents=True)
+    result={'schema_version':3,'started_at_utc':datetime.fromtimestamp(started/1000,timezone.utc).isoformat(),
+            'collected_at_utc':datetime.fromtimestamp(started/1000,timezone.utc).isoformat(),
             'source':'OKX public REST API','instrument':INSTRUMENT,'status':'error','errors':{},
             'liquidations':{'status':'not_available','liquidation_usd':None,
                 'note':'No verified public forced-liquidation event feed integrated; OI decline or regular trades must not be relabelled liquidations.'}}
     try:
-        ct,spec=instrument_spec()
-        ts,bids,asks=book();mid=(bids[0][0]+asks[0][0])/2
-        t=trade_metrics(ct);d=derivatives()
+        ct,spec=instrument_spec(raw_dir)
+        ts,bids,asks=book(raw_dir);mid=(bids[0][0]+asks[0][0])/2
+        t=trade_metrics(ct,raw_dir);d=derivatives(raw_dir)
+        collected=stamp_collection(result,started)
         metrics={'book_ts_ms':ts,'best_bid':bids[0][0],'best_ask':asks[0][0],
                  'spread_bps':(asks[0][0]-bids[0][0])/mid*10000,
                  'book_bid_levels':len(bids),'book_ask_levels':len(asks)}
@@ -157,7 +203,7 @@ def main():
                 metrics[f'{side}_{amount//1000}k_vwap']=avg
                 metrics[f'{side}_{amount//1000}k_slippage_bps']=slip
         result.update({'contract_spec':spec,'orderbook':metrics,'recent_trades':t,'derivatives':d,'status':'ok'})
-        row={'collected_at_ms':str(started),'instrument':INSTRUMENT,'book_ts_ms':str(ts),
+        row={'collected_at_ms':str(collected),'instrument':INSTRUMENT,'book_ts_ms':str(ts),
              'trade_latest_ts_ms':str(t['latest_ts_ms']),'oi_ts_ms':str(d['oi_ts_ms']),
              'best_bid':str(metrics['best_bid']),'best_ask':str(metrics['best_ask']),
              'spread_bps':str(metrics['spread_bps']),
@@ -175,6 +221,13 @@ def main():
     except Exception as e:
         result['errors']['collector']=type(e).__name__+': '+str(e)[:350]
         result['status']='error'
+    result['raw_evidence_directory']=str(raw_dir.relative_to(ROOT.parent.parent)).replace('\\','/')
+    result['raw_evidence']=[{'path':str(p.relative_to(ROOT.parent.parent)).replace('\\','/'),
+        'sha256':hashlib.sha256(p.read_bytes()).hexdigest()} for p in sorted(raw_dir.iterdir())]
+    captures=[json.loads(p.read_text(encoding='utf-8'))['received_at_utc'] for p in raw_dir.iterdir()]
+    result['available_at_utc']=max(captures) if captures else None
+    result['historical_backfill']=False
+    archive_snapshot(result,raw_dir,ROOT.parent.parent)
     atomic(ROOT/'latest.json',json.dumps(result,ensure_ascii=False,allow_nan=False,indent=2)+'\n')
     print(json.dumps({'status':result['status'],'errors':result['errors']},ensure_ascii=False),flush=True)
     return 0 if result['status']=='ok' else 1

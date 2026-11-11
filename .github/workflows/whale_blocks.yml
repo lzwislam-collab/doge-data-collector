@@ -2,7 +2,14 @@ name: DOGE confirmed block whale scanner
 
 on:
   workflow_dispatch:
-  # Lean-v1.0: redundant automatic research audit paused; dispatch and dependent triggers retained.
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+  push:
+    branches: [main]
+    paths:
+      - 'doge_whale_blocks.py'
+      - 'source_publication.py'
+      - '.github/workflows/whale_blocks.yml'
 
 permissions:
   contents: write
@@ -17,12 +24,14 @@ jobs:
     timeout-minutes: 15
     env:
       DOGE_BLOCK_MAX: '100'
-      DOGE_BLOCK_RUN_SECONDS: '600'
+      DOGE_BLOCK_RUN_SECONDS: '780'
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
+          ref: main
           persist-credentials: true
+          sparse-checkout: |
+            data/whales_blocks
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -33,25 +42,23 @@ jobs:
         id: scan
         continue-on-error: true
         run: python doge_whale_blocks.py
-      - name: Persist diagnostics and checkpoint even on scan errors
+      - name: Publish source files and verify remote bytes
         if: always()
+        env:
+          SOURCE_COLLECTION_OUTCOME: ${{ steps.scan.outcome }}
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          for f in data/whales_blocks/latest.json data/whales_blocks/events.csv data/whales_blocks/checkpoint.json data/whales_blocks/pending_block.json; do
-            if [ -f "$f" ]; then git add -f "$f"; fi
-          done
-          # Persist deletion when a previously incomplete block finishes.
-          git add -u -- data/whales_blocks
-          if ! git diff --cached --quiet; then
-            git commit -m 'data: automatically scan confirmed DOGE blocks'
-            for attempt in 1 2 3; do
-              if git pull --rebase origin main && git push origin HEAD:main; then break; fi
-              if [ "$attempt" -eq 3 ]; then exit 1; fi
-              sleep 3
-            done
-          fi
+          python source_publication.py --source whale_confirmed_blocks
       - name: Fail workflow when scanner failed
         if: steps.scan.outcome != 'success'
         run: exit 1
 
+      - name: Preserve source failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-5-whales_blocks-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 90
+          if-no-files-found: warn
+          path: data/whales_blocks/

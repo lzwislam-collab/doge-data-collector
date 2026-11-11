@@ -2,13 +2,13 @@ name: Collect observed DOGE liquidation events
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '4,19,34,49 * * * *'
   push:
     branches: [main]
     paths:
       - 'quote_evidence_v2.py'
       - 'data/stage5/forward_validation_protocol_v2.json'
-      - '.github/workflows/liquidations.yml'
-  # Lean-v1.0: automatic polling paused; manual dispatch retained.
 
 permissions:
   contents: write
@@ -19,6 +19,7 @@ concurrency:
 
 jobs:
   quote:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-24.04
     timeout-minutes: 4
     concurrency:
@@ -68,11 +69,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 13
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
+          ref: main
           persist-credentials: true
-          fetch-depth: 0
+          sparse-checkout: |
+            data/liquidations
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -88,24 +90,22 @@ jobs:
         env:
           LIQ_LISTEN_SECONDS: '480'
         run: python doge_liquidations.py
-      - name: Commit observations and diagnostic record
+      - name: Publish source files and verify remote bytes
         if: always()
+        env:
+          SOURCE_COLLECTION_OUTCOME: ${{ steps.scan.outcome }}
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          for f in data/liquidations/latest.json data/liquidations/events.csv ; do
-            if [ -f "$f" ]; then git add -f "$f"; fi
-          done
-          if ! git diff --cached --quiet; then
-            git commit -m 'data: capture observable DOGE liquidation notices'
-            for attempt in 1 2 3 4 5; do
-              if git pull --rebase origin main && git push origin HEAD:main; then
-                exit 0
-              fi
-              if [ "$attempt" -eq 5 ]; then exit 1; fi
-              sleep 4
-            done
-          fi
+          python source_publication.py --source liquidations_okx
       - name: Mark scanner error as workflow failure
         if: steps.scan.outcome != 'success'
         run: exit 1
+      - name: Preserve source failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-5-liquidations-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 90
+          if-no-files-found: warn
+          path: data/liquidations/

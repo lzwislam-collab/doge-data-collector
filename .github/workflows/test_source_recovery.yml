@@ -1,0 +1,69 @@
+name: Test six-source recovery contracts
+on:
+  pull_request:
+    paths:
+      - 'doge_onchain.py'
+      - 'doge_liquidations.py'
+      - 'doge_liquidity.py'
+      - 'doge_whale_blocks.py'
+      - 'macro_collector.py'
+      - 'etf_flows.py'
+      - 'feed_freshness_audit.py'
+      - 'source_publication.py'
+      - 'test_*source*.py'
+      - 'test_feed_quality.py'
+      - 'test_enhancement_data.py'
+      - 'test_whale*.py'
+      - '.github/workflows/onchain.yml'
+      - '.github/workflows/liquidations.yml'
+      - '.github/workflows/liquidity.yml'
+      - '.github/workflows/whale_blocks.yml'
+      - '.github/workflows/macro.yml'
+      - '.github/workflows/etf_flows.yml'
+      - '.github/workflows/feed_freshness_audit.yml'
+      - '.github/workflows/test_source_recovery.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'doge_onchain.py'
+      - 'doge_liquidations.py'
+      - 'doge_liquidity.py'
+      - 'doge_whale_blocks.py'
+      - 'macro_collector.py'
+      - 'etf_flows.py'
+      - 'feed_freshness_audit.py'
+      - 'source_publication.py'
+      - 'test_*source*.py'
+      - 'test_feed_quality.py'
+      - 'test_enhancement_data.py'
+      - 'test_whale*.py'
+      - '.github/workflows/onchain.yml'
+      - '.github/workflows/liquidations.yml'
+      - '.github/workflows/liquidity.yml'
+      - '.github/workflows/whale_blocks.yml'
+      - '.github/workflows/macro.yml'
+      - '.github/workflows/etf_flows.yml'
+      - '.github/workflows/feed_freshness_audit.yml'
+      - '.github/workflows/test_source_recovery.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/workflows
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install pinned test parsers
+        run: python -m pip install 'beautifulsoup4==4.12.3' 'PyYAML==6.0.2'
+      - name: Verify source collection and exact publication without live network
+        run: >-
+          python -m unittest -v
+          test_source_publication test_source_recovery_workflows test_source_recovery_quality
+          test_feed_quality test_enhancement_data test_auxiliary_source_refresh
+          test_microstructure_source_collectors test_whale_block_integrity
+          test_whale_block_resume test_whale_http_retry
