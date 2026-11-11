@@ -1,4 +1,4 @@
-"""Fresh bounded Git text reads for the unchanged FWD/P0 witness validators.
+"""Fresh bounded Git text reads for the unchanged FWD/P0 evidence validators.
 
 No raw-byte LRU, witness, row, verdict or error cache. Every eligible original
 show is a real sequential request using the existing owned paired transport.
@@ -18,8 +18,13 @@ import runtime_process
 IMPLEMENTATION = 'witness_fresh_git_blob_stream_v1'
 _BLOBS = {'forward_validation.py': 'f0831c7d38581543f84a85639c6d69a7305ff382',
           'forward_validation_v2.py': '3adbdcc43c5dbdb57ecd482b1d4138e720146ba1',
-          'p0_operational_audit.py': 'c615bdc665d24481569f545922d3d7aa04594d60'}
-_SPEC = re.compile(r'[0-9a-f]{40}:(?:data/direction_v42/forward_registry\.csv|data/stage5/forward_validation_protocol\.json)\Z')
+          'p0_operational_audit.py': 'c615bdc665d24481569f545922d3d7aa04594d60',
+          'quote_evidence_v2.py': '7d1e62e60f3aa78949ef1d5d81d74086d1907c91'}
+_SPEC = re.compile(r'[0-9a-f]{40}:(?:data/direction_v42/forward_registry\.csv|'
+                   r'data/stage5/forward_validation_protocol\.json|'
+                   r'data/quote_evidence_v2/bindings\.csv|'
+                   r'data/quote_evidence_v2/snapshots/(?P<shard>[0-9a-f]{2})/'
+                   r'(?P=shard)[0-9a-f]{62}\.json)\Z')
 
 
 def _compiled(path):
@@ -104,6 +109,27 @@ def _eligible(root, namespace):
         return None
 
 
+def _quote_alias(root, namespace, original):
+    """Bind only the exact imported alias used by the unchanged public check."""
+    try:
+        evidence = namespace.get('evidence')
+        if (type(evidence) is not types.ModuleType
+                or Path(evidence.__file__).resolve() != root/'quote_evidence_v2.py'
+                or evidence.git is not original or evidence.hashlib is not hashlib
+                or evidence.BASE != 'data/quote_evidence_v2'):
+            return None
+        code = _compiled(root/'quote_evidence_v2.py')
+        for name in ('snapshot_path', 'verify_public_issue'):
+            children = [child for child in code.co_consts
+                        if isinstance(child, types.CodeType) and child.co_name == name]
+            if (len(children) != 1 or not transport._function(
+                    getattr(evidence, name, None), children[0], evidence.__dict__)):
+                return None
+        return evidence
+    except (AttributeError, KeyError, OSError, TypeError, ValueError, SyntaxError, transport._Unavailable):
+        return None
+
+
 @contextmanager
 def installed(root, main_globals, *, trusted_object_directory=None,
               request_timeout=transport.REQUEST_TIMEOUT_SECONDS):
@@ -115,13 +141,14 @@ def installed(root, main_globals, *, trusted_object_directory=None,
     eligible = _eligible(root, main_globals)
     if eligible is None:
         yield report; return
+    quote = _quote_alias(root, main_globals, eligible[1])
     with runtime_process.cancellation_signals():
-        with _owned(root, eligible, report, trusted_object_directory, request_timeout) as active:
+        with _owned(root, eligible, report, trusted_object_directory, request_timeout, quote) as active:
             yield active
 
 
 @contextmanager
-def _owned(root, eligible, report, trusted_object_directory, request_timeout):
+def _owned(root, eligible, report, trusted_object_directory, request_timeout, quote=None):
     base, original = eligible
     try: view = transport._View(root, trusted_object_directory)
     except Exception:
@@ -159,12 +186,15 @@ def _owned(root, eligible, report, trusted_object_directory, request_timeout):
         report['fallback_calls'] += 1
         return original(call_root, *args)
 
-    base.git = git; report['installed'] = True
+    base.git = git
+    if quote is not None: quote.git = git
+    report['installed'] = True
     try:
         yield report
     finally:
         active_error = sys.exc_info()[1]
         base.git = original
+        if quote is not None: quote.git = original
         if batch is not None:
             owned = batch; batch = None
             try: owned.close()

@@ -31,6 +31,7 @@ on:
       - 'runtime_witness_git_stream.py'
       - 'test_runtime_witness_git_stream.py'
       - 'test_runtime_witness_stream_receipt.py'
+      - 'test_runtime_witness_quote_stream.py'
       - 'test_runtime_canonical_direct.py'
       - 'test_runtime_canonical_receipt_v2.py'
       - 'test_runtime_paired_git_stream.py'
@@ -107,6 +108,7 @@ on:
       - 'runtime_witness_git_stream.py'
       - 'test_runtime_witness_git_stream.py'
       - 'test_runtime_witness_stream_receipt.py'
+      - 'test_runtime_witness_quote_stream.py'
       - 'test_runtime_canonical_direct.py'
       - 'test_runtime_canonical_receipt_v2.py'
       - 'test_runtime_paired_git_stream.py'
@@ -234,12 +236,12 @@ jobs:
           PY
       - name: Run regression tests
         env:
-          NATIVE_TRANSPORT_PR: ${{ github.event_name == 'pull_request' && github.head_ref == 'fix/p0-archive-audit-20261111' }}
+          NATIVE_TRANSPORT_PR: ${{ github.event_name == 'pull_request' && (github.head_ref == 'fix/p0-archive-audit-20261111' || github.head_ref == 'fix/p0-current-archive-20261111') }}
         run: |
           # This PR also requires the unchanged complete scientific-evidence suite.
           # Avoid repeating that suite before the isolated six-CLI comparison.
           if [ "$NATIVE_TRANSPORT_PR" = 'true' ]; then
-            python -m unittest -q test_runtime_audit_cli test_runtime_history_prefix_transport test_runtime_audit_pipeline_profile test_runtime_canonical_walk test_runtime_p0_inventory_transport test_runtime_p0_launcher test_runtime_p0_profile_receipt test_runtime_paired_git_stream test_runtime_paired_stream_launcher test_runtime_paired_stream_receipt test_runtime_canonical_direct test_runtime_canonical_receipt_v2 test_runtime_witness_git_stream test_runtime_witness_stream_receipt
+            python -m unittest -q test_runtime_audit_cli test_runtime_history_prefix_transport test_runtime_audit_pipeline_profile test_runtime_canonical_walk test_runtime_p0_inventory_transport test_runtime_p0_launcher test_runtime_p0_profile_receipt test_runtime_paired_git_stream test_runtime_paired_stream_launcher test_runtime_paired_stream_receipt test_runtime_canonical_direct test_runtime_canonical_receipt_v2 test_runtime_witness_git_stream test_runtime_witness_stream_receipt test_runtime_witness_quote_stream
           else
             python -m unittest discover -q
           fi
@@ -327,7 +329,7 @@ jobs:
 
 
       - name: Compare whole original audit CLIs with native history transport
-        if: github.event_name == 'pull_request' && github.head_ref == 'fix/p0-archive-audit-20261111'
+        if: github.event_name == 'pull_request' && (github.head_ref == 'fix/p0-archive-audit-20261111' || github.head_ref == 'fix/p0-current-archive-20261111')
         timeout-minutes: 11
         env:
           DOGE_AUDIT_PAIRED_CPU_PROFILE: '0'
@@ -340,7 +342,7 @@ jobs:
         run: |
           python -B runtime_audit_pipeline_profile.py --source-root "$GITHUB_WORKSPACE" --ref "$GITHUB_SHA" --output "$RUNNER_TEMP/source-audit-native-profile"
       - name: Preserve whole audit CLI comparison
-        if: always() && github.event_name == 'pull_request' && github.head_ref == 'fix/p0-archive-audit-20261111'
+        if: always() && github.event_name == 'pull_request' && (github.head_ref == 'fix/p0-archive-audit-20261111' || github.head_ref == 'fix/p0-current-archive-20261111')
         uses: actions/upload-artifact@v4
         with:
           name: source-audit-native-profile-${{ github.run_id }}-${{ github.run_attempt }}
