@@ -8,6 +8,7 @@ import ast
 from contextlib import contextmanager
 import hashlib
 import importlib
+import importlib.util
 import json
 from pathlib import Path
 import sys
@@ -55,7 +56,32 @@ def _backend():
         oid = hashlib.sha1(b'blob ' + str(len(raw)).encode('ascii') + b'\0' + raw).hexdigest()
         if oid != PINS[path.name]:
             return None
-        loaded = importlib.import_module(name)
+        loaded = sys.modules.get(name)
+        if loaded is None:
+            spec = importlib.util.spec_from_file_location(name, path)
+            if spec is None or spec.loader is None:
+                return None
+            loaded = importlib.util.module_from_spec(spec)
+            sys.modules[name] = loaded
+            try:
+                # Execute exactly the bytes just pinned, not a second file
+                # read or a timestamp-valid but unrelated bytecode cache.
+                exec(compile(raw, str(path), 'exec', dont_inherit=True), loaded.__dict__)
+            except BaseException:
+                if sys.modules.get(name) is loaded:
+                    del sys.modules[name]
+                raise
+        if type(loaded) is not types.ModuleType:
+            return None
+        namespace = loaded.__dict__
+        if (type(namespace.get('__file__')) is not str
+                or Path(namespace['__file__']).resolve() != path
+                or namespace.get('__name__') != name):
+            return None
+        compiled = compile(raw, str(path), 'exec', dont_inherit=True)
+        if any(not _function(namespace.get(node.name), node, compiled, namespace, ROOT)
+               for node in ast.parse(raw).body if isinstance(node, ast.FunctionDef)):
+            return None
         if native is not None and loaded is not native:
             return None
     except Exception:

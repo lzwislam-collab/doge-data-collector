@@ -120,7 +120,7 @@ class RuntimeRescueTests(unittest.TestCase):
         return self.runtime.installed(self.root) if self.runtime else nullcontext({})
 
     @contextmanager
-    def market(self, failures=0):
+    def market(self, failures=0, skip_sleep=True):
         now = self.now
         raw = self.raw(now).encode('utf-8')
         class Clock(datetime):
@@ -135,8 +135,9 @@ class RuntimeRescueTests(unittest.TestCase):
         with patch.object(self.evidence, 'datetime', Clock), \
              patch.object(self.rescue, 'datetime', Clock), \
              patch.object(self.publisher, 'datetime', Clock), \
+             patch.object(self.rescue.retry, 'datetime', Clock), \
              patch.object(self.evidence.urllib.request, 'urlopen', side_effect=responses), \
-             patch.object(self.rescue.retry.time, 'sleep'):
+             (patch.object(self.rescue.retry.time, 'sleep') if skip_sleep else nullcontext()):
             yield
 
     @contextmanager
@@ -292,6 +293,151 @@ class RuntimeRescueTests(unittest.TestCase):
         self.assertEqual(report['native_validation_calls'], 0)
         self.assertEqual(report['native_validation_attempts'], 1)
         self.assertEqual(report['fallback_validation_calls'], 1)
+
+    def test_unknown_backend_bytecode_is_not_executed_when_source_pin_matches(self):
+        self.require_runtime()
+        from importlib._bootstrap_external import _code_to_timestamp_pyc
+        import importlib.util
+        backend = self.root / 'runtime_publication_state.py'
+        original = backend.read_bytes()
+        cached = Path(importlib.util.cache_from_source(str(backend)))
+        cached.parent.mkdir(exist_ok=True)
+        code = compile("from pathlib import Path\nPath('untrusted_backend_pyc_executed').write_text('bad')\n",
+                       str(backend), 'exec')
+        stat = backend.stat()
+        cached.write_bytes(_code_to_timestamp_pyc(code, int(stat.st_mtime), stat.st_size))
+        source = 'import sys;sys.path.insert(0,' + repr(str(self.root)) + ');import quote_rescue_runtime as m;raise SystemExit(m.main())'
+        result = subprocess.run([sys.executable, '-I', '-B', '-X', 'utf8', '-c', source,
+                                 '--expected-ids-json', '{}'], cwd=self.root, capture_output=True)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(json.loads(result.stdout)['status'], 'blocked')
+        self.assertEqual(backend.read_bytes(), original)
+        self.assertFalse((self.root / 'untrusted_backend_pyc_executed').exists(),
+                         'a matching raw source pin does not authorize unrelated cached bytecode')
+
+    def test_existing_unknown_module_is_not_executed_and_fresh_import_failure_is_removed(self):
+        runtime = self.require_runtime()
+        saved = sys.modules.pop('runtime_publication_state')
+        original, alias = self.publisher.validate_state, self.evidence.history_receipts
+        try:
+            trap = types.ModuleType('runtime_publication_state')
+            def forbidden(name):
+                raise AssertionError('unknown module attribute must not execute')
+            trap.__getattr__ = forbidden
+            sys.modules['runtime_publication_state'] = trap
+            with runtime.installed(self.root) as report:
+                self.assertIs(self.publisher.validate_state, original)
+                self.assertIs(self.evidence.history_receipts, alias)
+                self.publisher.validate_state(self.root)
+            self.assertEqual(report['native_validation_calls'], 0)
+            del sys.modules['runtime_publication_state']
+            import builtins
+            real_import = builtins.__import__
+            def failed_import(name, *args, **kwargs):
+                if name == 'forward_validation':
+                    raise ImportError('synthetic trusted backend dependency failure')
+                return real_import(name, *args, **kwargs)
+            with patch.object(builtins, '__import__', side_effect=failed_import):
+                with runtime.installed(self.root):
+                    self.assertIs(self.publisher.validate_state, original)
+                    self.assertIs(self.evidence.history_receipts, alias)
+            self.assertNotIn('runtime_publication_state', sys.modules)
+            with runtime.installed(self.root):
+                self.publisher.validate_state(self.root)
+            self.assertIs(sys.modules['runtime_publication_state'], runtime.native)
+            self.assertEqual(Path(runtime.native.__file__).resolve(), self.root / 'runtime_publication_state.py')
+            self.assertEqual(runtime.native.__spec__.name, 'runtime_publication_state')
+            self.assertIs(runtime.native.validate_state.__globals__, runtime.native.__dict__)
+        finally:
+            sys.modules['runtime_publication_state'] = saved
+
+    def test_keyword_calls_and_native_batch_interrupt_restore_both_hooks(self):
+        runtime = self.require_runtime()
+        rows = self.frozen.read_rows(self.root / self.evidence.BINDINGS, self.evidence.BCOLS)
+        want = self.base.history_receipts(self.root, self.evidence.BINDINGS, self.evidence.BCOLS, rows)
+        original, alias = self.publisher.validate_state, self.evidence.history_receipts
+        with runtime.installed(self.root):
+            self.assertIsNone(self.publisher.validate_state(root=self.root))
+            self.assertEqual(self.evidence.history_receipts(root=self.root, relative=self.evidence.BINDINGS,
+                                                            columns=self.evidence.BCOLS, current=rows), want)
+        real_run = subprocess.run
+        interrupt = KeyboardInterrupt('synthetic native batch cancellation')
+        def interrupted(args, **kwargs):
+            if args[:3] == ['git', 'cat-file', '--batch']:
+                raise interrupt
+            return real_run(args, **kwargs)
+        with patch.object(subprocess, 'run', side_effect=interrupted), \
+             self.assertRaises(KeyboardInterrupt) as caught:
+            with runtime.installed(self.root):
+                self.publisher.validate_state(root=self.root)
+        self.assertIs(caught.exception, interrupt)
+        self.assertIs(self.publisher.validate_state, original)
+        self.assertIs(self.evidence.history_receipts, alias)
+
+    def test_real_push_two_rejections_then_success_match_legacy_and_validate_five_times(self):
+        runtime = self.require_runtime()
+        baseline = self.area / 'baseline'
+        baseline_remote = self.area / 'baseline.git'
+        subprocess.run(['git', '-c', 'core.longpaths=true', '-c', 'core.autocrlf=false',
+                        'clone', '-q', str(self.root), str(baseline)], check=True, capture_output=True)
+        subprocess.run(['git', 'clone', '--bare', '-q', str(self.remote), str(baseline_remote)],
+                       check=True, capture_output=True)
+        for args in [('config', 'core.autocrlf', 'false'),
+                     ('remote', 'set-url', 'origin', str(baseline_remote))]:
+            subprocess.run(['git', *args], cwd=baseline, check=True, capture_output=True)
+        hook = ("#!/bin/sh\nn=0\nif test -f reject-count; then n=$(cat reject-count); fi\n"
+                "n=$((n + 1))\nprintf '%s\\n' \"$n\" > reject-count\n"
+                "if test \"$n\" -le 2; then echo \"synthetic rejection $n\" >&2; exit 1; fi\nexit 0\n")
+        for remote in (self.remote, baseline_remote):
+            # Local receive-pack clears process Git overrides; this retained
+            # synthetic remote needs its own Windows long-path setting.
+            subprocess.run(['git', '--git-dir=' + str(remote), 'config', 'core.longpaths', 'true'],
+                           check=True, capture_output=True)
+            path = remote / 'hooks/pre-receive'
+            path.write_text(hook, encoding='utf-8', newline='\n')
+            path.chmod(0o755)
+        stamp = self.now.isoformat()
+        environment = {'GIT_AUTHOR_DATE': stamp, 'GIT_COMMITTER_DATE': stamp}
+        saved = tuple(getattr(self, name) for name in ('root', 'remote', 'rescue', 'base', 'publisher',
+                                                      'evidence', 'frozen', 'native', 'runtime'))
+        try:
+            with graph(baseline) as modules:
+                self.root, self.remote = baseline, baseline_remote
+                for name, key in (('rescue', 'quote_only_rescue'), ('base', 'forward_validation'),
+                                  ('publisher', 'publish_forward_evidence'), ('evidence', 'quote_evidence_v2'),
+                                  ('frozen', 'direction_forward_v42'), ('native', 'runtime_publication_state')):
+                    setattr(self, name, modules[key])
+                with patch.dict(os.environ, environment), self.market(skip_sleep=False):
+                    legacy = self.rescue.run(baseline, ['p'], clock=lambda: self.now)
+                legacy_bytes = {p.relative_to(baseline).as_posix(): p.read_bytes()
+                                for p in (baseline / 'data').rglob('*') if p.is_file()}
+        finally:
+            for name, value in zip(('root', 'remote', 'rescue', 'base', 'publisher',
+                                    'evidence', 'frozen', 'native', 'runtime'), saved):
+                setattr(self, name, value)
+        original, alias = self.publisher.validate_state, self.evidence.history_receipts
+        with self.commands() as seen, patch.dict(os.environ, environment), \
+             self.market(skip_sleep=False), runtime.installed(self.root) as report:
+            current = self.rescue.run(self.root, ['p'], clock=lambda: self.now)
+        self.assertEqual(current, legacy)
+        self.assertEqual({p.relative_to(self.root).as_posix(): p.read_bytes()
+                          for p in (self.root / 'data').rglob('*') if p.is_file()}, legacy_bytes)
+        self.assertEqual(current['status'], 'verified_window_quote_rescue')
+        self.assertEqual(report['native_validation_calls'], 5)
+        self.assertEqual(report['native_history_calls'], 1)
+        self.assertEqual(report['fallback_validation_calls'], 0)
+        self.assertEqual(report['fallback_history_calls'], 0)
+        validations = [call['diagnostics'] for call in report['calls'] if call['kind'] == 'validation']
+        self.assertEqual(len(validations), 5)
+        self.assertTrue(all(len(row['histories']) == 3 and
+                            all(h['mode'] == 'native_batch' and h['status'] == 'ok'
+                                for h in row['histories']) for row in validations))
+        self.assertEqual(sum(args[1:3] == ['cat-file', '--batch'] for args in seen), 16)
+        self.assertEqual(sum(args[1] == 'push' for args in seen), 3)
+        self.assertEqual((self.remote / 'reject-count').read_text().strip(), '3')
+        self.assertEqual((baseline_remote / 'reject-count').read_text().strip(), '3')
+        self.assertIs(self.publisher.validate_state, original)
+        self.assertIs(self.evidence.history_receipts, alias)
 
     def test_readonly_probe_cli_completes_original_and_native_without_capture(self):
         self.require_runtime()
