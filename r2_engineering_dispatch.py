@@ -145,7 +145,8 @@ def queue_snapshot(api,path,validate_row):
 def _active(client,workflow,ignore=()):
     def validate(row):
         if (type(row.get('id')) is not int or row['id']<=0 or row.get('head_branch')!='main' or
-                row.get('path','').split('@')[0]!='.github/workflows/'+workflow):raise ValueError('invalid queue identity')
+                row.get('path','').split('@')[0]!='.github/workflows/'+workflow or
+                row.get('status') not in STATES+('completed',)):raise ValueError('invalid queue identity')
     for status in STATES:
         path='/actions/workflows/'+workflow+'/runs?'+urlencode({'branch':'main','status':status,'per_page':1})
         rows,count=queue_snapshot(client.api,path,validate)

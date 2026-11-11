@@ -150,7 +150,7 @@ class BoundDispatch(unittest.TestCase):
         class SharedQueue(Client):
             def api(self,path):
                 if '/phase2_forward_live_v2.yml/runs?' in path and 'status=queued' in path:
-                    return {'total_count':1,'workflow_runs':[{'id':77,'head_branch':'main','path':'.github/workflows/phase2_forward_live_v2.yml'}]}
+                    return {'total_count':1,'workflow_runs':[{'id':77,'head_branch':'main','path':'.github/workflows/phase2_forward_live_v2.yml','status':'queued'}]}
                 return super().api(path)
         c=SharedQueue();out=subject.dispatch_bound(subject.LIVE,{PATH:BLOB},NOW+timedelta(minutes=10),
             client=c,clock=lambda:NOW,mode='canary')
@@ -244,7 +244,8 @@ class QueueReadTests(unittest.TestCase):
             for value in ({'total_count':True,'workflow_runs':[]},
                           {'total_count':-1,'workflow_runs':[]},
                           {'total_count':0,'workflow_runs':[dict(self.row(module),head_branch='wrong')]},
-                          {'total_count':0,'workflow_runs':[dict(self.row(module),id=True)]}):
+                          {'total_count':0,'workflow_runs':[dict(self.row(module),id=True)]},
+                          {'total_count':0,'workflow_runs':[dict(self.row(module),status='garbage')]}):
                 with self.subTest(module=module.__name__,value=value):
                     read,calls=self.reader([value])
                     with self.assertRaises(ValueError):self.active(module,read)
