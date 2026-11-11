@@ -206,6 +206,30 @@ def _committed_source(publication):
             'sha': hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest(), 'size': len(raw)}
 
 
+class _Original18QueueClient:
+    """Strict same-URL census reread, using the original client's total budget."""
+    def __init__(self, client):
+        self._client = client
+
+    def api(self, path):
+        if not re.fullmatch(r'/actions/workflows/learned_shadow_v1\.yml/runs\?branch=main&status='
+                            r'(pending|queued|requested|waiting|in_progress)&per_page=1', path):
+            return self._client.api(path)
+        from r2_engineering_dispatch import queue_snapshot, STATES
+        def validate(row):
+            if (type(row.get('id')) is not int or row['id'] <= 0
+                    or row.get('head_branch') != 'main'
+                    or not isinstance(row.get('path'), str)
+                    or row['path'].split('@')[0] != '.github/workflows/learned_shadow_v1.yml'
+                    or row.get('status') not in STATES+('completed',)):
+                raise ValueError('invalid original18 queue identity')
+        rows, count = queue_snapshot(self._client.api, path, validate)
+        return {'workflow_runs': rows, 'total_count': count}
+
+    def request(self, path, payload=None):
+        return self._client.request(path, payload)
+
+
 def request_original18_witness(capture, publication, state, *, dispatch=None, client=None):
     """After exact data readback, request one existing audit per public head.
 
@@ -231,6 +255,8 @@ def request_original18_witness(capture, publication, state, *, dispatch=None, cl
         return {'status': 'UNKNOWN_PREVIOUS_AUDIT_DISPATCH_NOT_RETRIED', 'requested_head': head}
     if dispatch is None:
         from runtime_r2_bridge import dispatch_existing
+        from runtime_custody_bridge import GitHubClient
+        client = _Original18QueueClient(client if client is not None else GitHubClient())
         source = (_committed_source(publication)
                   if capture.get('runtime_status') == 'WAIT_EXACT_SOURCE_WITNESS' else None)
         def intent():

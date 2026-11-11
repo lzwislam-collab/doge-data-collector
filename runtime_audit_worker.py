@@ -17,6 +17,10 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 import runtime_process
+try:
+    import resource as _resource
+except Exception:
+    _resource = None
 
 SOURCE_BINDING_BLOB='f9b5136cc207558268cafeeb709436cff5e7a733'
 
@@ -365,8 +369,116 @@ def command(*args, cwd):
     return completed.stdout
 
 
+_TELEMETRY_CPU_KEYS = ('parent_user_seconds', 'parent_system_seconds',
+                       'child_user_seconds', 'child_system_seconds')
+_TELEMETRY_CHILD_COUNTERS = ('ru_inblock', 'ru_majflt', 'ru_nvcsw', 'ru_nivcsw')
+
+
+def _telemetry_number(value, maximum):
+    return type(value) in (int, float) and math.isfinite(value) and 0 <= value <= maximum
+
+
+def _telemetry_thread_value(value):
+    return value if type(value) is str and re.fullmatch(r'[1-9][0-9]{0,5}', value) else 'unknown'
+
+
+def _read_command_telemetry():
+    """Read existing local counters only; unsupported measurements stay absent.
+
+    Linux RUSAGE_CHILDREN includes waited children and their waited descendants.
+    It is cumulative accounting, not a claim of exclusive ownership of a CPU.
+    """
+    row = {}
+    for field, name in (('openblas_num_threads', 'OPENBLAS_NUM_THREADS'),
+                        ('omp_num_threads', 'OMP_NUM_THREADS')):
+        try: row[field] = _telemetry_thread_value(os.environ.get(name))
+        except Exception: row[field] = 'unknown'
+    try:
+        if _resource is not None:
+            parent = _resource.getrusage(_resource.RUSAGE_SELF)
+            children = _resource.getrusage(_resource.RUSAGE_CHILDREN)
+            values = (parent.ru_utime, parent.ru_stime, children.ru_utime, children.ru_stime)
+            if all(_telemetry_number(value, 10**9) for value in values):
+                row.update(zip(_TELEMETRY_CPU_KEYS, values))
+            for name in _TELEMETRY_CHILD_COUNTERS:
+                try:
+                    value = getattr(children, name)
+                    if type(value) is int and 0 <= value <= 10**15:
+                        row['child_' + name] = value
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    try:
+        load = os.getloadavg()
+        if type(load) is tuple and len(load) == 3 and all(_telemetry_number(v, 10**6) for v in load):
+            row['load'] = load
+    except Exception:
+        pass
+    try:
+        count = os.cpu_count()
+        if type(count) is int and 0 < count <= 65536:
+            row['os_cpu_count'] = count
+    except Exception:
+        pass
+    try:
+        affinity = os.sched_getaffinity(0)
+        if (type(affinity) is set and 0 < len(affinity) <= 65536
+                and all(type(cpu) is int and 0 <= cpu < 2**31 for cpu in affinity)):
+            row['sched_getaffinity_count'] = len(affinity)
+    except Exception:
+        pass
+    return row
+
+
+def _safe_command_telemetry():
+    try:
+        row = _read_command_telemetry()
+        return row if type(row) is dict else {}
+    except Exception:
+        return {}
+
+
+def _emit_command_telemetry(phase, before, **metadata):
+    """Independent bounded diagnostic: never change a command result or error."""
+    try:
+        if phase not in ('clone',) + SCRIPTS:
+            return
+        after = _safe_command_telemetry()
+        row = {'kind': 'runtime_source_audit_telemetry', 'schema_version': 1,
+               'phase': phase, 'worker_pid': os.getpid(),
+               'at_utc': datetime.now(timezone.utc).isoformat(), 'cpu_status': 'unknown'}
+        for field in ('openblas_num_threads', 'omp_num_threads'):
+            row[field] = _telemetry_thread_value(before.get(field))
+        head = metadata.get('input_head')
+        if type(head) is str and re.fullmatch(r'[0-9a-f]{40}', head):
+            row['input_head'] = head
+        if all(_telemetry_number(s.get(key), 10**9) for s in (before, after) for key in _TELEMETRY_CPU_KEYS):
+            deltas = {key + '_delta': after[key] - before[key] for key in _TELEMETRY_CPU_KEYS}
+            if all(_telemetry_number(value, 10**9) for value in deltas.values()):
+                row.update(deltas)
+                row['cpu_status'] = 'ok'
+        for name in _TELEMETRY_CHILD_COUNTERS:
+            key = 'child_' + name
+            if (all(type(s.get(key)) is int and 0 <= s[key] <= 10**15 for s in (before, after))
+                    and after[key] >= before[key]):
+                row[key + '_delta'] = after[key] - before[key]
+        for suffix, snapshot in (('before', before), ('after', after)):
+            for key in ('os_cpu_count', 'sched_getaffinity_count'):
+                value = snapshot.get(key)
+                if type(value) is int and 0 < value <= 65536:
+                    row[key + '_' + suffix] = value
+            load = snapshot.get('load')
+            if type(load) is tuple and len(load) == 3 and all(_telemetry_number(v, 10**6) for v in load):
+                row.update((f'load_{minutes}m_{suffix}', value) for minutes, value in zip((1, 5, 15), load))
+        print(json.dumps(row, sort_keys=True, allow_nan=False), flush=True)
+    except Exception:
+        pass
+
+
 def timed_command(phase, *args, cwd, **metadata):
     start = time.monotonic()
+    telemetry_before = _safe_command_telemetry()
     emit_progress(phase, 'begin', **metadata)
     try:
         output = command(*args, cwd=cwd)
@@ -374,9 +486,11 @@ def timed_command(phase, *args, cwd, **metadata):
         try: exc._audit_command_phase = phase
         except Exception: pass
         emit_progress(phase, 'end', status='error', seconds=elapsed(start), error=exc, **metadata)
+        _emit_command_telemetry(phase, telemetry_before, **metadata)
         raise
     seconds = time.monotonic()-start
     emit_progress(phase, 'end', status='ok', seconds=seconds, **metadata)
+    _emit_command_telemetry(phase, telemetry_before, **metadata)
     return output, seconds
 
 
