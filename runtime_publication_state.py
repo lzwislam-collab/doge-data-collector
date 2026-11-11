@@ -131,6 +131,41 @@ def _bodies(raw, objects):
     return bodies
 
 
+def _closed_csv(body):
+    # Strictness is only an optimization eligibility check. The original
+    # nonstrict reader still decides every validation result and exception.
+    try:
+        for row in csv.reader(io.StringIO(body), strict=True):
+            pass
+    except csv.Error:
+        return False
+    return True
+
+
+def _snapshot(body, columns, previous_body, prior, closed, relative):
+    # Reuse is local to one complete history scan. A strict closed CSV EOF plus
+    # a literal record separator prevents a quoted field from growing across
+    # the old EOF. Reformatting and nonstrict-only CSV use the full old parser.
+    if closed and body == previous_body:
+        return prior, True
+    if closed and body.startswith(previous_body + '\n'):
+        fragment = body[len(previous_body) + 1:]
+        reader = csv.DictReader(io.StringIO(fragment), fieldnames=columns)
+        snap = prior.copy()
+    else:
+        fragment = body
+        reader = csv.DictReader(io.StringIO(body))
+        if reader.fieldnames != columns:
+            raise ValueError('historic schema revised: ' + relative)
+        snap = {}
+    for row in reader:
+        fid = row['forecast_id']
+        if not fid or fid in snap:
+            raise ValueError('duplicate historical ID')
+        snap[fid] = row
+    return snap, _closed_csv(fragment)
+
+
 def _native_history(root, relative, columns, current, report):
     # Preserve the original shallow check before log/history/current validation.
     if base.git(root, 'rev-parse', '--is-shallow-repository') != 'false':
@@ -142,6 +177,7 @@ def _native_history(root, relative, columns, current, report):
     report['ordered_oids_sha256'] = hashlib.sha256(
         ('\n'.join(rev for rev, stamp in entries) + '\n').encode('ascii')).hexdigest()
     prior, receipts = {}, {}
+    previous_body, closed = None, False
     for offset in range(0, len(entries), BATCH_SIZE):
         chunk = entries[offset:offset + BATCH_SIZE]
         revisions = [rev for rev, stamp in chunk]
@@ -151,15 +187,7 @@ def _native_history(root, relative, columns, current, report):
         for (rev, stamp), raw in zip(chunk, bodies):
             # subprocess text=True uses universal newlines before stdout.strip().
             body = raw.decode('utf-8').replace('\r\n', '\n').replace('\r', '\n').strip()
-            reader = csv.DictReader(io.StringIO(body))
-            if reader.fieldnames != columns:
-                raise ValueError('historic schema revised: ' + relative)
-            snap = {}
-            for row in reader:
-                fid = row['forecast_id']
-                if not fid or fid in snap:
-                    raise ValueError('duplicate historical ID')
-                snap[fid] = row
+            snap, closed = _snapshot(body, columns, previous_body, prior, closed, relative)
             if any(snap.get(k) != v for k, v in prior.items()):
                 raise ValueError('committed record revised: ' + relative)
             # Original timestamp parsing comes after this revision's CSV and
@@ -173,6 +201,7 @@ def _native_history(root, relative, columns, current, report):
             for fid in snap.keys() - prior.keys():
                 receipts[fid] = {'commit_sha': rev, 'committed_at_utc': committed}
             prior = snap
+            previous_body = body
     if any(current.get(k) != v for k, v in prior.items()):
         raise ValueError('current record revised: ' + relative)
     return receipts
