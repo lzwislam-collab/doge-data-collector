@@ -1,6 +1,10 @@
 """The six existing schedules recover data only, with a callback audit."""
 from pathlib import Path
 import unittest
+from source_recovery_test_dependencies import ensure_test_dependencies
+
+ensure_test_dependencies()
+
 import yaml
 
 ROOT=Path(__file__).resolve().parent

@@ -12,6 +12,10 @@ from contextlib import ExitStack, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
+from source_recovery_test_dependencies import ensure_test_dependencies
+
+ensure_test_dependencies()
+
 import macro_collector as macro
 import etf_flows as etf
 
