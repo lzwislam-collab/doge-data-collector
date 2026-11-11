@@ -97,6 +97,64 @@ class EngineeringRuntime(unittest.TestCase):
         return self.subject.witness({fixtures.SCORE: fixtures.EXPECTED}, rows,
                                     r.read_at, before, after)
 
+    def upgraded_context(self):
+        """A real local transport upgrade; retained candidate Git bytes stay old."""
+        from contextlib import contextmanager
+        @contextmanager
+        def context():
+            target=self.root/'r2_engineering_readiness.py'
+            original=target.read_bytes()
+            upgraded=dict(self.manifest,engineering_files_sha256_lf=dict(self.manifest['engineering_files_sha256_lf']))
+            try:
+                target.write_bytes(original+b'upgraded engineering entry\n')
+                upgraded['engineering_files_sha256_lf']['r2_engineering_readiness.py']=digest(target.read_bytes())
+                (self.root/MANIFEST).write_bytes((json.dumps(upgraded,indent=2,sort_keys=True)+'\n').encode())
+                with self.subject.context():yield
+            finally:
+                target.write_bytes(original)
+                (self.root/MANIFEST).write_bytes(self.raw)
+        return context()
+
+    def test_registered_predecessor_witness_survives_engineering_upgrade_with_actual_metadata(self):
+        row=self.row()
+        with mock.patch.object(self.subject,'PUBLISHED_PREDECESSOR_MANIFESTS',frozenset({digest(self.raw)}),create=True),self.upgraded_context():
+            proof=self.witness([row])
+        self.assertIsNotNone(proof,'upgrading engineering code invalidated a registered old public witness')
+        self.assertEqual(proof['engineering_manifest_sha256'],digest(self.raw))
+        self.assertEqual(proof['head_sha'],self.head)
+        self.assertEqual(proof['run_id'],row['id'])
+        self.assertEqual(proof['run_attempt'],row['run_attempt'])
+        self.assertEqual(row['status'],'completed')
+        self.assertEqual(row['conclusion'],'success')
+
+    def test_unknown_predecessor_and_changed_predecessor_source_remain_rejected(self):
+        row=self.row()
+        with mock.patch.object(self.subject,'PUBLISHED_PREDECESSOR_MANIFESTS',frozenset(),create=True),self.upgraded_context():
+            self.assertIsNone(self.witness([row]))
+        with mock.patch.object(self.subject,'PUBLISHED_PREDECESSOR_MANIFESTS',frozenset({digest(self.raw)}),create=True),self.upgraded_context():
+            original=self.subject.read_identity_at
+            def changed(head,path):
+                value=original(head,path)
+                return value+b'wrong code\n' if path=='r2_engineering_readiness.py' else value
+            with mock.patch.object(self.subject,'_identity_cache',OrderedDict()),mock.patch.object(self.subject,'_identity_cache_bytes',0),mock.patch.object(self.subject,'read_identity_at',side_effect=changed):
+                self.assertIsNone(self.witness([row]))
+
+    def test_predecessor_keeps_original_deadline_and_server_failure_rejection(self):
+        row=self.row()
+        with mock.patch.object(self.subject,'PUBLISHED_PREDECESSOR_MANIFESTS',frozenset({digest(self.raw)}),create=True),self.upgraded_context():
+            self.assertIsNone(self.witness([row],before=datetime(2026,11,9,17,41,tzinfo=timezone.utc)))
+            failed=dict(row,conclusion='failure')
+            self.assertIsNone(self.witness([failed]))
+
+    def test_approved_predecessor_never_allows_changed_local_execution(self):
+        target=self.root/'r2_engineering_readiness.py'
+        original=target.read_bytes()
+        try:
+            target.write_bytes(original+b'wrong local execution\n')
+            with mock.patch.object(self.subject,'PUBLISHED_PREDECESSOR_MANIFESTS',frozenset({digest(self.raw)}),create=True):
+                with self.assertRaises(ValueError):self.subject.verify_transport()
+        finally:target.write_bytes(original)
+
     def test_new_workflow_qualifies_only_with_actual_identity_and_version_proof(self):
         row = self.row()
         result = self.witness([row])

@@ -120,16 +120,38 @@ def _matches(client,head,blobs,absence_proof):
         if value['sha']!=sha:return False
     return True
 
+def queue_snapshot(api,path,validate_row):
+    """One reread only for a legal census whose count and entries disagree.
+
+    The caller's same transport client retains its original total deadline.
+    Provider errors, bad schema and bad identities never authorize a reread.
+    This does not make separate queue observations atomic or retry any POST.
+    """
+    for attempt in range(2):
+        value=api(path)
+        if not isinstance(value,dict):raise ValueError('invalid workflow queue schema')
+        rows,count=value.get('workflow_runs'),value.get('total_count')
+        if not isinstance(rows,list) or type(count) is not int or count<0 or len(rows)>1:
+            raise ValueError('invalid workflow queue schema')
+        if rows:
+            if not isinstance(rows[0],dict):raise ValueError('invalid workflow queue row')
+            validate_row(rows[0])
+        if bool(rows)==bool(count):return rows,count
+        print(json.dumps({'event':'workflow_queue_inconsistent','path':path,
+              'count':count,'row_count':len(rows),'read_attempt':attempt+1},sort_keys=True),file=sys.stderr)
+        if attempt:raise ValueError('workflow queue inconsistent: count='+str(count)+' rows='+str(len(rows))+' path='+path)
+
+
 def _active(client,workflow,ignore=()):
+    def validate(row):
+        if (type(row.get('id')) is not int or row['id']<=0 or row.get('head_branch')!='main' or
+                row.get('path','').split('@')[0]!='.github/workflows/'+workflow or
+                row.get('status') not in STATES+('completed',)):raise ValueError('invalid queue identity')
     for status in STATES:
-        value=client.api('/actions/workflows/'+workflow+'/runs?'+urlencode({'branch':'main','status':status,'per_page':1}))
-        rows,count=value['workflow_runs'],value['total_count']
-        if not isinstance(rows,list) or type(count) is not int or count<0 or len(rows)>1 or bool(rows)!=bool(count):
-            raise ValueError('incomplete dispatch queue view')
+        path='/actions/workflows/'+workflow+'/runs?'+urlencode({'branch':'main','status':status,'per_page':1})
+        rows,count=queue_snapshot(client.api,path,validate)
         if rows:
             row=rows[0]
-            if (type(row.get('id')) is not int or row['id']<=0 or row.get('head_branch')!='main' or
-                row.get('path','').split('@')[0]!='.github/workflows/'+workflow):raise ValueError('invalid queue identity')
             if row['id'] not in ignore or count!=1:return row
     return None
 
