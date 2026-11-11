@@ -25,7 +25,17 @@ on:
       - 'test_runtime_process_lifecycle.py'
       - 'runtime_p2_history.py'
       - 'runtime_publication_state.py'
+      - 'test_runtime_history_prefix_transport.py'
       - 'runtime_paired_history.py'
+      - 'runtime_paired_git_stream.py'
+      - 'runtime_witness_git_stream.py'
+      - 'test_runtime_witness_git_stream.py'
+      - 'test_runtime_witness_stream_receipt.py'
+      - 'test_runtime_canonical_direct.py'
+      - 'test_runtime_canonical_receipt_v2.py'
+      - 'test_runtime_paired_git_stream.py'
+      - 'test_runtime_paired_stream_launcher.py'
+      - 'test_runtime_paired_stream_receipt.py'
       - 'runtime_core_history_profile.py'
       - 'test_runtime_core_history_profile.py'
       - 'test_runtime_publication_state.py'
@@ -48,6 +58,15 @@ on:
       - 'test_archive_capture_bridge.py'
       - 'p0_open_target_guard.py'
       - 'runtime_audit_worker.py'
+      - 'runtime_audit_cli.py'
+      - 'test_runtime_audit_cli.py'
+      - 'test_runtime_canonical_walk.py'
+      - 'runtime_p0_inventory_transport.py'
+      - 'test_runtime_p0_inventory_transport.py'
+      - 'test_runtime_p0_launcher.py'
+      - 'test_runtime_p0_profile_receipt.py'
+      - 'runtime_audit_pipeline_profile.py'
+      - 'test_runtime_audit_pipeline_profile.py'
       - 'runtime_audit_checkout_profile.py'
       - 'test_runtime_audit_checkout_profile.py'
       - 'test_runtime_audit_worker.py'
@@ -82,7 +101,17 @@ on:
       - 'test_runtime_process_lifecycle.py'
       - 'runtime_p2_history.py'
       - 'runtime_publication_state.py'
+      - 'test_runtime_history_prefix_transport.py'
       - 'runtime_paired_history.py'
+      - 'runtime_paired_git_stream.py'
+      - 'runtime_witness_git_stream.py'
+      - 'test_runtime_witness_git_stream.py'
+      - 'test_runtime_witness_stream_receipt.py'
+      - 'test_runtime_canonical_direct.py'
+      - 'test_runtime_canonical_receipt_v2.py'
+      - 'test_runtime_paired_git_stream.py'
+      - 'test_runtime_paired_stream_launcher.py'
+      - 'test_runtime_paired_stream_receipt.py'
       - 'runtime_core_history_profile.py'
       - 'test_runtime_core_history_profile.py'
       - 'test_runtime_publication_state.py'
@@ -105,6 +134,15 @@ on:
       - 'test_archive_capture_bridge.py'
       - 'p0_open_target_guard.py'
       - 'runtime_audit_worker.py'
+      - 'runtime_audit_cli.py'
+      - 'test_runtime_audit_cli.py'
+      - 'test_runtime_canonical_walk.py'
+      - 'runtime_p0_inventory_transport.py'
+      - 'test_runtime_p0_inventory_transport.py'
+      - 'test_runtime_p0_launcher.py'
+      - 'test_runtime_p0_profile_receipt.py'
+      - 'runtime_audit_pipeline_profile.py'
+      - 'test_runtime_audit_pipeline_profile.py'
       - 'runtime_audit_checkout_profile.py'
       - 'test_runtime_audit_checkout_profile.py'
       - 'test_runtime_audit_worker.py'
@@ -194,7 +232,17 @@ jobs:
               'all_original_checks_retained':True,'source_head_refs_unchanged':True,
               'natural_cycle_cadence_verified':False},sort_keys=True))
           PY
-      - run: python -m unittest discover -q
+      - name: Run regression tests
+        env:
+          NATIVE_TRANSPORT_PR: ${{ github.event_name == 'pull_request' && github.head_ref == 'fix/p0-archive-audit-20261111' }}
+        run: |
+          # This PR also requires the unchanged complete scientific-evidence suite.
+          # Avoid repeating that suite before the isolated six-CLI comparison.
+          if [ "$NATIVE_TRANSPORT_PR" = 'true' ]; then
+            python -m unittest -q test_runtime_audit_cli test_runtime_history_prefix_transport test_runtime_audit_pipeline_profile test_runtime_canonical_walk test_runtime_p0_inventory_transport test_runtime_p0_launcher test_runtime_p0_profile_receipt test_runtime_paired_git_stream test_runtime_paired_stream_launcher test_runtime_paired_stream_receipt test_runtime_canonical_direct test_runtime_canonical_receipt_v2 test_runtime_witness_git_stream test_runtime_witness_stream_receipt
+          else
+            python -m unittest discover -q
+          fi
       - run: python forward_validation_v2.py --integrity-only
 
       - name: Run original source audits in the isolated pinned checkout
@@ -277,3 +325,25 @@ jobs:
           retention-days: 7
 
 
+
+      - name: Compare whole original audit CLIs with native history transport
+        if: github.event_name == 'pull_request' && github.head_ref == 'fix/p0-archive-audit-20261111'
+        timeout-minutes: 11
+        env:
+          DOGE_AUDIT_PAIRED_CPU_PROFILE: '0'
+          DOGE_AUDIT_PAIRED_COMPONENT_PROFILE: '0'
+          GITHUB_TOKEN: ${{ github.token }}
+          OPENBLAS_NUM_THREADS: '1'
+          OMP_NUM_THREADS: '1'
+          PYTHONUTF8: '1'
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python -B runtime_audit_pipeline_profile.py --source-root "$GITHUB_WORKSPACE" --ref "$GITHUB_SHA" --output "$RUNNER_TEMP/source-audit-native-profile"
+      - name: Preserve whole audit CLI comparison
+        if: always() && github.event_name == 'pull_request' && github.head_ref == 'fix/p0-archive-audit-20261111'
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-audit-native-profile-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/source-audit-native-profile/
+          if-no-files-found: error
+          retention-days: 7
