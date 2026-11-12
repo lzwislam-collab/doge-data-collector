@@ -1,0 +1,56 @@
+name: Verify isolated DOGE news research V2
+on:
+  push:
+    branches: [research/news-event-pit-v2-20261016]
+    paths:
+      - news_event_research_v2.py
+      - test_news_event_research_v2.py
+      - .github/workflows/news_event_research_v2_verify.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run isolated deterministic regression tests
+        run: python -m unittest -q test_news_event_research_v2.py
+      - name: Replay actual immutable news ledger at fixed as-of
+        run: |
+          python news_event_research_v2.py --asof 2026-10-16T05:10:24Z > "$RUNNER_TEMP/news-replay.json"
+          python - "$RUNNER_TEMP/news-replay.json" <<'PY'
+          import json,sys
+          j=json.load(open(sys.argv[1],encoding='utf-8'))
+          if j['input_news_rows'] != 102:
+              raise SystemExit(f"wrong frozen-source news sample size: {j['input_news_rows']}")
+          if j['missing_or_stale_sources']:
+              raise SystemExit(f"source poll proof unexpectedly stale: {j['missing_or_stale_sources']}")
+          if j['coverage_sufficient_for_directional_claim'] is not False or j['prediction_direction'] is not None:
+              raise SystemExit("research-only, no-forecast invariant failed")
+          if not any('liquidated' in e['title'].lower() and e['primary_type']=='LEVERAGE_STRESS' for e in j['events']):
+              raise SystemExit("missed known liquidations headline")
+          latest=sorted(j['events'],key=lambda x:x['first_usable_utc'])[-4:]
+          print(json.dumps({
+              "evidence_kind":"NON_PREDICTIVE_FIXED_ASOF_LEDGER_REPLAY",
+              "asof_utc":j['asof_utc'],
+              "news_rows":j['input_news_rows'],
+              "provider_records":j['distinct_provider_records'],
+              "deduplicated_events":j['deduplicated_event_count'],
+              "collection_receipt_age_hours":j['collector_receipt_age_hours'],
+              "latest_new_event_age_hours":j['latest_new_event_age_hours'],
+              "missing_or_stale_sources":j['missing_or_stale_sources'],
+              "publication_lag_buckets":j['news_publication_lag_buckets'],
+              "historical_critical_mentions":j['critical_event_mentions_all_history'],
+              "timely_current_watch":j['critical_watch_count'],
+              "recent_titles":[{"title":e['title'],"category":e['primary_type'],"phase":e['reporting_phase'],
+                "lag_h":e['publication_lag_hours']} for e in latest],
+              "prediction_direction":j['prediction_direction']
+          },ensure_ascii=False,sort_keys=True))
+          PY
