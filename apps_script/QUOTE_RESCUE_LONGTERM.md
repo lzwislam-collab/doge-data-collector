@@ -184,3 +184,55 @@ remain <=5 seconds, intervals <=600 seconds and projected 288 main plus 96
 watchdog full durations <=30 minutes/day. Do not restart or add samples to
 improve the result. The original interrupted 24-hour window remains interrupted;
 recovery does not retroactively establish 24-hour stability.
+
+## Local-only phase timing (PHASE_TIMING_20261017)
+
+This diagnostic revision is prepared locally only. It does not authorize a save
+to Apps Script, deployment, execution, new observation, timer change or recovery.
+The completed fixed 12-run cohort, all slow samples, the extra 20-second execution,
+hourly failures and original interrupted-window evidence remain immutable.
+
+Timed callbacks add a runtime-only `timing` object to the existing log:
+
+- `entry_at_utc`: first clock inside the shared timed handler, before lock and
+  property-service acquisition; `legacy_started_offset_ms` locates the existing
+  `started_at_utc` relative to this clock.
+- `spans_ms`: lock acquisition, property-service handle acquisition, aggregate
+  property gets/sets, state loading, admission persistence, credential checks,
+  CSV/JSON parsing, decision calls, pinned-content integrity, dispatch persistence
+  and final persistence. A failing operation still records its elapsed span.
+- `requests`: serial request attempts with closed endpoint labels, method,
+  available numeric HTTP status, `completed`, and separate fetch, response-code,
+  header and content-text spans. No URLs, property names, property values,
+  credentials, headers or response bodies are added to the diagnostic log.
+- `measured_to_log_ms`: handler entry through final persistence and any failure
+  handling, ending before log serialization/output and lock release. It excludes
+  platform initialization before handler entry. It is **not full platform time**.
+
+Spans overlap: for example state loading contains a property read, credentials
+contain property reads, and final persistence contains a property write. Do not
+sum nested spans as exclusive time. Unlisted gaps remain unattributed. Missing
+spans mean that stage was not reached; `completed:false` means the request did
+not finish all response processing, including when an existing safety check
+rejected it. A stage interrupted by hard termination cannot emit a final log.
+
+`LONGTERM_LOCK_BUSY` explicitly records a failed immediate lock attempt, without
+properties, HTTP, email, state changes or releasing another callback's lock. It
+cannot retroactively explain the two historical watchdogs with unavailable logs.
+Failure to acquire the lock service itself or the property handle still propagates
+as before; those failures may have no final diagnostic log.
+
+Legacy `elapsed_ms`, `request_ms`, deadline placement, rolling budget floors and
+all admission/dispatch/score/stop rules retain their existing definitions. In
+particular legacy elapsed ends before final persistence, while legacy request
+time ends after response-code access, before header/content-text access. Added
+instrumentation has overhead and does not promise lower runtime. The original
+<=5-second **full platform main mean**, <=600-second intervals and <=30-minute
+daily full-platform projection remain unchanged. No batching, timeout, retries,
+new requests, extra property operations or persisted timing fields are added.
+
+Local synthetic-delay tests check exact boundaries and unchanged call counts,
+slow and failed requests, lock-busy zero-work returns, failed final persistence,
+CSV failure, and the existing dependent commit-pinned completion checks. Only a
+separately authorized future deployment and real observations could establish
+live behavior; local timings are not new performance samples.
