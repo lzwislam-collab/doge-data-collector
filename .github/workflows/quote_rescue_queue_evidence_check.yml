@@ -1,0 +1,93 @@
+name: Verify PR 65 pinned queue evidence tests
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+    paths:
+      - '.github/workflows/quote_rescue_queue_evidence_check.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-pinned-36:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      CI_WORKFLOW_SHA: ${{ github.workflow_sha }}
+      CI_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      CI_EVENT_SHA: ${{ github.sha }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: tools/quote_rescue_queue_evidence
+    steps:
+      - name: Checkout the approved PR 65 source, not the CI PR source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: e4fb31677649ea00081fd7d11412ca0999d44f7c
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.11'
+
+      - name: Verify the pinned source and all three file hashes
+        run: |
+          python -B -X utf8 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          expected_sha = 'e4fb31677649ea00081fd7d11412ca0999d44f7c'
+          actual_sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          if actual_sha != expected_sha:
+              raise SystemExit(f'Source SHA mismatch: {actual_sha}')
+          expected = {
+              'quote_rescue_queue_evidence.py': 'beff6ef5f343759495eb7e85d584a0c0a2450950c64fcbfbd4b20b9e75506823',
+              'test_quote_rescue_queue_evidence.py': '7ec3753030c3d51d59f2b35acb0cf7f6a219ecb7dbbd0ccc6a7f50337c627e18',
+              'README.txt': 'fccd955dd53fac48cf488f435a26df05009811d4c0c5c09279237c4b7112390d',
+          }
+          actual = {name: hashlib.sha256(Path(name).read_bytes()).hexdigest() for name in expected}
+          if actual != expected:
+              raise SystemExit('Pinned file hash mismatch: ' + json.dumps(actual, sort_keys=True))
+          print(json.dumps({
+              'source_sha': actual_sha,
+              'ci_workflow_sha': os.environ['CI_WORKFLOW_SHA'],
+              'ci_pr_head_sha': os.environ['CI_PR_HEAD_SHA'],
+              'ci_event_sha': os.environ['CI_EVENT_SHA'],
+              'python': sys.version,
+              'file_sha256': actual,
+          }, sort_keys=True))
+          PY
+
+      - name: Require and execute exactly 36 offline tests
+        run: |
+          python -B -X utf8 - <<'PY'
+          import json
+          import unittest
+
+          suite = unittest.defaultTestLoader.discover(
+              '.', pattern='test_quote_rescue_queue_evidence.py')
+          discovered = suite.countTestCases()
+          if discovered != 36:
+              raise SystemExit(f'Expected exactly 36 tests; discovered {discovered}')
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          print(json.dumps({
+              'discovered': discovered,
+              'executed': result.testsRun,
+              'skipped': len(result.skipped),
+              'failures': len(result.failures),
+              'errors': len(result.errors),
+              'successful': result.wasSuccessful(),
+          }, sort_keys=True))
+          if result.testsRun != 36 or result.skipped or not result.wasSuccessful():
+              raise SystemExit(1)
+          PY
