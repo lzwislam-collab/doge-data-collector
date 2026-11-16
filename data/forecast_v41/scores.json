@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "status": "ok",
-  "run_utc": "2026-11-15T22:55:06.023046+00:00",
-  "source_cutoff_utc": "2026-11-14",
+  "run_utc": "2026-11-16T07:10:08.702889+00:00",
+  "source_cutoff_utc": "2026-11-15",
   "source": "OKX confirmed 1Dutc DOGE-USDT close; immutable key registry",
   "research_only": true,
   "model_edge_proven": false,
@@ -314,6 +314,22 @@
       "baseline_up_brier": 0.23453377
     },
     {
+      "forecast_id": "doge_empirical_730d_v4_1_2026-10-16_30d",
+      "horizon_days": 30,
+      "anchor_date_utc": "2026-10-16",
+      "target_date_utc": "2026-11-15",
+      "realized_target_close": 0.05988,
+      "realized_up": 0,
+      "elapsed_target_minutes_before_forecast": 70.33,
+      "warning": "Close-to-close horizon began before issued_at_utc; not a full forward period after issuance",
+      "interval_hit": true,
+      "baseline_interval_hit": true,
+      "interval_score_log_pct": 60.369663,
+      "baseline_interval_score_log_pct": 65.114819,
+      "up_brier": 0.18872615,
+      "baseline_up_brier": 0.22093449
+    },
+    {
       "forecast_id": "doge_empirical_730d_v4_1_2026-10-16_7d",
       "horizon_days": 7,
       "anchor_date_utc": "2026-10-16",
@@ -536,13 +552,25 @@
       "baseline_interval_score_log_pct": 10.185168,
       "up_brier": 0.21069605,
       "baseline_up_brier": 0.23430541
+    },
+    {
+      "forecast_id": "doge_empirical_730d_v4_1_2026-11-14_1d",
+      "horizon_days": 1,
+      "anchor_date_utc": "2026-11-14",
+      "target_date_utc": "2026-11-15",
+      "realized_target_close": 0.05988,
+      "realized_up": 1,
+      "elapsed_target_minutes_before_forecast": 9.0,
+      "warning": "Close-to-close horizon began before issued_at_utc; not a full forward period after issuance",
+      "interval_hit": true,
+      "baseline_interval_hit": true,
+      "interval_score_log_pct": 9.231718,
+      "baseline_interval_score_log_pct": 10.193537,
+      "up_brier": 0.29562692,
+      "baseline_up_brier": 0.26680043
     }
   ],
   "pending": [
-    {
-      "forecast_id": "doge_empirical_730d_v4_1_2026-10-16_30d",
-      "reason": "future or unpublished target day"
-    },
     {
       "forecast_id": "doge_empirical_730d_v4_1_2026-10-17_30d",
       "reason": "future or unpublished target day"
@@ -588,10 +616,6 @@
       "reason": "future or unpublished target day"
     },
     {
-      "forecast_id": "doge_empirical_730d_v4_1_2026-11-14_1d",
-      "reason": "future or unpublished target day"
-    },
-    {
       "forecast_id": "doge_empirical_730d_v4_1_2026-11-14_30d",
       "reason": "future or unpublished target day"
     },
@@ -604,22 +628,22 @@
   "horizon_summary": {
     "1d": {
       "all_overlapping": {
-        "n": 15,
-        "rolling_interval_coverage_pct": 93.33,
-        "expanding_interval_coverage_pct": 93.33,
-        "rolling_interval_score_log_pct": 9.97786,
-        "expanding_interval_score_log_pct": 10.40103,
-        "rolling_up_brier": 0.243827,
-        "expanding_up_brier": 0.247167
+        "n": 16,
+        "rolling_interval_coverage_pct": 93.75,
+        "expanding_interval_coverage_pct": 93.75,
+        "rolling_interval_score_log_pct": 9.931226,
+        "expanding_interval_score_log_pct": 10.388062,
+        "rolling_up_brier": 0.247065,
+        "expanding_up_brier": 0.248394
       },
       "nonoverlap_fixed_phase": {
-        "n": 15,
-        "rolling_interval_coverage_pct": 93.33,
-        "expanding_interval_coverage_pct": 93.33,
-        "rolling_interval_score_log_pct": 9.97786,
-        "expanding_interval_score_log_pct": 10.40103,
-        "rolling_up_brier": 0.243827,
-        "expanding_up_brier": 0.247167
+        "n": 16,
+        "rolling_interval_coverage_pct": 93.75,
+        "expanding_interval_coverage_pct": 93.75,
+        "rolling_interval_score_log_pct": 9.931226,
+        "expanding_interval_score_log_pct": 10.388062,
+        "rolling_up_brier": 0.247065,
+        "expanding_up_brier": 0.248394
       },
       "claim_allowed": false
     },
@@ -646,13 +670,13 @@
     },
     "30d": {
       "all_overlapping": {
-        "n": 6,
-        "rolling_interval_coverage_pct": 83.33,
-        "expanding_interval_coverage_pct": 83.33,
-        "rolling_interval_score_log_pct": 65.012008,
-        "expanding_interval_score_log_pct": 71.915145,
-        "rolling_up_brier": 0.189916,
-        "expanding_up_brier": 0.220607
+        "n": 7,
+        "rolling_interval_coverage_pct": 85.71,
+        "expanding_interval_coverage_pct": 85.71,
+        "rolling_interval_score_log_pct": 64.348816,
+        "expanding_interval_score_log_pct": 70.94367,
+        "rolling_up_brier": 0.189746,
+        "expanding_up_brier": 0.220653
       },
       "nonoverlap_fixed_phase": {
         "n": 1,
@@ -667,8 +691,8 @@
     }
   },
   "counts": {
-    "scored": 33,
-    "pending": 15,
+    "scored": 35,
+    "pending": 13,
     "quarantined": 0
   }
 }
