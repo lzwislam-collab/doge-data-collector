@@ -1,8 +1,11 @@
 {
   "schema_version": 4,
-  "audited_at_utc": "2026-11-19T23:50:29.024164+00:00",
+  "audited_at_utc": "2026-11-20T02:35:53.922525+00:00",
   "status": "blocked",
   "critical_failures": [
+    "market",
+    "liquidations_okx",
+    "liquidity",
     "whale_confirmed_blocks"
   ],
   "optional_source_warnings": [
@@ -10,7 +13,8 @@
     "onchain_daily_activity",
     "okx_por_balances_optional",
     "bybit_liquidations_optional",
-    "binance_liquidations_optional"
+    "binance_liquidations_optional",
+    "hourly_research"
   ],
   "sources": {
     "market": {
@@ -19,8 +23,9 @@
       "required": true,
       "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
       "source_status": "ok",
-      "age_hours": 2.395,
-      "state": "ok"
+      "age_hours": 5.152,
+      "state": "stale_or_failed",
+      "error": "stale/clock-skewed: 5.15 h"
     },
     "onchain": {
       "source_file": "data/onchain/latest.json",
@@ -28,7 +33,7 @@
       "required": true,
       "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
       "source_status": "ok",
-      "age_hours": 14.927,
+      "age_hours": 17.684,
       "state": "ok"
     },
     "liquidations_okx": {
@@ -37,10 +42,9 @@
       "required": true,
       "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
       "source_status": "ok",
-      "age_hours": 0.258,
-      "raw_evidence_files_verified": 2,
-      "observation_window_complete": true,
-      "state": "ok_coverage_limited"
+      "age_hours": 3.015,
+      "state": "stale_or_failed",
+      "error": "stale/clock-skewed: 3.01 h"
     },
     "liquidity": {
       "source_file": "data/liquidity/latest.json",
@@ -48,9 +52,9 @@
       "required": true,
       "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
       "source_status": "ok",
-      "age_hours": 2.407,
-      "raw_evidence_files_verified": 6,
-      "state": "ok"
+      "age_hours": 5.164,
+      "state": "stale_or_failed",
+      "error": "stale/clock-skewed: 5.16 h"
     },
     "etf": {
       "source_file": "data/etf/latest.json",
@@ -58,7 +62,7 @@
       "required": true,
       "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
       "source_status": "ok",
-      "age_hours": 9.164,
+      "age_hours": 0.006,
       "state": "ok"
     },
     "macro": {
@@ -67,7 +71,7 @@
       "required": true,
       "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
       "source_status": "ok",
-      "age_hours": 1.135,
+      "age_hours": 3.891,
       "state": "ok"
     },
     "whale_sse_optional": {
@@ -76,9 +80,9 @@
       "required": false,
       "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
       "source_status": "partial",
-      "age_hours": 855.768,
+      "age_hours": 858.525,
       "state": "stale_or_failed",
-      "error": "stale/clock-skewed: 855.77 h"
+      "error": "stale/clock-skewed: 858.53 h"
     },
     "whale_confirmed_blocks": {
       "source_file": "data/whales_blocks/latest.json",
@@ -86,9 +90,9 @@
       "required": true,
       "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
       "source_status": "ok",
-      "age_hours": 0.005,
+      "age_hours": 2.762,
       "state": "stale_or_failed",
-      "error": "whale block scanner unfinished or error"
+      "error": "stale/clock-skewed: 2.76 h"
     },
     "onchain_daily_activity": {
       "source_file": "data/onchain/metrics_latest.json",
@@ -96,9 +100,9 @@
       "required": false,
       "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
       "source_status": "ok",
-      "age_hours": 861.773,
+      "age_hours": 864.53,
       "state": "stale_or_failed",
-      "error": "stale/clock-skewed: 861.77 h"
+      "error": "stale/clock-skewed: 864.53 h"
     },
     "okx_por_balances_optional": {
       "source_file": "data/okx_address_balances/latest.json",
@@ -106,9 +110,9 @@
       "required": false,
       "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
       "source_status": "ok",
-      "age_hours": 856.216,
+      "age_hours": 858.973,
       "state": "stale_or_failed",
-      "error": "stale/clock-skewed: 856.22 h"
+      "error": "stale/clock-skewed: 858.97 h"
     },
     "bybit_liquidations_optional": {
       "source_file": "data/bybit_liquidations/latest.json",
@@ -116,9 +120,9 @@
       "required": false,
       "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
       "source_status": "partial",
-      "age_hours": 855.768,
+      "age_hours": 858.525,
       "state": "stale_or_failed",
-      "error": "stale/clock-skewed: 855.77 h"
+      "error": "stale/clock-skewed: 858.53 h"
     },
     "binance_liquidations_optional": {
       "source_file": "data/binance_liquidations/latest.json",
@@ -126,16 +130,14 @@
       "required": false,
       "coverage_note": "Source health only: NOT proof of completeness, entity labels or causal predictive power",
       "source_status": "partial",
-      "age_hours": 855.768,
+      "age_hours": 858.525,
       "state": "stale_or_failed",
-      "error": "stale/clock-skewed: 855.77 h"
+      "error": "stale/clock-skewed: 858.52 h"
     },
     "hourly_research": {
-      "state": "ok_coverage_limited",
-      "last_candle_utc": "2026-11-19T22:00:00+00:00",
-      "candle_start_age_hours": 1.841,
-      "historical_backfill_complete": true,
-      "required": false
+      "state": "stale_or_failed",
+      "required": false,
+      "error": "hourly incomplete/stale 4.6 h"
     },
     "stage2_csv_quality": {
       "state": "ok",
@@ -339,21 +341,21 @@
     },
     "stage3_etf_csv_quality": {
       "state": "ok",
-      "rows": 86,
+      "rows": 88,
       "per_asset": {
         "BTC": {
-          "rows": 43,
+          "rows": 44,
           "first_trade_date": "2026-09-21",
-          "last_trade_date": "2026-11-18",
+          "last_trade_date": "2026-11-19",
           "first_collection_time_utc": "2026-10-10T11:29:04.819937+00:00",
-          "missing_constituent_fund_values": 0
+          "missing_constituent_fund_values": 1
         },
         "ETH": {
-          "rows": 43,
+          "rows": 44,
           "first_trade_date": "2026-09-21",
-          "last_trade_date": "2026-11-18",
+          "last_trade_date": "2026-11-19",
           "first_collection_time_utc": "2026-10-10T11:29:04.819937+00:00",
-          "missing_constituent_fund_values": 0
+          "missing_constituent_fund_values": 1
         }
       },
       "duplicate_keys": 0,
