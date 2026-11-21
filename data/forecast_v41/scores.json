@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "status": "ok",
-  "run_utc": "2026-11-20T18:39:46.722839+00:00",
-  "source_cutoff_utc": "2026-11-19",
+  "run_utc": "2026-11-21T07:38:45.001140+00:00",
+  "source_cutoff_utc": "2026-11-20",
   "source": "OKX confirmed 1Dutc DOGE-USDT close; immutable key registry",
   "research_only": true,
   "model_edge_proven": false,
@@ -554,6 +554,22 @@
       "baseline_up_brier": 0.23514895
     },
     {
+      "forecast_id": "doge_empirical_730d_v4_1_2026-10-21_30d",
+      "horizon_days": 30,
+      "anchor_date_utc": "2026-10-21",
+      "target_date_utc": "2026-11-20",
+      "realized_target_close": 0.05439,
+      "realized_up": 0,
+      "elapsed_target_minutes_before_forecast": 72.23,
+      "warning": "Close-to-close horizon began before issued_at_utc; not a full forward period after issuance",
+      "interval_hit": false,
+      "baseline_interval_hit": false,
+      "interval_score_log_pct": 150.934466,
+      "baseline_interval_score_log_pct": 168.977268,
+      "up_brier": 0.18283802,
+      "baseline_up_brier": 0.22003657
+    },
+    {
       "forecast_id": "doge_empirical_730d_v4_1_2026-10-21_7d",
       "horizon_days": 7,
       "anchor_date_utc": "2026-10-21",
@@ -684,10 +700,6 @@
   ],
   "pending": [
     {
-      "forecast_id": "doge_empirical_730d_v4_1_2026-10-21_30d",
-      "reason": "future or unpublished target day"
-    },
-    {
       "forecast_id": "doge_empirical_730d_v4_1_2026-11-09_30d",
       "reason": "future or unpublished target day"
     },
@@ -754,13 +766,13 @@
     },
     "30d": {
       "all_overlapping": {
-        "n": 11,
-        "rolling_interval_coverage_pct": 81.82,
-        "expanding_interval_coverage_pct": 81.82,
-        "rolling_interval_score_log_pct": 64.825706,
-        "expanding_interval_score_log_pct": 71.949974,
-        "rolling_up_brier": 0.188301,
-        "expanding_up_brier": 0.220592
+        "n": 12,
+        "rolling_interval_coverage_pct": 75.0,
+        "expanding_interval_coverage_pct": 75.0,
+        "rolling_interval_score_log_pct": 72.001436,
+        "expanding_interval_score_log_pct": 80.035581,
+        "rolling_up_brier": 0.187846,
+        "expanding_up_brier": 0.220546
       },
       "nonoverlap_fixed_phase": {
         "n": 1,
@@ -775,8 +787,8 @@
     }
   },
   "counts": {
-    "scored": 42,
-    "pending": 6,
+    "scored": 43,
+    "pending": 5,
     "quarantined": 0
   }
 }
