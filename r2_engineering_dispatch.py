@@ -4,6 +4,7 @@ No request is a witness. A known stale run may be cancelled and retried once;
 an unknown POST or unobserved result consumes the context without a retry.
 """
 import argparse
+import base64
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
@@ -26,6 +27,9 @@ BASE='data/phase2_forward_v2'
 ENGINEERING_MANIFEST='config/r2_engineering_transport_v1.json'
 STATES=('pending','queued','requested','waiting','in_progress')
 MAX_RESPONSE_BYTES=24*1024*1024  # same bound as the existing runtime GitHub client
+AUDIT_SOURCE='data/hourly_research/ohlc.csv'
+# Published readonly workflow: actual-SHA checkout and complete transport guard.
+AUDIT_WORKFLOW_SHA256='0ffab7dfdb901226e8c71d6f0cb2a694b15cc81025d3d808b2e6d23338262b67'
 
 def utc(value):
     if not isinstance(value,datetime) or value.tzinfo is None or value.utcoffset()!=timedelta(0):
@@ -155,6 +159,108 @@ def _active(client,workflow,ignore=()):
             if row['id'] not in ignore or count!=1:return row
     return None
 
+def _audit_queue_row(row):
+    if (not isinstance(row,dict) or type(row.get('id')) is not int or row['id']<=0 or
+        row.get('head_branch')!='main' or not isinstance(row.get('path'),str) or
+        row['path'].split('@')[0]!='.github/workflows/'+AUDIT or
+        row.get('status') not in STATES+('completed',)):raise ValueError('invalid audit queue identity')
+
+def _queued_audits(client):
+    path='/actions/workflows/'+AUDIT+'/runs?'+urlencode({'branch':'main','status':'queued','per_page':100})
+    for attempt in range(2):
+        value=client.api(path)
+        if not isinstance(value,dict):raise ValueError('invalid queued audit census')
+        rows,count=value.get('workflow_runs'),value.get('total_count')
+        if (not isinstance(rows,list) or len(rows)>100 or type(count) is not int or
+            not 0<=count<=100):raise ValueError('incomplete queued audit census')
+        seen=set()
+        for row in rows:
+            _audit_queue_row(row)
+            if row['id'] in seen:raise ValueError('duplicate queued audit identity')
+            seen.add(row['id'])
+        if bool(rows)==bool(count):
+            if count!=len(rows):raise ValueError('incomplete queued audit census')
+            return rows
+        print(json.dumps({'event':'audit_queue_inconsistent','count':count,'row_count':len(rows),
+                          'read_attempt':attempt+1},sort_keys=True),file=sys.stderr)
+        if attempt:raise ValueError('queued audit census inconsistent')
+
+def _queued_audit_identity(row):
+    if (not isinstance(row,dict) or type(row.get('id')) is not int or row['id']<=0 or
+        type(row.get('run_attempt')) is not int or row['run_attempt']<=0 or
+        not isinstance(row.get('head_sha'),str) or not HEX.fullmatch(row['head_sha']) or
+        row.get('path')!='.github/workflows/'+AUDIT or row.get('head_branch')!='main' or
+        row.get('status')!='queued' or row.get('event')!='push' or row.get('conclusion') is not None or
+        type(row.get('pull_requests')) is not list or row['pull_requests'] or
+        not isinstance(row.get('repository'),dict) or row['repository'].get('full_name')!=REPO or
+        not isinstance(row.get('head_repository'),dict) or row['head_repository'].get('full_name')!=REPO or
+        not isinstance(row.get('created_at'),str) or not isinstance(row.get('updated_at'),str)):
+        return None
+    try:
+        if (len(row['created_at'])>64 or len(row['updated_at'])>64 or
+            utc(datetime.fromisoformat(row['created_at'].replace('Z','+00:00')))>
+            utc(datetime.fromisoformat(row['updated_at'].replace('Z','+00:00')))):return None
+    except (ValueError,TypeError,OverflowError):return None
+    return tuple(row[k] for k in ('id','run_attempt','head_sha','path','head_branch','status',
+                                  'event','conclusion','created_at','updated_at'))
+
+def _irrelevant_queued_audit(client,row,source):
+    identity=_queued_audit_identity(row)
+    if identity is None:return False
+    run_path='/actions/runs/'+str(row['id'])
+    if _queued_audit_identity(client.api(run_path))!=identity:
+        raise ValueError('queued audit identity changed')
+    head=row['head_sha']
+    def metadata(path,maximum):
+        value=client.api('/contents/'+path+'?'+urlencode({'ref':head}))
+        if (not isinstance(value,dict) or value.get('type')!='file' or value.get('path')!=path or
+            not isinstance(value.get('sha'),str) or not HEX.fullmatch(value['sha']) or
+            type(value.get('size')) is not int or not 0<=value['size']<=maximum):
+            raise ValueError('invalid queued audit immutable file metadata')
+        return value
+    old_source=metadata(AUDIT_SOURCE,32000000)
+    if old_source['sha']==source:return False
+    workflow=metadata('.github/workflows/'+AUDIT,16384)
+    if (workflow.get('encoding')!='base64' or not isinstance(workflow.get('content'),str) or
+        len(workflow['content'])>32768):raise ValueError('invalid queued audit workflow content')
+    raw=base64.b64decode(workflow['content'].replace('\n',''),validate=True)
+    if (len(raw)!=workflow['size'] or
+        hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()!=workflow['sha']):
+        raise ValueError('queued audit workflow blob mismatch')
+    if hashlib.sha256(raw).hexdigest()!=AUDIT_WORKFLOW_SHA256:return False
+    jobs=client.api(run_path+'/jobs?filter=all&per_page=1')
+    if not isinstance(jobs,dict):raise ValueError('invalid queued audit jobs')
+    rows,count=jobs.get('jobs'),jobs.get('total_count')
+    if (not isinstance(rows,list) or len(rows)>1 or type(count) is not int or count<0 or
+        bool(rows)!=bool(count)):raise ValueError('incomplete queued audit jobs')
+    if count:return False
+    return True
+
+def _audit_active(client,expected,ignore=()):
+    queued=[];seen=set();proven=[]
+    for status in STATES:
+        if status=='queued':rows=_queued_audits(client);count=len(rows);queued=rows
+        else:
+            path='/actions/workflows/'+AUDIT+'/runs?'+urlencode({'branch':'main','status':status,'per_page':1})
+            rows,count=queue_snapshot(client.api,path,_audit_queue_row)
+        for row in rows:
+            if row['id'] in seen:raise ValueError('duplicate active audit identity')
+            seen.add(row['id'])
+            if status!='queued' and (row['id'] not in ignore or count!=1):return row
+    for row in queued:
+        if row['id'] not in ignore:
+            if not _irrelevant_queued_audit(client,row,expected[AUDIT_SOURCE]):return row
+            proven.append((row['id'],_queued_audit_identity(row)))
+    # Recheck all proven rows together: an earlier row may change while a later
+    # row's immutable source/workflow/jobs proof is being read. Same40s client.
+    for rid,identity in proven:
+        if _queued_audit_identity(client.api('/actions/runs/'+str(rid)))!=identity:
+            raise ValueError('queued audit identity changed during source proof')
+    for rid,identity in proven:
+        print(json.dumps({'event':'audit_queue_irrelevant_source','run_id':rid,
+                          'witness_verified':False},sort_keys=True),file=sys.stderr)
+    return None
+
 def _observed(client,workflow,token,post_at,sleep):
     title='R2E1 '+('audit' if workflow==AUDIT else 'publish')+' '+token
     for index in range(3):
@@ -192,7 +298,8 @@ def dispatch_bound(workflow,expected_blobs,not_after,*,client=None,clock=None,sl
         if not _matches(client,head,expected_blobs,absence_proof):return {'status':'DEFERRED_PUBLIC_BYTES_CHANGED','witness_verified':False}
         active=None
         for queued_workflow in (workflow,'phase2_forward_live_v2.yml') if workflow==LIVE else (workflow,):
-            active=_active(client,queued_workflow,stale if queued_workflow==workflow else ())
+            active=(_audit_active(client,expected_blobs,stale) if workflow==AUDIT and AUDIT_SOURCE in expected_blobs
+                    else _active(client,queued_workflow,stale if queued_workflow==workflow else ()))
             if active is not None:break
         if active is not None:return {'status':'DEFERRED_ACTIVE_WORKFLOW','active_run_id':active['id'],'witness_verified':False}
         token=token_factory()
